@@ -216,7 +216,7 @@ fn linear_iterates_until_done() {
     let bytes: &[u8] = &[0x90, 0x90, 0x90, 0xc3]; // nop nop nop ret
     let mut d = LinearDisassembler::new(&arch, bytes, Address::new(0x1000));
     let mut count = 0;
-    while let Some(r) = d.next() {
+    for r in d.by_ref() {
         r.unwrap();
         count += 1;
     }

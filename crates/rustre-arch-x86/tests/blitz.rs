@@ -305,10 +305,10 @@ fn vex3_map_field_recognises_all_legacy() {
 
 #[test]
 fn vex_extend_helpers() {
-    let v = VexPrefix::parse_3byte(0b0_1_1_1_0001, 0x00); // r=true (~bit7 of b1=0), b=true, x=true
+    let v = VexPrefix::parse_3byte(0b0111_0001, 0x00); // r=true (~bit7 of b1=0), b=true, x=true
     // Actually carefully: parse_3byte sets r/x/b = (bit == 0). So with bits set in b1, those are FALSE.
     // Construct an extension-on case: bits all zero.
-    let v_ext = VexPrefix::parse_3byte(0b000_00001, 0x00);
+    let v_ext = VexPrefix::parse_3byte(0b0000_0001, 0x00);
     assert!(v_ext.r && v_ext.x && v_ext.b);
     assert_eq!(v_ext.extend_reg(3), 11);
     assert_eq!(v_ext.extend_rm(3), 11);
@@ -335,7 +335,7 @@ fn evex_vector_length_flags() {
 fn evex_extend_reg_combines_r_and_rprime() {
     // r=true when bit7=0; r_prime=true when bit4=0
     // p0 with bit7=0 (R ext on), bit4=0 (R' ext on) → 0b0xx0_xxxx
-    let e = EvexPrefix::parse(0b0_1_1_0_0_001, 0x00, 0x00);
+    let e = EvexPrefix::parse(0b0110_0001, 0x00, 0x00);
     assert!(e.r);
     assert!(e.r_prime);
     // reg=2 + R(8) + R'(16) = 26
@@ -517,7 +517,7 @@ fn string_instr_reads_src_writes_dst() {
     assert!(StringInstr::StosByte.writes_dst());
     assert!(StringInstr::CmpsByte.reads_src());
     assert!(!StringInstr::CmpsByte.writes_dst());
-    assert!(StringInstr::ScasByte.reads_src() == false); // SCAS reads only [rdi]
+    assert!(!StringInstr::ScasByte.reads_src()); // SCAS reads only [rdi]
     assert!(!StringInstr::ScasByte.writes_dst());
 }
 
@@ -1058,10 +1058,19 @@ fn db_mem_access_variant_round_trip_in_lookups() {
 
 #[test]
 fn db_eflags_bits_nonzero_known() {
-    assert!(eflags::CF != 0);
-    assert!(eflags::ZF != 0);
-    assert!(eflags::OF != 0);
-    assert!(eflags::SF != 0);
+    // Iterate rather than asserting on each constant directly: a bare
+    // `assert!(CONST != 0)` is a compile-time tautology to the reader and to
+    // clippy. Going through a slice also lets us check the stronger property
+    // that each mask is exactly one bit, and name the offender on failure.
+    for (name, bit) in [
+        ("CF", eflags::CF),
+        ("ZF", eflags::ZF),
+        ("OF", eflags::OF),
+        ("SF", eflags::SF),
+    ] {
+        assert_ne!(bit, 0, "{name} mask must be non-zero");
+        assert_eq!(bit.count_ones(), 1, "{name} mask must be a single bit");
+    }
 }
 
 // -----------------------------------------------------------------------------

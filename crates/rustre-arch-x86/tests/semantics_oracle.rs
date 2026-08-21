@@ -119,8 +119,7 @@ fn reg_info(name: &str) -> Option<(String, u32, u32)> {
     if let Some(num) = name
         .strip_prefix('r')
         .and_then(|r| r.trim_end_matches(['d', 'w', 'l', 'b']).parse::<u8>().ok())
-    {
-        if (8..=15).contains(&num) {
+        && (8..=15).contains(&num) {
             let base = format!("r{num}");
             let bits = match name.chars().last().unwrap() {
                 'd' => 32,
@@ -130,17 +129,14 @@ fn reg_info(name: &str) -> Option<(String, u32, u32)> {
             };
             return Some((base, 0, bits));
         }
-    }
-    if let Some(rest) = name.strip_prefix('r') {
-        if LEGACY.contains(&rest) {
+    if let Some(rest) = name.strip_prefix('r')
+        && LEGACY.contains(&rest) {
             return Some(full(rest));
         }
-    }
-    if let Some(rest) = name.strip_prefix('e') {
-        if LEGACY.contains(&rest) {
+    if let Some(rest) = name.strip_prefix('e')
+        && LEGACY.contains(&rest) {
             return Some((format!("r{rest}"), 0, 32));
         }
-    }
     if LEGACY.contains(&name) {
         return Some((format!("r{name}"), 0, 16));
     }
@@ -378,7 +374,7 @@ impl IState {
             E::Intrinsic { name, args, .. } if name == "parity" => {
                 // x86 PF: set if the LOW BYTE of the result has even parity.
                 let v = self.eval(&args[0])?;
-                Ok(u64::from((v as u8).count_ones() % 2 == 0))
+                Ok(u64::from((v as u8).count_ones().is_multiple_of(2)))
             }
             // ── Bit-scan / bit-count intrinsics ──────────────────────────
             //
@@ -502,17 +498,14 @@ impl IState {
                     self.write_reg(low, half, v & lo_mask)?;
                     self.write_reg(high, half, v >> half_bits)?;
                 }
-                I::SetFlag { name, src } => match self.eval(src) {
-                    Ok(v) => {
-                        self.flags.insert(name.clone(), u8::from(v != 0));
-                        self.unknown_flags.remove(name);
-                    }
-                    Err(_) => {
-                        // Opaque intrinsic (shift_carry, imul_overflow, ...):
-                        // the IL declares the flag written but not its value.
-                        self.flags.remove(name);
-                        self.unknown_flags.insert(name.clone());
-                    }
+                I::SetFlag { name, src } => if let Ok(v) = self.eval(src) {
+                    self.flags.insert(name.clone(), u8::from(v != 0));
+                    self.unknown_flags.remove(name);
+                } else {
+                    // Opaque intrinsic (shift_carry, imul_overflow, ...):
+                    // the IL declares the flag written but not its value.
+                    self.flags.remove(name);
+                    self.unknown_flags.insert(name.clone());
                 },
                 I::Store { addr, size, value } => {
                     let a = self.eval(addr)?;
@@ -1303,11 +1296,11 @@ mod differential {
             ctx.0[FLAGS_SLOT] = RFLAGS_BASE | in_flags;
             let expect = ctx.0;
             jit.run(&mut ctx);
-            for i in 0..16 {
+            for (i, (&got, &want)) in ctx.0.iter().zip(expect.iter()).enumerate() {
                 if i == FLAGS_SLOT {
-                    assert_eq!(ctx.0[i] & FLAG_MASK, in_flags, "flag roundtrip");
+                    assert_eq!(got & FLAG_MASK, in_flags, "flag roundtrip");
                 } else {
-                    assert_eq!(ctx.0[i], expect[i], "gpr {i} roundtrip");
+                    assert_eq!(got, want, "gpr {i} roundtrip");
                 }
             }
         }

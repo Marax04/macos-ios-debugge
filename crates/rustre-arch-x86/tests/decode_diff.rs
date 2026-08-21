@@ -93,14 +93,13 @@ fn diff_one(bytes: &[u8], bits: u32) -> Result<(), String> {
     if iced_len == 0 || iced_len > bytes.len() {
         return Ok(());
     }
-    if let Ok(our_len) = instr_length(bytes, bits) {
-        if our_len != iced_len && !known_divergence(&bytes[..iced_len], bits) {
+    if let Ok(our_len) = instr_length(bytes, bits)
+        && our_len != iced_len && !known_divergence(&bytes[..iced_len], bits) {
             return Err(format!(
                 "length mismatch (bits={bits}): bytes={:02x?} ours={our_len} iced={iced_len} ({iced})",
                 &bytes[..iced_len.max(our_len).min(bytes.len())]
             ));
         }
-    }
     Ok(())
 }
 

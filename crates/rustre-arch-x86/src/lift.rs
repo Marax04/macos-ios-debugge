@@ -164,7 +164,7 @@ pub fn gpr_high_byte_parent(name: &str) -> Option<&'static str> {
 
 /// Gate OPT-IN per il modello dei byte alti: cambia l'IL, quindi va misurato.
 fn high_byte_alias_enabled() -> bool {
-    !matches!(std::env::var("RUSTRE_HIGHBYTE").as_deref(), Ok("0") | Ok("false"))
+    !matches!(std::env::var("RUSTRE_HIGHBYTE").as_deref(), Ok("0" | "false"))
 }
 
 /// The 8/16-bit views of `rbp`, kept OUT of [`gpr_narrow_parent`] because "the
@@ -204,7 +204,7 @@ fn frame_narrow_alias_enabled() -> bool {
     *ON.get_or_init(|| {
         !matches!(
             std::env::var("RUSTRE_X86_BP_NARROW_ALIAS").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         )
     })
 }
@@ -244,7 +244,7 @@ fn gpr_narrow_alias_enabled() -> bool {
     *ON.get_or_init(|| {
         !matches!(
             std::env::var("RUSTRE_X86_GPR8_16_ALIAS").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         )
     })
 }
@@ -329,7 +329,7 @@ fn implicit_acc_alias_enabled() -> bool {
     *ON.get_or_init(|| {
         !matches!(
             std::env::var("RUSTRE_X86_IMPLICIT_ACC_ALIAS").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         )
     })
 }
@@ -361,7 +361,7 @@ fn div_acc_alias_enabled() -> bool {
     *ON.get_or_init(|| {
         !matches!(
             std::env::var("RUSTRE_X86_DIV_ACC_ALIAS").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         )
     })
 }
@@ -404,7 +404,7 @@ fn cdq_acc_alias_enabled() -> bool {
     *ON.get_or_init(|| {
         !matches!(
             std::env::var("RUSTRE_X86_CDQ_ACC_ALIAS").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         )
     })
 }
@@ -443,7 +443,7 @@ fn gpr32_alias_enabled() -> bool {
     *ON.get_or_init(|| {
         !matches!(
             std::env::var("RUSTRE_X86_GPR32_ALIAS").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         )
     })
 }
@@ -3669,7 +3669,7 @@ impl X86Lifter {
 pub(crate) fn il_lift_fallback_enabled() -> bool {
     matches!(
         std::env::var("RUSTRE_X86_IL_LIFT_FALLBACK").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("1" | "true")
     )
 }
 
@@ -4104,7 +4104,7 @@ impl X86Lifter {
         *ON.get_or_init(|| {
             !matches!(
                 std::env::var("RUSTRE_X86_SEGMENT_INTRINSIC").as_deref(),
-                Ok("0") | Ok("false")
+                Ok("0" | "false")
             )
         })
     }
@@ -5665,45 +5665,42 @@ impl X86Lifter {
         // unconditionally (same class as the rotate count-0 bug). A constant
         // count resolves the predicate at lift time; a variable count emits
         // the selection explicitly, keeping the OLD flag value at count 0.
-        match &count {
-            LlilExpr::Const { value, .. } => {
-                if *value != 0 {
-                    self.emit_set_flag(ctx, FLAG_CF, cf_val);
-                    self.emit_sf_zf_pf(ctx, &result, size);
-                }
+        if let LlilExpr::Const { value, .. } = &count {
+            if *value != 0 {
+                self.emit_set_flag(ctx, FLAG_CF, cf_val);
+                self.emit_sf_zf_pf(ctx, &result, size);
             }
-            _ => {
-                let csz = count.result_size();
-                let cnt_is_zero = LlilExpr::CmpEq(
-                    Box::new(count.clone()),
-                    Box::new(LlilExpr::Const { value: 0, size: csz }),
-                );
-                let keep_old = |new_val: LlilExpr, old_flag: &str| LlilExpr::CondExpr {
-                    cond: Box::new(cnt_is_zero.clone()),
-                    true_val: Box::new(flag(old_flag)),
-                    false_val: Box::new(new_val),
-                    size: Size::Byte,
-                };
-                self.emit_set_flag(ctx, FLAG_CF, keep_old(cf_val, FLAG_CF));
-                self.emit_set_flag(
-                    ctx,
-                    FLAG_SF,
-                    keep_old(is_negative(result.clone(), size), FLAG_SF),
-                );
-                self.emit_set_flag(ctx, FLAG_ZF, keep_old(is_zero(result.clone(), size), FLAG_ZF));
-                self.emit_set_flag(
-                    ctx,
+        } else {
+            let csz = count.result_size();
+            let cnt_is_zero = LlilExpr::CmpEq(
+                Box::new(count.clone()),
+                Box::new(LlilExpr::Const { value: 0, size: csz }),
+            );
+            let keep_old = |new_val: LlilExpr, old_flag: &str| LlilExpr::CondExpr {
+                cond: Box::new(cnt_is_zero.clone()),
+                true_val: Box::new(flag(old_flag)),
+                false_val: Box::new(new_val),
+                size: Size::Byte,
+            };
+            self.emit_set_flag(ctx, FLAG_CF, keep_old(cf_val, FLAG_CF));
+            self.emit_set_flag(
+                ctx,
+                FLAG_SF,
+                keep_old(is_negative(result.clone(), size), FLAG_SF),
+            );
+            self.emit_set_flag(ctx, FLAG_ZF, keep_old(is_zero(result.clone(), size), FLAG_ZF));
+            self.emit_set_flag(
+                ctx,
+                FLAG_PF,
+                keep_old(
+                    LlilExpr::Intrinsic {
+                        name: "parity".to_string(),
+                        args: vec![result.clone()],
+                        result_size: Size::Byte,
+                    },
                     FLAG_PF,
-                    keep_old(
-                        LlilExpr::Intrinsic {
-                            name: "parity".to_string(),
-                            args: vec![result.clone()],
-                            result_size: Size::Byte,
-                        },
-                        FLAG_PF,
-                    ),
-                );
-            }
+                ),
+            );
         }
         self.write_operand(iced, 0, result, ctx);
     }
@@ -5794,47 +5791,44 @@ impl X86Lifter {
         // counts > 1 — honestly left stale, never guessed). A constant count
         // resolves the predicate at lift time; a variable count emits the
         // selection explicitly so a later `jo`/`jc` sees the dependency.
-        match &count {
-            LlilExpr::Const { value, .. } => {
-                if *value != 0 {
-                    self.emit_set_flag(ctx, FLAG_CF, cf_val);
-                    if *value == 1
-                        && let Some(of_val) = of_val
-                    {
-                        self.emit_set_flag(ctx, FLAG_OF, of_val);
-                    }
+        if let LlilExpr::Const { value, .. } = &count {
+            if *value != 0 {
+                self.emit_set_flag(ctx, FLAG_CF, cf_val);
+                if *value == 1
+                    && let Some(of_val) = of_val
+                {
+                    self.emit_set_flag(ctx, FLAG_OF, of_val);
                 }
             }
-            _ => {
-                let csz = count.result_size();
+        } else {
+            let csz = count.result_size();
+            self.emit_set_flag(
+                ctx,
+                FLAG_CF,
+                LlilExpr::CondExpr {
+                    cond: Box::new(LlilExpr::CmpEq(
+                        Box::new(count.clone()),
+                        Box::new(LlilExpr::Const { value: 0, size: csz }),
+                    )),
+                    true_val: Box::new(flag(FLAG_CF)),
+                    false_val: Box::new(cf_val),
+                    size: Size::Byte,
+                },
+            );
+            if let Some(of_val) = of_val {
                 self.emit_set_flag(
                     ctx,
-                    FLAG_CF,
+                    FLAG_OF,
                     LlilExpr::CondExpr {
                         cond: Box::new(LlilExpr::CmpEq(
                             Box::new(count.clone()),
-                            Box::new(LlilExpr::Const { value: 0, size: csz }),
+                            Box::new(LlilExpr::Const { value: 1, size: csz }),
                         )),
-                        true_val: Box::new(flag(FLAG_CF)),
-                        false_val: Box::new(cf_val),
+                        true_val: Box::new(of_val),
+                        false_val: Box::new(flag(FLAG_OF)),
                         size: Size::Byte,
                     },
                 );
-                if let Some(of_val) = of_val {
-                    self.emit_set_flag(
-                        ctx,
-                        FLAG_OF,
-                        LlilExpr::CondExpr {
-                            cond: Box::new(LlilExpr::CmpEq(
-                                Box::new(count.clone()),
-                                Box::new(LlilExpr::Const { value: 1, size: csz }),
-                            )),
-                            true_val: Box::new(of_val),
-                            false_val: Box::new(flag(FLAG_OF)),
-                            size: Size::Byte,
-                        },
-                    );
-                }
             }
         }
         self.write_operand(iced, 0, result, ctx);
@@ -7331,7 +7325,7 @@ impl X86Lifter {
         // Same distinction as `lift_fpu_generic`; the memory-effect oracle's
         // INVENTED-LOAD direction caught this helper the run after it landed.
         let mut info = iced_x86::InstructionInfoFactory::new();
-        let address_only = info.info(iced).used_memory().len() == 0;
+        let address_only = info.info(iced).used_memory().is_empty();
         let args: Vec<LlilExpr> = (1..iced.op_count())
             .map(|n| {
                 if address_only && Self::op_is_memory(iced, n) {
@@ -7927,7 +7921,7 @@ impl X86Lifter {
         // corretto in 1 caso su 16 ⇒ codice **confidently wrong**. Col
         // mnemonico ciascuno puo' avere il corpo giusto.
         // ⚠ Tocca ENTRAMBI i path ⇒ opt-in, e #28 va riverificato.
-        let name: String = if !matches!(std::env::var("RUSTRE_SIMD_MNEMONIC").as_deref(), Ok("0") | Ok("false")) {
+        let name: String = if !matches!(std::env::var("RUSTRE_SIMD_MNEMONIC").as_deref(), Ok("0" | "false")) {
             format!("{:?}", iced.mnemonic()).to_ascii_lowercase()
         } else {
             name.to_string()
@@ -8454,7 +8448,7 @@ impl X86Lifter {
         // Exact per-lane path.
         if let Some(elem) = Self::evex_elem_size(iced) {
             let n_lanes = (size.bytes() / elem.bytes()) as u64;
-            if n_lanes >= 2 && n_lanes <= 16 {
+            if (2..=16).contains(&n_lanes) {
                 let eb = elem.bits() as u64;
                 let zeroing = iced.zeroing_masking();
                 let dest_before = if zeroing {
@@ -9766,12 +9760,10 @@ mod tests {
                 value: LlilExpr::LowPart { expr, .. },
                 ..
             } = &o.instr
-            {
-                if let LlilExpr::DivU(dividend, _, Size::OWord) = &**expr {
+                && let LlilExpr::DivU(dividend, _, Size::OWord) = &**expr {
                     let s = format!("{dividend:?}");
                     return s.contains("rdx") && s.contains("rax") && s.contains("ShlT");
                 }
-            }
             false
         });
         assert!(

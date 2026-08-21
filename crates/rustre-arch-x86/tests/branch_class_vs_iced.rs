@@ -27,6 +27,7 @@
 //!   basic blocks together and every later analysis inherits the error.
 //! * Classifier says branch, decoder says plain — an INVENTED transfer, which
 //!   fragments blocks.
+//!
 //! Both are asserted; they are reported separately so a regression says which.
 //!
 //! Encodings are synthesised systematically (every primary opcode and every

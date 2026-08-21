@@ -19,6 +19,7 @@
 //! Two descriptions of the same semantics, written separately:
 //!   * the database's `FlagEffects { writes, clears, sets, undef, … }`;
 //!   * the `SetFlag` instructions the lifter actually emits.
+//!
 //! Where they disagree, at least one is wrong — and neither could tell you so
 //! before this test existed.
 //!

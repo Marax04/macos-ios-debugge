@@ -1470,7 +1470,7 @@ pub fn disassemble_and_lift(
     // l'emissione di ENTRAMBI i path, quindi la decisione non e' automatica.
     let uniq = matches!(
         std::env::var("RUSTRE_X86_TMPUNIQ").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("1" | "true")
     );
     let mut base = 0u32;
     while decoder.can_decode() {

@@ -563,7 +563,7 @@ mod tests {
     fn excluded(bytes: &[u8], bits: u32) -> bool {
         let ps = crate::prefix::PrefixSet::consume(bytes, bits == 64);
         match bytes.get(ps.count) {
-            Some(0xC4) | Some(0xC5) | Some(0x62) => true, // VEX/EVEX
+            Some(0xC4 | 0xC5 | 0x62) => true, // VEX/EVEX
             None => true,
             _ => bits != 64 && ps.addr_size, // 16-bit addressing form
         }

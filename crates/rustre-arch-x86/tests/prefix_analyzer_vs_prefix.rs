@@ -15,6 +15,7 @@
 //! say":
 //!   * `prefix::PrefixSet::consume(bytes, is_64bit)`;
 //!   * `X86PrefixAnalyzer::new_64bit().parse(bytes)`.
+//!
 //! Where they disagree at least one is wrong, and nothing could say so before.
 //!
 //! # Deliberate scope

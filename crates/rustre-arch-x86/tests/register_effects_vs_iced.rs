@@ -292,42 +292,26 @@ fn registers_the_decoder_says_are_written_are_modelled() {
     let missing = by_kind
         .get("MISSING register write")
         .map_or(0, std::vec::Vec::len);
-    if missing < PINNED_MISSING_WRITES {
-        println!(
-            "NOTE: missing register writes down to {missing} from the pinned              {PINNED_MISSING_WRITES} — lower the pin."
-        );
-    }
-    assert!(
-        missing <= PINNED_MISSING_WRITES,
-        "register-effect modelling REGRESSED: {missing} missing writes,          {PINNED_MISSING_WRITES} pinned — {} new:
-  {}",
-        missing - PINNED_MISSING_WRITES,
+    // `PINNED_MISSING_WRITES` may legitimately be 0, so compare through `Ord`
+    // instead of `<` / `<=`: with an unsigned pin of 0 those are absurd
+    // comparisons and the "lower the pin" branch below could never be reached.
+    let detail = || {
         by_kind
             .get("MISSING register write")
             .map(|v| v.iter().take(200).cloned().collect::<Vec<_>>().join("
   "))
             .unwrap_or_default()
-    );
-
-    if false {
-        let histogram = by_kind
-            .iter()
-            .map(|(k, v)| format!("{k}: {}", v.len()))
-            .collect::<Vec<_>>()
-            .join("\n  ");
-        let examples = by_kind
-            .values()
-            .flat_map(|v| v.iter().take(20))
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n  ");
-        panic!(
-            "register-effect disagreements over {checked} mnemonics\n\
-             \nBY KIND:\n  {histogram}\n\nEXAMPLES:\n  {examples}"
-        );
+    };
+    match missing.cmp(&PINNED_MISSING_WRITES) {
+        core::cmp::Ordering::Less => println!(
+            "NOTE: missing register writes down to {missing} from the pinned {PINNED_MISSING_WRITES} — lower the pin."
+        ),
+        core::cmp::Ordering::Equal => {}
+        core::cmp::Ordering::Greater => panic!(
+            "register-effect modelling REGRESSED: {missing} missing writes, {PINNED_MISSING_WRITES} pinned — {} new:
+  {}",
+            missing - PINNED_MISSING_WRITES,
+            detail()
+        ),
     }
-
-    println!(
-        "{checked} register-writing mnemonics swept; {missing} known missing          writes still pinned, 0 new"
-    );
 }
