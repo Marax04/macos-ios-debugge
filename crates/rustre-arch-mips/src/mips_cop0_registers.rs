@@ -288,7 +288,7 @@ pub fn cop0_description(reg: Cop0Register) -> &'static str {
 /// Build the full standard CP0 entry database.
 #[must_use]
 pub fn standard_cop0_entries() -> Vec<Cop0Entry> {
-    use cop0::*;
+    use cop0::{INDEX, RANDOM, ENTRY_LO0, ENTRY_LO1, CONTEXT, PAGE_MASK, PAGE_GRAIN, WIRED, BAD_VADDR, COUNT, ENTRY_HI, COMPARE, STATUS, INT_CTL, SRS_CTL, SRS_MAP, CAUSE, EPC, PRID, EBASE, CONFIG0, CONFIG1, CONFIG2, CONFIG3, CONFIG4, CONFIG5, LLADDR, WATCH_LO, WATCH_HI, XCONTEXT, DEBUG, DEPC, PERF_CTL0, PERF_CNT0, CACHE_ERR, TAG_LO, TAG_HI, ERROR_EPC, DESAVE};
     vec![
         Cop0Entry { reg: INDEX,         name: "Index",      description: "TLB index",                         introduced_in: MipsRevision::Mips1,   writable: true,  readable: true },
         Cop0Entry { reg: RANDOM,        name: "Random",     description: "Pseudo-random TLB index",           introduced_in: MipsRevision::Mips1,   writable: false, readable: true },
@@ -339,7 +339,7 @@ static CP0_DESC_TABLE_ONCE: std::sync::OnceLock<HashMap<Cop0Register, &'static s
     std::sync::OnceLock::new();
 
 fn build_name_table() -> HashMap<Cop0Register, &'static str> {
-    use cop0::*;
+    use cop0::{INDEX, RANDOM, ENTRY_LO0, ENTRY_LO1, CONTEXT, PAGE_MASK, PAGE_GRAIN, WIRED, BAD_VADDR, COUNT, ENTRY_HI, COMPARE, STATUS, INT_CTL, SRS_CTL, SRS_MAP, CAUSE, EPC, PRID, EBASE, CONFIG0, CONFIG1, CONFIG2, CONFIG3, CONFIG4, CONFIG5, CONFIG6, CONFIG7, LLADDR, WATCH_LO, WATCH_HI, XCONTEXT, DEBUG, DEPC, PERF_CTL0, PERF_CNT0, PERF_CTL1, PERF_CNT1, CACHE_ERR, TAG_LO, TAG_HI, ERROR_EPC, DESAVE};
     let mut m = HashMap::new();
     m.insert(INDEX,       "Index");
     m.insert(RANDOM,      "Random");
@@ -388,7 +388,7 @@ fn build_name_table() -> HashMap<Cop0Register, &'static str> {
 }
 
 fn build_desc_table() -> HashMap<Cop0Register, &'static str> {
-    use cop0::*;
+    use cop0::{INDEX, RANDOM, STATUS, CAUSE, EPC, COUNT, COMPARE, CONFIG0, BAD_VADDR};
     let mut m = HashMap::new();
     m.insert(INDEX,     "TLB index");
     m.insert(RANDOM,    "Pseudo-random TLB index");

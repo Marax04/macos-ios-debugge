@@ -763,7 +763,7 @@ mod tests {
     #[test]
     fn many_branches_total_matches_input_len() {
         let branches: Vec<_> = (0..50)
-            .map(|i: u64| make_branch(MipsJumpOpcode::J, 0x2000_0000 + i * 4, i % 2 == 0))
+            .map(|i: u64| make_branch(MipsJumpOpcode::J, 0x2000_0000 + i * 4, i.is_multiple_of(2)))
             .collect();
         let analyser = MipsDelaySlot::default_config();
         let report = analyser.analyze(&branches);

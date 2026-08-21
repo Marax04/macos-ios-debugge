@@ -352,7 +352,7 @@ impl FpuCondition {
 // ── FPU instruction kind ─────────────────────────────────────────────────────
 
 /// MIPS FPU instruction (Coprocessor 1).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MipsFpuInsn {
     // Arithmetic
     AddS {
@@ -995,22 +995,22 @@ impl fmt::Display for MipsFpuInsn {
 #[derive(Debug, Clone)]
 pub enum FpuIlNode {
     /// Register assignment: fd = rhs.
-    Assign { fd: u8, rhs: Box<FpuIlNode> },
+    Assign { fd: u8, rhs: Box<Self> },
     /// Binary float operation.
     BinOp {
         op: &'static str,
-        lhs: Box<FpuIlNode>,
-        rhs: Box<FpuIlNode>,
+        lhs: Box<Self>,
+        rhs: Box<Self>,
     },
     /// Unary float operation.
     UnOp {
         op: &'static str,
-        src: Box<FpuIlNode>,
+        src: Box<Self>,
     },
     /// Conversion operation.
     Convert {
         op: &'static str,
-        src: Box<FpuIlNode>,
+        src: Box<Self>,
     },
     /// FPR read.
     Fpr(u8),
@@ -1019,13 +1019,13 @@ pub enum FpuIlNode {
     /// Condition-code read.
     Fcc(u8),
     /// Condition-code write.
-    SetFcc { cc: u8, val: Box<FpuIlNode> },
+    SetFcc { cc: u8, val: Box<Self> },
     /// Memory load.
-    Load { addr: Box<FpuIlNode>, size: u8 },
+    Load { addr: Box<Self>, size: u8 },
     /// Memory store.
     Store {
-        addr: Box<FpuIlNode>,
-        val: Box<FpuIlNode>,
+        addr: Box<Self>,
+        val: Box<Self>,
         size: u8,
     },
     /// Unknown operation.

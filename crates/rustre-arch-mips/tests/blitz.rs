@@ -968,7 +968,7 @@ fn registers_64bit_size() {
     let regs = MipsArch::mips64_le().registers();
     // First 32 GPRs should be 8 bytes wide.
     for r in regs.iter().take(32) {
-        assert_eq!(r.size, 8, "{:?}", r);
+        assert_eq!(r.size, 8, "{r:?}");
     }
 }
 

@@ -2285,12 +2285,9 @@ impl MipsBasicBlock {
 
         while offset + 4 <= bytes.len() {
             let addr = Address::new(base.0.wrapping_add(offset as u64));
-            let instr = match arch.disassemble(addr, &bytes[offset..]) {
-                Ok(i) => i,
-                Err(_) => {
-                    offset += 4;
-                    continue;
-                }
+            let instr = if let Ok(i) = arch.disassemble(addr, &bytes[offset..]) { i } else {
+                offset += 4;
+                continue;
             };
             let is_uncond = instr.flags.intersects(InstrFlags::BRANCH | InstrFlags::RET)
                 && !instr.flags.contains(InstrFlags::CONDITIONAL);
@@ -2299,7 +2296,7 @@ impl MipsBasicBlock {
             offset += 4;
 
             if in_delay_slot {
-                blocks.push(MipsBasicBlock {
+                blocks.push(Self {
                     start: block_start,
                     instructions: std::mem::take(&mut current),
                 });
@@ -2310,7 +2307,7 @@ impl MipsBasicBlock {
             }
         }
         if !current.is_empty() {
-            blocks.push(MipsBasicBlock {
+            blocks.push(Self {
                 start: block_start,
                 instructions: current,
             });
@@ -6511,7 +6508,7 @@ impl MipsFeatures {
         self.contains(Self::MIPS64)
     }
 
-    /// MIPS32r2 instructions detected.
+    /// `MIPS32r2` instructions detected.
     #[must_use]
     pub const fn has_mips32r2(self) -> bool {
         self.contains(Self::MIPS32R2)
@@ -6923,7 +6920,7 @@ impl MipsClass {
                 || m == "neg"
                 || m == "move")
         {
-            return MipsClass::IntAlu;
+            return Self::IntAlu;
         }
 
         if m == "addi"
@@ -6937,7 +6934,7 @@ impl MipsClass {
             || m == "daddi"
             || m == "daddiu"
         {
-            return MipsClass::IntImm;
+            return Self::IntImm;
         }
 
         if m == "mult"
@@ -6957,7 +6954,7 @@ impl MipsClass {
             || m == "msub"
             || m == "msubu"
         {
-            return MipsClass::HiLo;
+            return Self::HiLo;
         }
 
         if m == "sll"
@@ -6978,7 +6975,7 @@ impl MipsClass {
             || m == "rotr"
             || m == "rotrv"
         {
-            return MipsClass::Shift;
+            return Self::Shift;
         }
 
         if m == "beq"
@@ -7002,11 +6999,11 @@ impl MipsClass {
             || m == "bc1fl"
             || m == "bc1tl"
         {
-            return MipsClass::Branch;
+            return Self::Branch;
         }
 
         if m == "j" || m == "jal" || m == "jr" || m == "jalr" {
-            return MipsClass::Jump;
+            return Self::Jump;
         }
 
         if m == "lb"
@@ -7021,7 +7018,7 @@ impl MipsClass {
             || m == "ldl"
             || m == "ldr"
         {
-            return MipsClass::Load;
+            return Self::Load;
         }
 
         if m == "sb"
@@ -7033,14 +7030,14 @@ impl MipsClass {
             || m == "sdl"
             || m == "sdr"
         {
-            return MipsClass::Store;
+            return Self::Store;
         }
 
         if m == "lwc1" || m == "ldc1" {
-            return MipsClass::FloatLoad;
+            return Self::FloatLoad;
         }
         if m == "swc1" || m == "sdc1" {
-            return MipsClass::FloatStore;
+            return Self::FloatStore;
         }
 
         if m.starts_with("add.")
@@ -7057,7 +7054,7 @@ impl MipsClass {
             || m.starts_with("nmadd.")
             || m.starts_with("nmsub.")
         {
-            return MipsClass::FloatArith;
+            return Self::FloatArith;
         }
 
         if m.starts_with("cvt.")
@@ -7066,11 +7063,11 @@ impl MipsClass {
             || m.starts_with("ceil.")
             || m.starts_with("floor.")
         {
-            return MipsClass::FloatConvert;
+            return Self::FloatConvert;
         }
 
         if m.starts_with("c.") {
-            return MipsClass::FloatCompare;
+            return Self::FloatCompare;
         }
 
         if m.starts_with("mov.")
@@ -7087,7 +7084,7 @@ impl MipsClass {
             || m == "mfhc1"
             || m == "mthc1"
         {
-            return MipsClass::FloatMove;
+            return Self::FloatMove;
         }
 
         if m == "mfc0"
@@ -7102,7 +7099,7 @@ impl MipsClass {
             || m == "deret"
             || m == "wait"
         {
-            return MipsClass::Cop0;
+            return Self::Cop0;
         }
 
         if m == "tge"
@@ -7118,29 +7115,29 @@ impl MipsClass {
             || m == "teqi"
             || m == "tnei"
         {
-            return MipsClass::Trap;
+            return Self::Trap;
         }
 
         if m == "ll" || m == "sc" || m == "lld" || m == "scd" {
-            return MipsClass::Atomic;
+            return Self::Atomic;
         }
         if m == "pref" || m == "prefx" {
-            return MipsClass::Prefetch;
+            return Self::Prefetch;
         }
         if m == "cache" {
-            return MipsClass::Cache;
+            return Self::Cache;
         }
         if m == "syscall" {
-            return MipsClass::Syscall;
+            return Self::Syscall;
         }
         if m == "break" || m == "sdbbp" {
-            return MipsClass::Break;
+            return Self::Break;
         }
         if m == "sync" || m == "synci" {
-            return MipsClass::Sync;
+            return Self::Sync;
         }
 
-        MipsClass::Unknown
+        Self::Unknown
     }
 
     /// Is this a memory access?
@@ -9339,11 +9336,11 @@ pub struct CfgNode {
 impl CfgNode {
     /// Build a CFG from basic blocks.
     #[must_use]
-    pub fn build_cfg(arch: &MipsArch, bytes: &[u8], base: Address) -> Vec<CfgNode> {
+    pub fn build_cfg(arch: &MipsArch, bytes: &[u8], base: Address) -> Vec<Self> {
         let blocks = MipsBasicBlock::find_blocks(arch, bytes, base);
-        let mut nodes: Vec<CfgNode> = blocks
+        let mut nodes: Vec<Self> = blocks
             .into_iter()
-            .map(|b| CfgNode {
+            .map(|b| Self {
                 block: b,
                 successors: Vec::new(),
                 predecessors: Vec::new(),
@@ -9352,7 +9349,7 @@ impl CfgNode {
 
         // Determine successors from the last instruction of each block
         let starts: Vec<u64> = nodes.iter().map(|n| n.block.start.0).collect();
-        for __item in nodes.iter_mut() {
+        for __item in &mut nodes {
             let last_idx = __item.block.instructions.len().saturating_sub(1);
             if let Some(last) = __item.block.instructions.get(last_idx) {
                 if last.flags.intersects(InstrFlags::BRANCH | InstrFlags::RET) {
@@ -9784,7 +9781,7 @@ mod tests_utils {
         let result = patch_branch(&mut buf, 0, addr(0x0), 0x14, MipsEndian::Big);
         assert!(result.is_ok());
         let new_word = read_be32(&buf, 0).unwrap();
-        let disp = (new_word & 0xFFFF) as i16 as i64;
+        let disp = i64::from((new_word & 0xFFFF) as i16);
         assert_eq!(disp, 4); // 4 words = 16 bytes offset from PC+4
     }
 

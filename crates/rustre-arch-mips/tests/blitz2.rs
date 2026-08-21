@@ -68,7 +68,7 @@ fn fuzz_decode_word_le_no_panic_5000() {
         let bytes = w.to_le_bytes();
         let ins = a.decode_word(addr(i * 4), w, &bytes);
         // Mnemonic must be a non-empty UTF-8 string.
-        assert!(!ins.mnemonic.is_empty(), "word={:#x}", w);
+        assert!(!ins.mnemonic.is_empty(), "word={w:#x}");
     }
 }
 
@@ -361,7 +361,7 @@ fn branch_target_i_off_by_one() {
     assert_eq!(branch_target_i(addr(0x1000), 0), 0x1004);
     assert_eq!(branch_target_i(addr(0x1000), 1), 0x1008);
     assert_eq!(branch_target_i(addr(0x1000), -1), 0x1000);
-    assert_eq!(branch_target_i(addr(0x1000), i16::MAX as i64), 0x1000 + 4 + 4 * (i16::MAX as u64));
+    assert_eq!(branch_target_i(addr(0x1000), i64::from(i16::MAX)), 0x1000 + 4 + 4 * (i16::MAX as u64));
 }
 
 #[test]
@@ -374,8 +374,8 @@ fn branch_target_j_only_low_28_bits_used() {
 #[test]
 fn branch_target_i_address_max_no_panic() {
     let _ = branch_target_i(addr(u64::MAX), 0);
-    let _ = branch_target_i(addr(u64::MAX), i16::MAX as i64);
-    let _ = branch_target_i(addr(0), i16::MIN as i64);
+    let _ = branch_target_i(addr(u64::MAX), i64::from(i16::MAX));
+    let _ = branch_target_i(addr(0), i64::from(i16::MIN));
 }
 
 // -------------------------------------------------------------------
@@ -756,7 +756,7 @@ fn callee_caller_saved_disjoint_modulo_sp_gp() {
     let callee: HashSet<_> = cc.callee_saved_regs().into_iter().collect();
     let caller_saved: HashSet<_> = cc.caller_saved_regs().into_iter().collect();
     let inter: HashSet<_> = callee.intersection(&caller_saved).collect();
-    assert!(inter.is_empty(), "overlap: {:?}", inter);
+    assert!(inter.is_empty(), "overlap: {inter:?}");
 }
 
 #[test]
@@ -808,7 +808,7 @@ fn cop0_register_display_with_and_without_select() {
     let s2 = Cop0Register::new(12, 2).to_string();
     assert!(s0.contains("12"));
     assert!(s2.contains("12"));
-    assert!(s2.contains("2"));
+    assert!(s2.contains('2'));
 }
 
 #[test]
@@ -1031,7 +1031,7 @@ fn encode_decode_mnemonic_table() {
     ];
     for (w, want) in cases {
         let i = a.decode_word(addr(0), w, &w.to_le_bytes());
-        assert_eq!(i.mnemonic, want, "word={:#x}", w);
+        assert_eq!(i.mnemonic, want, "word={w:#x}");
     }
 }
 
