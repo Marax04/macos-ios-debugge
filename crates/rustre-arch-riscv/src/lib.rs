@@ -11987,20 +11987,7 @@ fn decode_compressed_q0_rest(hw: u16, xlen: u32, addr: Address) -> Result<Instru
                 bytes,
             ))
         }
-        5 => {
-            let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
-            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-            let uimm = c_lw_imm(hw);
-            Ok(mk(
-                addr,
-                2,
-                "c.fsd",
-                format!("{}, {uimm}({})", fr(rs2_prime), xr(rs1_prime)),
-                InstrFlags::WRITE_MEM,
-                bytes,
-            ))
-        }
-        _ => decode_compressed_q0_tail(hw, xlen, addr),
+        _ => decode_compressed_q0_tail2(hw, xlen, addr),
     }
 }
 
@@ -12101,50 +12088,7 @@ fn decode_compressed_q1_rest(hw: u16, addr: Address) -> Result<Instruction, Core
                 _ => unreachable!(),
             }
         }
-        5 => {
-            // C.J
-            let offset = c_j_offset(hw);
-            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
-            Ok(mk(
-                addr,
-                2,
-                "c.j",
-                format!("0x{target:x}"),
-                InstrFlags::BRANCH,
-                bytes,
-            ))
-        }
-        6 => {
-            // C.BEQZ
-            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-            let offset = c_b_offset(hw);
-            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
-            Ok(mk(
-                addr,
-                2,
-                "c.beqz",
-                format!("{}, 0x{target:x}", xr(rs1_prime)),
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-                bytes,
-            ))
-        }
-        7 => {
-            // C.BNEZ
-            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-            let offset = c_b_offset(hw);
-            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
-            Ok(mk(
-                addr,
-                2,
-                "c.bnez",
-                format!("{}, 0x{target:x}", xr(rs1_prime)),
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-                bytes,
-            ))
-        }
-        _ => Err(CoreError::InvalidFormat {
-            message: "reserved C1".into(),
-        }),
+        _ => decode_compressed_q1_tail(hw, addr),
     }
 }
 
@@ -12285,5 +12229,79 @@ fn decode_compressed_q0_tail(hw: u16, xlen: u32, addr: Address) -> Result<Instru
         _ => Err(CoreError::InvalidFormat {
             message: "reserved C quadrant 0".into(),
         }),
+    }
+}
+
+fn decode_compressed_q1_tail(hw: u16, addr: Address) -> Result<Instruction, CoreError> {
+    let bytes = hw.to_le_bytes().to_vec();
+    let funct3 = (hw >> 13) & 0x7;
+
+    match funct3 {
+        5 => {
+            // C.J
+            let offset = c_j_offset(hw);
+            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
+            Ok(mk(
+                addr,
+                2,
+                "c.j",
+                format!("0x{target:x}"),
+                InstrFlags::BRANCH,
+                bytes,
+            ))
+        }
+        6 => {
+            // C.BEQZ
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let offset = c_b_offset(hw);
+            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
+            Ok(mk(
+                addr,
+                2,
+                "c.beqz",
+                format!("{}, 0x{target:x}", xr(rs1_prime)),
+                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                bytes,
+            ))
+        }
+        7 => {
+            // C.BNEZ
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let offset = c_b_offset(hw);
+            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
+            Ok(mk(
+                addr,
+                2,
+                "c.bnez",
+                format!("{}, 0x{target:x}", xr(rs1_prime)),
+                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                bytes,
+            ))
+        }
+        _ => Err(CoreError::InvalidFormat {
+            message: "reserved C1".into(),
+        }),
+    }
+}
+
+fn decode_compressed_q0_tail2(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
+    let bytes = hw.to_le_bytes().to_vec();
+    let funct3 = (hw >> 13) & 0x7;
+
+    match funct3 {
+        5 => {
+            let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let uimm = c_lw_imm(hw);
+            Ok(mk(
+                addr,
+                2,
+                "c.fsd",
+                format!("{}, {uimm}({})", fr(rs2_prime), xr(rs1_prime)),
+                InstrFlags::WRITE_MEM,
+                bytes,
+            ))
+        }
+        _ => decode_compressed_q0_tail(hw, xlen, addr),
     }
 }
