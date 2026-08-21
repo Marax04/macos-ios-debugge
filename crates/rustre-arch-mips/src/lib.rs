@@ -2043,6 +2043,18 @@ pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
         }
 
         // ── Immediate ALU ──────────────────────────────────────────────
+        _ => {}
+    }
+
+    lift_immediate_alu(instr, m, ops, &parts)
+}
+
+/// LLIL lifting for the immediate-operand ALU and shift mnemonics.
+///
+/// Split out of `lift_to_llil` for length only; it is the next step of the
+/// same fall-through chain.
+fn lift_immediate_alu(instr: &Instruction, m: &str, ops: &str, parts: &[&str]) -> Vec<LlilOp> {
+    match m {
         "addi" | "addiu" | "daddi" | "daddiu" => {
             if parts.len() >= 2 {
                 let sub_joined = parts[1..].join(",");
@@ -2133,6 +2145,17 @@ pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
                 }
             }
         }
+        _ => {}
+    }
+
+    lift_shifts(instr, m, ops, parts)
+}
+
+/// LLIL lifting for the shift-by-constant mnemonics and `lui`.
+///
+/// Split out of `lift_immediate_alu` for length only; same fall-through chain.
+fn lift_shifts(instr: &Instruction, m: &str, ops: &str, parts: &[&str]) -> Vec<LlilOp> {
+    match m {
         "sll" | "dsll" | "dsll32" => {
             if parts.len() >= 3 {
                 let shamt = parts[2].parse::<i64>().unwrap_or(0);
@@ -2176,6 +2199,19 @@ pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
             }
         }
 
+        _ => {}
+    }
+
+    lift_mem_and_control(instr, m, ops, parts)
+}
+
+/// LLIL lifting for the load/store, move and control-flow mnemonics.
+///
+/// Split out of `lift_to_llil` for length only. It is the tail of the same
+/// dispatch: `lift_to_llil` falls through to it when its own match finds no
+/// arm, and this one falls through to `LlilOp::Unimpl`.
+fn lift_mem_and_control(instr: &Instruction, m: &str, ops: &str, parts: &[&str]) -> Vec<LlilOp> {
+    match m {
         // ── Loads ─────────────────────────────────────────────────────
         "lb" | "lbu" | "lh" | "lhu" | "lw" | "lwu" | "ld" => {
             let sz: u8 = match m {
@@ -2223,6 +2259,18 @@ pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
         }
 
         // ── Control flow ───────────────────────────────────────────────
+        _ => {}
+    }
+
+    lift_control_flow(instr, m, ops, parts)
+}
+
+/// LLIL lifting for the control-flow mnemonics: jumps, calls, branches, eret.
+///
+/// Split out of `lift_mem_and_control` for length only; last step of the
+/// fall-through chain before `LlilOp::Unimpl`.
+fn lift_control_flow(instr: &Instruction, m: &str, ops: &str, parts: &[&str]) -> Vec<LlilOp> {
+    match m {
         "j" => {
             return vec![LlilOp::Jump {
                 target: parse_hex_target(ops),
