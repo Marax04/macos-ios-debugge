@@ -327,80 +327,90 @@ impl AvrStringScanner {
 // SREG flag liveness
 // ---------------------------------------------------------------------------
 
-/// SREG flag bits tracked in liveness analysis.
+/// SREG flag bits tracked in liveness analysis, packed in hardware bit order.
+///
+/// The bit image is exactly the AVR SREG mask (`I T H S V N Z C`, bit 7 down
+/// to bit 0), so [`Self::mask`] is the value itself rather than a
+/// reconstruction from eight interchangeable `bool` fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct SregLiveness {
-    pub c: bool, // Carry
-    pub z: bool, // Zero
-    pub n: bool, // Negative
-    pub v: bool, // Overflow
-    pub s: bool, // Sign
-    pub h: bool, // Half-carry
-    pub t: bool, // Bit-copy
-    pub i: bool, // Global Interrupt Enable
-}
+pub struct SregLiveness(u8);
 
 impl SregLiveness {
+    /// Carry.
+    pub const C: u8 = crate::avr_emulator::SREG_C;
+    /// Zero.
+    pub const Z: u8 = crate::avr_emulator::SREG_Z;
+    /// Negative.
+    pub const N: u8 = crate::avr_emulator::SREG_N;
+    /// Overflow.
+    pub const V: u8 = crate::avr_emulator::SREG_V;
+    /// Sign.
+    pub const S: u8 = crate::avr_emulator::SREG_S;
+    /// Half carry.
+    pub const H: u8 = crate::avr_emulator::SREG_H;
+    /// Bit copy.
+    pub const T: u8 = crate::avr_emulator::SREG_T;
+    /// Global interrupt enable.
+    pub const I: u8 = crate::avr_emulator::SREG_I;
+
+    /// No flag live.
+    pub const NONE: Self = Self(0);
+
+    /// Build from a raw SREG mask.
+    #[must_use]
+    pub const fn from_bits(v: u8) -> Self { Self(v) }
+
     /// Return the combined SREG mask of all live flags.
     #[must_use]
-    pub const fn mask(self) -> u8 {
-        let mut m = 0u8;
-        if self.c {
-            m |= crate::avr_emulator::SREG_C;
-        }
-        if self.z {
-            m |= crate::avr_emulator::SREG_Z;
-        }
-        if self.n {
-            m |= crate::avr_emulator::SREG_N;
-        }
-        if self.v {
-            m |= crate::avr_emulator::SREG_V;
-        }
-        if self.s {
-            m |= crate::avr_emulator::SREG_S;
-        }
-        if self.h {
-            m |= crate::avr_emulator::SREG_H;
-        }
-        if self.t {
-            m |= crate::avr_emulator::SREG_T;
-        }
-        if self.i {
-            m |= crate::avr_emulator::SREG_I;
-        }
-        m
+    pub const fn mask(self) -> u8 { self.0 }
+
+    /// True when `bit` (one of the associated constants) is live.
+    #[must_use]
+    pub const fn has(self, bit: u8) -> bool { self.0 & bit != 0 }
+
+    /// A copy with `bit` live (`on`) or dead.
+    #[must_use]
+    pub const fn with(self, bit: u8, on: bool) -> Self {
+        if on { Self(self.0 | bit) } else { Self(self.0 & !bit) }
     }
+
+    /// Carry live.
+    #[must_use]
+    pub const fn c(self) -> bool { self.has(Self::C) }
+    /// Zero live.
+    #[must_use]
+    pub const fn z(self) -> bool { self.has(Self::Z) }
+    /// Negative live.
+    #[must_use]
+    pub const fn n(self) -> bool { self.has(Self::N) }
+    /// Overflow live.
+    #[must_use]
+    pub const fn v(self) -> bool { self.has(Self::V) }
+    /// Sign live.
+    #[must_use]
+    pub const fn s(self) -> bool { self.has(Self::S) }
+    /// Half carry live.
+    #[must_use]
+    pub const fn h(self) -> bool { self.has(Self::H) }
+    /// Bit copy live.
+    #[must_use]
+    pub const fn t(self) -> bool { self.has(Self::T) }
+    /// Global interrupt enable live.
+    #[must_use]
+    pub const fn i(self) -> bool { self.has(Self::I) }
 
     /// All flags live.
     #[must_use]
-    pub const fn all() -> Self {
-        Self {
-            c: true,
-            z: true,
-            n: true,
-            v: true,
-            s: true,
-            h: true,
-            t: true,
-            i: true,
-        }
-    }
+    pub const fn all() -> Self { Self(0xFF) }
 
     /// Merge two liveness sets (OR of live flags).
     #[must_use]
-    pub const fn merge(self, other: Self) -> Self {
-        Self {
-            c: self.c || other.c,
-            z: self.z || other.z,
-            n: self.n || other.n,
-            v: self.v || other.v,
-            s: self.s || other.s,
-            h: self.h || other.h,
-            t: self.t || other.t,
-            i: self.i || other.i,
-        }
-    }
+    pub const fn merge(self, other: Self) -> Self { Self(self.0 | other.0) }
+}
+
+impl core::ops::BitOr for SregLiveness {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
 }
 
 /// A single liveness entry for one instruction.
@@ -478,44 +488,27 @@ enum SregBitSel {
 }
 
 /// A liveness set containing exactly the named SREG bit.
-fn only(bit: SregBitSel) -> SregLiveness {
-    let mut l = SregLiveness::default();
-    match bit {
-        SregBitSel::C => l.c = true,
-        SregBitSel::Z => l.z = true,
-        SregBitSel::N => l.n = true,
-        SregBitSel::V => l.v = true,
-        SregBitSel::S => l.s = true,
-        SregBitSel::H => l.h = true,
-        SregBitSel::T => l.t = true,
-        SregBitSel::I => l.i = true,
-    }
-    l
+const fn only(bit: SregBitSel) -> SregLiveness {
+    SregLiveness::from_bits(match bit {
+        SregBitSel::C => SregLiveness::C,
+        SregBitSel::Z => SregLiveness::Z,
+        SregBitSel::N => SregLiveness::N,
+        SregBitSel::V => SregLiveness::V,
+        SregBitSel::S => SregLiveness::S,
+        SregBitSel::H => SregLiveness::H,
+        SregBitSel::T => SregLiveness::T,
+        SregBitSel::I => SregLiveness::I,
+    })
 }
 
 /// SREG bits written by the general arithmetic instructions.
-fn arith_def() -> SregLiveness {
-    SregLiveness {
-        c: true,
-        z: true,
-        n: true,
-        v: true,
-        s: true,
-        h: true,
-        ..Default::default()
-    }
+const fn arith_def() -> SregLiveness {
+    SregLiveness::from_bits(SregLiveness::C | SregLiveness::Z | SregLiveness::N | SregLiveness::V | SregLiveness::S | SregLiveness::H)
 }
 
 /// SREG bits written by the logic/compare instructions (no half carry).
-fn logic_def() -> SregLiveness {
-    SregLiveness {
-        c: true,
-        z: true,
-        n: true,
-        v: true,
-        s: true,
-        ..Default::default()
-    }
+const fn logic_def() -> SregLiveness {
+    SregLiveness::from_bits(SregLiveness::C | SregLiveness::Z | SregLiveness::N | SregLiveness::V | SregLiveness::S)
 }
 
 /// Conditional branches and the single SREG bit each one reads.
@@ -703,17 +696,17 @@ mod tests {
     #[test]
     fn test_sreg_liveness_add() {
         let (defs, _uses) = sreg_def_use("ADD");
-        assert!(defs.c);
-        assert!(defs.z);
-        assert!(defs.n);
-        assert!(defs.h);
+        assert!(defs.c());
+        assert!(defs.z());
+        assert!(defs.n());
+        assert!(defs.h());
     }
 
     #[test]
     fn test_sreg_liveness_breq() {
         let (_defs, uses) = sreg_def_use("BREQ");
-        assert!(uses.z);
-        assert!(!uses.c);
+        assert!(uses.z());
+        assert!(!uses.c());
     }
 
     #[test]
@@ -725,19 +718,11 @@ mod tests {
 
     #[test]
     fn test_sreg_liveness_merge() {
-        let a = SregLiveness {
-            c: true,
-            z: false,
-            ..Default::default()
-        };
-        let b = SregLiveness {
-            c: false,
-            z: true,
-            ..Default::default()
-        };
+        let a = SregLiveness::NONE.with(SregLiveness::C, true);
+        let b = SregLiveness::NONE.with(SregLiveness::Z, true);
         let m = a.merge(b);
-        assert!(m.c);
-        assert!(m.z);
+        assert!(m.c());
+        assert!(m.z());
     }
 
     #[test]
@@ -754,8 +739,8 @@ mod tests {
         ];
         let entries = AvrSregAnalysis::analyze(&instrs);
         assert_eq!(entries.len(), 2);
-        assert!(entries[0].defs.z);
-        assert!(entries[1].uses.z);
+        assert!(entries[0].defs.z());
+        assert!(entries[1].uses.z());
     }
 
     #[test]

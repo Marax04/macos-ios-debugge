@@ -164,34 +164,82 @@ pub fn annotate_io_reg(io_addr: u8, value: Option<u8>, device: &'static AvrDevic
 
 // ── SREG flag decoder ─────────────────────────────────────────────────────────
 
-/// Decode the AVR SREG (status register) byte.
-#[derive(Debug, Clone, Copy)]
-pub struct SregFlags {
-    pub i: bool,
-    pub t: bool,
-    pub h: bool,
-    pub s: bool,
-    pub v: bool,
-    pub n: bool,
-    pub z: bool,
-    pub c: bool,
-}
+/// The AVR SREG (status register) byte, decoded in hardware bit order.
+///
+/// The value stored *is* the SREG byte (`I T H S V N Z C`, bit 7 down to
+/// bit 0); the accessors read bits rather than eight separate `bool` fields
+/// that a caller could fill in the wrong order.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SregFlags(u8);
 
 impl SregFlags {
+    /// Global interrupt enable.
+    pub const I: u8 = 0x80;
+    /// Bit copy storage.
+    pub const T: u8 = 0x40;
+    /// Half carry.
+    pub const H: u8 = 0x20;
+    /// Sign.
+    pub const S: u8 = 0x10;
+    /// Two's complement overflow.
+    pub const V: u8 = 0x08;
+    /// Negative.
+    pub const N: u8 = 0x04;
+    /// Zero.
+    pub const Z: u8 = 0x02;
+    /// Carry.
+    pub const C: u8 = 0x01;
+
+    /// No flag set.
+    pub const NONE: Self = Self(0);
+
+    /// Decode a raw SREG byte.
     #[must_use]
-    pub const fn from_byte(sreg: u8) -> Self {
-        Self {
-            i: sreg & 0x80 != 0,
-            t: sreg & 0x40 != 0,
-            h: sreg & 0x20 != 0,
-            s: sreg & 0x10 != 0,
-            v: sreg & 0x08 != 0,
-            n: sreg & 0x04 != 0,
-            z: sreg & 0x02 != 0,
-            c: sreg & 0x01 != 0,
-        }
+    pub const fn from_byte(sreg: u8) -> Self { Self(sreg) }
+
+    /// The raw SREG byte.
+    #[must_use]
+    pub const fn bits(self) -> u8 { self.0 }
+
+    /// True when `bit` (one of the associated constants) is set.
+    #[must_use]
+    pub const fn has(self, bit: u8) -> bool { self.0 & bit != 0 }
+
+    /// A copy with `bit` set (`on`) or cleared.
+    #[must_use]
+    pub const fn with(self, bit: u8, on: bool) -> Self {
+        if on { Self(self.0 | bit) } else { Self(self.0 & !bit) }
     }
 
+    /// Global interrupt enable (I).
+    #[must_use]
+    pub const fn i(self) -> bool { self.has(Self::I) }
+    /// Bit copy storage (T).
+    #[must_use]
+    pub const fn t(self) -> bool { self.has(Self::T) }
+    /// Half carry (H).
+    #[must_use]
+    pub const fn h(self) -> bool { self.has(Self::H) }
+    /// Sign (S).
+    #[must_use]
+    pub const fn s(self) -> bool { self.has(Self::S) }
+    /// Two's complement overflow (V).
+    #[must_use]
+    pub const fn v(self) -> bool { self.has(Self::V) }
+    /// Negative (N).
+    #[must_use]
+    pub const fn n(self) -> bool { self.has(Self::N) }
+    /// Zero (Z).
+    #[must_use]
+    pub const fn z(self) -> bool { self.has(Self::Z) }
+    /// Carry (C).
+    #[must_use]
+    pub const fn c(self) -> bool { self.has(Self::C) }
+}
+
+impl core::ops::BitOr for SregFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
 }
 
 impl std::fmt::Display for SregFlags {
@@ -199,8 +247,8 @@ impl std::fmt::Display for SregFlags {
         write!(
             f,
             "I={} T={} H={} S={} V={} N={} Z={} C={}",
-            u8::from(self.i), u8::from(self.t), u8::from(self.h), u8::from(self.s),
-            u8::from(self.v), u8::from(self.n), u8::from(self.z), u8::from(self.c),
+            u8::from(self.i()), u8::from(self.t()), u8::from(self.h()), u8::from(self.s()),
+            u8::from(self.v()), u8::from(self.n()), u8::from(self.z()), u8::from(self.c()),
         )
     }
 }
@@ -431,16 +479,98 @@ pub const fn decode_admux_ref(refs: u8) -> &'static str {
 
 // ── SPI control decoder ───────────────────────────────────────────────────────
 
+/// The SPCR boolean control bits, packed in hardware bit order.
+///
+/// Bit positions match SPCR itself: SPE (6), DORD (5), MSTR (4), CPOL (3),
+/// CPHA (2).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SpiFlags(u8);
+
+impl SpiFlags {
+    /// SPE — SPI enable.
+    pub const ENABLED: u8 = 1 << 6;
+    /// DORD — data order, LSB first when set.
+    pub const DORD_LSB_FIRST: u8 = 1 << 5;
+    /// MSTR — master mode select.
+    pub const MASTER: u8 = 1 << 4;
+    /// CPOL — clock polarity.
+    pub const CPOL: u8 = 1 << 3;
+    /// CPHA — clock phase.
+    pub const CPHA: u8 = 1 << 2;
+
+    /// Every bit this type tracks.
+    pub const MASK: u8 = Self::ENABLED | Self::DORD_LSB_FIRST | Self::MASTER | Self::CPOL | Self::CPHA;
+
+    /// No bit set.
+    pub const NONE: Self = Self(0);
+
+    /// Keep only the control bits of a raw SPCR byte.
+    #[must_use]
+    pub const fn from_spcr(spcr: u8) -> Self { Self(spcr & Self::MASK) }
+
+    /// The raw bit image.
+    #[must_use]
+    pub const fn bits(self) -> u8 { self.0 }
+
+    /// True when `bit` (one of the associated constants) is set.
+    #[must_use]
+    pub const fn has(self, bit: u8) -> bool { self.0 & bit != 0 }
+
+    /// A copy with `bit` set (`on`) or cleared.
+    #[must_use]
+    pub const fn with(self, bit: u8, on: bool) -> Self {
+        if on { Self(self.0 | (bit & Self::MASK)) } else { Self(self.0 & !bit) }
+    }
+
+    /// SPI enabled.
+    #[must_use]
+    pub const fn enabled(self) -> bool { self.has(Self::ENABLED) }
+    /// Data order is LSB first.
+    #[must_use]
+    pub const fn dord_lsb_first(self) -> bool { self.has(Self::DORD_LSB_FIRST) }
+    /// Master mode.
+    #[must_use]
+    pub const fn master(self) -> bool { self.has(Self::MASTER) }
+    /// Clock polarity.
+    #[must_use]
+    pub const fn cpol(self) -> bool { self.has(Self::CPOL) }
+    /// Clock phase.
+    #[must_use]
+    pub const fn cpha(self) -> bool { self.has(Self::CPHA) }
+}
+
+impl core::ops::BitOr for SpiFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
+}
+
 /// Decoded SPI configuration (SPCR).
 #[derive(Debug, Clone)]
 pub struct SpiConfig {
-    pub enabled: bool,
-    pub dord_lsb_first: bool,
-    pub master: bool,
-    pub cpol: bool,
-    pub cpha: bool,
+    /// The SPCR control bits, in hardware bit order.
+    pub flags: SpiFlags,
+    /// SPI mode number, `(CPOL << 1) | CPHA`.
     pub spi_mode: u8,
+    /// Human-readable SCK divider.
     pub clock_div: &'static str,
+}
+
+impl SpiConfig {
+    /// SPI enabled.
+    #[must_use]
+    pub const fn enabled(&self) -> bool { self.flags.enabled() }
+    /// Data order is LSB first.
+    #[must_use]
+    pub const fn dord_lsb_first(&self) -> bool { self.flags.dord_lsb_first() }
+    /// Master mode.
+    #[must_use]
+    pub const fn master(&self) -> bool { self.flags.master() }
+    /// Clock polarity.
+    #[must_use]
+    pub const fn cpol(&self) -> bool { self.flags.cpol() }
+    /// Clock phase.
+    #[must_use]
+    pub const fn cpha(&self) -> bool { self.flags.cpha() }
 }
 
 impl SpiConfig {
@@ -464,11 +594,12 @@ impl SpiConfig {
             _ => "fosc/64 (SPI2X)",
         };
         Self {
-            enabled: spe,
-            dord_lsb_first: dord,
-            master: mstr,
-            cpol,
-            cpha,
+            flags: SpiFlags::NONE
+                .with(SpiFlags::ENABLED, spe)
+                .with(SpiFlags::DORD_LSB_FIRST, dord)
+                .with(SpiFlags::MASTER, mstr)
+                .with(SpiFlags::CPOL, cpol)
+                .with(SpiFlags::CPHA, cpha),
             spi_mode: mode,
             clock_div: clk,
         }

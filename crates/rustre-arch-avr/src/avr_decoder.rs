@@ -117,6 +117,67 @@ pub enum AvrOpcode {
     Unknown,
 }
 
+/// Properties of a decoded instruction, packed as one bit set.
+///
+/// Six adjacent `bool` fields are interchangeable to the compiler; a single
+/// bit set with named constants cannot be filled in the wrong order.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AvrInstrFlags(u8);
+
+impl AvrInstrFlags {
+    /// The instruction reads data memory.
+    pub const READS_MEM: u8 = 1 << 0;
+    /// The instruction writes data memory.
+    pub const WRITES_MEM: u8 = 1 << 1;
+    /// The instruction is a call.
+    pub const IS_CALL: u8 = 1 << 2;
+    /// The instruction is a return.
+    pub const IS_RET: u8 = 1 << 3;
+    /// The instruction is a conditional branch.
+    pub const IS_CONDITIONAL: u8 = 1 << 4;
+    /// The instruction is an unconditional branch.
+    pub const IS_BRANCH: u8 = 1 << 5;
+
+    /// Every bit this type tracks.
+    pub const MASK: u8 = Self::READS_MEM
+        | Self::WRITES_MEM
+        | Self::IS_CALL
+        | Self::IS_RET
+        | Self::IS_CONDITIONAL
+        | Self::IS_BRANCH;
+
+    /// No property set.
+    pub const NONE: Self = Self(0);
+
+    /// Keep only the bits this type tracks.
+    #[must_use]
+    pub const fn from_bits(v: u8) -> Self { Self(v & Self::MASK) }
+
+    /// The raw bit image.
+    #[must_use]
+    pub const fn bits(self) -> u8 { self.0 }
+
+    /// True when `bit` (one of the associated constants) is set.
+    #[must_use]
+    pub const fn has(self, bit: u8) -> bool { self.0 & bit != 0 }
+
+    /// A copy with `bit` set (`on`) or cleared.
+    #[must_use]
+    pub const fn with(self, bit: u8, on: bool) -> Self {
+        if on { Self(self.0 | (bit & Self::MASK)) } else { Self(self.0 & !bit) }
+    }
+
+    /// Set or clear `bit` in place.
+    pub const fn set(&mut self, bit: u8, on: bool) {
+        *self = self.with(bit, on);
+    }
+}
+
+impl core::ops::BitOr for AvrInstrFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
+}
+
 /// A fully decoded AVR instruction.
 #[derive(Debug, Clone)]
 pub struct AvrInstr {
@@ -132,21 +193,42 @@ pub struct AvrInstr {
     pub operands: Vec<AvrOperand>,
     /// PC-relative absolute branch target (byte address), if applicable.
     pub branch_target: Option<AvrAddr>,
-    /// Whether this instruction reads memory.
-    pub reads_mem: bool,
-    /// Whether this instruction writes memory.
-    pub writes_mem: bool,
-    /// Whether this instruction is a call.
-    pub is_call: bool,
-    /// Whether this instruction is a return.
-    pub is_ret: bool,
-    /// Whether this instruction is a conditional branch.
-    pub is_conditional: bool,
-    /// Whether this instruction is an unconditional branch.
-    pub is_branch: bool,
+    /// Instruction property bits.
+    pub flags: AvrInstrFlags,
 }
 
 impl AvrInstr {
+    /// Whether this instruction has the `READS_MEM` property.
+    #[must_use]
+    pub const fn reads_mem(&self) -> bool { self.flags.has(AvrInstrFlags::READS_MEM) }
+    /// Set the `READS_MEM` property.
+    pub const fn set_reads_mem(&mut self, on: bool) { self.flags.set(AvrInstrFlags::READS_MEM, on); }
+    /// Whether this instruction has the `WRITES_MEM` property.
+    #[must_use]
+    pub const fn writes_mem(&self) -> bool { self.flags.has(AvrInstrFlags::WRITES_MEM) }
+    /// Set the `WRITES_MEM` property.
+    pub const fn set_writes_mem(&mut self, on: bool) { self.flags.set(AvrInstrFlags::WRITES_MEM, on); }
+    /// Whether this instruction has the `IS_CALL` property.
+    #[must_use]
+    pub const fn is_call(&self) -> bool { self.flags.has(AvrInstrFlags::IS_CALL) }
+    /// Set the `IS_CALL` property.
+    pub const fn set_is_call(&mut self, on: bool) { self.flags.set(AvrInstrFlags::IS_CALL, on); }
+    /// Whether this instruction has the `IS_RET` property.
+    #[must_use]
+    pub const fn is_ret(&self) -> bool { self.flags.has(AvrInstrFlags::IS_RET) }
+    /// Set the `IS_RET` property.
+    pub const fn set_is_ret(&mut self, on: bool) { self.flags.set(AvrInstrFlags::IS_RET, on); }
+    /// Whether this instruction has the `IS_CONDITIONAL` property.
+    #[must_use]
+    pub const fn is_conditional(&self) -> bool { self.flags.has(AvrInstrFlags::IS_CONDITIONAL) }
+    /// Set the `IS_CONDITIONAL` property.
+    pub const fn set_is_conditional(&mut self, on: bool) { self.flags.set(AvrInstrFlags::IS_CONDITIONAL, on); }
+    /// Whether this instruction has the `IS_BRANCH` property.
+    #[must_use]
+    pub const fn is_branch(&self) -> bool { self.flags.has(AvrInstrFlags::IS_BRANCH) }
+    /// Set the `IS_BRANCH` property.
+    pub const fn set_is_branch(&mut self, on: bool) { self.flags.set(AvrInstrFlags::IS_BRANCH, on); }
+
     /// Format operands separated by ", ".
     #[must_use]
     pub fn operand_string(&self) -> String {
@@ -186,8 +268,7 @@ fn simple_instr(raw2: u16, opcode: AvrOpcode, mn: &str) -> AvrInstr {
         mnemonic: mn.to_string(),
         operands: vec![],
         branch_target: None,
-        reads_mem: false, writes_mem: false,
-        is_call: false, is_ret: false, is_conditional: false, is_branch: false,
+                flags: AvrInstrFlags::NONE,
     }
 }
 
@@ -197,8 +278,7 @@ fn reg_instr(raw2: u16, opcode: AvrOpcode, mn: &str, d: u8, r: u8) -> AvrInstr {
         len: 2, opcode, mnemonic: mn.to_string(),
         operands: vec![AvrOperand::Reg(d), AvrOperand::Reg(r)],
         branch_target: None,
-        reads_mem: false, writes_mem: false,
-        is_call: false, is_ret: false, is_conditional: false, is_branch: false,
+                flags: AvrInstrFlags::NONE,
     }
 }
 
@@ -208,8 +288,7 @@ fn reg_imm_instr(raw2: u16, opcode: AvrOpcode, mn: &str, d: u8, k: u8) -> AvrIns
         len: 2, opcode, mnemonic: mn.to_string(),
         operands: vec![AvrOperand::Reg(d), AvrOperand::Imm8(k)],
         branch_target: None,
-        reads_mem: false, writes_mem: false,
-        is_call: false, is_ret: false, is_conditional: false, is_branch: false,
+                flags: AvrInstrFlags::NONE,
     }
 }
 
@@ -259,8 +338,7 @@ impl AvrDecoder {
             mnemonic: "DC.W".to_string(),
             operands: vec![AvrOperand::Imm8(u8::try_from(word).unwrap_or(u8::MAX))],
             branch_target: None,
-            reads_mem: false, writes_mem: false,
-            is_call: false, is_ret: false, is_conditional: false, is_branch: false,
+                        flags: AvrInstrFlags::NONE,
         }
     }
 
@@ -270,15 +348,15 @@ impl AvrDecoder {
             0x0000 => Some(simple_instr(word, AvrOpcode::Nop, "NOP")),
             0x9508 => Some({
                 let mut i = simple_instr(word, AvrOpcode::Ret, "RET");
-                i.is_ret = true; i
+                i.set_is_ret(true); i
             }),
-            0x9518 => Some({ let mut i = simple_instr(word, AvrOpcode::Reti, "RETI"); i.is_ret = true; i }),
-            0x9409 => Some({ let mut i = simple_instr(word, AvrOpcode::Ijmp, "IJMP"); i.is_branch = true; i }),
-            0x9509 => Some({ let mut i = simple_instr(word, AvrOpcode::Icall, "ICALL"); i.is_call = true; i }),
-            0x9419 => Some({ let mut i = simple_instr(word, AvrOpcode::Eijmp, "EIJMP"); i.is_branch = true; i }),
-            0x9519 => Some({ let mut i = simple_instr(word, AvrOpcode::Eicall, "EICALL"); i.is_call = true; i }),
-            0x95C8 => Some({ let mut i = simple_instr(word, AvrOpcode::Lpm, "LPM"); i.reads_mem = true; i }),
-            0x95E8 => Some({ let mut i = simple_instr(word, AvrOpcode::Spm, "SPM"); i.writes_mem = true; i }),
+            0x9518 => Some({ let mut i = simple_instr(word, AvrOpcode::Reti, "RETI"); i.set_is_ret(true); i }),
+            0x9409 => Some({ let mut i = simple_instr(word, AvrOpcode::Ijmp, "IJMP"); i.set_is_branch(true); i }),
+            0x9509 => Some({ let mut i = simple_instr(word, AvrOpcode::Icall, "ICALL"); i.set_is_call(true); i }),
+            0x9419 => Some({ let mut i = simple_instr(word, AvrOpcode::Eijmp, "EIJMP"); i.set_is_branch(true); i }),
+            0x9519 => Some({ let mut i = simple_instr(word, AvrOpcode::Eicall, "EICALL"); i.set_is_call(true); i }),
+            0x95C8 => Some({ let mut i = simple_instr(word, AvrOpcode::Lpm, "LPM"); i.set_reads_mem(true); i }),
+            0x95E8 => Some({ let mut i = simple_instr(word, AvrOpcode::Spm, "SPM"); i.set_writes_mem(true); i }),
             0x9588 => Some(simple_instr(word, AvrOpcode::Sleep, "SLEEP")),
             0x95A8 => Some(simple_instr(word, AvrOpcode::Wdr, "WDR")),
             0x9598 => Some(simple_instr(word, AvrOpcode::Break, "BREAK")),
@@ -424,13 +502,13 @@ impl AvrDecoder {
         if (word & 0xFF00) == 0x9900 {
             let a = ((word >> 3) & 0x1F) as u8; let b = u8::try_from(word & 7).unwrap_or(u8::MAX);
             let mut i = simple_instr(word, AvrOpcode::Sbic, "SBIC");
-            i.is_conditional = true;
+            i.set_is_conditional(true);
             i.operands = vec![AvrOperand::IoPortBit(a, b)]; return Some(i);
         }
         if (word & 0xFF00) == 0x9B00 {
             let a = ((word >> 3) & 0x1F) as u8; let b = u8::try_from(word & 7).unwrap_or(u8::MAX);
             let mut i = simple_instr(word, AvrOpcode::Sbis, "SBIS");
-            i.is_conditional = true;
+            i.set_is_conditional(true);
             i.operands = vec![AvrOperand::IoPortBit(a, b)]; return Some(i);
         }
         // CP
@@ -463,29 +541,29 @@ impl AvrDecoder {
             return Some(reg_imm_instr(word, AvrOpcode::Ldi, "LDI", d, k));
         }
         // LD X
-        if (word & 0xFE0F) == 0x900C { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPair(27,26)]; return Some(i); }
-        if (word & 0xFE0F) == 0x900D { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPostInc(27,26)]; return Some(i); }
-        if (word & 0xFE0F) == 0x900E { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPreDec(27,26)]; return Some(i); }
+        if (word & 0xFE0F) == 0x900C { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPair(27,26)]; return Some(i); }
+        if (word & 0xFE0F) == 0x900D { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPostInc(27,26)]; return Some(i); }
+        if (word & 0xFE0F) == 0x900E { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPreDec(27,26)]; return Some(i); }
         // LD Y
-        if (word & 0xFE0F) == 0x8008 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPair(29,28)]; return Some(i); }
-        if (word & 0xFE0F) == 0x9009 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPostInc(29,28)]; return Some(i); }
-        if (word & 0xFE0F) == 0x900A { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPreDec(29,28)]; return Some(i); }
+        if (word & 0xFE0F) == 0x8008 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPair(29,28)]; return Some(i); }
+        if (word & 0xFE0F) == 0x9009 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPostInc(29,28)]; return Some(i); }
+        if (word & 0xFE0F) == 0x900A { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPreDec(29,28)]; return Some(i); }
         // LD Z
-        if (word & 0xFE0F) == 0x8000 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPair(31,30)]; return Some(i); }
-        if (word & 0xFE0F) == 0x9001 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPostInc(31,30)]; return Some(i); }
-        if (word & 0xFE0F) == 0x9002 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPreDec(31,30)]; return Some(i); }
+        if (word & 0xFE0F) == 0x8000 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPair(31,30)]; return Some(i); }
+        if (word & 0xFE0F) == 0x9001 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPostInc(31,30)]; return Some(i); }
+        if (word & 0xFE0F) == 0x9002 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Ld, "LD"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPreDec(31,30)]; return Some(i); }
         // LDD Y+q
         if (word & 0xD208) == 0x8008 && word & 0x0207 != 0 {
             let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX);
             let q = u8::try_from(((word & 0x2000) >> 8) | ((word & 0x0C00) >> 7) | (word & 0x07)).unwrap_or(u8::MAX);
-            let mut i = simple_instr(word, AvrOpcode::Ldd, "LDD"); i.reads_mem = true;
+            let mut i = simple_instr(word, AvrOpcode::Ldd, "LDD"); i.set_reads_mem(true);
             i.operands = vec![AvrOperand::Reg(d), AvrOperand::IndexDisp(29, q)]; return Some(i);
         }
         // LDD Z+q
         if (word & 0xD208) == 0x8000 && word & 0x0207 != 0 {
             let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX);
             let q = u8::try_from(((word & 0x2000) >> 8) | ((word & 0x0C00) >> 7) | (word & 0x07)).unwrap_or(u8::MAX);
-            let mut i = simple_instr(word, AvrOpcode::Ldd, "LDD"); i.reads_mem = true;
+            let mut i = simple_instr(word, AvrOpcode::Ldd, "LDD"); i.set_reads_mem(true);
             i.operands = vec![AvrOperand::Reg(d), AvrOperand::IndexDisp(31, q)]; return Some(i);
         }
         // LDS
@@ -493,27 +571,27 @@ impl AvrDecoder {
             if bytes.len() < 4 { return None; }
             let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX);
             let addr = u16::from_le_bytes([bytes[2], bytes[3]]);
-            let mut i = AvrInstr { raw: [bytes[0],bytes[1],bytes[2],bytes[3]], len: 4, opcode: AvrOpcode::Lds, mnemonic: "LDS".to_string(), operands: vec![AvrOperand::Reg(d), AvrOperand::DataAddr(addr)], branch_target: None, reads_mem: true, writes_mem: false, is_call: false, is_ret: false, is_conditional: false, is_branch: false };
+            let mut i = AvrInstr { raw: [bytes[0],bytes[1],bytes[2],bytes[3]], len: 4, opcode: AvrOpcode::Lds, mnemonic: "LDS".to_string(), operands: vec![AvrOperand::Reg(d), AvrOperand::DataAddr(addr)], branch_target: None, flags: AvrInstrFlags::from_bits(AvrInstrFlags::READS_MEM) };
             i.len = 4; return Some(i);
         }
         // ST X
-        if (word & 0xFE0F) == 0x920C { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.writes_mem = true; i.operands = vec![AvrOperand::RegPair(27,26), AvrOperand::Reg(r)]; return Some(i); }
-        if (word & 0xFE0F) == 0x920D { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.writes_mem = true; i.operands = vec![AvrOperand::RegPairPostInc(27,26), AvrOperand::Reg(r)]; return Some(i); }
-        if (word & 0xFE0F) == 0x920E { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.writes_mem = true; i.operands = vec![AvrOperand::RegPairPreDec(27,26), AvrOperand::Reg(r)]; return Some(i); }
-        if (word & 0xFE0F) == 0x9209 { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.writes_mem = true; i.operands = vec![AvrOperand::RegPairPostInc(29,28), AvrOperand::Reg(r)]; return Some(i); }
-        if (word & 0xFE0F) == 0x9201 { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.writes_mem = true; i.operands = vec![AvrOperand::RegPairPostInc(31,30), AvrOperand::Reg(r)]; return Some(i); }
+        if (word & 0xFE0F) == 0x920C { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.set_writes_mem(true); i.operands = vec![AvrOperand::RegPair(27,26), AvrOperand::Reg(r)]; return Some(i); }
+        if (word & 0xFE0F) == 0x920D { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.set_writes_mem(true); i.operands = vec![AvrOperand::RegPairPostInc(27,26), AvrOperand::Reg(r)]; return Some(i); }
+        if (word & 0xFE0F) == 0x920E { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.set_writes_mem(true); i.operands = vec![AvrOperand::RegPairPreDec(27,26), AvrOperand::Reg(r)]; return Some(i); }
+        if (word & 0xFE0F) == 0x9209 { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.set_writes_mem(true); i.operands = vec![AvrOperand::RegPairPostInc(29,28), AvrOperand::Reg(r)]; return Some(i); }
+        if (word & 0xFE0F) == 0x9201 { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::St, "ST"); i.set_writes_mem(true); i.operands = vec![AvrOperand::RegPairPostInc(31,30), AvrOperand::Reg(r)]; return Some(i); }
         // STS
         if (word & 0xFE0F) == 0x9200 {
             if bytes.len() < 4 { return None; }
             let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX);
             let addr = u16::from_le_bytes([bytes[2], bytes[3]]);
-            let i = AvrInstr { raw: [bytes[0],bytes[1],bytes[2],bytes[3]], len: 4, opcode: AvrOpcode::Sts, mnemonic: "STS".to_string(), operands: vec![AvrOperand::DataAddr(addr), AvrOperand::Reg(r)], branch_target: None, reads_mem: false, writes_mem: true, is_call: false, is_ret: false, is_conditional: false, is_branch: false };
+            let i = AvrInstr { raw: [bytes[0],bytes[1],bytes[2],bytes[3]], len: 4, opcode: AvrOpcode::Sts, mnemonic: "STS".to_string(), operands: vec![AvrOperand::DataAddr(addr), AvrOperand::Reg(r)], branch_target: None, flags: AvrInstrFlags::from_bits(AvrInstrFlags::WRITES_MEM) };
             return Some(i);
         }
         // PUSH
-        if (word & 0xFE0F) == 0x920F { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Push, "PUSH"); i.writes_mem = true; i.operands = vec![AvrOperand::Reg(r)]; return Some(i); }
+        if (word & 0xFE0F) == 0x920F { let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Push, "PUSH"); i.set_writes_mem(true); i.operands = vec![AvrOperand::Reg(r)]; return Some(i); }
         // POP
-        if (word & 0xFE0F) == 0x900F { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Pop, "POP"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d)]; return Some(i); }
+        if (word & 0xFE0F) == 0x900F { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Pop, "POP"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d)]; return Some(i); }
         // IN
         if (word & 0xF800) == 0xB000 {
             let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX);
@@ -529,9 +607,9 @@ impl AvrDecoder {
             i.operands = vec![AvrOperand::IoPort(a), AvrOperand::Reg(r)]; return Some(i);
         }
         // LPM Rd,Z
-        if (word & 0xFE0F) == 0x9004 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Lpm, "LPM"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPair(31,30)]; return Some(i); }
+        if (word & 0xFE0F) == 0x9004 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Lpm, "LPM"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPair(31,30)]; return Some(i); }
         // LPM Rd,Z+
-        if (word & 0xFE0F) == 0x9005 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Lpm, "LPM"); i.reads_mem = true; i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPostInc(31,30)]; return Some(i); }
+        if (word & 0xFE0F) == 0x9005 { let d = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let mut i = simple_instr(word, AvrOpcode::Lpm, "LPM"); i.set_reads_mem(true); i.operands = vec![AvrOperand::Reg(d), AvrOperand::RegPairPostInc(31,30)]; return Some(i); }
         None
     }
 
@@ -541,7 +619,7 @@ impl AvrDecoder {
             let k = sign_ext_12(word);
             let target = branch_target_12(pc, k);
             let mut i = simple_instr(word, AvrOpcode::Rjmp, "RJMP");
-            i.is_branch = true; i.branch_target = Some(target);
+            i.set_is_branch(true); i.branch_target = Some(target);
             i.operands = vec![AvrOperand::RelOffset12(k)]; return Some(i);
         }
         // RCALL
@@ -549,7 +627,7 @@ impl AvrDecoder {
             let k = sign_ext_12(word);
             let target = branch_target_12(pc, k);
             let mut i = simple_instr(word, AvrOpcode::Rcall, "RCALL");
-            i.is_call = true; i.branch_target = Some(target);
+            i.set_is_call(true); i.branch_target = Some(target);
             i.operands = vec![AvrOperand::RelOffset12(k)]; return Some(i);
         }
         // JMP (32-bit)
@@ -558,7 +636,7 @@ impl AvrDecoder {
             let k_hi = ((u32::from(word) & 0x01F0) >> 3) | (u32::from(word) & 1);
             let k_lo = u32::from(u16::from_le_bytes([bytes[2], bytes[3]]));
             let target = (k_hi << 16) | k_lo;
-            let i = AvrInstr { raw: [bytes[0],bytes[1],bytes[2],bytes[3]], len: 4, opcode: AvrOpcode::Jmp, mnemonic: "JMP".to_string(), operands: vec![AvrOperand::FlashAddr(target)], branch_target: Some(AvrAddr(target * 2)), reads_mem: false, writes_mem: false, is_call: false, is_ret: false, is_conditional: false, is_branch: true };
+            let i = AvrInstr { raw: [bytes[0],bytes[1],bytes[2],bytes[3]], len: 4, opcode: AvrOpcode::Jmp, mnemonic: "JMP".to_string(), operands: vec![AvrOperand::FlashAddr(target)], branch_target: Some(AvrAddr(target * 2)), flags: AvrInstrFlags::from_bits(AvrInstrFlags::IS_BRANCH) };
             return Some(i);
         }
         // CALL (32-bit)
@@ -567,7 +645,7 @@ impl AvrDecoder {
             let k_hi = ((u32::from(word) & 0x01F0) >> 3) | (u32::from(word) & 1);
             let k_lo = u32::from(u16::from_le_bytes([bytes[2], bytes[3]]));
             let target = (k_hi << 16) | k_lo;
-            let i = AvrInstr { raw: [bytes[0],bytes[1],bytes[2],bytes[3]], len: 4, opcode: AvrOpcode::Call, mnemonic: "CALL".to_string(), operands: vec![AvrOperand::FlashAddr(target)], branch_target: Some(AvrAddr(target * 2)), reads_mem: false, writes_mem: false, is_call: true, is_ret: false, is_conditional: false, is_branch: false };
+            let i = AvrInstr { raw: [bytes[0],bytes[1],bytes[2],bytes[3]], len: 4, opcode: AvrOpcode::Call, mnemonic: "CALL".to_string(), operands: vec![AvrOperand::FlashAddr(target)], branch_target: Some(AvrAddr(target * 2)), flags: AvrInstrFlags::from_bits(AvrInstrFlags::IS_CALL) };
             return Some(i);
         }
         // BRBS (set bit branches) 1111 0kkk kkkk ksss
@@ -578,7 +656,7 @@ impl AvrDecoder {
             let target = branch_target_7(pc, k);
             let mn = ["BRCS","BREQ","BRMI","BRVS","BRLT","BRHS","BRTS","BRIE"][s as usize];
             let mut i = simple_instr(word, AvrOpcode::Brbs, mn);
-            i.is_conditional = true; i.is_branch = true; i.branch_target = Some(target);
+            i.set_is_conditional(true); i.set_is_branch(true); i.branch_target = Some(target);
             i.operands = vec![AvrOperand::RelOffset7(k)]; return Some(i);
         }
         // BRBC (clear bit branches)
@@ -589,27 +667,27 @@ impl AvrDecoder {
             let target = branch_target_7(pc, k);
             let mn = ["BRCC","BRNE","BRPL","BRVC","BRGE","BRHC","BRTC","BRID"][s as usize];
             let mut i = simple_instr(word, AvrOpcode::Brbc, mn);
-            i.is_conditional = true; i.is_branch = true; i.branch_target = Some(target);
+            i.set_is_conditional(true); i.set_is_branch(true); i.branch_target = Some(target);
             i.operands = vec![AvrOperand::RelOffset7(k)]; return Some(i);
         }
         // CPSE
         if (word & 0xFC00) == 0x1000 {
             let (d,r) = rdrr(word);
             let mut i = reg_instr(word, AvrOpcode::Cpse, "CPSE", d, r);
-            i.is_conditional = true; return Some(i);
+            i.set_is_conditional(true); return Some(i);
         }
         // SBRC
         if (word & 0xFE08) == 0xFC00 {
             let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let b = u8::try_from(word & 7).unwrap_or(u8::MAX);
             let mut i = simple_instr(word, AvrOpcode::Sbrc, "SBRC");
-            i.is_conditional = true;
+            i.set_is_conditional(true);
             i.operands = vec![AvrOperand::Reg(r), AvrOperand::Bit(b)]; return Some(i);
         }
         // SBRS
         if (word & 0xFE08) == 0xFE00 {
             let r = u8::try_from((word >> 4) & 0x1F).unwrap_or(u8::MAX); let b = u8::try_from(word & 7).unwrap_or(u8::MAX);
             let mut i = simple_instr(word, AvrOpcode::Sbrs, "SBRS");
-            i.is_conditional = true;
+            i.set_is_conditional(true);
             i.operands = vec![AvrOperand::Reg(r), AvrOperand::Bit(b)]; return Some(i);
         }
         let _ = bytes;
@@ -666,7 +744,7 @@ mod tests {
     fn test_ret() {
         let i = dec().decode(0, &[0x08, 0x95]).unwrap();
         assert_eq!(i.mnemonic, "RET");
-        assert!(i.is_ret);
+        assert!(i.is_ret());
     }
 
     #[test]
@@ -687,7 +765,7 @@ mod tests {
     fn test_rjmp() {
         let i = dec().decode(0x100, &[0xFF, 0xCF]).unwrap();
         assert_eq!(i.mnemonic, "RJMP");
-        assert!(i.is_branch);
+        assert!(i.is_branch());
         assert_eq!(i.branch_target, Some(AvrAddr(0x100)));
     }
 
@@ -695,7 +773,7 @@ mod tests {
     fn test_call_32bit() {
         let i = dec().decode(0, &[0x0E, 0x94, 0x10, 0x00]).unwrap();
         assert_eq!(i.mnemonic, "CALL");
-        assert!(i.is_call);
+        assert!(i.is_call());
         assert_eq!(i.len, 4);
     }
 
@@ -703,24 +781,24 @@ mod tests {
     fn test_brne() {
         let i = dec().decode(0x100, &[0x01, 0xF4]).unwrap();
         assert_eq!(i.mnemonic, "BRNE");
-        assert!(i.is_conditional);
+        assert!(i.is_conditional());
     }
 
     #[test]
     fn test_push_pop() {
         let push = dec().decode(0, &[0x0F, 0x93]).unwrap();
         assert_eq!(push.mnemonic, "PUSH");
-        assert!(push.writes_mem);
+        assert!(push.writes_mem());
         let pop = dec().decode(0, &[0x0F, 0x90]).unwrap();
         assert_eq!(pop.mnemonic, "POP");
-        assert!(pop.reads_mem);
+        assert!(pop.reads_mem());
     }
 
     #[test]
     fn test_ld_x() {
         let i = dec().decode(0, &[0x0C, 0x90]).unwrap();
         assert_eq!(i.mnemonic, "LD");
-        assert!(i.reads_mem);
+        assert!(i.reads_mem());
     }
 
     #[test]
