@@ -24,8 +24,7 @@ impl ApiArg {
     pub const fn as_u64(&self) -> Option<u64> {
         match self {
             Self::Int(v) => Some((*v).cast_unsigned()),
-            Self::Uint(v) => Some(*v),
-            Self::Pointer(v) => Some(*v),
+            Self::Uint(v) | Self::Pointer(v) => Some(*v),
             Self::String(_) | Self::Buffer(_) => None,
         }
     }
@@ -188,8 +187,8 @@ impl SyscallInterceptRecord {
 
     /// Serialize to a compact 88-byte little-endian record.
     ///
-    /// Layout: syscall_num(4) + thread_id(4) + timestamp_ns(8) + args(8*8) +
-    /// return_value(8) = 88 bytes. The figure used to read 96, which no field
+    /// Layout: `syscall_num(4)` + `thread_id(4)` + `timestamp_ns(8)` + args(8*8) +
+    /// `return_value(8)` = 88 bytes. The figure used to read 96, which no field
     /// layout produced: `serialize` emitted 88 while `deserialize` demanded 96,
     /// so a record could never be read back.
     #[must_use]
@@ -794,7 +793,7 @@ mod tests {
 
     #[test]
     fn test_api_call_log_line() {
-        let mut rec = ApiCallRecord::new("ntdll.dll", "NtOpenFile", 42, 0x140001000);
+        let mut rec = ApiCallRecord::new("ntdll.dll", "NtOpenFile", 42, 0x0001_4000_1000);
         rec.push_arg(ApiArg::Pointer(0xDEAD_0000));
         rec.push_arg(ApiArg::String("\\Device\\Harddisk0".into()));
         rec.return_value = 0;

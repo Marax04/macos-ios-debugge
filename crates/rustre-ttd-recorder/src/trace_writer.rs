@@ -107,10 +107,9 @@ impl TraceFileHeader {
                 .as_nanos().try_into().unwrap_or(u64::MAX),
             compression: match compression {
                 CompressionLevel::None => 0,
-                CompressionLevel::Fast => 1,
+                CompressionLevel::Fast | CompressionLevel::Default => 1,
                 CompressionLevel::Best => 2,
-                CompressionLevel::Default => 1,
-            },
+                },
             reserved: [0u8; 16],
         }
     }
@@ -1065,14 +1064,14 @@ mod tests {
             encode_varint(v, &mut out);
             let mut cur = Cursor::new(out.as_slice());
             let decoded = decode_varint(&mut cur).unwrap();
-            assert_eq!(decoded, v, "varint mismatch for {}", v);
+            assert_eq!(decoded, v, "varint mismatch for {v}");
         }
     }
 
     #[test]
     fn test_delta_positions_roundtrip() {
         let positions: Vec<TtdPosition> = (0..50u64)
-            .map(|i| dummy_pos(i * 1000 + 7, (i % 16) as u64))
+            .map(|i| dummy_pos(i * 1000 + 7, i % 16))
             .collect();
         let encoded = delta_encode_positions(&positions);
         let decoded = delta_decode_positions(&encoded).unwrap();
@@ -1118,8 +1117,8 @@ mod tests {
         let mut writer = TraceWriter::in_memory(hdr, CompressionLevel::Fast).unwrap();
 
         for i in 0u64..200 {
-            let pos = dummy_pos(i * 100, (i % 8) as u64);
-            let payload = format!("event-{}", i);
+            let pos = dummy_pos(i * 100, i % 8);
+            let payload = format!("event-{i}");
             writer.append_entry(pos, 1, payload.as_bytes()).unwrap();
         }
 
@@ -1172,7 +1171,7 @@ mod tests {
         for tid in 0u32..4 {
             for i in 0u64..25 {
                 writer
-                    .append_entry(dummy_pos(tid as u64 * 1000 + i, 0), tid, b"payload")
+                    .append_entry(dummy_pos(u64::from(tid) * 1000 + i, 0), tid, b"payload")
                     .unwrap();
             }
         }

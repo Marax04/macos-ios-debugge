@@ -607,7 +607,7 @@ fn serializer_deserialize_garbage_errors() {
 
 // ─── RingBufferRecorder ──────────────────────────────────────────────────────
 
-fn mk_event(seq: u64, tid: u32) -> rustre_ttd::TraceEvent {
+const fn mk_event(seq: u64, tid: u32) -> rustre_ttd::TraceEvent {
     rustre_ttd::TraceEvent {
         position: rustre_ttd::TracePosition::new(seq, 0),
         thread_id: tid,
@@ -739,7 +739,7 @@ fn ttd_trace_header_bad_version_rejected() {
     assert!(e.contains("version"));
 }
 
-fn mk_syscall_event(ic: u64, nr: u32) -> SyscallEvent {
+const fn mk_syscall_event(ic: u64, nr: u32) -> SyscallEvent {
     SyscallEvent {
         instr_count: ic,
         nr,
@@ -957,7 +957,7 @@ fn check_platform_support_windows_returns_err() {
 
 #[test]
 fn ttd_error_from_io() {
-    let io = std::io::Error::new(std::io::ErrorKind::Other, "x");
+    let io = std::io::Error::other("x");
     let e: TtdRecordError = io.into();
     assert!(matches!(e, TtdRecordError::Io(_)));
 }

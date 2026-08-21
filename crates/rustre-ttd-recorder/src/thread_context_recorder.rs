@@ -526,7 +526,7 @@ mod tests {
     fn test_register_names_all_readable() {
         let regs = ThreadRegisters::default();
         for name in ThreadRegisters::register_names() {
-            assert!(regs.read(name).is_some(), "register {} unreadable", name);
+            assert!(regs.read(name).is_some(), "register {name} unreadable");
         }
     }
 
@@ -566,7 +566,7 @@ mod tests {
         let before = make_ctx(1, 100, 1000, 0x1000, 0x7FFF_0000);
         let after  = make_ctx(1, 100, 2000, 0x1010, 0x7FFF_0008);
         let delta = compute_delta(&before, &after);
-        let mut reconstructed = before.clone();
+        let mut reconstructed = before;
         apply_delta(&mut reconstructed, &delta);
         assert_eq!(reconstructed.regs.rip, 0x1010);
         assert_eq!(reconstructed.regs.rsp, 0x7FFF_0008);
@@ -580,7 +580,7 @@ mod tests {
         let midpoint = 2000u64;
         let v = interpolate_reg("rip", &t1, &t2, midpoint);
         // At midpoint should be halfway between 0x1000 and 0x2000
-        assert!(v >= 0x1000 && v <= 0x2000);
+        assert!((0x1000..=0x2000).contains(&v));
     }
 
     #[test]

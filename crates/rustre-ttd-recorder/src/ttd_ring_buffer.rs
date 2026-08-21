@@ -173,7 +173,7 @@ pub fn compress_chunk(input: &[u8]) -> Vec<u8> {
 
         if best_len >= LZ77_MIN_MATCH {
             debug_assert!(
-                best_offset >= 1 && best_offset <= u8::MAX as usize,
+                best_offset >= 1 && u8::try_from(best_offset).is_ok(),
                 "offset {best_offset} must fit the one-byte field"
             );
             tokens.push(Lz77Token::Match(
@@ -208,7 +208,7 @@ pub fn compress_chunk(input: &[u8]) -> Vec<u8> {
     // for, and what the `input.len() < LZ77_MIN_MATCH` guard above was trying to
     // avoid. That guard only catches inputs too short to hold a match at all;
     // this one catches every case where the encoding did not actually pay off.
-    if out.len() >= input.len() + 1 {
+    if out.len() > input.len() {
         let mut raw = Vec::with_capacity(input.len() + 1);
         raw.push(0u8); // 0 = raw
         raw.extend_from_slice(input);

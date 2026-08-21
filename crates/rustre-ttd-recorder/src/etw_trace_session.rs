@@ -856,7 +856,7 @@ mod tests {
     fn test_kernel_provider_flags_unique() {
         let mut seen = std::collections::HashSet::new();
         for kp in KernelProvider::all() {
-            assert!(seen.insert(kp.flag()), "duplicate flag for {:?}", kp);
+            assert!(seen.insert(kp.flag()), "duplicate flag for {kp:?}");
         }
     }
 

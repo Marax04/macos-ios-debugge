@@ -352,12 +352,12 @@ impl TriggerCondition {
     ) -> bool {
         match self {
             Self::Immediate => true,
-            Self::Never => false,
+            Self::Never | Self::MemoryEquals { .. } => false,
             Self::AddressHit { address } => last_address == Some(*address),
             Self::ExceptionCode { code } => last_exception == Some(*code),
             Self::EventCount { n } => event_count >= *n,
             Self::Timeout { millis } => elapsed_ms >= *millis,
-            Self::MemoryEquals { .. } => false, // requires memory read, checked externally
+            // requires memory read, checked externally
             Self::ApiCall { function_name } => last_api.is_some_and(|a| a == function_name),
             Self::SyscallNumber { nr } => last_syscall == Some(*nr),
             Self::AnyException => last_exception.is_some(),

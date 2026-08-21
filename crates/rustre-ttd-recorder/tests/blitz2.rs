@@ -7,8 +7,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -49,7 +49,7 @@ fn pos_ordering_total() {
         let lt = a < b;
         let eq = a == b;
         let gt = a > b;
-        assert_eq!(lt as u8 + eq as u8 + gt as u8, 1);
+        assert_eq!(u8::from(lt) + u8::from(eq) + u8::from(gt), 1);
         assert_eq!(a.is_before(&b), a < b);
     }
 }
@@ -405,7 +405,7 @@ fn session_double_stop_errors() {
 #[test]
 fn session_invalid_config_fails_start() {
     let mut cfg = TtdRecordConfig::for_pid(1, "");
-    cfg.output_dir = "".into();
+    cfg.output_dir = String::new();
     let mut s = TtdRecordSession::new(cfg);
     assert!(s.start().is_err());
 }

@@ -1323,7 +1323,7 @@ fn synthetic_event(i: u64, config: &RecorderConfig) -> EventKind {
             addr: 0x1000 + i * 8,
             len: 8,
         },
-        0 => EventKind::Call {
+        0 | 2 => EventKind::Call {
             from: 0x4000 + i * 4,
             to: 0x5000 + i * 4,
         },
@@ -1331,15 +1331,7 @@ fn synthetic_event(i: u64, config: &RecorderConfig) -> EventKind {
             addr: 0x2000 + i * 8,
             data: vec![0xca, 0xfe, 0xba, 0xbe],
         },
-        1 => EventKind::Return {
-            from: 0x5000 + i * 4,
-            to: 0x4004 + i * 4,
-        },
-        2 => EventKind::Call {
-            from: 0x4000 + i * 4,
-            to: 0x5000 + i * 4,
-        },
-        3 => EventKind::Return {
+        1 | 3 => EventKind::Return {
             from: 0x5000 + i * 4,
             to: 0x4004 + i * 4,
         },
@@ -4244,7 +4236,7 @@ impl InstructionCounter {
 
     /// Read the counter and update `last_read`; return the delta since the
     /// previous call to `read_delta`.
-    pub fn read_delta(&mut self) -> u64 {
+    pub const fn read_delta(&mut self) -> u64 {
         let current = self.read();
         let delta = current.saturating_sub(self.last_read);
         self.last_read = current;
@@ -4460,54 +4452,23 @@ impl SyscallOutputBufferDb {
         // allocations in the hot recording path.
         match nr {
             // read(fd, buf, count) — buf[0..retval] written
-            0 => &[OutputBufferSpec {
-                ptr_arg: 1,
-                size_arg: None,
-                size_from_retval: true,
-                fixed_size: None,
-            }],
             // write(fd, buf, count) — input only, no output
-            1 => &[],
             // open — no output buffers
-            2 => &[],
             // close
-            3 => &[],
             // stat(pathname, statbuf) — statbuf 144 bytes
-            4 => &[OutputBufferSpec {
+            4 | 5 | 6 | 98 => &[OutputBufferSpec {
                 ptr_arg: 1,
                 size_arg: None,
                 size_from_retval: false,
                 fixed_size: Some(144),
             }],
             // fstat(fd, statbuf)
-            5 => &[OutputBufferSpec {
-                ptr_arg: 1,
-                size_arg: None,
-                size_from_retval: false,
-                fixed_size: Some(144),
-            }],
             // lstat(pathname, statbuf)
-            6 => &[OutputBufferSpec {
-                ptr_arg: 1,
-                size_arg: None,
-                size_from_retval: false,
-                fixed_size: Some(144),
-            }],
             // mmap
-            9 => &[],
             // pread64(fd, buf, count, off)
-            17 => &[OutputBufferSpec {
-                ptr_arg: 1,
-                size_arg: None,
-                size_from_retval: true,
-                fixed_size: None,
-            }],
             // readv(fd, iov, iovcnt)
-            19 => &[],
             // writev
-            20 => &[],
             // getpid, getuid, etc.
-            39 | 102 | 107 | 108 => &[],
             // uname(buf) — 65*6 = 390 bytes
             63 => &[OutputBufferSpec {
                 ptr_arg: 0,
@@ -4516,12 +4477,6 @@ impl SyscallOutputBufferDb {
                 fixed_size: Some(390),
             }],
             // getdents64(fd, dirent, count) — dirent filled with retval bytes
-            217 | 78 => &[OutputBufferSpec {
-                ptr_arg: 1,
-                size_arg: None,
-                size_from_retval: true,
-                fixed_size: None,
-            }],
             // getcwd(buf, size)
             79 => &[OutputBufferSpec {
                 ptr_arg: 0,
@@ -4545,33 +4500,21 @@ impl SyscallOutputBufferDb {
                 },
             ],
             // clock_gettime(clkid, tp)
-            228 => &[OutputBufferSpec {
+            228 | 35 => &[OutputBufferSpec {
                 ptr_arg: 1,
                 size_arg: None,
                 size_from_retval: false,
                 fixed_size: Some(16),
             }],
             // nanosleep(req, rem) — rem is output
-            35 => &[OutputBufferSpec {
-                ptr_arg: 1,
-                size_arg: None,
-                size_from_retval: false,
-                fixed_size: Some(16),
-            }],
             // readlink(path, buf, bufsiz)
-            89 => &[OutputBufferSpec {
+            0 | 17 | 217 | 78 | 89 => &[OutputBufferSpec {
                 ptr_arg: 1,
                 size_arg: None,
                 size_from_retval: true,
                 fixed_size: None,
             }],
             // getrusage(who, usage)
-            98 => &[OutputBufferSpec {
-                ptr_arg: 1,
-                size_arg: None,
-                size_from_retval: false,
-                fixed_size: Some(144),
-            }],
             // sysinfo(info)
             99 => &[OutputBufferSpec {
                 ptr_arg: 0,
@@ -4601,19 +4544,13 @@ impl SyscallOutputBufferDb {
                 fixed_size: Some(32),
             }],
             // pipe(pipefd) — two fds
-            22 => &[OutputBufferSpec {
+            22 | 293 => &[OutputBufferSpec {
                 ptr_arg: 0,
                 size_arg: None,
                 size_from_retval: false,
                 fixed_size: Some(8),
             }],
             // pipe2
-            293 => &[OutputBufferSpec {
-                ptr_arg: 0,
-                size_arg: None,
-                size_from_retval: false,
-                fixed_size: Some(8),
-            }],
             // socketpair
             53 => &[OutputBufferSpec {
                 ptr_arg: 3,
@@ -4622,7 +4559,7 @@ impl SyscallOutputBufferDb {
                 fixed_size: Some(8),
             }],
             // accept(sockfd, addr, addrlen)
-            43 => &[
+            43 | 288 | 51 | 52 => &[
                 OutputBufferSpec {
                     ptr_arg: 1,
                     size_arg: Some(2),
@@ -4637,20 +4574,6 @@ impl SyscallOutputBufferDb {
                 },
             ],
             // accept4
-            288 => &[
-                OutputBufferSpec {
-                    ptr_arg: 1,
-                    size_arg: Some(2),
-                    size_from_retval: false,
-                    fixed_size: None,
-                },
-                OutputBufferSpec {
-                    ptr_arg: 2,
-                    size_arg: None,
-                    size_from_retval: false,
-                    fixed_size: Some(4),
-                },
-            ],
             // recvfrom(sockfd, buf, len, flags, src_addr, addrlen)
             45 => &[
                 OutputBufferSpec {
@@ -4667,37 +4590,8 @@ impl SyscallOutputBufferDb {
                 },
             ],
             // recvmsg(sockfd, msg, flags) — complex, skip for now
-            47 => &[],
             // getsockname(sockfd, addr, addrlen)
-            51 => &[
-                OutputBufferSpec {
-                    ptr_arg: 1,
-                    size_arg: Some(2),
-                    size_from_retval: false,
-                    fixed_size: None,
-                },
-                OutputBufferSpec {
-                    ptr_arg: 2,
-                    size_arg: None,
-                    size_from_retval: false,
-                    fixed_size: Some(4),
-                },
-            ],
             // getpeername
-            52 => &[
-                OutputBufferSpec {
-                    ptr_arg: 1,
-                    size_arg: Some(2),
-                    size_from_retval: false,
-                    fixed_size: None,
-                },
-                OutputBufferSpec {
-                    ptr_arg: 2,
-                    size_arg: None,
-                    size_from_retval: false,
-                    fixed_size: Some(4),
-                },
-            ],
             // getsockopt(sockfd, level, optname, optval, optlen)
             55 => &[
                 OutputBufferSpec {
@@ -4714,13 +4608,11 @@ impl SyscallOutputBufferDb {
                 },
             ],
             // poll(fds, nfds, timeout)
-            7 => &[], // fds is in+out but complex
+            // fds is in+out but complex
             // ppoll
-            271 => &[],
             // select / pselect6
-            23 | 270 => &[],
             // epoll_wait / epoll_pwait
-            232 | 281 => &[], // events array is out but size is in retval
+            // events array is out but size is in retval
             // wait4(pid, wstatus, options, rusage)
             61 => &[
                 OutputBufferSpec {
@@ -4744,7 +4636,6 @@ impl SyscallOutputBufferDb {
                 fixed_size: Some(128),
             }],
             // openat
-            257 => &[],
             // statx
             332 => &[OutputBufferSpec {
                 ptr_arg: 4,
@@ -5701,7 +5592,7 @@ impl FullTtdSession {
     }
 
     /// Update the current instruction count from the hardware counter.
-    pub fn sync_instr_count(&mut self) {
+    pub const fn sync_instr_count(&mut self) {
         if let Some(ref c) = self.counter {
             self.current_instr_count = c.read();
         }
