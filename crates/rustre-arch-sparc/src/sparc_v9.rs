@@ -1431,77 +1431,114 @@ impl PrivilegeLevel {
 // ── V9 Condition Code Simulator ───────────────────────────────────────────────
 
 /// Simulates the SPARC V9 condition codes (CCR = XCC:ICC).
-#[derive(Debug, Clone, Default)]
-pub struct V9CondCodes {
-    /// ICC.N (negative).
-    pub icc_n: bool,
-    /// ICC.Z (zero).
-    pub icc_z: bool,
-    /// ICC.V (overflow).
-    pub icc_v: bool,
-    /// ICC.C (carry).
-    pub icc_c: bool,
-    /// XCC.N.
-    pub xcc_n: bool,
-    /// XCC.Z.
-    pub xcc_z: bool,
-    /// XCC.V.
-    pub xcc_v: bool,
-    /// XCC.C.
-    pub xcc_c: bool,
-}
+///
+/// The value is the 8-bit CCR image itself rather than eight interchangeable
+/// `bool` fields.
+///
+/// NOTE: the bit assignment preserved here is the one this crate has always
+/// encoded and decoded (`icc_z` 0, `icc_c` 1, `icc_v` 2, `icc_n` 3, and the
+/// same order again for `xcc` in bits 4..7).  Within each nibble that is not
+/// the SPARC V9 `n z v c` order used by
+/// [`SparcCondCode`](crate::sparc_registers::SparcCondCode); the two are kept
+/// self-consistent here (`as_ccr`/`from_ccr` round-trip) and changing the
+/// layout would change decoding behaviour, so it is recorded rather than
+/// silently altered.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct V9CondCodes(u8);
 
 impl V9CondCodes {
+    /// ICC.Z (zero).
+    pub const ICC_Z: u8 = 1 << 0;
+    /// ICC.C (carry).
+    pub const ICC_C: u8 = 1 << 1;
+    /// ICC.V (overflow).
+    pub const ICC_V: u8 = 1 << 2;
+    /// ICC.N (negative).
+    pub const ICC_N: u8 = 1 << 3;
+    /// XCC.Z.
+    pub const XCC_Z: u8 = 1 << 4;
+    /// XCC.C.
+    pub const XCC_C: u8 = 1 << 5;
+    /// XCC.V.
+    pub const XCC_V: u8 = 1 << 6;
+    /// XCC.N.
+    pub const XCC_N: u8 = 1 << 7;
+
+    /// No flag set.
+    pub const NONE: Self = Self(0);
+
+    /// Build from a raw CCR byte.
+    #[must_use]
+    pub const fn from_bits(v: u8) -> Self { Self(v) }
+
+    /// True when `bit` (one of the associated constants) is set.
+    #[must_use]
+    pub const fn has(self, bit: u8) -> bool { self.0 & bit != 0 }
+
+    /// A copy with `bit` set (`on`) or cleared.
+    #[must_use]
+    pub const fn with(self, bit: u8, on: bool) -> Self {
+        if on { Self(self.0 | bit) } else { Self(self.0 & !bit) }
+    }
+
+    /// Set or clear `bit` in place.
+    pub const fn set(&mut self, bit: u8, on: bool) { *self = self.with(bit, on); }
+
+    /// ICC.N (negative).
+    #[must_use]
+    pub const fn icc_n(self) -> bool { self.has(Self::ICC_N) }
+    /// ICC.Z (zero).
+    #[must_use]
+    pub const fn icc_z(self) -> bool { self.has(Self::ICC_Z) }
+    /// ICC.V (overflow).
+    #[must_use]
+    pub const fn icc_v(self) -> bool { self.has(Self::ICC_V) }
+    /// ICC.C (carry).
+    #[must_use]
+    pub const fn icc_c(self) -> bool { self.has(Self::ICC_C) }
+    /// XCC.N.
+    #[must_use]
+    pub const fn xcc_n(self) -> bool { self.has(Self::XCC_N) }
+    /// XCC.Z.
+    #[must_use]
+    pub const fn xcc_z(self) -> bool { self.has(Self::XCC_Z) }
+    /// XCC.V.
+    #[must_use]
+    pub const fn xcc_v(self) -> bool { self.has(Self::XCC_V) }
+    /// XCC.C.
+    #[must_use]
+    pub const fn xcc_c(self) -> bool { self.has(Self::XCC_C) }
+
     /// Encode as an 8-bit CCR value.
     #[must_use]
-    pub fn as_ccr(&self) -> u8 {
-        (u8::from(self.xcc_c) << 5)
-            | (u8::from(self.xcc_v) << 6)
-            | (u8::from(self.xcc_z) << 4)
-            | (u8::from(self.xcc_n) << 7)
-            | (u8::from(self.icc_c) << 1)
-            | (u8::from(self.icc_v) << 2)
-            | u8::from(self.icc_z)
-            | (u8::from(self.icc_n) << 3)
-    }
+    pub const fn as_ccr(&self) -> u8 { self.0 }
 
     /// Decode from an 8-bit CCR value.
     #[must_use]
-    pub const fn from_ccr(ccr: u8) -> Self {
-        Self {
-            icc_z: ccr & 1 != 0,
-            icc_c: (ccr >> 1) & 1 != 0,
-            icc_v: (ccr >> 2) & 1 != 0,
-            icc_n: (ccr >> 3) & 1 != 0,
-            xcc_z: (ccr >> 4) & 1 != 0,
-            xcc_c: (ccr >> 5) & 1 != 0,
-            xcc_v: (ccr >> 6) & 1 != 0,
-            xcc_n: (ccr >> 7) & 1 != 0,
-        }
-    }
+    pub const fn from_ccr(ccr: u8) -> Self { Self(ccr) }
 
     /// Update from a 32-bit addition result.
     pub const fn set_from_add32(&mut self, a: u32, b: u32, result: u32) {
-        self.icc_n = (result >> 31) != 0;
-        self.icc_z = result == 0;
+        self.set(Self::ICC_N, (result >> 31) != 0);
+        self.set(Self::ICC_Z, result == 0);
         let carry = (a as u64 + b as u64) > 0xFFFF_FFFF;
-        self.icc_c = carry;
+        self.set(Self::ICC_C, carry);
         let a_sign = (a >> 31) & 1;
         let b_sign = (b >> 31) & 1;
         let r_sign = (result >> 31) & 1;
-        self.icc_v = (a_sign == b_sign) && (r_sign != a_sign);
+        self.set(Self::ICC_V, (a_sign == b_sign) && (r_sign != a_sign));
     }
 
     /// Update from a 64-bit addition result.
     pub const fn set_from_add64(&mut self, a: u64, b: u64, result: u64) {
-        self.xcc_n = (result >> 63) != 0;
-        self.xcc_z = result == 0;
+        self.set(Self::XCC_N, (result >> 63) != 0);
+        self.set(Self::XCC_Z, result == 0);
         let carry = (a as u128 + b as u128) > 0xFFFF_FFFF_FFFF_FFFF;
-        self.xcc_c = carry;
+        self.set(Self::XCC_C, carry);
         let a_sign = (a >> 63) & 1;
         let b_sign = (b >> 63) & 1;
         let r_sign = (result >> 63) & 1;
-        self.xcc_v = (a_sign == b_sign) && (r_sign != a_sign);
+        self.set(Self::XCC_V, (a_sign == b_sign) && (r_sign != a_sign));
     }
 }
 

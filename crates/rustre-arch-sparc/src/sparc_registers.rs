@@ -267,29 +267,67 @@ impl fmt::Display for FpReg {
 // ── SparcCondCode ─────────────────────────────────────────────────────────────
 
 /// SPARC condition code flags, stored in PSR (v8) or CCR (v9).
+///
+/// The bit image is the 4-bit `icc` field in hardware order — `N Z V C`,
+/// bit 3 down to bit 0 — so [`Self::pack_icc`] is the value itself.  Packing
+/// removes the transposition hazard of four adjacent, interchangeable `bool`
+/// fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct SparcCondCode {
-    /// Negative flag.
-    pub n: bool,
-    /// Zero flag.
-    pub z: bool,
-    /// Overflow flag.
-    pub v: bool,
-    /// Carry flag.
-    pub c: bool,
-}
+pub struct SparcCondCode(u8);
 
 impl SparcCondCode {
+    /// Negative flag (bit 3).
+    pub const N: u8 = 1 << 3;
+    /// Zero flag (bit 2).
+    pub const Z: u8 = 1 << 2;
+    /// Overflow flag (bit 1).
+    pub const V: u8 = 1 << 1;
+    /// Carry flag (bit 0).
+    pub const C: u8 = 1 << 0;
+
+    /// Every bit this type tracks.
+    pub const MASK: u8 = Self::N | Self::Z | Self::V | Self::C;
+
+    /// No flag set.
+    pub const NONE: Self = Self(0);
+
     /// Create all-zero condition codes.
     #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            n: false,
-            z: false,
-            v: false,
-            c: false,
-        }
+    pub const fn new() -> Self { Self(0) }
+
+    /// Keep only the four `icc` bits of a raw value.
+    #[must_use]
+    pub const fn from_bits(v: u8) -> Self { Self(v & Self::MASK) }
+
+    /// The raw bit image.
+    #[must_use]
+    pub const fn bits(self) -> u8 { self.0 }
+
+    /// True when `bit` (one of the associated constants) is set.
+    #[must_use]
+    pub const fn has(self, bit: u8) -> bool { self.0 & bit != 0 }
+
+    /// A copy with `bit` set (`on`) or cleared.
+    #[must_use]
+    pub const fn with(self, bit: u8, on: bool) -> Self {
+        if on { Self(self.0 | (bit & Self::MASK)) } else { Self(self.0 & !bit) }
     }
+
+    /// Set or clear `bit` in place.
+    pub const fn set(&mut self, bit: u8, on: bool) { *self = self.with(bit, on); }
+
+    /// Negative flag.
+    #[must_use]
+    pub const fn n(self) -> bool { self.has(Self::N) }
+    /// Zero flag.
+    #[must_use]
+    pub const fn z(self) -> bool { self.has(Self::Z) }
+    /// Overflow flag.
+    #[must_use]
+    pub const fn v(self) -> bool { self.has(Self::V) }
+    /// Carry flag.
+    #[must_use]
+    pub const fn c(self) -> bool { self.has(Self::C) }
 
     /// Update condition codes from an integer result.
     pub const fn update_from_result(&mut self, result: i64, prev_a: i64, prev_b: i64, width: u8) {
@@ -310,22 +348,22 @@ impl SparcCondCode {
         } else {
             (result & mask).cast_unsigned()
         };
-        self.z = masked == 0;
-        self.n = (masked & sign_bit) != 0;
+        self.set(Self::Z, masked == 0);
+        self.set(Self::N, (masked & sign_bit) != 0);
         // Overflow: sign of result differs from expected
         let a_sign = ((prev_a).cast_unsigned() & sign_bit) != 0;
         let b_sign = ((prev_b).cast_unsigned() & sign_bit) != 0;
-        let r_sign = self.n;
-        self.v = (a_sign == b_sign) && (a_sign != r_sign);
+        let r_sign = self.n();
+        self.set(Self::V, (a_sign == b_sign) && (a_sign != r_sign));
         // Carry: unsigned overflow
         let ua = (prev_a).cast_unsigned();
         let _ub = (prev_b).cast_unsigned();
         let ur = masked;
-        self.c = if width == 64 {
+        self.set(Self::C, if width == 64 {
             ur < ua
         } else {
             (result).cast_unsigned() > (mask).cast_unsigned()
-        };
+        });
     }
 
     /// Evaluate a branch condition (Bicc / `BPcc`).
@@ -334,21 +372,21 @@ impl SparcCondCode {
     #[must_use]
     pub const fn evaluate(&self, cond: u8) -> bool {
         match cond & 0xF {
-            0x1 => self.z,                         // BE
-            0x2 => self.z || (self.n ^ self.v),    // BLE
-            0x3 => self.n ^ self.v,                // BL
-            0x4 => self.c || self.z,               // BLEU
-            0x5 => self.c,                         // BCS / BLU
-            0x6 => self.n,                         // BNEG
-            0x7 => self.v,                         // BVS
+            0x1 => self.z(),                         // BE
+            0x2 => self.z() || (self.n() ^ self.v()),    // BLE
+            0x3 => self.n() ^ self.v(),                // BL
+            0x4 => self.c() || self.z(),               // BLEU
+            0x5 => self.c(),                         // BCS / BLU
+            0x6 => self.n(),                         // BNEG
+            0x7 => self.v(),                         // BVS
             0x8 => true,                           // BA  (always)
-            0x9 => !self.z,                        // BNE
-            0xA => !(self.z || (self.n ^ self.v)), // BG
-            0xB => !(self.n ^ self.v),             // BGE
-            0xC => !(self.c || self.z),            // BGU
-            0xD => !self.c,                        // BCC / BGEU
-            0xE => !self.n,                        // BPOS
-            0xF => !self.v,                        // BVC
+            0x9 => !self.z(),                        // BNE
+            0xA => !(self.z() || (self.n() ^ self.v())), // BG
+            0xB => !(self.n() ^ self.v()),             // BGE
+            0xC => !(self.c() || self.z()),            // BGU
+            0xD => !self.c(),                        // BCC / BGEU
+            0xE => !self.n(),                        // BPOS
+            0xF => !self.v(),                        // BVC
             // 0x0 is BN, "branch never"; the mask above makes every other value
             // unreachable. Both answer false.
             _ => false,
@@ -357,23 +395,11 @@ impl SparcCondCode {
 
     /// Pack into the 4-bit icc field of PSR/CCR.
     #[must_use]
-    pub fn pack_icc(&self) -> u8 {
-        (u8::from(self.n) << 3)
-            | (u8::from(self.z) << 2)
-            | (u8::from(self.v) << 1)
-            | u8::from(self.c)
-    }
+    pub const fn pack_icc(&self) -> u8 { self.0 }
 
     /// Unpack from the 4-bit icc field.
     #[must_use]
-    pub const fn unpack_icc(bits: u8) -> Self {
-        Self {
-            n: (bits >> 3) & 1 != 0,
-            z: (bits >> 2) & 1 != 0,
-            v: (bits >> 1) & 1 != 0,
-            c: bits & 1 != 0,
-        }
-    }
+    pub const fn unpack_icc(bits: u8) -> Self { Self::from_bits(bits) }
 }
 
 impl fmt::Display for SparcCondCode {
@@ -381,10 +407,10 @@ impl fmt::Display for SparcCondCode {
         write!(
             f,
             "N={} Z={} V={} C={}",
-            u8::from(self.n),
-            u8::from(self.z),
-            u8::from(self.v),
-            u8::from(self.c)
+            u8::from(self.n()),
+            u8::from(self.z()),
+            u8::from(self.v()),
+            u8::from(self.c())
         )
     }
 }
@@ -825,20 +851,20 @@ mod tests {
 
     #[test]
     fn test_cond_code_zero() {
-        let cc = SparcCondCode { z: true, ..Default::default() };
+        let cc = SparcCondCode::NONE.with(SparcCondCode::Z, true);
         assert!(cc.evaluate(0x1)); // BE (z=1)
         assert!(!cc.evaluate(0x9)); // BNE (!z)
     }
 
     #[test]
     fn test_cond_code_pack_unpack() {
-        let cc = SparcCondCode { n: true, z: false, v: true, c: false };
+        let cc = SparcCondCode::NONE.with(SparcCondCode::N, true).with(SparcCondCode::V, true);
         let packed = cc.pack_icc();
         let unpacked = SparcCondCode::unpack_icc(packed);
-        assert_eq!(unpacked.n, cc.n);
-        assert_eq!(unpacked.z, cc.z);
-        assert_eq!(unpacked.v, cc.v);
-        assert_eq!(unpacked.c, cc.c);
+        assert_eq!(unpacked.n(), cc.n());
+        assert_eq!(unpacked.z(), cc.z());
+        assert_eq!(unpacked.v(), cc.v());
+        assert_eq!(unpacked.c(), cc.c());
     }
 
     #[test]

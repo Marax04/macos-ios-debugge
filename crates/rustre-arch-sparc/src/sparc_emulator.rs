@@ -294,18 +294,22 @@ impl SparcState {
         self.psr & PSR_ICC_C != 0
     }
 
-    const fn set_icc(&mut self, n: bool, z: bool, v: bool, c: bool) {
+    /// Write the four `icc` bits of PSR from a packed condition-code value.
+    ///
+    /// Takes [`SparcCondCode`] rather than four adjacent `bool` parameters,
+    /// which any caller could silently transpose.
+    const fn set_icc(&mut self, cc: crate::sparc_registers::SparcCondCode) {
         self.psr &= !(PSR_ICC_N | PSR_ICC_Z | PSR_ICC_V | PSR_ICC_C);
-        if n {
+        if cc.n() {
             self.psr |= PSR_ICC_N;
         }
-        if z {
+        if cc.z() {
             self.psr |= PSR_ICC_Z;
         }
-        if v {
+        if cc.v() {
             self.psr |= PSR_ICC_V;
         }
-        if c {
+        if cc.c() {
             self.psr |= PSR_ICC_C;
         }
     }
@@ -315,7 +319,13 @@ impl SparcState {
         let zero = result == 0;
         let overflow = ((lhs ^ result) & (rhs ^ result)) >> 31 != 0;
         let carry = u64::from(result) < u64::from(lhs) + u64::from(rhs);
-        self.set_icc(neg, zero, overflow, carry);
+        self.set_icc(
+            crate::sparc_registers::SparcCondCode::NONE
+                .with(crate::sparc_registers::SparcCondCode::N, neg)
+                .with(crate::sparc_registers::SparcCondCode::Z, zero)
+                .with(crate::sparc_registers::SparcCondCode::V, overflow)
+                .with(crate::sparc_registers::SparcCondCode::C, carry),
+        );
     }
 
     fn update_icc_sub(&mut self, lhs: u32, rhs: u32, result: u32) {
@@ -323,7 +333,13 @@ impl SparcState {
         let zero = result == 0;
         let overflow = ((lhs ^ rhs) & (lhs ^ result)) >> 31 != 0;
         let carry = u64::from(lhs) < u64::from(rhs);
-        self.set_icc(neg, zero, overflow, carry);
+        self.set_icc(
+            crate::sparc_registers::SparcCondCode::NONE
+                .with(crate::sparc_registers::SparcCondCode::N, neg)
+                .with(crate::sparc_registers::SparcCondCode::Z, zero)
+                .with(crate::sparc_registers::SparcCondCode::V, overflow)
+                .with(crate::sparc_registers::SparcCondCode::C, carry),
+        );
     }
 
     // ── Window management ─────────────────────────────────────────────────────
@@ -557,7 +573,11 @@ impl SparcState {
             0x11 => {
                 // ANDcc
                 let r = src1 & src2;
-                self.set_icc(r >> 31 != 0, r == 0, false, false);
+                self.set_icc(
+                    crate::sparc_registers::SparcCondCode::NONE
+                        .with(crate::sparc_registers::SparcCondCode::N, r >> 31 != 0)
+                        .with(crate::sparc_registers::SparcCondCode::Z, r == 0),
+                );
                 self.rset(rd, r);
             }
             0x02 => {
@@ -567,7 +587,11 @@ impl SparcState {
             0x12 => {
                 // ORcc
                 let r = src1 | src2;
-                self.set_icc(r >> 31 != 0, r == 0, false, false);
+                self.set_icc(
+                    crate::sparc_registers::SparcCondCode::NONE
+                        .with(crate::sparc_registers::SparcCondCode::N, r >> 31 != 0)
+                        .with(crate::sparc_registers::SparcCondCode::Z, r == 0),
+                );
                 self.rset(rd, r);
             }
             0x03 => {
