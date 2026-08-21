@@ -249,7 +249,7 @@ pub struct DetectedProtector {
 impl DetectedProtector {
     /// Return `true` if the confidence meets the protector's minimum threshold.
     #[must_use]
-    pub fn is_confident(&self) -> bool {
+    pub const fn is_confident(&self) -> bool {
         self.confidence >= self.protector.min_confidence()
     }
 }
@@ -779,7 +779,7 @@ impl ProtectorDetector {
             })
             .collect();
 
-        results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        results.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         results
     }
 
@@ -813,15 +813,11 @@ impl Default for ProtectorDetector {
 
 fn infer_version(p: ProtectorPattern, _confidence: u8) -> String {
     match p {
-        ProtectorPattern::VMProtect2 => "2.x".to_string(),
         ProtectorPattern::VMProtect3 => "3.x".to_string(),
-        ProtectorPattern::Themida1 => "1.x".to_string(),
-        ProtectorPattern::Themida2 => "2.x".to_string(),
-        ProtectorPattern::CodeVirtualizer1 => "1.x".to_string(),
-        ProtectorPattern::CodeVirtualizer2 => "2.x".to_string(),
+        ProtectorPattern::Themida1 | ProtectorPattern::CodeVirtualizer1 | ProtectorPattern::Obsidium => "1.x".to_string(),
+        ProtectorPattern::VMProtect2 | ProtectorPattern::Themida2 | ProtectorPattern::CodeVirtualizer2 => "2.x".to_string(),
         ProtectorPattern::Enigma => "4.x".to_string(),
-        ProtectorPattern::Obsidium => "1.x".to_string(),
-    }
+        }
 }
 
 // ---------------------------------------------------------------------------

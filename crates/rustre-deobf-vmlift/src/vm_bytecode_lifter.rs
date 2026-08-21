@@ -444,44 +444,41 @@ impl VmBytecodeLifter {
             let raw_opcode = bytes[pc];
             pc += 1;
 
-            match self.table.lookup(raw_opcode) {
-                Some((op, operand_bytes)) => {
-                    let available = bytes.len() - pc;
-                    if available < operand_bytes {
-                        if self.strict {
-                            return Err(LiftError::TruncatedOperand {
-                                offset,
-                                expected: operand_bytes,
-                                got: available,
-                            });
-                        }
-                        // Non-strict: emit what we can and stop.
-                        insns.push(LiftedInsn::new(
-                            offset,
-                            raw_opcode,
-                            op.clone(),
-                            Vec::new(),
-                            1,
-                        ));
-                        break;
-                    }
-                    let operands = decode_operands(bytes, pc, op, operand_bytes);
-                    let encoded_width = 1 + operand_bytes;
-                    pc += operand_bytes;
-                    insns.push(LiftedInsn::new(offset, raw_opcode, op.clone(), operands, encoded_width));
-                }
-                None => {
+            if let Some((op, operand_bytes)) = self.table.lookup(raw_opcode) {
+                let available = bytes.len() - pc;
+                if available < operand_bytes {
                     if self.strict {
-                        return Err(LiftError::UnknownOpcode { offset, opcode: raw_opcode });
+                        return Err(LiftError::TruncatedOperand {
+                            offset,
+                            expected: operand_bytes,
+                            got: available,
+                        });
                     }
+                    // Non-strict: emit what we can and stop.
                     insns.push(LiftedInsn::new(
                         offset,
                         raw_opcode,
-                        LiftedOp::Unknown(raw_opcode),
+                        op.clone(),
                         Vec::new(),
                         1,
                     ));
+                    break;
                 }
+                let operands = decode_operands(bytes, pc, op, operand_bytes);
+                let encoded_width = 1 + operand_bytes;
+                pc += operand_bytes;
+                insns.push(LiftedInsn::new(offset, raw_opcode, op.clone(), operands, encoded_width));
+            } else {
+                if self.strict {
+                    return Err(LiftError::UnknownOpcode { offset, opcode: raw_opcode });
+                }
+                insns.push(LiftedInsn::new(
+                    offset,
+                    raw_opcode,
+                    LiftedOp::Unknown(raw_opcode),
+                    Vec::new(),
+                    1,
+                ));
             }
         }
         Ok(insns)

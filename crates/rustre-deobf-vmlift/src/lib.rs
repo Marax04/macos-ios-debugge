@@ -734,7 +734,7 @@ impl HandlerSemantic {
 
     /// Suggest a short mnemonic for this semantic.
     #[must_use]
-    pub fn suggest_mnemonic(&self) -> &'static str {
+    pub const fn suggest_mnemonic(&self) -> &'static str {
         suggest_mnemonic(self)
     }
 }
@@ -826,11 +826,9 @@ impl VmInstructionDef {
     const fn default_operand_bytes(sem: &HandlerSemantic) -> usize {
         match sem {
             HandlerSemantic::Push(PushSrc::Constant(_)) => 8,
-            HandlerSemantic::Push(PushSrc::VirtualReg(_)) => 1,
-            HandlerSemantic::Pop(PopDst::VirtualReg(_)) => 1,
+            HandlerSemantic::Push(PushSrc::VirtualReg(_)) | HandlerSemantic::Pop(PopDst::VirtualReg(_)) => 1,
             HandlerSemantic::Load(n) | HandlerSemantic::Store(n) => *n as usize,
-            HandlerSemantic::IpAdvance(_) => 4,
-            HandlerSemantic::Branch => 4,
+            HandlerSemantic::IpAdvance(_) | HandlerSemantic::Branch => 4,
             _ => 0,
         }
     }
@@ -908,7 +906,7 @@ impl VmIsa {
 
     /// Suggest a mnemonic for the given semantic value.
     #[must_use]
-    pub fn suggest_mnemonic(sem: &HandlerSemantic) -> &'static str {
+    pub const fn suggest_mnemonic(sem: &HandlerSemantic) -> &'static str {
         suggest_mnemonic(sem)
     }
 
@@ -1096,17 +1094,11 @@ impl VmBytecodeDisassembler {
                 vec![u64::from(buf[pc]), u64::from(imm)]
             }
             // Push-immediate: 4-byte imm
-            HandlerSemantic::Push(PushSrc::Constant(_)) if ob == 4 && available >= 4 => {
+            HandlerSemantic::Push(PushSrc::Constant(_)) | HandlerSemantic::Branch | HandlerSemantic::IpAdvance(_) if ob == 4 && available >= 4 => {
                 let imm = u32::from_le_bytes([buf[pc], buf[pc + 1], buf[pc + 2], buf[pc + 3]]);
                 vec![u64::from(imm)]
             }
             // Branch / IpAdvance: 4-byte target offset
-            HandlerSemantic::Branch | HandlerSemantic::IpAdvance(_)
-                if ob == 4 && available >= 4 =>
-            {
-                let v = u32::from_le_bytes([buf[pc], buf[pc + 1], buf[pc + 2], buf[pc + 3]]);
-                vec![u64::from(v)]
-            }
             _ => {
                 // Generic: read `available` bytes as a single little-endian value
                 let mut raw = 0u64;
@@ -1350,7 +1342,7 @@ mod tests {
                 opcode: GuestOpcode::Load,
                 reg_dst: Some(7),
                 reg_src: Some(8),
-                imm: Some(0x12345678),
+                imm: Some(0x1234_5678),
             }])
         );
 
@@ -1361,7 +1353,7 @@ mod tests {
                 opcode: GuestOpcode::Store,
                 reg_dst: Some(9),
                 reg_src: Some(10),
-                imm: Some(0x87654321),
+                imm: Some(0x8765_4321),
             }])
         );
 

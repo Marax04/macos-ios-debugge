@@ -35,12 +35,12 @@ pub enum IrVal {
 impl IrVal {
     #[must_use]
     pub const fn is_const(&self) -> bool {
-        matches!(self, IrVal::Const(_))
+        matches!(self, Self::Const(_))
     }
 
     #[must_use]
     pub const fn as_const(&self) -> Option<Const> {
-        if let IrVal::Const(v) = self {
+        if let Self::Const(v) = self {
             Some(*v)
         } else {
             None
@@ -90,11 +90,10 @@ impl IrBinOp {
     #[must_use]
     pub const fn identity(self) -> Option<u64> {
         match self {
-            Self::Add | Self::Or | Self::Xor => Some(0),
-            Self::Sub => Some(0),   // x - 0 = x
+            // x - 0 = x
             Self::Mul => Some(1),
             Self::And => Some(u64::MAX),
-            Self::Shl | Self::Shr | Self::Sar | Self::Rol | Self::Ror => Some(0),
+            Self::Add | Self::Or | Self::Xor | Self::Sub | Self::Shl | Self::Shr | Self::Sar | Self::Rol | Self::Ror => Some(0),
             _ => None,
         }
     }
@@ -135,7 +134,7 @@ impl IrUnaryOp {
 }
 
 /// A single lifted IR instruction.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IrInsn {
     /// `dst = val`
     Assign { dst: VReg, val: IrVal },
@@ -166,10 +165,10 @@ impl IrInsn {
     #[must_use]
     pub const fn dst(&self) -> Option<VReg> {
         match self {
-            IrInsn::Assign { dst, .. }
-            | IrInsn::BinOp { dst, .. }
-            | IrInsn::UnaryOp { dst, .. }
-            | IrInsn::Load { dst, .. } => Some(*dst),
+            Self::Assign { dst, .. }
+            | Self::BinOp { dst, .. }
+            | Self::UnaryOp { dst, .. }
+            | Self::Load { dst, .. } => Some(*dst),
             _ => None,
         }
     }
@@ -179,20 +178,18 @@ impl IrInsn {
     pub fn uses(&self) -> Vec<VReg> {
         let mut regs = Vec::with_capacity(2);
         match self {
-            IrInsn::Assign { val, .. } => collect_reg(val, &mut regs),
-            IrInsn::BinOp { lhs, rhs, .. } => {
+            Self::BinOp { lhs, rhs, .. } => {
                 collect_reg(lhs, &mut regs);
                 collect_reg(rhs, &mut regs);
             }
-            IrInsn::UnaryOp { val, .. } => collect_reg(val, &mut regs),
-            IrInsn::Load { addr, .. } => collect_reg(addr, &mut regs),
-            IrInsn::Store { addr, val, .. } => {
+            Self::Load { addr, .. } => collect_reg(addr, &mut regs),
+            Self::Store { addr, val, .. } => {
                 collect_reg(addr, &mut regs);
                 collect_reg(val, &mut regs);
             }
-            IrInsn::Jump { target } | IrInsn::Call { target } => collect_reg(target, &mut regs),
-            IrInsn::Branch { cond, .. } => collect_reg(cond, &mut regs),
-            IrInsn::Ret { val } => collect_reg(val, &mut regs),
+            Self::Jump { target } | Self::Call { target } => collect_reg(target, &mut regs),
+            Self::Branch { cond, .. } => collect_reg(cond, &mut regs),
+            Self::Assign { val, .. } | Self::UnaryOp { val, .. } | Self::Ret { val } => collect_reg(val, &mut regs),
             _ => {}
         }
         regs
@@ -388,11 +385,10 @@ impl ConstantPropagation {
 
 fn substitute_consts(insn: IrInsn, map: &HashMap<VReg, Const>) -> IrInsn {
     let sub = |v: IrVal| -> IrVal {
-        if let IrVal::Reg(r) = &v {
-            if let Some(&c) = map.get(r) {
+        if let IrVal::Reg(r) = &v
+            && let Some(&c) = map.get(r) {
                 return IrVal::Const(c);
             }
-        }
         v
     };
 
@@ -642,8 +638,7 @@ impl LoopSimplification {
                         lhs: IrVal::Reg(src),
                         rhs: IrVal::Const(step),
                     } = insn
-                    {
-                        if dst == src {
+                        && dst == src {
                             ivars.push(InductionVar {
                                 vreg: *dst,
                                 init: None,
@@ -651,7 +646,6 @@ impl LoopSimplification {
                                 increment_block: block_id,
                             });
                         }
-                    }
                     // Sub variant: r = r - const → step is negative
                     if let IrInsn::BinOp {
                         dst,
@@ -659,8 +653,7 @@ impl LoopSimplification {
                         lhs: IrVal::Reg(src),
                         rhs: IrVal::Const(step),
                     } = insn
-                    {
-                        if dst == src {
+                        && dst == src {
                             ivars.push(InductionVar {
                                 vreg: *dst,
                                 init: None,
@@ -668,7 +661,6 @@ impl LoopSimplification {
                                 increment_block: block_id,
                             });
                         }
-                    }
                 }
             }
         }
@@ -685,8 +677,8 @@ impl LoopSimplification {
         // Simplification: if step == 1 and the loop compares ivar against a constant,
         // we can mark the loop as a counted loop (add an annotation or rewrite the branch).
         // For now, we just remove self-add-zero NOPs (r = r + 0).
-        if ivar.step == 0 {
-            if let Some(block) = func.blocks.get_mut(&ivar.increment_block) {
+        if ivar.step == 0
+            && let Some(block) = func.blocks.get_mut(&ivar.increment_block) {
                 let before = block.insns.len();
                 block.insns.retain(|insn| {
                     !matches!(insn,
@@ -696,7 +688,6 @@ impl LoopSimplification {
                 });
                 return (before - block.insns.len()) as u32;
             }
-        }
         0
     }
 }
@@ -757,14 +748,13 @@ impl ExpressionNormalization {
                 }
 
                 // Absorbing element: x op absorb → absorb
-                if let Some(abs_val) = op.absorbing() {
-                    if rhs == IrVal::Const(abs_val) || lhs == IrVal::Const(abs_val) {
+                if let Some(abs_val) = op.absorbing()
+                    && (rhs == IrVal::Const(abs_val) || lhs == IrVal::Const(abs_val)) {
                         return IrInsn::Assign {
                             dst,
                             val: IrVal::Const(abs_val),
                         };
                     }
-                }
 
                 // x - x → 0 or x ^ x → 0 or x & x → x
                 if lhs == rhs {

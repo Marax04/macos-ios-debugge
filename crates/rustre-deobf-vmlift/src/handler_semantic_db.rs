@@ -1813,7 +1813,7 @@ impl SemanticMap {
     }
 
     /// Merge another map into this one (callee wins on conflict).
-    pub fn merge(&mut self, other: SemanticMap) {
+    pub fn merge(&mut self, other: Self) {
         self.entries.extend(other.entries);
     }
 

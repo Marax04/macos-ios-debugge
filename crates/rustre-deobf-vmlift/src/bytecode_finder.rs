@@ -36,7 +36,7 @@ impl BytecodeRegion {
 
     /// Return `true` if two regions overlap.
     #[must_use]
-    pub fn overlaps(&self, other: &Self) -> bool {
+    pub const fn overlaps(&self, other: &Self) -> bool {
         self.start < other.end() && other.start < self.end()
     }
 
@@ -127,7 +127,7 @@ impl BytecodeFinder {
         // Deduplicate overlapping regions (keep highest confidence)
         regions = deduplicate(regions);
         regions.retain(|r| r.confidence >= self.min_confidence && r.length >= self.min_region_size);
-        regions.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        regions.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         regions
     }
 
@@ -404,7 +404,7 @@ mod tests {
     #[test]
     fn test_shannon_entropy_binary() {
         // 50% zeros, 50% ones → entropy = 1.0
-        let data: Vec<u8> = (0..128).map(|i| if i < 64 { 0 } else { 1 }).collect();
+        let data: Vec<u8> = (0..128).map(|i| u8::from(i >= 64)).collect();
         let e = shannon_entropy(&data);
         assert!(
             (e - 1.0).abs() < 0.01,

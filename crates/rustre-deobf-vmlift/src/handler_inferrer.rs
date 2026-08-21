@@ -267,8 +267,8 @@ impl HandlerSemanticInferrer {
             size: handler.len(),
             class,
             confidence,
-            input_count: (state.stack_pops + if state.mem_reads > 0 { 1 } else { 0 }) as u8,
-            output_count: (state.stack_pushes + if state.mem_writes > 0 { 1 } else { 0 }) as u8,
+            input_count: (state.stack_pops + usize::from(state.mem_reads > 0)) as u8,
+            output_count: (state.stack_pushes + usize::from(state.mem_writes > 0)) as u8,
             reads_memory: state.mem_reads > 0,
             writes_memory: state.mem_writes > 0,
             modifies_vip: state.branch_seen || state.ret_seen,
@@ -361,7 +361,6 @@ impl HandlerSemanticInferrer {
                     state.primary_op = Some(match reg {
                         0 => ArithOp::Rol,
                         1 => ArithOp::Ror,
-                        4 | 6 => ArithOp::Shl,
                         5 => ArithOp::Shr,
                         7 => ArithOp::Sar,
                         _ => ArithOp::Shl,
@@ -373,7 +372,6 @@ impl HandlerSemanticInferrer {
                     state.primary_op = Some(match reg {
                         2 => ArithOp::Not,
                         3 => ArithOp::Neg,
-                        4 => ArithOp::Mul,
                         6 => ArithOp::Div,
                         _ => ArithOp::Mul,
                     });
@@ -431,11 +429,7 @@ impl HandlerSemanticInferrer {
                     state.branch_seen = true;
                     pc += 5;
                 }
-                0xEB => {
-                    state.branch_seen = true;
-                    pc += 2;
-                }
-                0x74 | 0x75 | 0x7C | 0x7D | 0x7E | 0x7F | 0x72 | 0x73 | 0x76 | 0x77 | 0x78
+                0xEB | 0x74 | 0x75 | 0x7C | 0x7D | 0x7E | 0x7F | 0x72 | 0x73 | 0x76 | 0x77 | 0x78
                 | 0x79 => {
                     state.branch_seen = true;
                     pc += 2;
@@ -466,14 +460,8 @@ impl HandlerSemanticInferrer {
                 }
 
                 // ── NOP / prefixes ────────────────────────────────────────────
-                0x90 | 0x66 | 0x67 | 0xF2 | 0xF3 => {
-                    pc += 1;
-                }
-
                 // ── REX prefix (x64) ─────────────────────────────────────────
-                0x40..=0x4F => {
-                    pc += 1;
-                } // skip REX
+                // skip REX
 
                 // ── Halt (custom VM) ──────────────────────────────────────────
                 0xF4 => {

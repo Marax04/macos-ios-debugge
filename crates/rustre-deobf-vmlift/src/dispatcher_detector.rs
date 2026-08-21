@@ -222,7 +222,7 @@ impl DispatcherDetector {
         self.detect_threaded_dispatchers(data, &mut results);
         self.detect_interpreter_loop(data, &mut results);
         results.retain(|d| d.confidence >= self.min_confidence);
-        results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        results.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         results
     }
 

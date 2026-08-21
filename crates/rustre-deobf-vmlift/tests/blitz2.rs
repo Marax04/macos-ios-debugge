@@ -10,8 +10,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -55,7 +55,7 @@ fn lifter_sub_50_inputs() {
 #[test]
 fn lifter_loadimm_roundtrip_50() {
     for i in 0..50u32 {
-        let imm = i.wrapping_mul(0x01020304);
+        let imm = i.wrapping_mul(0x0102_0304);
         let mut bc = vec![0x08, (i & 0xFF) as u8];
         bc.extend_from_slice(&imm.to_le_bytes());
         let r = VmLifter::lift_to_instructions(&bc).unwrap();
@@ -68,7 +68,7 @@ fn lifter_loadimm_roundtrip_50() {
 #[test]
 fn lifter_pushimm_roundtrip_50() {
     for i in 0..50u32 {
-        let imm = i.wrapping_mul(0xDEADBEEF);
+        let imm = i.wrapping_mul(0xDEAD_BEEF);
         let mut bc = vec![0x09];
         bc.extend_from_slice(&imm.to_le_bytes());
         let r = VmLifter::lift_to_instructions(&bc).unwrap();
@@ -240,7 +240,7 @@ fn guest_opcode_clone_copy() {
     let a = GuestOpcode::Halt;
     let b = a;
     assert_eq!(a, b);
-    let _c = a.clone();
+    let _c = a;
 }
 
 // ───────────────── VmDispatcherDetector ─────────────────
@@ -256,7 +256,7 @@ fn detector_pattern_a_indirect_indexed() {
     // FF 24 CD disp32  → pattern A
     let mut code = vec![0xFF, 0x24, 0xCD];
     code.extend_from_slice(&0u32.to_le_bytes());
-    code.extend(std::iter::repeat(0u8).take(64));
+    code.extend(std::iter::repeat_n(0u8, 64));
     let out = VmDispatcherDetector::detect_in_bytes(&code, 0);
     assert!(out.iter().any(|d| d.offset == 0));
 }

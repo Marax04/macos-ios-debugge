@@ -362,16 +362,14 @@ impl VmCfg {
             }
         }
         // Mirror in block successor/predecessor lists for serialisation.
-        if let Some(b) = self.blocks.get_mut(&from) {
-            if !b.successors.contains(&to) {
+        if let Some(b) = self.blocks.get_mut(&from)
+            && !b.successors.contains(&to) {
                 b.successors.push(to);
             }
-        }
-        if let Some(b) = self.blocks.get_mut(&to) {
-            if !b.predecessors.contains(&from) {
+        if let Some(b) = self.blocks.get_mut(&to)
+            && !b.predecessors.contains(&from) {
                 b.predecessors.push(from);
             }
-        }
     }
 
     /// Number of blocks.
@@ -734,14 +732,13 @@ impl VmIsaComplete {
         while pc < bytecode.len() {
             let _opcode_byte = bytecode[pc];
             let (_, total, is_branch, ops) = self.decode_single(bytecode, pc);
-            if is_branch {
-                if let Some(&target) = ops.first() {
+            if is_branch
+                && let Some(&target) = ops.first() {
                     let t = target as usize;
                     if t < bytecode.len() {
                         targets.insert(t);
                     }
                 }
-            }
             pc += total;
         }
         targets
@@ -781,8 +778,7 @@ impl VmIsaComplete {
     fn default_operands_for(byte: u8) -> Vec<VmOperand> {
         match byte {
             0x01 => vec![VmOperand::new("imm", OperandKind::Immediate, OperandWidth::U32)],
-            0x02 => vec![VmOperand::new("reg", OperandKind::Register, OperandWidth::U8)],
-            0x03 => vec![VmOperand::new("reg", OperandKind::Register, OperandWidth::U8)],
+            0x02 | 0x03 => vec![VmOperand::new("reg", OperandKind::Register, OperandWidth::U8)],
             0x30 | 0x31 | 0x32 | 0x35 => {
                 vec![VmOperand::new("target", OperandKind::BranchTarget, OperandWidth::U32)]
             }

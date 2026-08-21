@@ -56,7 +56,7 @@ fn lift_push_reg_then_pop_reg() {
 fn lift_load_mem_le_immediate() {
     // 0x05 rd rs imm32-le
     let v = VmLifter::lift_to_instructions(&[0x05, 0x01, 0x02, 0xDE, 0xAD, 0xBE, 0xEF]).unwrap();
-    assert_eq!(v[0].imm, Some(0xEFBEADDE));
+    assert_eq!(v[0].imm, Some(0xEFBE_ADDE));
 }
 
 #[test]
@@ -258,7 +258,7 @@ fn guest_instruction_eq_and_clone() {
     };
     let b = a.clone();
     assert_eq!(a, b);
-    let c = GuestInstruction { reg_dst: Some(2), ..a.clone() };
+    let c = GuestInstruction { reg_dst: Some(2), ..a };
     assert_ne!(a, c);
 }
 
@@ -542,7 +542,7 @@ fn disasm_load_six_byte_form() {
         &isa,
     )
     .unwrap();
-    assert_eq!(r[0].operands, vec![1, 2, 0x12345678]);
+    assert_eq!(r[0].operands, vec![1, 2, 0x1234_5678]);
 }
 
 #[test]
@@ -553,14 +553,14 @@ fn disasm_loadimm_five_byte_form() {
         &isa,
     )
     .unwrap();
-    assert_eq!(r[0].operands, vec![3, 0x12345678]);
+    assert_eq!(r[0].operands, vec![3, 0x1234_5678]);
 }
 
 #[test]
 fn disasm_pushimm_four_byte_form() {
     let isa = VmIsa::default_lifter_isa();
     let r = VmBytecodeDisassembler::disassemble(&[0x09, 0x78, 0x56, 0x34, 0x12], &isa).unwrap();
-    assert_eq!(r[0].operands, vec![0x12345678]);
+    assert_eq!(r[0].operands, vec![0x1234_5678]);
 }
 
 #[test]
@@ -679,7 +679,7 @@ fn detector_pattern_a_indirect_indexed_jmp() {
 fn detector_pattern_b_computed_jmp_ff_e0() {
     // 48 8B 00  (table load) then FF E0
     let code = [0x48u8, 0x8B, 0x00, 0xFF, 0xE0];
-    let v = VmDispatcherDetector::detect_in_bytes(&code, 0x400000);
+    let v = VmDispatcherDetector::detect_in_bytes(&code, 0x0040_0000);
     assert!(v.iter().any(|d| d.description.contains("computed-jmp FF E0")));
 }
 
@@ -803,7 +803,7 @@ fn raw_dispatcher_site_constructible_and_clone() {
         kind: RawDispatcherKind::ComputedJmp,
         table_entries: vec![0x10, 0x20],
     };
-    let c = s.clone();
+    let c = s;
     assert_eq!(c.address, 0x1000);
     assert_eq!(c.table_entries.len(), 2);
 }
@@ -814,7 +814,7 @@ fn raw_dispatcher_site_constructible_and_clone() {
 
 #[test]
 fn pipeline_detect_and_report_empty() {
-    let r = VmLifterPipeline::detect_and_report(&[], 0x400000);
+    let r = VmLifterPipeline::detect_and_report(&[], 0x0040_0000);
     assert_eq!(r.dispatchers_found, 0);
     assert_eq!(r.isa.len(), 9);
     assert!(!r.analysis_notes.is_empty());

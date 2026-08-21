@@ -151,15 +151,15 @@ pub enum LlilExpr {
     /// Constant.
     Const(u64),
     /// Memory load: `mem[inner]`.
-    Load { inner: Box<LlilExpr>, width: u8 },
+    Load { inner: Box<Self>, width: u8 },
     /// Binary operation.
     BinOp {
         op: String,
-        lhs: Box<LlilExpr>,
-        rhs: Box<LlilExpr>,
+        lhs: Box<Self>,
+        rhs: Box<Self>,
     },
     /// Unary operation.
-    UnaryOp { op: String, inner: Box<LlilExpr> },
+    UnaryOp { op: String, inner: Box<Self> },
 }
 
 impl LlilExpr {
@@ -173,7 +173,7 @@ impl LlilExpr {
     }
 
     #[must_use]
-    pub fn add(lhs: LlilExpr, rhs: LlilExpr) -> Self {
+    pub fn add(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: "ADD".into(),
             lhs: Box::new(lhs),
@@ -182,7 +182,7 @@ impl LlilExpr {
     }
 
     #[must_use]
-    pub fn sub(lhs: LlilExpr, rhs: LlilExpr) -> Self {
+    pub fn sub(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: "SUB".into(),
             lhs: Box::new(lhs),
@@ -191,7 +191,7 @@ impl LlilExpr {
     }
 
     #[must_use]
-    pub fn xor(lhs: LlilExpr, rhs: LlilExpr) -> Self {
+    pub fn xor(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: "XOR".into(),
             lhs: Box::new(lhs),
@@ -200,7 +200,7 @@ impl LlilExpr {
     }
 
     #[must_use]
-    pub fn load(inner: LlilExpr, width: u8) -> Self {
+    pub fn load(inner: Self, width: u8) -> Self {
         Self::Load { inner: Box::new(inner), width }
     }
 }
@@ -409,8 +409,7 @@ impl TigressLifter {
             .filter(|w| w[0] == 0x80 && w[1] == 0x3F)
             .count();
         if sparse_count >= 3 {
-            *scores.entry(TigressDispatchMode::SparseBranch).or_insert(0.0) +=
-                0.05 * sparse_count as f32;
+            *scores.entry(TigressDispatchMode::SparseBranch).or_insert(0.0) = 0.05f32.mul_add(sparse_count as f32, *scores.entry(TigressDispatchMode::SparseBranch).or_insert(0.0));
         }
 
         // Indirect table: call [rax + rcx*8] or similar
@@ -433,8 +432,7 @@ impl TigressLifter {
                     .unwrap_or(std::cmp::Ordering::Equal)
                     .then_with(|| b.0.cmp(&a.0))
             })
-            .map(|(mode, score)| (mode, score.min(1.0)))
-            .unwrap_or((TigressDispatchMode::Unknown, 0.0))
+            .map_or((TigressDispatchMode::Unknown, 0.0), |(mode, score)| (mode, score.min(1.0)))
     }
 
     // ── Handler table location ────────────────────────────────────────────────
@@ -495,9 +493,7 @@ impl TigressLifter {
         // frequent candidates yield the same base register on every run.
         let base_reg = reg_counts
             .into_iter()
-            .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0)))
-            .map(|(r, _)| r)
-            .unwrap_or_else(|| "rdi".to_string());
+            .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0))).map_or_else(|| "rdi".to_string(), |(r, _)| r);
 
         // Estimate register count from maximum observed slot offset
         let mut max_offset: i32 = 0;
@@ -516,7 +512,7 @@ impl TigressLifter {
             num_registers: num_regs,
             register_width: 64,
             access: RegFileAccess::Array {
-                base_reg: base_reg.clone(),
+                base_reg,
                 index: 0,
             },
             slot_names: (0..num_regs).map(|i| (i, format!("vr{i}"))).collect(),

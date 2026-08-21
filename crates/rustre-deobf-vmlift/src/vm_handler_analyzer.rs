@@ -237,11 +237,10 @@ impl PatternSignature {
             return false;
         }
         for (i, pat_byte) in self.pattern.iter().enumerate() {
-            if let Some(expected) = pat_byte {
-                if data[offset + i] != *expected {
+            if let Some(expected) = pat_byte
+                && data[offset + i] != *expected {
                     return false;
                 }
-            }
         }
         true
     }

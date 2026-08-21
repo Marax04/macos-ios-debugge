@@ -205,7 +205,7 @@ pub fn detect_vm_exits(code: &[u8], base: u64) -> Vec<VmExit> {
         match b {
             // RET near: C3
             0xC3 => {
-                exits.push(VmExit::new(Addr(base + i as u64), VmExitKind::Ret).with_confidence(90))
+                exits.push(VmExit::new(Addr(base + i as u64), VmExitKind::Ret).with_confidence(90));
             }
             // RETN imm16: C2 xx xx
             0xC2 if i + 3 <= code.len() => {
@@ -551,9 +551,8 @@ impl VirtualizedFunction {
         let disp_conf = self
             .dispatcher
             .as_ref()
-            .map(|d| u32::from(d.confidence))
-            .unwrap_or(0);
-        (((entry_conf + disp_conf) / 2) as u8).min(100)
+            .map_or(0, |d| u32::from(d.confidence));
+        (u32::midpoint(entry_conf, disp_conf) as u8).min(100)
     }
 
     /// Return a short summary string.
@@ -671,7 +670,7 @@ impl VmOpcodeFrequencyAnalyzer {
                 fraction: c as f32 / total,
             })
             .collect();
-        freqs.sort_by(|a, b| b.count.cmp(&a.count));
+        freqs.sort_by_key(|b| std::cmp::Reverse(b.count));
         freqs
     }
 
@@ -981,7 +980,7 @@ mod tests {
             .filter(|e| e.kind == VmEntryKind::PushJmp)
             .collect();
         assert!(!push_entries.is_empty());
-        assert_eq!(push_entries[0].opcode, Some(0x12345678));
+        assert_eq!(push_entries[0].opcode, Some(0x1234_5678));
     }
 
     #[test]

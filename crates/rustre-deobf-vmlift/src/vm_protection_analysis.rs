@@ -126,7 +126,7 @@ pub enum DeobfPriority {
 
 impl DeobfPriority {
     #[must_use]
-    pub fn from_complexity(c: &VmComplexity) -> Self {
+    pub const fn from_complexity(c: &VmComplexity) -> Self {
         let score = c.obfuscation_level.score();
         match score {
             0..=25 => Self::Low,
@@ -337,7 +337,7 @@ impl VmProtectionAnalysis {
             .iter()
             .map(|r| (r, DeobfPriority::from_complexity(&r.complexity)))
             .collect();
-        ranked.sort_by(|a, b| b.1.cmp(&a.1));
+        ranked.sort_by_key(|b| std::cmp::Reverse(b.1));
         ranked
     }
 }
@@ -372,8 +372,8 @@ mod tests {
 
     #[test]
     fn test_protected_region_creation() {
-        let r = ProtectedRegion::new(0x401000, 0x401080);
-        assert_eq!(r.original_address, 0x401000);
+        let r = ProtectedRegion::new(0x0040_1000, 0x0040_1080);
+        assert_eq!(r.original_address, 0x0040_1000);
         assert!(!r.has_known_protector());
     }
 

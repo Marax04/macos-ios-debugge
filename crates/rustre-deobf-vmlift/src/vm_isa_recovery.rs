@@ -453,14 +453,13 @@ impl VmIsaRecovery {
             let semantics = self.analyse_handler(handler_addr, binary);
             let confidence = semantics
                 .as_ref()
-                .map(|s| {
+                .map_or(0, |s| {
                     if s.kind == HandlerSemanticsKind::Unknown {
                         0
                     } else {
                         75u8
                     }
-                })
-                .unwrap_or(0);
+                });
 
             let sem = semantics
                 .unwrap_or_else(|| HandlerSemantics::new(HandlerSemanticsKind::Unknown, ""));
@@ -680,7 +679,7 @@ mod tests {
 
     #[test]
     fn test_virtual_opcode_mnemonic_unanalysed() {
-        let op = VirtualOpcode::unanalysed(0x0A, 0x401000);
+        let op = VirtualOpcode::unanalysed(0x0A, 0x0040_1000);
         assert!(op.mnemonic().contains("???"));
     }
 

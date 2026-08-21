@@ -144,58 +144,58 @@ pub enum LlilExpr {
     },
     Load {
         size: u8,
-        src: Box<LlilExpr>,
+        src: Box<Self>,
     },
     Add {
         size: u8,
-        left: Box<LlilExpr>,
-        right: Box<LlilExpr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Sub {
         size: u8,
-        left: Box<LlilExpr>,
-        right: Box<LlilExpr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Mul {
         size: u8,
-        left: Box<LlilExpr>,
-        right: Box<LlilExpr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     And {
         size: u8,
-        left: Box<LlilExpr>,
-        right: Box<LlilExpr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Or {
         size: u8,
-        left: Box<LlilExpr>,
-        right: Box<LlilExpr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Xor {
         size: u8,
-        left: Box<LlilExpr>,
-        right: Box<LlilExpr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Neg {
         size: u8,
-        src: Box<LlilExpr>,
+        src: Box<Self>,
     },
     Not {
         size: u8,
-        src: Box<LlilExpr>,
+        src: Box<Self>,
     },
     Cmp {
         size: u8,
-        left: Box<LlilExpr>,
-        right: Box<LlilExpr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Zx {
         size: u8,
-        src: Box<LlilExpr>,
+        src: Box<Self>,
     },
     Sx {
         size: u8,
-        src: Box<LlilExpr>,
+        src: Box<Self>,
     },
     StackSlot {
         size: u8,
@@ -208,12 +208,7 @@ impl LlilExpr {
     #[must_use]
     pub const fn size(&self) -> u8 {
         match self {
-            Self::Const { size, .. } | Self::Reg { size, .. } | Self::Load { size, .. } => *size,
-            Self::Add { size, .. } | Self::Sub { size, .. } | Self::Mul { size, .. } => *size,
-            Self::And { size, .. } | Self::Or { size, .. } | Self::Xor { size, .. } => *size,
-            Self::Neg { size, .. } | Self::Not { size, .. } | Self::Cmp { size, .. } => *size,
-            Self::Zx { size, .. } | Self::Sx { size, .. } => *size,
-            Self::StackSlot { size, .. } => *size,
+            Self::Const { size, .. } | Self::Reg { size, .. } | Self::Load { size, .. } | Self::Add { size, .. } | Self::Sub { size, .. } | Self::Mul { size, .. } | Self::And { size, .. } | Self::Or { size, .. } | Self::Xor { size, .. } | Self::Neg { size, .. } | Self::Not { size, .. } | Self::Cmp { size, .. } | Self::Zx { size, .. } | Self::Sx { size, .. } | Self::StackSlot { size, .. } => *size,
         }
     }
 }
@@ -482,7 +477,8 @@ impl VmToLlilLifter {
 
     fn instruction_size_for(&self, opcode_id: u16, bytecode: &[u8], offset: usize) -> usize {
         let vop = self.isa.get_opcode(opcode_id);
-        let has_imm = matches!(vop.map(|v| v.semantics.kind), Some(HandlerSemanticsKind::Push) | Some(HandlerSemanticsKind::Branch) | Some(HandlerSemanticsKind::ConditionalBranch) | Some(HandlerSemanticsKind::Call));
+        let has_imm = matches!(vop.map(|v| v.semantics.kind), Some(HandlerSemanticsKind::Push | HandlerSemanticsKind::Branch |
+HandlerSemanticsKind::ConditionalBranch | HandlerSemanticsKind::Call));
         if has_imm && offset + 1 + self.operand_size as usize <= bytecode.len() {
             1 + self.operand_size as usize
         } else {

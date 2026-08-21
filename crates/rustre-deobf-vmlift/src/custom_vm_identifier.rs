@@ -356,9 +356,7 @@ impl CustomVmIdentifier {
                     let distinct_ratio = unique.len() as f32 / addrs.len() as f32;
                     let all_aligned = addrs.iter().all(|a| a % 4 == 0);
 
-                    let confidence = distinct_ratio * 0.6
-                        + if all_aligned { 0.2 } else { 0.0 }
-                        + (addrs.len().min(32) as f32 / 32.0) * 0.2;
+                    let confidence = (addrs.len().min(32) as f32 / 32.0).mul_add(0.2, distinct_ratio.mul_add(0.6, if all_aligned { 0.2 } else { 0.0 }));
 
                     if confidence >= self.min_confidence {
                         candidates.push(HandlerTableCandidate {
@@ -693,7 +691,7 @@ mod tests {
     #[test]
     fn test_find_handler_tables_empty() {
         let id = CustomVmIdentifier::new();
-        let tables = id.find_handler_tables(&[0u8; 8], 0x400000);
+        let tables = id.find_handler_tables(&[0u8; 8], 0x0040_0000);
         assert!(tables.is_empty());
     }
 
@@ -702,7 +700,7 @@ mod tests {
         let id = CustomVmIdentifier::new();
         // Short jmp rel32 → must classify as Trampoline
         let bytes = vec![0xE9u8, 0x00, 0x10, 0x00, 0x00];
-        let result = id.identify(&bytes, 0x401000);
+        let result = id.identify(&bytes, 0x0040_1000);
         assert_eq!(result.kind, VmKind::Trampoline);
     }
 

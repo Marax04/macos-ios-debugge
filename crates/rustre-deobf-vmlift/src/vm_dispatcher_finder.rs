@@ -76,10 +76,8 @@ impl DispatchPattern {
     #[must_use]
     pub const fn max_handlers(&self) -> usize {
         match self {
-            Self::ScaledIndexJmp | Self::ScaledIndexJmp32 | Self::TableCall => 256,
-            Self::ComputedJmp => 256,
             Self::LinearScan | Self::SwitchTree => 64,
-            Self::InterpreterLoop => 256,
+            Self::ScaledIndexJmp | Self::ScaledIndexJmp32 | Self::TableCall | Self::ComputedJmp | Self::InterpreterLoop => 256,
             Self::Unknown => 0,
         }
     }
@@ -177,7 +175,7 @@ impl<'a> ByteScanner<'a> {
             return false;
         }
         pattern.iter().enumerate().all(|(i, p)| {
-            p.map_or(true, |expected| self.data[offset + i] == expected)
+            p.is_none_or(|expected| self.data[offset + i] == expected)
         })
     }
 
@@ -275,11 +273,10 @@ impl VmDispatcherFinder {
 
         for offset in 0..code.len() {
             for matcher in &self.matchers {
-                if let Some(dt) = matcher.try_match(&scanner, offset) {
-                    if dt.confidence >= self.min_confidence {
+                if let Some(dt) = matcher.try_match(&scanner, offset)
+                    && dt.confidence >= self.min_confidence {
                         results.push(dt);
                     }
-                }
             }
         }
 
@@ -325,7 +322,7 @@ impl VmDispatcherFinder {
                 (pat, confs.len(), avg as u8)
             })
             .collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by_key(|b| std::cmp::Reverse(b.1));
         result
     }
 
@@ -744,8 +741,8 @@ mod tests {
         t1.set_handler_count(256);
         let tables = vec![t1, t2, t3];
         let groups = VmDispatcherFinder::group_by_pattern(&tables);
-        assert_eq!(groups.get("computed-jmp").map(|v| v.len()), Some(2));
-        assert_eq!(groups.get("linear-scan-cmp/je").map(|v| v.len()), Some(1));
+        assert_eq!(groups.get("computed-jmp").map(std::vec::Vec::len), Some(2));
+        assert_eq!(groups.get("linear-scan-cmp/je").map(std::vec::Vec::len), Some(1));
     }
 
     #[test]
