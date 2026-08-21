@@ -581,7 +581,7 @@ impl PassManagerReport {
     #[must_use]
     pub fn slowest_passes(&self, n: usize) -> Vec<&PassResult> {
         let mut sorted: Vec<&PassResult> = self.results.iter().collect();
-        sorted.sort_by(|a, b| b.elapsed.cmp(&a.elapsed));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.elapsed));
         sorted.truncate(n);
         sorted
     }

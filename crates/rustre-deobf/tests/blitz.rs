@@ -569,7 +569,7 @@ fn entropy_scanner_custom_threshold() {
 #[test]
 fn entropy_scanner_max_region_none_when_empty() {
     let scanner = EntropyScanner::default();
-    assert!(scanner.max_entropy_region(&vec![0u8; 32]).is_none());
+    assert!(scanner.max_entropy_region(&[0u8; 32]).is_none());
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -945,11 +945,11 @@ fn deobf_session_metrics_accumulate() {
 
 #[test]
 fn deobf_error_display_messages() {
-    assert!(DeobfError::NotApplicable("x".into()).to_string().contains("x"));
-    assert!(DeobfError::ParseError("p".into()).to_string().contains("p"));
+    assert!(DeobfError::NotApplicable("x".into()).to_string().contains('x'));
+    assert!(DeobfError::ParseError("p".into()).to_string().contains('p'));
     assert!(DeobfError::TooShort { needed: 4, have: 1 }
         .to_string()
-        .contains("4"));
+        .contains('4'));
     assert!(DeobfError::PatchConflict { offset: 0xAB, reason: "r".into() }
         .to_string()
         .contains("0xab"));

@@ -668,8 +668,7 @@ impl XorDecryptor {
                     b'A'..=b'Z' => 8,
                     b'0'..=b'9' => 3,
                     b'.' | b',' | b'\'' | b'"' | b'!' | b'?' | b';' | b':' | b'-' => 2,
-                    b'\n' | b'\r' | b'\t' => 1,
-                    0x20..=0x7e => 1,
+                    b'\n' | b'\r' | b'\t' | 0x20..=0x7e => 1,
                     _ => -5,
                 };
                 // Small extra reward for bytes that also look like code/text
@@ -2645,11 +2644,11 @@ mod tests {
     fn test_chacha20_quarter_round_rfc_test_vector() {
         // RFC 8439 §2.1.1 test vector.
         let (a, b, c, d) =
-            ChaCha20Decryptor::quarter_round(0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567);
-        assert_eq!(a, 0xea2a92f4);
-        assert_eq!(b, 0xcb1cf8ce);
-        assert_eq!(c, 0x4581472e);
-        assert_eq!(d, 0x5881c4bb);
+            ChaCha20Decryptor::quarter_round(0x1111_1111, 0x0102_0304, 0x9b8d_6f43, 0x0123_4567);
+        assert_eq!(a, 0xea2a_92f4);
+        assert_eq!(b, 0xcb1c_f8ce);
+        assert_eq!(c, 0x4581_472e);
+        assert_eq!(d, 0x5881_c4bb);
     }
 
     #[test]

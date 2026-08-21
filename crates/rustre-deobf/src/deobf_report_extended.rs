@@ -719,8 +719,8 @@ mod tests {
             TechniqueUsed::Rc4StringEncryption,
             0.7,
         )
-        .with_address(0x401000);
-        assert_eq!(a.address, Some(0x401000));
+        .with_address(0x0040_1000);
+        assert_eq!(a.address, Some(0x0040_1000));
     }
 
     // ── ConfidenceMatrix ──────────────────────────────────────────────────────
