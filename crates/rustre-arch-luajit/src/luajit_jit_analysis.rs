@@ -292,7 +292,7 @@ impl HotspotFinder {
             .filter(|&(_, &c)| c >= self.hot_threshold)
             .map(|(&pc, &c)| (pc, c))
             .collect();
-        pairs.sort_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_by_key(|&(_, c)| std::cmp::Reverse(c));
         pairs
     }
 

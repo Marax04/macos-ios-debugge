@@ -50,7 +50,7 @@ impl LjInsn {
     }
     #[must_use]
     pub const fn sd(self) -> i16 {
-        self.d() as i16
+        self.d().cast_signed()
     }
 
     #[must_use] 

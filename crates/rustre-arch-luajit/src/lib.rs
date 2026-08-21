@@ -291,6 +291,16 @@ impl LjOp {
     }
 }
 
+/// Number of `LuaJIT` opcodes, as a `u8`.
+///
+/// The `LuaJIT` bytecode encodes the opcode in a single byte, so the table can
+/// never hold more than 256 entries; the conversion is therefore exact and the
+/// saturating fallback exists only to keep a future table edit from panicking.
+#[must_use]
+pub fn lj_names_len_u8() -> u8 {
+    u8::try_from(LJ_NAMES.len()).unwrap_or(u8::MAX)
+}
+
 pub(crate) static LJ_NAMES: &[&str] = &[
     "ISLT", "ISGE", "ISLE", "ISGT", "ISEQV", "ISNEV", "ISEQS", "ISNES", "ISEQN", "ISNEN", "ISEQP",
     "ISNEP", "ISTC", "ISFC", "IST", "ISF", "ISTYPE", "ISNUM", "MOV", "NOT", "UNM", "LEN", "ADDVN",
@@ -3180,7 +3190,7 @@ mod tests {
 
     #[test]
     fn test_lj_op_from_u8_roundtrip() {
-        for i in 0u8..LJ_NAMES.len() as u8 {
+        for i in 0u8..lj_names_len_u8() {
             let op = LjOp::from_u8(i).expect("should parse");
             assert_eq!(op as u8, i);
         }
@@ -3594,7 +3604,7 @@ mod tests {
     #[test]
     fn test_all_opcodes_decodable() {
         // Every valid opcode should decode without error
-        for op in 0u8..LJ_NAMES.len() as u8 {
+        for op in 0u8..lj_names_len_u8() {
             let w = make_lj_abc(op, 0, 0, 0);
             let result = arch().disassemble(Address::new(0), &w.to_le_bytes());
             assert!(result.is_ok(), "opcode {op} failed: {result:?}");
@@ -3701,7 +3711,7 @@ mod tests {
 
     #[test]
     fn test_opcode_meta_all_present() {
-        for op in 0u8..LJ_NAMES.len() as u8 {
+        for op in 0u8..lj_names_len_u8() {
             let m = LjOpMeta::for_op(op);
             assert_eq!(m.mnemonic, LJ_NAMES[op as usize]);
         }
@@ -3812,7 +3822,7 @@ mod tests {
         assert_eq!(instr.a, 10);
         assert_eq!(instr.b, 11);
         assert_eq!(instr.c, 12);
-        assert_eq!(instr.d, (11u32 << 8) | 12);
+        assert_eq!(instr.d, (11u32 << 8) | 0x0c);
     }
 
     #[test]
@@ -3866,7 +3876,7 @@ mod tests {
 
     #[test]
     fn test_all_lj_opcodes_decode_instruction() {
-        for op in 0u8..LJ_NAMES.len() as u8 {
+        for op in 0u8..lj_names_len_u8() {
             let w = make_lj_abc(op, 0, 0, 0);
             let instr = decode_lj_instruction(w);
             assert_eq!(instr.op, op, "op {op}");
@@ -3875,7 +3885,7 @@ mod tests {
 
     #[test]
     fn test_all_lj_opcodes_format() {
-        for op in 0u8..LJ_NAMES.len() as u8 {
+        for op in 0u8..lj_names_len_u8() {
             let w = make_lj_abc(op, 1, 2, 3);
             let instr = decode_lj_instruction(w);
             let s = fmt_lj_instruction(&instr, None);
@@ -4999,7 +5009,7 @@ mod tests {
 
     #[test]
     fn test_lj_op_from_u8_all_valid() {
-        for i in 0u8..(LJ_NAMES.len() as u8) {
+        for i in 0u8..lj_names_len_u8() {
             let op = LjOp::from_u8(i);
             assert!(op.is_some(), "op {i} should parse");
             assert_eq!(op.unwrap() as u8, i);
@@ -5016,7 +5026,7 @@ mod tests {
 
     #[test]
     fn test_op_meta_description_nonempty() {
-        for op in 0u8..(LJ_NAMES.len() as u8) {
+        for op in 0u8..lj_names_len_u8() {
             let m = LjOpMeta::for_op(op);
             assert!(!m.description.is_empty(), "op {op} has empty description");
         }
@@ -5112,7 +5122,7 @@ mod tests {
 
     #[test]
     fn test_iter_instructions_order() {
-        let words: Vec<u32> = (0u32..5).map(|i| make_lj_abc(i as u8, 0, 0, 0)).collect();
+        let words: Vec<u32> = (0u8..5).map(|i| make_lj_abc(i, 0, 0, 0)).collect();
         let proto = LuaJitProto {
             instructions: words.clone(),
             ..Default::default()
@@ -5374,7 +5384,7 @@ mod tests {
 
     #[test]
     fn test_op_meta_fmt_matches_lj_fmt() {
-        for op in 0u8..(LJ_NAMES.len() as u8) {
+        for op in 0u8..lj_names_len_u8() {
             let meta_fmt = LjOpMeta::for_op(op).fmt;
             let computed_fmt = lj_fmt(op);
             assert_eq!(
@@ -5688,7 +5698,7 @@ mod tests {
 
     #[test]
     fn test_lj_op_mnemonic_all() {
-        for i in 0u8..(LJ_NAMES.len() as u8) {
+        for i in 0u8..lj_names_len_u8() {
             let op = LjOp::from_u8(i).unwrap();
             assert_eq!(op.mnemonic(), LJ_NAMES[i as usize]);
         }

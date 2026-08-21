@@ -14,8 +14,8 @@ fn mk_lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -34,7 +34,7 @@ fn t01_ljop_roundtrip_all_valid() {
 #[test]
 fn t02_ljop_invalid_returns_none() {
     for v in 97u16..=255 {
-        assert!(LjOp::from_u8(v as u8).is_none(), "v={v}");
+        assert!(LjOp::from_u8(low8(u64::from(v))).is_none(), "v={v}");
     }
 }
 
@@ -77,16 +77,16 @@ fn t05_category_specific_ranges() {
 fn t06_make_lj_abc_roundtrip() {
     let mut lcg = mk_lcg();
     for _ in 0..60 {
-        let r = lcg();
-        let op = (r & 0x7f) as u8 % 97;
-        let a = ((r >> 8) & 0xff) as u8;
-        let b = ((r >> 16) & 0xff) as u8;
-        let c = ((r >> 24) & 0xff) as u8;
-        let w = make_lj_abc(op, a, b, c);
+        let raw = lcg();
+        let op = (low8(raw) & 0x7f) % 97;
+        let reg_a = low8(raw >> 8);
+        let reg_b = low8(raw >> 16);
+        let reg_c = low8(raw >> 24);
+        let w = make_lj_abc(op, reg_a, reg_b, reg_c);
         assert_eq!(instr_op(w), op);
-        assert_eq!(instr_a(w), a);
-        assert_eq!(instr_b(w), b);
-        assert_eq!(instr_c(w), c);
+        assert_eq!(instr_a(w), reg_a);
+        assert_eq!(instr_b(w), reg_b);
+        assert_eq!(instr_c(w), reg_c);
     }
 }
 
@@ -95,9 +95,9 @@ fn t07_make_lj_ad_roundtrip() {
     let mut lcg = mk_lcg();
     for _ in 0..60 {
         let r = lcg();
-        let op = (r & 0xff) as u8;
-        let a = ((r >> 8) & 0xff) as u8;
-        let d = (r >> 16) as u16;
+        let op = low8(r);
+        let a = low8(r >> 8);
+        let d = low16(r >> 16);
         let w = make_lj_ad(op, a, d);
         assert_eq!(instr_op(w), op);
         assert_eq!(instr_a(w), a);
@@ -205,7 +205,7 @@ fn t19_arch_disassemble_fuzz_never_panics() {
     let a = LuaJitArch::new();
     let mut lcg = mk_lcg();
     for _ in 0..200 {
-        let w = lcg() as u32;
+        let w = low32(lcg());
         let _ = a.disassemble(Address::new(0), &w.to_le_bytes());
     }
 }
@@ -361,7 +361,7 @@ fn t36_basic_blocks_fuzz_never_panics() {
     let mut lcg = mk_lcg();
     for _ in 0..30 {
         let n = (lcg() % 20) as usize;
-        let words: Vec<u32> = (0..n).map(|_| lcg() as u32).collect();
+        let words: Vec<u32> = (0..n).map(|_| low32(lcg())).collect();
         let _ = find_basic_blocks(&words);
     }
 }
@@ -537,7 +537,7 @@ fn t54_parse_fuzz_never_panics() {
     let mut lcg = mk_lcg();
     for _ in 0..200 {
         let n = (lcg() % 64) as usize;
-        let data: Vec<u8> = (0..n).map(|_| lcg() as u8).collect();
+        let data: Vec<u8> = (0..n).map(|_| low8(lcg())).collect();
         let _ = LuaJitBytecode::parse(&data);
     }
 }
@@ -561,8 +561,8 @@ fn t56_arch_send_sync_threaded() {
         .map(|_| {
             std::thread::spawn(|| {
                 let a = LuaJitArch::new();
-                for i in 0..100 {
-                    let w = make_lj_ad(LjOp::Mov as u8, i as u8, 0);
+                for i in 0u8..100 {
+                    let w = make_lj_ad(LjOp::Mov as u8, i, 0);
                     let _ = a.disassemble(Address::new(0), &w.to_le_bytes());
                 }
             })
@@ -642,4 +642,22 @@ fn t64_make_ad_signed_extremes() {
     assert_eq!(instr_d_signed(w), i16::MIN);
     let w2 = make_lj_ad_signed(88, 0, i16::MAX);
     assert_eq!(instr_d_signed(w2), i16::MAX);
+}
+
+/// Low 32 bits of a generated 64-bit value, taken explicitly rather than by a
+/// narrowing `as` so the intent (use half the PRNG output) stays visible.
+const fn low32(v: u64) -> u32 {
+    let b = v.to_le_bytes();
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+}
+
+/// Low 8 bits of a generated 64-bit value.
+const fn low8(v: u64) -> u8 {
+    v.to_le_bytes()[0]
+}
+
+/// Low 16 bits of a generated 64-bit value.
+const fn low16(v: u64) -> u16 {
+    let b = v.to_le_bytes();
+    u16::from_le_bytes([b[0], b[1]])
 }

@@ -33,7 +33,7 @@ impl Rng {
 fn random_words_never_panic() {
     let mut rng = Rng(0x2545_F491_4F6C_DD1D);
     for _ in 0..20_000 {
-        let word = rng.next() as u32;
+        let word = low32(rng.next());
         let _ = decode_lj_instruction(word);
     }
 }
@@ -62,7 +62,7 @@ fn every_opcode_with_extreme_operands_never_panics() {
 fn random_listings_never_panic() {
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
     for len in [0usize, 1, 4, 64, 1024] {
-        let words: Vec<u32> = (0..len).map(|_| rng.next() as u32).collect();
+        let words: Vec<u32> = (0..len).map(|_| low32(rng.next())).collect();
         let _ = disassemble_listing(&words);
     }
 }
@@ -85,4 +85,11 @@ fn every_opcode_listing_never_panics() {
         let _ = disassemble_listing(&[op]);
         let _ = disassemble_listing(&[op, 0xFFFF_FF00 | op]);
     }
+}
+
+/// Low 32 bits of a generated 64-bit value, taken explicitly rather than by a
+/// narrowing `as` so the intent (use half the PRNG output) stays visible.
+const fn low32(v: u64) -> u32 {
+    let b = v.to_le_bytes();
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
 }

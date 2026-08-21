@@ -575,7 +575,8 @@ mod tests {
         // JMP to within trace 2's mcode
         let base = 0x2000_0000u64;
         let target = base + 10;
-        let rel = (target.cast_signed() - (0x1000_0000u64.cast_signed() + 5)) as i32;
+        let rel = i32::try_from(target.cast_signed() - (0x1000_0000u64.cast_signed() + 5))
+            .expect("fixture displacement fits in i32");
         let mut mcode = vec![0xE9u8];
         mcode.extend_from_slice(&rel.to_le_bytes());
         let mut a = McodeAnalyzer::new(mcode, 0x1000_0000);

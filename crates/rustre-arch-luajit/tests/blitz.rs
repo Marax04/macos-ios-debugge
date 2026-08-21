@@ -526,7 +526,7 @@ fn format_instruction_addvv() {
 
 #[test]
 fn format_instruction_unknown_op() {
-    let s = format_instruction(0, 0x000000FF);
+    let s = format_instruction(0, 0x0000_00FF);
     assert!(s.contains("???"));
 }
 
