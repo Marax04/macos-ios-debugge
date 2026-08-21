@@ -8184,26 +8184,7 @@ fn decode_rvv_tail(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instru
                 0x18 => {
                     if funct3 == 1 {
                         // VFUNARY0 — vs1 selects the conversion
-                        let cvt_mn = match vs1 {
-                            0 => "vfcvt.xu.f.v",
-                            1 => "vfcvt.x.f.v",
-                            2 => "vfcvt.f.xu.v",
-                            3 => "vfcvt.f.x.v",
-                            6 => "vfcvt.rtz.xu.f.v",
-                            7 => "vfcvt.rtz.x.f.v",
-                            8 => "vfwcvt.xu.f.v",
-                            9 => "vfwcvt.x.f.v",
-                            10 => "vfwcvt.f.xu.v",
-                            11 => "vfwcvt.f.x.v",
-                            12 => "vfwcvt.f.f.v",
-                            16 => "vfncvt.xu.f.w",
-                            17 => "vfncvt.x.f.w",
-                            18 => "vfncvt.f.xu.w",
-                            19 => "vfncvt.f.x.w",
-                            20 => "vfncvt.f.f.w",
-                            23 => "vfncvt.rod.f.f.w",
-                            _ => "vmfne", // fallback: treat as vmfne for funct3!=1
-                        };
+                        let cvt_mn = rvv_vfunary_mnemonic(vs1);
                         return Some(plain(
                             address,
                             cvt_mn,
@@ -12164,4 +12145,31 @@ fn decode_rvv_vwxunary(address: Address, word: u32, bytes: Vec<u8>) -> Option<In
             ));
         }
     None
+}
+
+/// VFUNARY0 conversion mnemonics, selected by the `vs1` field.
+///
+/// Extracted from the floating-point dispatch so the table can be read on
+/// its own; the mapping is unchanged.
+const fn rvv_vfunary_mnemonic(vs1: usize) -> &'static str {
+    match vs1 {
+    0 => "vfcvt.xu.f.v",
+    1 => "vfcvt.x.f.v",
+    2 => "vfcvt.f.xu.v",
+    3 => "vfcvt.f.x.v",
+    6 => "vfcvt.rtz.xu.f.v",
+    7 => "vfcvt.rtz.x.f.v",
+    8 => "vfwcvt.xu.f.v",
+    9 => "vfwcvt.x.f.v",
+    10 => "vfwcvt.f.xu.v",
+    11 => "vfwcvt.f.x.v",
+    12 => "vfwcvt.f.f.v",
+    16 => "vfncvt.xu.f.w",
+    17 => "vfncvt.x.f.w",
+    18 => "vfncvt.f.xu.w",
+    19 => "vfncvt.f.x.w",
+    20 => "vfncvt.f.f.w",
+    23 => "vfncvt.rod.f.f.w",
+    _ => "vmfne", // fallback: treat as vmfne for funct3!=1
+    }
 }
