@@ -82,7 +82,50 @@ impl Default for RiscvArch {
     }
 }
 
+/// The register and function fields of an R-type-shaped instruction word.
+///
+/// The `decode_*` helpers all need the same five fields; passing them as one
+/// value keeps the call sites readable and makes it impossible to swap two
+/// same-typed register indices by accident.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RFields {
+    /// Destination register index, bits [11:7].
+    rd: usize,
+    /// First source register index, bits [19:15].
+    rs1: usize,
+    /// Second source register index, bits [24:20].
+    rs2: usize,
+    /// `funct3` field, bits [14:12].
+    funct3: u32,
+    /// `funct7` field, bits [31:25].
+    funct7: u32,
+}
+
+impl RFields {
+    /// Extract all five fields from a 32-bit instruction word.
+    const fn from_word(word: u32) -> Self {
+        Self {
+            rd: ((word >> 7) & 0x1F) as usize,
+            rs1: ((word >> 15) & 0x1F) as usize,
+            rs2: ((word >> 20) & 0x1F) as usize,
+            funct3: (word >> 12) & 0x07,
+            funct7: (word >> 25) & 0x7F,
+        }
+    }
+}
+
 impl RiscvArch {
+    /// True when `bits` is one of the XLEN widths this decoder implements.
+    ///
+    /// Every `decode_*` helper documents this as a precondition and checks it
+    /// with a `debug_assert!`, so a caller that builds a `RiscvArch` by hand
+    /// with a nonsense width fails loudly in debug builds instead of silently
+    /// producing RV32 output.
+    #[must_use]
+    pub const fn is_supported_xlen(&self) -> bool {
+        matches!(self.bits, 32 | 64 | 128)
+    }
+
     /// RV32I base ISA.
     #[must_use]
     pub const fn rv32() -> Self {
@@ -109,11 +152,14 @@ impl RiscvArch {
         assert!(raw.len() >= 4, "decode_word requires at least 4 bytes");
         let bytes = raw[..4].to_vec();
         let opcode = word & 0x7F;
-        let rd = ((word >> 7) & 0x1F) as usize;
-        let funct3 = (word >> 12) & 0x07;
-        let rs1 = ((word >> 15) & 0x1F) as usize;
-        let rs2 = ((word >> 20) & 0x1F) as usize;
-        let funct7 = (word >> 25) & 0x7F;
+        let fields = RFields::from_word(word);
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct3,
+            funct7: _,
+        } = fields;
 
         match opcode {
             0x03 => self.decode_load(address, rd, funct3, rs1, imm_i(word), bytes),
@@ -129,24 +175,24 @@ impl RiscvArch {
             0x1B => self.decode_op_imm32(address, rd, funct3, rs1, word, bytes),
             0x23 => self.decode_store(address, rs1, rs2, funct3, imm_s(word), bytes),
             0x27 => self.decode_fp_store(address, rs1, rs2, funct3, imm_s(word), bytes),
-            0x2F => self.decode_atomic(address, rd, rs1, rs2, funct3, funct7, bytes),
-            0x33 => self.decode_op(address, rd, funct3, rs1, rs2, funct7, bytes),
+            0x2F => self.decode_atomic(address, fields, bytes),
+            0x33 => self.decode_op(address, fields, bytes),
             0x37 => plain(
                 address,
                 "lui",
                 format!("{}, 0x{:x}", xr(rd), imm_u(word) >> 12),
                 bytes,
             ),
-            0x3B => self.decode_op32(address, rd, funct3, rs1, rs2, funct7, bytes),
-            0x43 => self.decode_fmadd(address, rd, funct3, rs1, rs2, funct7, "fmadd", bytes),
-            0x47 => self.decode_fmadd(address, rd, funct3, rs1, rs2, funct7, "fmsub", bytes),
-            0x4B => self.decode_fmadd(address, rd, funct3, rs1, rs2, funct7, "fnmsub", bytes),
-            0x4F => self.decode_fmadd(address, rd, funct3, rs1, rs2, funct7, "fnmadd", bytes),
-            0x53 => self.decode_fp_op(address, rd, funct3, rs1, rs2, funct7, bytes),
+            0x3B => self.decode_op32(address, fields, bytes),
+            0x43 => self.decode_fmadd(address, fields, "fmadd", bytes),
+            0x47 => self.decode_fmadd(address, fields, "fmsub", bytes),
+            0x4B => self.decode_fmadd(address, fields, "fnmsub", bytes),
+            0x4F => self.decode_fmadd(address, fields, "fnmadd", bytes),
+            0x53 => self.decode_fp_op(address, fields, bytes),
             0x63 => self.decode_branch(address, rs1, rs2, funct3, imm_b(word), bytes),
             0x67 if funct3 == 0 => self.decode_jalr(address, rd, rs1, imm_i(word), bytes),
             0x6F => self.decode_jal(address, rd, imm_j(word), bytes),
-            0x73 => self.decode_system(address, rd, funct3, rs1, rs2, word, bytes),
+            0x73 => self.decode_system(address, fields, word, bytes),
             _ => unknown(address, bytes),
         }
     }
@@ -190,6 +236,7 @@ impl RiscvArch {
         imm: i32,
         bytes: Vec<u8>,
     ) -> Instruction {
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let mn = match funct3 {
             2 => "flw",
             3 => "fld",
@@ -210,6 +257,7 @@ impl RiscvArch {
         funct3: u32,
         bytes: Vec<u8>,
     ) -> Instruction {
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         if funct3 == 0 {
             let pred = (word >> 24) & 0xF;
             let succ = (word >> 20) & 0xF;
@@ -273,6 +321,7 @@ impl RiscvArch {
         imm: i32,
         bytes: Vec<u8>,
     ) -> Instruction {
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let mn = match funct3 {
             2 => "fsw",
             3 => "fsd",
@@ -358,16 +407,15 @@ impl RiscvArch {
     // OP (opcode 0x33)
     // ------------------------------------------------------------------
 
-    fn decode_op(
-        &self,
-        address: Address,
-        rd: usize,
-        funct3: u32,
-        rs1: usize,
-        rs2: usize,
-        funct7: u32,
-        bytes: Vec<u8>,
-    ) -> Instruction {
+    fn decode_op(&self, address: Address, f: RFields, bytes: Vec<u8>) -> Instruction {
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct3,
+            funct7,
+        } = f;
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         // M extension
         if funct7 == 0x01 {
             let mn = match funct3 {
@@ -423,6 +471,7 @@ impl RiscvArch {
         word: u32,
         bytes: Vec<u8>,
     ) -> Instruction {
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let imm = imm_i(word);
         let shamt = (word >> 20) & 0x1F;
         let funct7 = (word >> 25) & 0x7F;
@@ -452,16 +501,15 @@ impl RiscvArch {
         }
     }
 
-    fn decode_op32(
-        &self,
-        address: Address,
-        rd: usize,
-        funct3: u32,
-        rs1: usize,
-        rs2: usize,
-        funct7: u32,
-        bytes: Vec<u8>,
-    ) -> Instruction {
+    fn decode_op32(&self, address: Address, f: RFields, bytes: Vec<u8>) -> Instruction {
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct3,
+            funct7,
+        } = f;
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         if funct7 == 0x01 {
             let mn = match funct3 {
                 0 => "mulw",
@@ -499,16 +547,15 @@ impl RiscvArch {
     // ATOMIC (opcode 0x2F — A extension)
     // ------------------------------------------------------------------
 
-    fn decode_atomic(
-        &self,
-        address: Address,
-        rd: usize,
-        rs1: usize,
-        rs2: usize,
-        funct3: u32,
-        funct7: u32,
-        bytes: Vec<u8>,
-    ) -> Instruction {
+    fn decode_atomic(&self, address: Address, f: RFields, bytes: Vec<u8>) -> Instruction {
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct3,
+            funct7,
+        } = f;
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let aq = (funct7 >> 1) & 1;
         let rl = funct7 & 1;
         let funct5 = funct7 >> 2;
@@ -538,15 +585,15 @@ impl RiscvArch {
                     bytes,
                 )
             }
-            0x01 => amo(address, "amoswap", suffix, aq_rl, rd, rs1, rs2, bytes),
-            0x00 => amo(address, "amoadd", suffix, aq_rl, rd, rs1, rs2, bytes),
-            0x04 => amo(address, "amoxor", suffix, aq_rl, rd, rs1, rs2, bytes),
-            0x0C => amo(address, "amoand", suffix, aq_rl, rd, rs1, rs2, bytes),
-            0x08 => amo(address, "amoor", suffix, aq_rl, rd, rs1, rs2, bytes),
-            0x10 => amo(address, "amomin", suffix, aq_rl, rd, rs1, rs2, bytes),
-            0x14 => amo(address, "amomax", suffix, aq_rl, rd, rs1, rs2, bytes),
-            0x18 => amo(address, "amominu", suffix, aq_rl, rd, rs1, rs2, bytes),
-            0x1C => amo(address, "amomaxu", suffix, aq_rl, rd, rs1, rs2, bytes),
+            0x01 => amo(address, "amoswap", suffix, aq_rl, f, bytes),
+            0x00 => amo(address, "amoadd", suffix, aq_rl, f, bytes),
+            0x04 => amo(address, "amoxor", suffix, aq_rl, f, bytes),
+            0x0C => amo(address, "amoand", suffix, aq_rl, f, bytes),
+            0x08 => amo(address, "amoor", suffix, aq_rl, f, bytes),
+            0x10 => amo(address, "amomin", suffix, aq_rl, f, bytes),
+            0x14 => amo(address, "amomax", suffix, aq_rl, f, bytes),
+            0x18 => amo(address, "amominu", suffix, aq_rl, f, bytes),
+            0x1C => amo(address, "amomaxu", suffix, aq_rl, f, bytes),
             _ => unknown(address, bytes),
         }
     }
@@ -564,6 +611,7 @@ impl RiscvArch {
         offset: i32,
         bytes: Vec<u8>,
     ) -> Instruction {
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let target = address.0.wrapping_add((i64::from(offset)).cast_unsigned());
         let mn = match funct3 {
             0 => "beq",
@@ -589,6 +637,7 @@ impl RiscvArch {
     // ------------------------------------------------------------------
 
     fn decode_jal(&self, address: Address, rd: usize, offset: i32, bytes: Vec<u8>) -> Instruction {
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let target = address.0.wrapping_add((i64::from(offset)).cast_unsigned());
         let flags = if rd == 1 {
             InstrFlags::BRANCH | InstrFlags::CALL
@@ -611,6 +660,7 @@ impl RiscvArch {
         offset: i32,
         bytes: Vec<u8>,
     ) -> Instruction {
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let flags = if rd == 0 && rs1 == 1 && offset == 0 {
             InstrFlags::BRANCH | InstrFlags::INDIRECT | InstrFlags::RET
         } else if rd == 1 {
@@ -633,14 +683,18 @@ impl RiscvArch {
     fn decode_fmadd(
         &self,
         address: Address,
-        rd: usize,
-        _funct3: u32,
-        rs1: usize,
-        rs2: usize,
-        funct7: u32,
+        f: RFields,
         base: &str,
         bytes: Vec<u8>,
     ) -> Instruction {
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct7,
+            ..
+        } = f;
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let rs3 = (funct7 >> 2) as usize;
         let fmt = funct7 & 0x3;
         let suffix = fp_fmt(fmt);
@@ -657,16 +711,15 @@ impl RiscvArch {
     // FP OP (opcode 0x53)
     // ------------------------------------------------------------------
 
-    fn decode_fp_op(
-        &self,
-        address: Address,
-        rd: usize,
-        funct3: u32,
-        rs1: usize,
-        rs2: usize,
-        funct7: u32,
-        bytes: Vec<u8>,
-    ) -> Instruction {
+    fn decode_fp_op(&self, address: Address, f: RFields, bytes: Vec<u8>) -> Instruction {
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct3,
+            funct7,
+        } = f;
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         let fmt = funct7 & 0x3;
         let funct5 = funct7 >> 2;
         let suffix = fp_fmt(fmt);
@@ -826,13 +879,18 @@ impl RiscvArch {
     fn decode_system(
         &self,
         address: Address,
-        rd: usize,
-        funct3: u32,
-        rs1: usize,
-        rs2: usize,
+        f: RFields,
         word: u32,
         bytes: Vec<u8>,
     ) -> Instruction {
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct3,
+            ..
+        } = f;
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         if funct3 == 0 {
             let funct12 = (word >> 20) & 0xFFF;
             return match funct12 {
@@ -1717,11 +1775,10 @@ fn amo(
     base: &str,
     suffix: &str,
     aq_rl: &str,
-    rd: usize,
-    rs1: usize,
-    rs2: usize,
+    f: RFields,
     bytes: Vec<u8>,
 ) -> Instruction {
+    let RFields { rd, rs1, rs2, .. } = f;
     let mn = format!("{base}{suffix}{aq_rl}");
     plain(
         address,
@@ -2623,7 +2680,7 @@ mod tests {
         // C.LW x8, 0(x8) → funct3=2, op=0 → 0x4000
         // Encode: op=0, funct3=2, rd'=0(→x8), rs1'=0(→x8), uimm=0
         // bits: [15:13]=010, [12:10]=000(rs1'=0), [9:7]=000, [6:5]=00, [4:2]=000, [1:0]=00
-        let hw: u16 = (0b010 << 13);
+        let hw: u16 = 0b010 << 13;
         let instr = decode_compressed(hw, 64, Address::new(0x1000)).unwrap();
         assert_eq!(instr.mnemonic, "c.lw");
         assert!(instr.flags.contains(InstrFlags::READ_MEM));
@@ -8179,14 +8236,14 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
 
     // Arithmetic — opcode == 0x57
     let ops_vvv = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
-    let ops_vvx = || format!("{}, {}, {}{}", vr(vd), vr(vs2), xr(rs1), mask);
-    let ops_vvi = || {
+    let ops_vec_scalar = || format!("{}, {}, {}{}", vr(vd), vr(vs2), xr(rs1), mask);
+    let ops_vec_imm = || {
         // Read the vs1 field straight out of the instruction word: no cast, and
         // the mask bounds it to five bits exactly as `vs1` was derived.
         let imm5 = rv_sign_ext((word >> 15) & 0x1f, 5);
         format!("{}, {}, {imm5}{}", vr(vd), vr(vs2), mask)
     };
-    let _ops_vv = || format!("{}, {}{}", vr(vd), vr(vs2), mask);
+    let ops_vv = || format!("{}, {}{}", vr(vd), vr(vs2), mask);
     let _ops_vx = || format!("{}, {}{}", vr(vd), xr(rs1), mask);
     let ops_red = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
 
@@ -8241,8 +8298,8 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
                 };
                 let full = format!("{m}.{sfx}");
                 let ops = match funct3 {
-                    3 => ops_vvx(),
-                    2 => ops_vvi(),
+                    3 => ops_vec_scalar(),
+                    2 => ops_vec_imm(),
                     _ => ops_vvv(),
                 };
                 return Some(plain(address, &full, ops, bytes));
@@ -8334,7 +8391,7 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
             if let Some(m) = mn {
                 let sfx = if funct3 == 4 { "vv" } else { "vx" };
                 let full = format!("{m}.{sfx}");
-                let ops = if funct3 == 4 { ops_red() } else { ops_vvx() };
+                let ops = if funct3 == 4 { ops_red() } else { ops_vec_scalar() };
                 return Some(plain(address, &full, ops, bytes));
             }
             None
@@ -8410,7 +8467,7 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
                         return Some(plain(
                             address,
                             cvt_mn,
-                            format!("{}, {}{}", vr(vd), vr(vs2), mask),
+                            ops_vv(),
                             bytes,
                         ));
                     }
@@ -8421,7 +8478,7 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
             if let Some(m) = mn {
                 let sfx = if funct3 == 1 { "vv" } else { "vf" };
                 let full = format!("{m}.{sfx}");
-                let ops = if funct3 == 1 { ops_vvv() } else { ops_vvx() };
+                let ops = if funct3 == 1 { ops_vvv() } else { ops_vec_scalar() };
                 return Some(plain(address, &full, ops, bytes));
             }
             None
@@ -9349,6 +9406,7 @@ pub const fn rv_vtype_imm(vma: bool, vta: bool, vsew: u8, vlmul: u8) -> u16 {
 impl RiscvArch {
     /// Decode a vector (opcode=0x57) instruction word.
     fn decode_vector(&self, address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
         decode_rvv(address, word, bytes.clone()).unwrap_or_else(|| unknown(address, bytes))
     }
 }
@@ -9905,7 +9963,11 @@ mod llil_tests {
     #[test]
     fn test_llil_c_addi() {
         // C.ADDI x1, 4 → op=1, funct3=0, rd=1, imm=4
-        let _hw: u16 = (1 << 7) | (1 << 2) | 0b01; // imm[4:0]=1 (=+1 shifted)
+        // The same instruction with imm[4:0]=1 must lift the same way: the
+        // immediate is data, not part of the opcode selection.
+        let hw_imm1: u16 = (1 << 7) | (1 << 2) | 0b01;
+        let ops_imm1 = rv_lift_compressed(0x1000, hw_imm1, 64);
+        assert_eq!(ops_imm1.len(), 1, "c.addi x1, 1 lifts to one LLIL op");
         // Use a proper c.addi encoding: op=01, funct3=000, rd=1(=ra), imm5=0, imm4_0=4
         // hw: [15:13]=000, [12]=0(imm5), [11:7]=00001(rd=1), [6:2]=00100(imm[4:0]=4), [1:0]=01
         let hw: u16 = (1 << 7) | (4 << 2) | 0b01;

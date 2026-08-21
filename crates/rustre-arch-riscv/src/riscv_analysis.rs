@@ -12,12 +12,18 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+/// Pointer width assumed when the ABI cannot be identified.
+///
+/// Deliberately the narrow value, so a wrong guess under-reads rather than
+/// running past the end of an object.
+const DEFAULT_POINTER_SIZE: usize = 4;
+
 // ---------------------------------------------------------------------------
 // RISC-V ABI
 // ---------------------------------------------------------------------------
 
-/// RISC-V Application Binary Interface variants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// RISC-V Application Binary Interface variants.
 pub enum RiscVAbi {
     /// ILP32 — 32-bit integers, longs, and pointers; no floating-point regs.
     Ilp32,
@@ -42,7 +48,9 @@ impl RiscVAbi {
         match self {
             Self::Ilp32 | Self::Ilp32f | Self::Ilp32d => 4,
             Self::Lp64 | Self::Lp64f | Self::Lp64d => 8,
-            Self::Unknown => 4,
+            // An unrecognised ABI is assumed 32-bit: the narrower guess keeps
+            // pointer-sized reads inside the object rather than past its end.
+            Self::Unknown => DEFAULT_POINTER_SIZE,
         }
     }
 
@@ -422,7 +430,7 @@ impl CompressedInsn {
                 let j = (raw >> 12) & 1;
                 match (j, rd, rs2) {
                     (0, _, 0) => {
-                        Self::make(raw, "c.jr", &Self::reg5(rd).to_string(), Some("jalr"))
+                        Self::make(raw, "c.jr", &Self::reg5(rd), Some("jalr"))
                     }
                     (0, _, _) => Self::make(
                         raw,
@@ -432,7 +440,7 @@ impl CompressedInsn {
                     ),
                     (1, 0, 0) => Self::make(raw, "c.ebreak", "", Some("ebreak")),
                     (1, _, 0) => {
-                        Self::make(raw, "c.jalr", &Self::reg5(rd).to_string(), Some("jalr"))
+                        Self::make(raw, "c.jalr", &Self::reg5(rd), Some("jalr"))
                     }
                     (1, _, _) => Self::make(
                         raw,
@@ -545,10 +553,10 @@ impl SoftFloat {
     /// Classify the float ABI from detected symbols.
     #[must_use]
     pub const fn infer_abi(&self) -> RiscVAbi {
-        if !self.detected {
-            RiscVAbi::Unknown
-        } else {
+        if self.detected {
             RiscVAbi::Ilp32 // Soft-float implies integer-only ABI
+        } else {
+            RiscVAbi::Unknown
         }
     }
 }

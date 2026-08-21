@@ -227,9 +227,13 @@ impl RiscvCompressedDecoder {
     }
 
     fn err(&self, word: u16, msg: &str) -> CompressedDecodeError {
+        // Record which expansion mode was active: the same halfword is a valid
+        // encoding in one mode and reserved in the other, so the mode is part
+        // of the diagnosis.
+        let mode = if self.rv64 { "rv64c" } else { "rv32c" };
         CompressedDecodeError {
             word,
-            message: msg.to_string(),
+            message: format!("{msg} [{mode}]"),
         }
     }
 

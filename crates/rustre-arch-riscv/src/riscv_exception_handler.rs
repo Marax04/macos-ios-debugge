@@ -721,7 +721,7 @@ mod tests {
     fn test_machine_vectored_handler() {
         let h = RiscvExceptionHandler::new(64, 0x8000_0001);
         // Machine external interrupt = code 11
-        let cause = (1u64 << 63) | 11;
+        let cause = (1u64 << 63) | 0x0B;
         let addr = h.machine_handler(cause);
         assert_eq!(addr, 0x8000_0000 + 4 * 11);
     }

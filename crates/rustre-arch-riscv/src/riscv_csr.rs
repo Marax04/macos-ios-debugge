@@ -1501,7 +1501,7 @@ mod tests {
 
     #[test]
     fn test_mcause_unknown_interrupt() {
-        let d = McauseDecoder::decode_64((1u64 << 63) | 20);
+        let d = McauseDecoder::decode_64((1u64 << 63) | 0x14);
         assert!(matches!(
             d,
             McauseDecode::Interrupt(InterruptCode::Unknown(20))
