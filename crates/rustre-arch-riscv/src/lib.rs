@@ -775,6 +775,25 @@ impl RiscvArch {
                     bytes,
                 )
             }
+            _ => self.decode_fp_op_rest(address, f, bytes),
+        }
+    }
+
+    /// Second half of the FP-op funct5 table.
+    fn decode_fp_op_rest(&self, address: Address, f: RFields, bytes: Vec<u8>) -> Instruction {
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct3,
+            funct7,
+        } = f;
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
+        let fmt = funct7 & 0x3;
+        let funct5 = funct7 >> 2;
+        let suffix = fp_fmt(fmt);
+
+        match funct5 {
             0x08 => {
                 // `rs2 & 0x1F` is at most 31, so this conversion is exact for every
                 // input and the fallback arm is unreachable.
@@ -805,6 +824,25 @@ impl RiscvArch {
                     bytes,
                 )
             }
+            _ => self.decode_fp_op_tail(address, f, bytes),
+        }
+    }
+
+    /// Final part of the FP-op funct5 table.
+    fn decode_fp_op_tail(&self, address: Address, f: RFields, bytes: Vec<u8>) -> Instruction {
+        let RFields {
+            rd,
+            rs1,
+            rs2,
+            funct3,
+            funct7,
+        } = f;
+        debug_assert!(self.is_supported_xlen(), "unsupported XLEN {}", self.bits);
+        let fmt = funct7 & 0x3;
+        let funct5 = funct7 >> 2;
+        let suffix = fp_fmt(fmt);
+
+        match funct5 {
             0x18 => {
                 let mn = match rs2 {
                     0 => format!("fcvt.{suffix}.w"),
@@ -8690,20 +8728,13 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
     let rd = ((word >> 7) & 0x1F) as usize;
     let funct3 = (word >> 12) & 7;
     let rs1 = ((word >> 15) & 0x1F) as usize;
-    let rs2 = ((word >> 20) & 0x1F) as usize;
-    let funct7 = (word >> 25) & 0x7F;
     let imm_i = i64::from(rv_imm_i(word));
-    let imm_s = i64::from(rv_imm_s(word));
-    let imm_b = i64::from(rv_imm_b(word));
     let imm_u = i64::from(rv_imm_u(word));
     let imm_j = i64::from(rv_imm_j(word));
 
     let ra1 = xabi(rs1);
-    let ra2 = xabi(rs2);
     let rda = xabi(rd);
 
-    let nop = || vec![LlilOp::Nop];
-    let skip = || vec![LlilOp::Nop]; // unhandled but safe
 
     // Helper to produce: rda = expr, but only if rd != x0
     let setreg = |expr: LlilExpr| {
@@ -8768,6 +8799,38 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
         }
 
         // BRANCH
+        _ => rv_lift_word_mid(pc, word, xlen),
+    }
+}
+
+/// Middle part of the opcode dispatch in `rv_lift_word`.
+fn rv_lift_word_mid(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
+    let opcode = (word & 0x7F) as u8;
+    let rd = ((word >> 7) & 0x1F) as usize;
+    let funct3 = (word >> 12) & 7;
+    let rs1 = ((word >> 15) & 0x1F) as usize;
+    let rs2 = ((word >> 20) & 0x1F) as usize;
+    let funct7 = (word >> 25) & 0x7F;
+    let imm_i = i64::from(rv_imm_i(word));
+    let imm_s = i64::from(rv_imm_s(word));
+    let imm_b = i64::from(rv_imm_b(word));
+
+    let ra1 = xabi(rs1);
+    let ra2 = xabi(rs2);
+    let rda = xabi(rd);
+
+    let skip = || vec![LlilOp::Nop]; // unhandled but safe
+
+    // Helper to produce: rda = expr, but only if rd != x0
+    let setreg = |expr: LlilExpr| {
+        if rd == 0 {
+            vec![LlilOp::Nop]
+        } else {
+            vec![llil_set(&rda, expr)]
+        }
+    };
+
+    match opcode {
         0x63 => {
             let taken = pc.wrapping_add(imm_b.cast_unsigned());
             let fallthrough = pc.wrapping_add(4);
@@ -8889,6 +8952,37 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
         }
 
         // OP-IMM-32 (RV64 word-size immediate)
+        _ => rv_lift_word_rest(word, xlen),
+    }
+}
+
+/// Second half of the opcode dispatch in `rv_lift_word`.
+fn rv_lift_word_rest(word: u32, xlen: u32) -> Vec<LlilOp> {
+    let opcode = (word & 0x7F) as u8;
+    let rd = ((word >> 7) & 0x1F) as usize;
+    let funct3 = (word >> 12) & 7;
+    let rs1 = ((word >> 15) & 0x1F) as usize;
+    let rs2 = ((word >> 20) & 0x1F) as usize;
+    let funct7 = (word >> 25) & 0x7F;
+    let imm_i = i64::from(rv_imm_i(word));
+
+    let ra1 = xabi(rs1);
+    let ra2 = xabi(rs2);
+    let rda = xabi(rd);
+
+    let nop = || vec![LlilOp::Nop];
+    let skip = || vec![LlilOp::Nop]; // unhandled but safe
+
+    // Helper to produce: rda = expr, but only if rd != x0
+    let setreg = |expr: LlilExpr| {
+        if rd == 0 {
+            vec![LlilOp::Nop]
+        } else {
+            vec![llil_set(&rda, expr)]
+        }
+    };
+
+    match opcode {
         0x1B if xlen >= 64 => {
             let shamt = (word >> 20) & 0x1F;
             let funct7l = (word >> 25) & 0x7F;
@@ -8996,6 +9090,30 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
         }
 
         // ATOMIC (A extension) — emit as intrinsics
+        _ => rv_lift_word_tail(word),
+    }
+}
+
+/// Final part of the opcode dispatch in `rv_lift_word`.
+fn rv_lift_word_tail(word: u32) -> Vec<LlilOp> {
+    let opcode = (word & 0x7F) as u8;
+    let rd = ((word >> 7) & 0x1F) as usize;
+    let funct3 = (word >> 12) & 7;
+    let rs1 = ((word >> 15) & 0x1F) as usize;
+    let rs2 = ((word >> 20) & 0x1F) as usize;
+    let funct7 = (word >> 25) & 0x7F;
+    let imm_i = i64::from(rv_imm_i(word));
+    let imm_s = i64::from(rv_imm_s(word));
+
+    let ra1 = xabi(rs1);
+    let ra2 = xabi(rs2);
+    let rda = xabi(rd);
+
+    let skip = || vec![LlilOp::Nop]; // unhandled but safe
+
+    // Helper to produce: rda = expr, but only if rd != x0
+
+    match opcode {
         0x2F => {
             let funct5 = funct7 >> 2;
             let suffix = if funct3 == 2 { "w" } else { "d" };

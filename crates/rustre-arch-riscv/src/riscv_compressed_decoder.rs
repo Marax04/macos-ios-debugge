@@ -334,6 +334,16 @@ impl RiscvCompressedDecoder {
                 }
             }
             // Reserved (0b100)
+            _ => self.decode_q0_rest(word),
+        }
+    }
+
+    /// Second half of the Q0 dispatch table.
+    fn decode_q0_rest(&self, word: u16) -> Result<CompressedInsn, CompressedDecodeError> {
+        let funct3 = (word >> 13) & 0x7;
+        let rs1_prime = creg(u32::from((word >> 7) & 0x7));
+
+        match funct3 {
             0b100 => Err(self.err(word, "Q0 funct3=0b100 reserved")),
             // C.FSD
             0b101 => {
@@ -477,6 +487,16 @@ impl RiscvCompressedDecoder {
                 }
             }
             // C.LI
+            _ => self.decode_q1_mid(word),
+        }
+    }
+
+    /// Middle part of the Q1 dispatch table.
+    fn decode_q1_mid(&self, word: u16) -> Result<CompressedInsn, CompressedDecodeError> {
+        let funct3 = (word >> 13) & 0x7;
+        let rs1_rd = u32::from((word >> 7) & 0x1F);
+
+        match funct3 {
             0b010 => {
                 let imm = ci_imm(word);
                 Ok(CompressedInsn {
@@ -525,6 +545,15 @@ impl RiscvCompressedDecoder {
                 }
             }
             // C.SRLI / C.SRAI / C.ANDI / C.SUB / C.XOR / C.OR / C.AND / C.SUBW / C.ADDW
+            _ => self.decode_q1_rest(word),
+        }
+    }
+
+    /// Second half of the Q1 dispatch table.
+    fn decode_q1_rest(&self, word: u16) -> Result<CompressedInsn, CompressedDecodeError> {
+        let funct3 = (word >> 13) & 0x7;
+
+        match funct3 {
             0b100 => self.decode_q1_arith(word),
             // C.J
             0b101 => {
@@ -689,7 +718,6 @@ impl RiscvCompressedDecoder {
     fn decode_q2(&self, word: u16) -> Result<CompressedInsn, CompressedDecodeError> {
         let funct3 = (word >> 13) & 0x7;
         let rs1_rd = u32::from((word >> 7) & 0x1F);
-        let rs2 = u32::from((word >> 2) & 0x1F);
 
         match funct3 {
             // C.SLLI
@@ -773,6 +801,17 @@ impl RiscvCompressedDecoder {
                 }
             }
             // C.JR / C.MV / C.EBREAK / C.JALR / C.ADD
+            _ => self.decode_q2_rest(word),
+        }
+    }
+
+    /// Second half of the Q2 dispatch table.
+    fn decode_q2_rest(&self, word: u16) -> Result<CompressedInsn, CompressedDecodeError> {
+        let funct3 = (word >> 13) & 0x7;
+        let rs1_rd = u32::from((word >> 7) & 0x1F);
+        let rs2 = u32::from((word >> 2) & 0x1F);
+
+        match funct3 {
             0b100 => self.decode_q2_cr(word, rs1_rd, rs2),
             // C.FSDSP
             0b101 => {
