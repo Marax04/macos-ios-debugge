@@ -119,6 +119,19 @@ fn decode_index_prefix(bytes: &[u8], idx: &str) -> Decoded {
     };
     let disp = disp_str(idx, disp_raw);
 
+    if op2 < 0x46 {
+        return decode_index_arith(op2, bytes, idx, &disp);
+    }
+    decode_index_indexed(op2, bytes, idx, &disp)
+}
+
+/// A DD/FD opcode with no indexed form: rendered as a data byte.
+fn index_db(op2: u8) -> (String, String, usize, InstrFlags) {
+    ("DB".into(), format!("${op2:02X}"), 2, InstrFlags::NONE)
+}
+
+/// DD/FD opcodes below 0x46: 16-bit arithmetic and the ixh/ixl register forms.
+fn decode_index_arith(op2: u8, bytes: &[u8], idx: &str, disp: &str) -> Decoded {
     let (mnemonic, operands, size, flags) = match op2 {
         0x09 => ("ADD".into(), format!("{idx},BC"), 2, InstrFlags::NONE),
         0x19 => ("ADD".into(), format!("{idx},DE"), 2, InstrFlags::NONE),
@@ -209,6 +222,19 @@ fn decode_index_prefix(bytes: &[u8], idx: &str) -> Decoded {
         }
         0x39 => ("ADD".into(), format!("{idx},SP"), 2, InstrFlags::NONE),
         // LD r,(IX+d)
+        _ => index_db(op2),
+    };
+    Decoded {
+        mnemonic,
+        operands,
+        size,
+        flags,
+    }
+}
+
+/// DD/FD opcodes 0x46 and above: the (ix+d) load/ALU forms, stack ops and DD CB.
+fn decode_index_indexed(op2: u8, bytes: &[u8], idx: &str, disp: &str) -> Decoded {
+    let (mnemonic, operands, size, flags) = match op2 {
         0x46 => ("LD".into(), format!("B,({disp})"), 3, InstrFlags::READ_MEM),
         0x4E => ("LD".into(), format!("C,({disp})"), 3, InstrFlags::READ_MEM),
         0x56 => ("LD".into(), format!("D,({disp})"), 3, InstrFlags::READ_MEM),
@@ -343,6 +369,19 @@ fn decode_ddcb_or_fdcb(bytes: &[u8], idx: &str) -> Decoded {
 #[must_use]
 pub fn decode_ed_prefix(bytes: &[u8]) -> Decoded {
     let op2 = if bytes.len() >= 2 { bytes[1] } else { 0 };
+    if op2 >= 0xA0 {
+        return decode_ed_block_ops(op2);
+    }
+    decode_ed_register_ops(op2, bytes)
+}
+
+/// An ED opcode with no defined meaning: rendered as a data byte pair.
+fn ed_db(op2: u8) -> (String, String, InstrFlags) {
+    ("DB".into(), format!("ED,${op2:02X}"), InstrFlags::NONE)
+}
+
+/// ED opcodes below 0xA0: IN/OUT (C), 16-bit ADC/SBC, LD (nn),rp, NEG, IM, RLD/RRD.
+fn decode_ed_register_ops(op2: u8, bytes: &[u8]) -> Decoded {
     let mut size = 2usize;
 
     let addr_at = |off: usize| -> u16 {
@@ -442,6 +481,19 @@ pub fn decode_ed_prefix(bytes: &[u8]) -> Decoded {
         // RLD / RRD
         0x6F => ("RLD".into(), String::new(), InstrFlags::NONE),
         0x67 => ("RRD".into(), String::new(), InstrFlags::NONE),
+        _ => ed_db(op2),
+    };
+    Decoded {
+        mnemonic,
+        operands,
+        size,
+        flags,
+    }
+}
+
+/// ED opcodes 0xA0 and above: the block move, search and block I/O groups.
+fn decode_ed_block_ops(op2: u8) -> Decoded {
+    let (mnemonic, operands, flags) = match op2 {
         // Block moves / searches
         0xA0 => ("LDI".into(), String::new(), InstrFlags::NONE),
         0xA8 => ("LDD".into(), String::new(), InstrFlags::NONE),
@@ -460,12 +512,12 @@ pub fn decode_ed_prefix(bytes: &[u8]) -> Decoded {
         0xAB => ("OUTD".into(), String::new(), InstrFlags::NONE),
         0xB3 => ("OTIR".into(), String::new(), InstrFlags::NONE),
         0xBB => ("OTDR".into(), String::new(), InstrFlags::NONE),
-        _ => ("DB".into(), format!("ED,${op2:02X}"), InstrFlags::NONE),
+        _ => ed_db(op2),
     };
     Decoded {
         mnemonic,
         operands,
-        size,
+        size: 2,
         flags,
     }
 }
