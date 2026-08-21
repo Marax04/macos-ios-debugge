@@ -9,19 +9,23 @@ pub mod z80_emulator;
 pub mod z80_io_model;
 pub mod z80_prefix_tables;
 
-/// Z80 OS and platform pattern analysis: CpMBiosCall, Z80BdosCall,
-/// ZxSpectrumPatterns, Z80BootloaderDetector, Z80SelfModifying, Z80OsPatterns.
+/// Z80 OS and platform pattern analysis.
+///
+/// `CpMBiosCall`, `Z80BdosCall`, `ZxSpectrumPatterns`, `Z80BootloaderDetector`,
+/// `Z80SelfModifying`, `Z80OsPatterns`.
 pub mod z80_os_patterns;
 
-/// Z80 undocumented instructions: IXH/IXL/IYH/IYL register access via DD CB /
+/// Z80 undocumented instructions.
 ///
-/// FD CB prefixes, SLL (shift left with bit0=1), DDCB/FDCB combined bit
-/// manipulation + load, undoc_decode(), and Z80FullDecoder.
-///
+/// IXH/IXL/IYH/IYL register access via the DD CB / FD CB prefixes, SLL (shift
+/// left with bit0=1), DDCB/FDCB combined bit manipulation + load,
+/// `undoc_decode()`, and `Z80FullDecoder`.
 pub mod z80_undocumented;
 
-/// Platform-specific Z80 knowledge: ZX Spectrum ULA/memory banking, MSX slot
-/// system and BIOS calls, CP/M BDOS functions, Game Boy (SM83) ISA differences.
+/// Platform-specific Z80 knowledge.
+///
+/// ZX Spectrum ULA/memory banking, MSX slot system and BIOS calls, CP/M BDOS
+/// functions, Game Boy (SM83) ISA differences.
 pub mod z80_platforms;
 
 pub mod z80_decoder;
@@ -1588,29 +1592,26 @@ pub fn analyze(base: Address, bytes: &[u8]) -> AnalysisResult {
 
     while offset < bytes.len() {
         let addr = base + offset as u64;
-        match arch.disassemble(addr, &bytes[offset..]) {
-            Ok(instr) => {
-                let flags = instr.flags;
-                let sz = instr.size;
-                let op = bytes[offset];
-                result.total_cycles += u64::from(opcode_cycles(op).cycles);
+        if let Ok(instr) = arch.disassemble(addr, &bytes[offset..]) {
+            let flags = instr.flags;
+            let sz = instr.size;
+            let op = bytes[offset];
+            result.total_cycles += u64::from(opcode_cycles(op).cycles);
 
-                if flags.contains(InstrFlags::CALL) && let Some(t) = extract_hex_target(&instr.operands) {
-                    result.call_targets.push(Address::new(t));
-                }
-                if flags.intersects(InstrFlags::BRANCH) && !flags.contains(InstrFlags::CALL) && let Some(t) = extract_hex_target(&instr.operands) {
-                    result.branch_targets.push(Address::new(t));
-                }
-                if flags.contains(InstrFlags::RET) {
-                    result.returns.push(addr);
-                }
-                result.instructions.push(instr);
-                offset += sz;
+            if flags.contains(InstrFlags::CALL) && let Some(t) = extract_hex_target(&instr.operands) {
+                result.call_targets.push(Address::new(t));
             }
-            Err(_) => {
-                result.errors += 1;
-                offset += 1;
+            if flags.intersects(InstrFlags::BRANCH) && !flags.contains(InstrFlags::CALL) && let Some(t) = extract_hex_target(&instr.operands) {
+                result.branch_targets.push(Address::new(t));
             }
+            if flags.contains(InstrFlags::RET) {
+                result.returns.push(addr);
+            }
+            result.instructions.push(instr);
+            offset += sz;
+        } else {
+            result.errors += 1;
+            offset += 1;
         }
     }
     result
@@ -2010,7 +2011,7 @@ pub const fn branch_category(branch: &BranchInfo) -> &'static str {
 pub struct Z80Arch;
 
 impl Architecture for Z80Arch {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "z80"
     }
 
@@ -2651,25 +2652,25 @@ mod tests {
 /// Panics if `e` is outside −128..=127.
 #[must_use]
 pub const fn encode_jr_nz(e: i8) -> [u8; 2] {
-    [0x20, e as u8]
+    [0x20, e.cast_unsigned()]
 }
 
 /// Encode Z80 `JR Z, e` (jump relative if zero).
 #[must_use]
 pub const fn encode_jr_z(e: i8) -> [u8; 2] {
-    [0x28, e as u8]
+    [0x28, e.cast_unsigned()]
 }
 
 /// Encode Z80 `JR NC, e` (jump relative if no carry).
 #[must_use]
 pub const fn encode_jr_nc(e: i8) -> [u8; 2] {
-    [0x30, e as u8]
+    [0x30, e.cast_unsigned()]
 }
 
 /// Encode Z80 `JR C, e` (jump relative if carry).
 #[must_use]
 pub const fn encode_jr_c(e: i8) -> [u8; 2] {
-    [0x38, e as u8]
+    [0x38, e.cast_unsigned()]
 }
 
 /// Encode Z80 `LD A, n` (load accumulator from immediate).
@@ -3299,7 +3300,7 @@ pub fn z80_param_locations(count: usize) -> Vec<Z80ParamLoc> {
         } else {
             // stack_idx is at most Z80_PARAM_MAX - regs.len() = 125,
             // so stack_idx * 2 <= 250 which fits in u8.
-            let stack_idx = (i - regs.len()) as u8;
+            let stack_idx = u8::try_from(i - regs.len()).unwrap_or(u8::MAX);
             result.push(Z80ParamLoc::Stack(stack_idx * 2));
         }
     }
@@ -3341,7 +3342,7 @@ impl Z80BasicBlock {
             current.push(instr);
             offset += sz;
             if is_terminator {
-                blocks.push(Z80BasicBlock {
+                blocks.push(Self {
                     start: block_start,
                     instructions: std::mem::take(&mut current),
                 });
@@ -3349,7 +3350,7 @@ impl Z80BasicBlock {
             }
         }
         if !current.is_empty() {
-            blocks.push(Z80BasicBlock {
+            blocks.push(Self {
                 start: block_start,
                 instructions: current,
             });
@@ -3406,11 +3407,11 @@ impl Z80CodeStats {
             s.total += 1;
             match instr.mnemonic.as_str() {
                 "ADD" | "ADC" | "SUB" | "SBC" | "INC" | "DEC" | "NEG" | "DAA" | "ADDHL" => {
-                    s.arithmetic += 1
+                    s.arithmetic += 1;
                 }
                 "AND" | "OR" | "XOR" | "CPL" | "CCF" | "SCF" => s.logic += 1,
                 "LD" | "LDI" | "LDIR" | "LDD" | "LDDR" | "EX" | "EXX" | "PUSH" | "POP" => {
-                    s.load_store += 1
+                    s.load_store += 1;
                 }
                 "JP" | "JR" | "DJNZ" => s.branches += 1,
                 "CALL" | "RST" => s.calls += 1,
@@ -3823,7 +3824,7 @@ pub fn lookup_zx_port(addr: u16) -> Option<&'static ZxPort> {
 /// Panics if `op` > 3, `bit` > 7, or `reg` > 7.
 #[must_use]
 pub fn encode_cb_op(op: u8, bit: u8, reg: u8) -> [u8; 2] {
-    assert!(op <= 3 && bit <= 7 && reg <= 7);
+    assert!(op <= 3 && bit <= 7 && reg <= 7, "CB op: op must be 0..3, bit 0..7, reg 0..7");
     [0xCB, (op << 6) | (bit << 3) | reg]
 }
 

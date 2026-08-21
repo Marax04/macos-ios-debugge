@@ -58,7 +58,7 @@ pub struct UlaOutput(pub u8);
 impl UlaOutput {
     /// Bits 2:0 — border colour.
     #[must_use]
-    pub fn border(self) -> SpectrumBorder {
+    pub const fn border(self) -> SpectrumBorder {
         SpectrumBorder::from_bits(self.0)
     }
     /// Bit 3 — MIC socket output (tape save).
@@ -419,8 +419,12 @@ pub static CPM_BIOS_FUNCTIONS: &[(u8, &str)] = &[
 
 // ── Game Boy (GB-Z80) ─────────────────────────────────────────────────────────
 
+/// GB-Z80 register IDs (data-model used in this crate).
+///
 /// The Game Boy CPU is a modified Z80 (sometimes called SM83 / LR35902).
+///
 /// Differences from standard Z80:
+///
 /// - No IX, IY registers
 /// - No R register (memory refresh)
 /// - No I register
@@ -431,8 +435,6 @@ pub static CPM_BIOS_FUNCTIONS: &[(u8, &str)] = &[
 /// - CB prefix decodes differently (no undocumented SLL)
 /// - Carry/half-carry semantics preserved, parity removed
 /// - Separate HALT: CPU halts on next instruction if IME=0 and pending interrupt
-
-/// GB-Z80 register IDs (data-model used in this crate).
 pub mod gb_regs {
     pub const GB_REG_A:  u32 = 0;
     pub const GB_REG_F:  u32 = 1;
@@ -563,7 +565,7 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
         0xF2 => GbDecoded { mnemonic: "LD".into(),  operands: "A,($FF00+C)".into(), size: 1 },
         // LD HL,SP+e — 0xF8
         0xF8 => {
-            let e = bytes.get(1).copied().unwrap_or(0) as i8;
+            let e = bytes.get(1).copied().unwrap_or(0).cast_signed();
             let sign = if e >= 0 { '+' } else { '-' };
             GbDecoded {
                 mnemonic: "LD".into(),
@@ -573,7 +575,7 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
         }
         // ADD SP,e — 0xE8
         0xE8 => {
-            let e = bytes.get(1).copied().unwrap_or(0) as i8;
+            let e = bytes.get(1).copied().unwrap_or(0).cast_signed();
             let sign = if e >= 0 { '+' } else { '-' };
             GbDecoded {
                 mnemonic: "ADD".into(),
@@ -585,23 +587,23 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
         0xF9 => GbDecoded { mnemonic: "LD".into(), operands: "SP,HL".into(), size: 1 },
         // LD (nn),SP — 0x08
         0x08 => {
-            let nn = bytes.get(1..3).map(|b| u16::from_le_bytes([b[0], b[1]])).unwrap_or(0);
+            let nn = bytes.get(1..3).map_or(0, |b| u16::from_le_bytes([b[0], b[1]]));
             GbDecoded { mnemonic: "LD".into(), operands: format!("(${nn:04X}),SP"), size: 3 }
         }
         // JP nn — 0xC3
         0xC3 => {
-            let nn = bytes.get(1..3).map(|b| u16::from_le_bytes([b[0], b[1]])).unwrap_or(0);
+            let nn = bytes.get(1..3).map_or(0, |b| u16::from_le_bytes([b[0], b[1]]));
             GbDecoded { mnemonic: "JP".into(), operands: format!("${nn:04X}"), size: 3 }
         }
         // CALL nn — 0xCD
         0xCD => {
-            let nn = bytes.get(1..3).map(|b| u16::from_le_bytes([b[0], b[1]])).unwrap_or(0);
+            let nn = bytes.get(1..3).map_or(0, |b| u16::from_le_bytes([b[0], b[1]]));
             GbDecoded { mnemonic: "CALL".into(), operands: format!("${nn:04X}"), size: 3 }
         }
         // JR e — 0x18
         0x18 => {
-            let e = bytes.get(1).copied().unwrap_or(0) as i8;
-            let target = (i32::from(pc) + 2 + i32::from(e)) as u16;
+            let e = bytes.get(1).copied().unwrap_or(0).cast_signed();
+            let target = pc.wrapping_add(2).wrapping_add(i16::from(e).cast_unsigned());
             GbDecoded { mnemonic: "JR".into(), operands: format!("${target:04X}"), size: 2 }
         }
         // JR cc,e — 0x20/0x28/0x30/0x38
@@ -609,8 +611,8 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
             let cc = match op {
                 0x20 => "NZ", 0x28 => "Z", 0x30 => "NC", _ => "C",
             };
-            let e = bytes.get(1).copied().unwrap_or(0) as i8;
-            let target = (i32::from(pc) + 2 + i32::from(e)) as u16;
+            let e = bytes.get(1).copied().unwrap_or(0).cast_signed();
+            let target = pc.wrapping_add(2).wrapping_add(i16::from(e).cast_unsigned());
             GbDecoded {
                 mnemonic: "JR".into(),
                 operands: format!("{cc},${target:04X}"),
@@ -647,7 +649,7 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
             let rp = match (op >> 4) & 0x03 {
                 0 => "BC", 1 => "DE", 2 => "HL", _ => "SP",
             };
-            let nn = bytes.get(1..3).map(|b| u16::from_le_bytes([b[0], b[1]])).unwrap_or(0);
+            let nn = bytes.get(1..3).map_or(0, |b| u16::from_le_bytes([b[0], b[1]]));
             GbDecoded { mnemonic: "LD".into(), operands: format!("{rp},${nn:04X}"), size: 3 }
         }
         // ALU x=2

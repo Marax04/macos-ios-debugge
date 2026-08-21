@@ -89,7 +89,7 @@ fn encode_ld_r_n_each_reg() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "LD r,n: reg must be 0..7")]
 fn encode_ld_r_n_panics_on_invalid_reg() {
     // Asserting the documented panic — this is verifying the precondition, not masking a failure.
     let _ = z::encode_ld_r_n(8, 0);
@@ -114,7 +114,7 @@ fn encode_push_pop_all_pairs() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "PUSH: rp_idx must be 0..3")]
 fn encode_push_panics_invalid() {
     let _ = z::encode_push(4);
 }
@@ -128,7 +128,7 @@ fn encode_rst_all_vectors() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "RST: vector must be 0..7")]
 fn encode_rst_panics_above_7() {
     let _ = z::encode_rst(8);
 }
@@ -206,7 +206,7 @@ fn encode_cb_set_res_all_bits() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "CB op: op must be 0..3, bit 0..7, reg 0..7")]
 fn encode_cb_op_panics_on_bad_op() {
     let _ = z::encode_cb_op(4, 0, 0);
 }

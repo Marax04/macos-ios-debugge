@@ -285,7 +285,7 @@ impl Z80IoPortMap {
     #[must_use]
     pub fn hot_ports(&self) -> Vec<(u16, u32)> {
         let mut v: Vec<(u16, u32)> = self.access_log.iter().map(|(&p, &c)| (p, c)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|&(_, count)| core::cmp::Reverse(count));
         v
     }
 

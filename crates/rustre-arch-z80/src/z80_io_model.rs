@@ -32,7 +32,7 @@ impl Z80IoDevice for NullIoDevice {
         // discard
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "null"
     }
 }
@@ -114,7 +114,7 @@ impl Z80IoDevice for CountingIoDevice {
         self.last_written[port as usize] = value;
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "counter"
     }
 }
@@ -180,11 +180,7 @@ impl Z80IoMap {
     /// Return the name of the device at `port` (`"null"` if unmapped).
     #[must_use]
     pub fn device_name(&self, port: u8) -> &str {
-        if let Some(dev) = &self.devices[port as usize] {
-            dev.name()
-        } else {
-            "null"
-        }
+        self.devices[port as usize].as_ref().map_or("null", |dev| dev.name())
     }
 
     /// Return the list of all occupied ports.
@@ -192,7 +188,7 @@ impl Z80IoMap {
     pub fn occupied_ports(&self) -> Vec<u8> {
         (0u16..256)
             .filter(|&p| self.devices[p as usize].is_some())
-            .map(|p| p as u8)
+            .map(|p| p.to_le_bytes()[0])
             .collect()
     }
 }

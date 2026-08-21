@@ -1,4 +1,4 @@
-/// Z80 register file: main and alternate sets, IX/IY, SP, PC, I, R, flags.
+//! Z80 register file: main and alternate sets, IX/IY, SP, PC, I, R, flags.
 
 // ── 8-bit register names ──────────────────────────────────────────────────────
 
@@ -31,30 +31,30 @@ impl Z80Reg {
     #[must_use]
     pub const fn opcode_bits(self) -> Option<u8> {
         match self {
-            Z80Reg::B     => Some(0),
-            Z80Reg::C     => Some(1),
-            Z80Reg::D     => Some(2),
-            Z80Reg::E     => Some(3),
-            Z80Reg::H     => Some(4),
-            Z80Reg::L     => Some(5),
-            Z80Reg::MemHL => Some(6),
-            Z80Reg::A     => Some(7),
+            Self::B     => Some(0),
+            Self::C     => Some(1),
+            Self::D     => Some(2),
+            Self::E     => Some(3),
+            Self::H     => Some(4),
+            Self::L     => Some(5),
+            Self::MemHL => Some(6),
+            Self::A     => Some(7),
             _             => None,
         }
     }
 
     /// Decode a 3-bit field from an opcode to a `Z80Reg`.
     #[must_use]
-    pub fn from_bits(bits: u8) -> Z80Reg {
+    pub fn from_bits(bits: u8) -> Self {
         match bits & 7 {
-            0 => Z80Reg::B,
-            1 => Z80Reg::C,
-            2 => Z80Reg::D,
-            3 => Z80Reg::E,
-            4 => Z80Reg::H,
-            5 => Z80Reg::L,
-            6 => Z80Reg::MemHL,
-            7 => Z80Reg::A,
+            0 => Self::B,
+            1 => Self::C,
+            2 => Self::D,
+            3 => Self::E,
+            4 => Self::H,
+            5 => Self::L,
+            6 => Self::MemHL,
+            7 => Self::A,
             _ => unreachable!(),
         }
     }
@@ -63,27 +63,27 @@ impl Z80Reg {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Z80Reg::B     => "B",
-            Z80Reg::C     => "C",
-            Z80Reg::D     => "D",
-            Z80Reg::E     => "E",
-            Z80Reg::H     => "H",
-            Z80Reg::L     => "L",
-            Z80Reg::MemHL => "(HL)",
-            Z80Reg::A     => "A",
-            Z80Reg::IXH   => "IXH",
-            Z80Reg::IXL   => "IXL",
-            Z80Reg::IYH   => "IYH",
-            Z80Reg::IYL   => "IYL",
-            Z80Reg::I     => "I",
-            Z80Reg::R     => "R",
-            Z80Reg::F     => "F",
+            Self::B     => "B",
+            Self::C     => "C",
+            Self::D     => "D",
+            Self::E     => "E",
+            Self::H     => "H",
+            Self::L     => "L",
+            Self::MemHL => "(HL)",
+            Self::A     => "A",
+            Self::IXH   => "IXH",
+            Self::IXL   => "IXL",
+            Self::IYH   => "IYH",
+            Self::IYL   => "IYL",
+            Self::I     => "I",
+            Self::R     => "R",
+            Self::F     => "F",
         }
     }
 
     /// True for the (HL) / (IX+d) / (IY+d) pseudo-registers.
     #[must_use]
-    pub const fn is_memory_ref(self) -> bool { matches!(self, Z80Reg::MemHL) }
+    pub const fn is_memory_ref(self) -> bool { matches!(self, Self::MemHL) }
 }
 
 impl core::fmt::Display for Z80Reg {
@@ -114,34 +114,34 @@ impl Z80RegPair16 {
     #[must_use]
     pub const fn opcode_bits(self) -> Option<u8> {
         match self {
-            Z80RegPair16::BC => Some(0),
-            Z80RegPair16::DE => Some(1),
-            Z80RegPair16::HL => Some(2),
-            Z80RegPair16::SP => Some(3),
+            Self::BC => Some(0),
+            Self::DE => Some(1),
+            Self::HL => Some(2),
+            Self::SP => Some(3),
             _                => None,
         }
     }
 
     /// Decode a 2-bit field.
     #[must_use]
-    pub fn from_bits(bits: u8) -> Z80RegPair16 {
+    pub fn from_bits(bits: u8) -> Self {
         match bits & 3 {
-            0 => Z80RegPair16::BC,
-            1 => Z80RegPair16::DE,
-            2 => Z80RegPair16::HL,
-            3 => Z80RegPair16::SP,
+            0 => Self::BC,
+            1 => Self::DE,
+            2 => Self::HL,
+            3 => Self::SP,
             _ => unreachable!(),
         }
     }
 
     /// Decode a 2-bit field from PUSH/POP encoding (3 → AF instead of SP).
     #[must_use]
-    pub fn from_push_bits(bits: u8) -> Z80RegPair16 {
+    pub fn from_push_bits(bits: u8) -> Self {
         match bits & 3 {
-            0 => Z80RegPair16::BC,
-            1 => Z80RegPair16::DE,
-            2 => Z80RegPair16::HL,
-            3 => Z80RegPair16::AF,
+            0 => Self::BC,
+            1 => Self::DE,
+            2 => Self::HL,
+            3 => Self::AF,
             _ => unreachable!(),
         }
     }
@@ -150,13 +150,13 @@ impl Z80RegPair16 {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Z80RegPair16::BC => "BC",
-            Z80RegPair16::DE => "DE",
-            Z80RegPair16::HL => "HL",
-            Z80RegPair16::SP => "SP",
-            Z80RegPair16::IX => "IX",
-            Z80RegPair16::IY => "IY",
-            Z80RegPair16::AF => "AF",
+            Self::BC => "BC",
+            Self::DE => "DE",
+            Self::HL => "HL",
+            Self::SP => "SP",
+            Self::IX => "IX",
+            Self::IY => "IY",
+            Self::AF => "AF",
         }
     }
 
@@ -164,13 +164,13 @@ impl Z80RegPair16 {
     #[must_use]
     pub const fn high(self) -> Z80Reg {
         match self {
-            Z80RegPair16::BC => Z80Reg::B,
-            Z80RegPair16::DE => Z80Reg::D,
-            Z80RegPair16::HL => Z80Reg::H,
-            Z80RegPair16::AF => Z80Reg::A,
-            Z80RegPair16::IX => Z80Reg::IXH,
-            Z80RegPair16::IY => Z80Reg::IYH,
-            Z80RegPair16::SP => Z80Reg::H, // no single 8-bit for SP
+            Self::BC => Z80Reg::B,
+            Self::DE => Z80Reg::D,
+            Self::HL => Z80Reg::H,
+            Self::AF => Z80Reg::A,
+            Self::IX => Z80Reg::IXH,
+            Self::IY => Z80Reg::IYH,
+            Self::SP => Z80Reg::H, // no single 8-bit for SP
         }
     }
 
@@ -178,13 +178,13 @@ impl Z80RegPair16 {
     #[must_use]
     pub const fn low(self) -> Z80Reg {
         match self {
-            Z80RegPair16::BC => Z80Reg::C,
-            Z80RegPair16::DE => Z80Reg::E,
-            Z80RegPair16::HL => Z80Reg::L,
-            Z80RegPair16::AF => Z80Reg::F,
-            Z80RegPair16::IX => Z80Reg::IXL,
-            Z80RegPair16::IY => Z80Reg::IYL,
-            Z80RegPair16::SP => Z80Reg::L, // no single 8-bit for SP
+            Self::BC => Z80Reg::C,
+            Self::DE => Z80Reg::E,
+            Self::HL => Z80Reg::L,
+            Self::AF => Z80Reg::F,
+            Self::IX => Z80Reg::IXL,
+            Self::IY => Z80Reg::IYL,
+            Self::SP => Z80Reg::L, // no single 8-bit for SP
         }
     }
 }
@@ -210,10 +210,10 @@ impl Z80AltReg {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Z80AltReg::AltAF => "AF'",
-            Z80AltReg::AltBC => "BC'",
-            Z80AltReg::AltDE => "DE'",
-            Z80AltReg::AltHL => "HL'",
+            Self::AltAF => "AF'",
+            Self::AltBC => "BC'",
+            Self::AltDE => "DE'",
+            Self::AltHL => "HL'",
         }
     }
 }
@@ -267,18 +267,18 @@ impl Z80Flags {
         if v { self.0 |= 1 << bit; } else { self.0 &= !(1 << bit); }
     }
 
-    #[inline] pub fn set_c(&mut self, v: bool)  { self.set_bit(flag_bits::C,  v); }
-    #[inline] pub fn set_n(&mut self, v: bool)  { self.set_bit(flag_bits::N,  v); }
-    #[inline] pub fn set_pv(&mut self, v: bool) { self.set_bit(flag_bits::PV, v); }
-    #[inline] pub fn set_h(&mut self, v: bool)  { self.set_bit(flag_bits::H,  v); }
-    #[inline] pub fn set_z(&mut self, v: bool)  { self.set_bit(flag_bits::Z,  v); }
-    #[inline] pub fn set_s(&mut self, v: bool)  { self.set_bit(flag_bits::S,  v); }
+    #[inline] pub const fn set_c(&mut self, v: bool)  { self.set_bit(flag_bits::C,  v); }
+    #[inline] pub const fn set_n(&mut self, v: bool)  { self.set_bit(flag_bits::N,  v); }
+    #[inline] pub const fn set_pv(&mut self, v: bool) { self.set_bit(flag_bits::PV, v); }
+    #[inline] pub const fn set_h(&mut self, v: bool)  { self.set_bit(flag_bits::H,  v); }
+    #[inline] pub const fn set_z(&mut self, v: bool)  { self.set_bit(flag_bits::Z,  v); }
+    #[inline] pub const fn set_s(&mut self, v: bool)  { self.set_bit(flag_bits::S,  v); }
 
     /// Update flags after an 8-bit addition.
     pub fn update_add8(&mut self, a: u8, b: u8, carry_in: bool) {
         let ci = u16::from(carry_in);
         let result16 = u16::from(a) + u16::from(b) + ci;
-        let result = result16 as u8;
+        let result = result16.to_le_bytes()[0];
         let half = ((a & 0x0F) + (b & 0x0F) + u8::from(carry_in)) > 0x0F;
         let overflow = ((a ^ result) & (b ^ result) & 0x80) != 0;
         self.set_s(result & 0x80 != 0);
@@ -293,7 +293,7 @@ impl Z80Flags {
     pub fn update_sub8(&mut self, a: u8, b: u8, borrow_in: bool) {
         let bi = u16::from(borrow_in);
         let result16 = (u16::from(a)).wrapping_sub(u16::from(b)).wrapping_sub(bi);
-        let result = result16 as u8;
+        let result = result16.to_le_bytes()[0];
         let half = (a & 0x0F) < (b & 0x0F) + u8::from(borrow_in);
         let overflow = ((a ^ b) & (a ^ result) & 0x80) != 0;
         self.set_s(result & 0x80 != 0);
@@ -305,7 +305,7 @@ impl Z80Flags {
     }
 
     /// Update flags for logical AND.
-    pub fn update_and(&mut self, result: u8) {
+    pub const fn update_and(&mut self, result: u8) {
         self.set_s(result & 0x80 != 0);
         self.set_z(result == 0);
         self.set_h(true);
@@ -315,7 +315,7 @@ impl Z80Flags {
     }
 
     /// Update flags for logical OR/XOR.
-    pub fn update_or(&mut self, result: u8) {
+    pub const fn update_or(&mut self, result: u8) {
         self.set_s(result & 0x80 != 0);
         self.set_z(result == 0);
         self.set_h(false);
@@ -434,7 +434,7 @@ pub struct Z80RegFile {
 
 impl Default for Z80RegFile {
     fn default() -> Self {
-        Z80RegFile {
+        Self {
             a: 0xFF, f: Z80Flags(0xFF),
             b: 0, c: 0, d: 0, e: 0, h: 0, l: 0,
             a_alt: 0xFF, f_alt: Z80Flags(0xFF),
@@ -483,7 +483,7 @@ impl Z80RegFile {
     }
 
     /// Write any 16-bit register pair.
-    pub fn write_pair(&mut self, pair: Z80RegPair16, v: u16) {
+    pub const fn write_pair(&mut self, pair: Z80RegPair16, v: u16) {
         match pair {
             Z80RegPair16::BC => self.set_bc(v),
             Z80RegPair16::DE => self.set_de(v),

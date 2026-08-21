@@ -101,7 +101,9 @@ impl CpMBiosCall {
             // Guard against truncation: cast only after confirming the value
             // fits in u8 AND is within the known BIOS function table.
             if func_u64 < BIOS_FUNCTION_NAMES.len() as u64 {
-                return Some(func_u64 as u8);
+                // Guarded above: func_u64 < BIOS_FUNCTION_NAMES.len(), far below 256,
+                // so the low byte IS the value. `to_le_bytes` is exact and const.
+                return Some(func_u64.to_le_bytes()[0]);
             }
         }
         None
@@ -719,13 +721,13 @@ impl Z80OsPatterns {
 
     /// Whether this looks like a CP/M binary.
     #[must_use]
-    pub fn is_cpm(&self) -> bool {
+    pub const fn is_cpm(&self) -> bool {
         self.bios.has_bios_calls() || self.bdos.total_calls() > 0
     }
 
     /// Whether this looks like a ZX Spectrum program.
     #[must_use]
-    pub fn is_spectrum(&self) -> bool {
+    pub const fn is_spectrum(&self) -> bool {
         self.spectrum.has_rom_calls() || self.spectrum.uses_ula()
     }
 }

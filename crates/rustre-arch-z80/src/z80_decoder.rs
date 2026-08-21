@@ -1,4 +1,4 @@
-/// Z80 instruction decoder: unprefixed + CB, DD, FD, ED, DDCB, FDCB tables.
+//! Z80 instruction decoder: unprefixed + CB, DD, FD, ED, DDCB, FDCB tables.
 
 // ── Prefix encoding ───────────────────────────────────────────────────────────
 
@@ -26,13 +26,13 @@ impl Z80Prefix {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Z80Prefix::None  => "",
-            Z80Prefix::Cb    => "CB",
-            Z80Prefix::Dd    => "DD",
-            Z80Prefix::Fd    => "FD",
-            Z80Prefix::Ed    => "ED",
-            Z80Prefix::DdCb  => "DDCB",
-            Z80Prefix::FdCb  => "FDCB",
+            Self::None  => "",
+            Self::Cb    => "CB",
+            Self::Dd    => "DD",
+            Self::Fd    => "FD",
+            Self::Ed    => "ED",
+            Self::DdCb  => "DDCB",
+            Self::FdCb  => "FDCB",
         }
     }
 }
@@ -117,35 +117,35 @@ impl Z80Operand {
 impl core::fmt::Display for Z80Operand {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Z80Operand::Reg8(r)     => f.write_str(Self::reg8_name(*r)),
-            Z80Operand::Reg16(r)    => f.write_str(Self::reg16_name(*r)),
-            Z80Operand::RegIX       => f.write_str("IX"),
-            Z80Operand::RegIY       => f.write_str("IY"),
-            Z80Operand::A           => f.write_str("A"),
-            Z80Operand::F           => f.write_str("F"),
-            Z80Operand::MemHL       => f.write_str("(HL)"),
-            Z80Operand::MemBC       => f.write_str("(BC)"),
-            Z80Operand::MemDE       => f.write_str("(DE)"),
-            Z80Operand::MemSP       => f.write_str("(SP)"),
-            Z80Operand::MemIXd(d)   => write!(f, "(IX{d:+})"),
-            Z80Operand::MemIYd(d)   => write!(f, "(IY{d:+})"),
-            Z80Operand::MemNN(n)    => write!(f, "(0x{n:04x})"),
-            Z80Operand::Imm8(v)     => write!(f, "0x{v:02x}"),
-            Z80Operand::Imm16(v)    => write!(f, "0x{v:04x}"),
-            Z80Operand::Rel8(d)     => write!(f, "{d:+}"),
-            Z80Operand::Abs16(a)    => write!(f, "0x{a:04x}"),
-            Z80Operand::Cond(c)     => f.write_str(Self::cond_name(*c)),
-            Z80Operand::RstTarget(t)=> write!(f, "0x{t:02x}"),
-            Z80Operand::PortC       => f.write_str("(C)"),
-            Z80Operand::PortImm(p)  => write!(f, "(0x{p:02x})"),
-            Z80Operand::RegC        => f.write_str("C"),
-            Z80Operand::BitNum(b)   => write!(f, "{b}"),
-            Z80Operand::IntMode(m)  => write!(f, "{m}"),
-            Z80Operand::SpDisp(d)   => write!(f, "SP{d:+}"),
-            Z80Operand::RegAF       => f.write_str("AF"),
-            Z80Operand::RegAF2      => f.write_str("AF'"),
-            Z80Operand::RegI        => f.write_str("I"),
-            Z80Operand::RegR        => f.write_str("R"),
+            Self::Reg8(r)     => f.write_str(Self::reg8_name(*r)),
+            Self::Reg16(r)    => f.write_str(Self::reg16_name(*r)),
+            Self::RegIX       => f.write_str("IX"),
+            Self::RegIY       => f.write_str("IY"),
+            Self::A           => f.write_str("A"),
+            Self::F           => f.write_str("F"),
+            Self::MemHL       => f.write_str("(HL)"),
+            Self::MemBC       => f.write_str("(BC)"),
+            Self::MemDE       => f.write_str("(DE)"),
+            Self::MemSP       => f.write_str("(SP)"),
+            Self::MemIXd(d)   => write!(f, "(IX{d:+})"),
+            Self::MemIYd(d)   => write!(f, "(IY{d:+})"),
+            Self::MemNN(n)    => write!(f, "(0x{n:04x})"),
+            Self::Imm8(v)     => write!(f, "0x{v:02x}"),
+            Self::Imm16(v)    => write!(f, "0x{v:04x}"),
+            Self::Rel8(d)     => write!(f, "{d:+}"),
+            Self::Abs16(a)    => write!(f, "0x{a:04x}"),
+            Self::Cond(c)     => f.write_str(Self::cond_name(*c)),
+            Self::RstTarget(t)=> write!(f, "0x{t:02x}"),
+            Self::PortC       => f.write_str("(C)"),
+            Self::PortImm(p)  => write!(f, "(0x{p:02x})"),
+            Self::RegC        => f.write_str("C"),
+            Self::BitNum(b)   => write!(f, "{b}"),
+            Self::IntMode(m)  => write!(f, "{m}"),
+            Self::SpDisp(d)   => write!(f, "SP{d:+}"),
+            Self::RegAF       => f.write_str("AF"),
+            Self::RegAF2      => f.write_str("AF'"),
+            Self::RegI        => f.write_str("I"),
+            Self::RegR        => f.write_str("R"),
         }
     }
 }
@@ -181,7 +181,7 @@ pub struct Z80Instr {
 
 impl Z80Instr {
     const fn new(prefix: Z80Prefix, mnemonic: &'static str, len: u8) -> Self {
-        Z80Instr {
+        Self {
             bytes: [0u8; 4],
             len,
             prefix,
@@ -233,7 +233,7 @@ pub struct Z80Decoder {
 
 impl Z80Decoder {
     #[must_use]
-    pub const fn new() -> Self { Z80Decoder { undocumented: true } }
+    pub const fn new() -> Self { Self { undocumented: true } }
 
     /// Decode one instruction from `bytes` at virtual address `pc`.
     /// Returns `None` if bytes is empty or truncated.
@@ -243,7 +243,7 @@ impl Z80Decoder {
         match bytes[0] {
             0xCB => {
                 if bytes.len() < 2 { return None; }
-                Some(self.decode_cb(pc, &bytes[1..]))
+                Some(Self::decode_cb(pc, &bytes[1..]))
             }
             0xDD => {
                 if bytes.len() < 2 { return None; }
@@ -251,9 +251,9 @@ impl Z80Decoder {
                     // DDCB prefix requires 4 bytes (DD CB d op); truncated input
                     // must return None rather than mis-routing to the DD table.
                     if bytes.len() < 4 { return None; }
-                    Some(self.decode_ddcb(pc, &bytes[2..]))
+                    Some(Self::decode_ddcb(pc, &bytes[2..]))
                 } else {
-                    Some(self.decode_dd(pc, &bytes[1..]))
+                    Some(Self::decode_dd(pc, &bytes[1..]))
                 }
             }
             0xFD => {
@@ -262,22 +262,22 @@ impl Z80Decoder {
                     // FDCB prefix requires 4 bytes (FD CB d op); truncated input
                     // must return None rather than mis-routing to the FD table.
                     if bytes.len() < 4 { return None; }
-                    Some(self.decode_fdcb(pc, &bytes[2..]))
+                    Some(Self::decode_fdcb(pc, &bytes[2..]))
                 } else {
-                    Some(self.decode_fd(pc, &bytes[1..]))
+                    Some(Self::decode_fd(pc, &bytes[1..]))
                 }
             }
             0xED => {
                 if bytes.len() < 2 { return None; }
-                Some(self.decode_ed(pc, &bytes[1..]))
+                Some(Self::decode_ed(pc, &bytes[1..]))
             }
-            b => Some(self.decode_main(pc, b, bytes)),
+            b => Some(Self::decode_main(pc, b, bytes)),
         }
     }
 
     // ── Main unprefixed table ────────────────────────────────────────────────
 
-    fn decode_main(&self, pc: u16, opcode: u8, bytes: &[u8]) -> Z80Instr {
+    fn decode_main(pc: u16, opcode: u8, bytes: &[u8]) -> Z80Instr {
         let x = (opcode >> 6) & 3;
         let y = (opcode >> 3) & 7;
         let z = opcode & 7;
@@ -289,23 +289,23 @@ impl Z80Decoder {
                 .op0(Z80Operand::RegAF).op1(Z80Operand::RegAF2),
             (0, 2, 0) => { // DJNZ e
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                let off = bytes[1] as i8;
-                let target = pc.wrapping_add(2).wrapping_add(off as u16);
+                let off = bytes[1].cast_signed();
+                let target = pc.wrapping_add(2).wrapping_add(i16::from(off).cast_unsigned());
                 Z80Instr::new(Z80Prefix::None, "DJNZ", 2)
                     .op0(Z80Operand::Rel8(off)).branch().cond().target(target)
                     .raw(bytes)
             }
             (0, 3, 0) => { // JR e
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                let off = bytes[1] as i8;
-                let target = pc.wrapping_add(2).wrapping_add(off as u16);
+                let off = bytes[1].cast_signed();
+                let target = pc.wrapping_add(2).wrapping_add(i16::from(off).cast_unsigned());
                 Z80Instr::new(Z80Prefix::None, "JR", 2)
                     .op0(Z80Operand::Rel8(off)).branch().target(target).raw(bytes)
             }
             (0, cc @ 4..=7, 0) => { // JR cc,e  (cc=NZ/Z/NC/C → bits 0..3)
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                let off = bytes[1] as i8;
-                let target = pc.wrapping_add(2).wrapping_add(off as u16);
+                let off = bytes[1].cast_signed();
+                let target = pc.wrapping_add(2).wrapping_add(i16::from(off).cast_unsigned());
                 Z80Instr::new(Z80Prefix::None, "JR", 2)
                     .op0(Z80Operand::Cond(cc - 4))
                     .op1(Z80Operand::Rel8(off))
@@ -461,7 +461,7 @@ impl Z80Decoder {
 
     // ── CB prefix ────────────────────────────────────────────────────────────
 
-    fn decode_cb(&self, _pc: u16, bytes: &[u8]) -> Z80Instr {
+    fn decode_cb(_pc: u16, bytes: &[u8]) -> Z80Instr {
         if bytes.is_empty() { return Z80Instr::new(Z80Prefix::Cb, "???", 2); }
         let op = bytes[0];
         let x = (op >> 6) & 3;
@@ -483,7 +483,7 @@ impl Z80Decoder {
 
     // ── DD prefix (IX instructions) ──────────────────────────────────────────
 
-    fn decode_dd(&self, pc: u16, bytes: &[u8]) -> Z80Instr {
+    fn decode_dd(pc: u16, bytes: &[u8]) -> Z80Instr {
         if bytes.is_empty() { return Z80Instr::new(Z80Prefix::Dd, "???", 2); }
         match bytes[0] {
             0x21 => { // LD IX,nn
@@ -507,25 +507,25 @@ impl Z80Decoder {
             0xF9 => Z80Instr::new(Z80Prefix::Dd, "LD",  2).op0(Z80Operand::Reg16(3)).op1(Z80Operand::RegIX),
             0x36 => { // LD (IX+d),n
                 if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::Dd, "???", 2); }
-                let d = bytes[1] as i8;
+                let d = bytes[1].cast_signed();
                 Z80Instr::new(Z80Prefix::Dd, "LD", 4).op0(Z80Operand::MemIXd(d)).op1(Z80Operand::Imm8(bytes[2]))
             }
             op if (op & 0xC7) == 0x46 => { // LD r,(IX+d)
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::Dd, "???", 2); }
                 let r = (op >> 3) & 7;
-                let d = bytes[1] as i8;
+                let d = bytes[1].cast_signed();
                 Z80Instr::new(Z80Prefix::Dd, "LD", 3).op0(Z80Operand::Reg8(r)).op1(Z80Operand::MemIXd(d))
             }
             op if (op & 0xF8) == 0x70 => { // LD (IX+d),r
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::Dd, "???", 2); }
                 let r = op & 7;
-                let d = bytes[1] as i8;
+                let d = bytes[1].cast_signed();
                 Z80Instr::new(Z80Prefix::Dd, "LD", 3).op0(Z80Operand::MemIXd(d)).op1(Z80Operand::Reg8(r))
             }
             op if (op & 0xC7) == 0x86 => { // ALU A,(IX+d)
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::Dd, "???", 2); }
                 let alu = (op >> 3) & 7;
-                let d = bytes[1] as i8;
+                let d = bytes[1].cast_signed();
                 Z80Instr::new(Z80Prefix::Dd, alu_mnemonic(alu), 3)
                     .op0(Z80Operand::A).op1(Z80Operand::MemIXd(d))
             }
@@ -538,7 +538,7 @@ impl Z80Decoder {
             0xE3 => Z80Instr::new(Z80Prefix::Dd, "EX",   2).op0(Z80Operand::MemSP).op1(Z80Operand::RegIX),
             _ => {
                 // Fall through to main table decoding (prefix ignored for non-IX opcodes).
-                let mut i = self.decode_main(pc, bytes[0], bytes);
+                let mut i = Self::decode_main(pc, bytes[0], bytes);
                 i.len += 1; i.prefix = Z80Prefix::Dd; i
             }
         }
@@ -546,7 +546,7 @@ impl Z80Decoder {
 
     // ── FD prefix (IY instructions) ──────────────────────────────────────────
 
-    fn decode_fd(&self, pc: u16, bytes: &[u8]) -> Z80Instr {
+    fn decode_fd(pc: u16, bytes: &[u8]) -> Z80Instr {
         if bytes.is_empty() { return Z80Instr::new(Z80Prefix::Fd, "???", 2); }
         // Mirror of DD, substituting IX→IY
         match bytes[0] {
@@ -561,26 +561,26 @@ impl Z80Decoder {
             op if (op & 0xC7) == 0x46 => {
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::Fd, "???", 2); }
                 let r = (op >> 3) & 7;
-                let d = bytes[1] as i8;
+                let d = bytes[1].cast_signed();
                 Z80Instr::new(Z80Prefix::Fd, "LD", 3).op0(Z80Operand::Reg8(r)).op1(Z80Operand::MemIYd(d))
             }
             op if (op & 0xF8) == 0x70 => {
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::Fd, "???", 2); }
                 let r = op & 7;
-                let d = bytes[1] as i8;
+                let d = bytes[1].cast_signed();
                 Z80Instr::new(Z80Prefix::Fd, "LD", 3).op0(Z80Operand::MemIYd(d)).op1(Z80Operand::Reg8(r))
             }
             op if (op & 0xC7) == 0x86 => {
                 if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::Fd, "???", 2); }
                 let alu = (op >> 3) & 7;
-                let d = bytes[1] as i8;
+                let d = bytes[1].cast_signed();
                 Z80Instr::new(Z80Prefix::Fd, alu_mnemonic(alu), 3)
                     .op0(Z80Operand::A).op1(Z80Operand::MemIYd(d))
             }
             0xE5 => Z80Instr::new(Z80Prefix::Fd, "PUSH", 2).op0(Z80Operand::RegIY),
             0xE1 => Z80Instr::new(Z80Prefix::Fd, "POP",  2).op0(Z80Operand::RegIY),
             _ => {
-                let mut i = self.decode_main(pc, bytes[0], bytes);
+                let mut i = Self::decode_main(pc, bytes[0], bytes);
                 i.len += 1; i.prefix = Z80Prefix::Fd; i
             }
         }
@@ -588,7 +588,7 @@ impl Z80Decoder {
 
     // ── ED prefix ────────────────────────────────────────────────────────────
 
-    fn decode_ed(&self, _pc: u16, bytes: &[u8]) -> Z80Instr {
+    fn decode_ed(_pc: u16, bytes: &[u8]) -> Z80Instr {
         if bytes.is_empty() { return Z80Instr::new(Z80Prefix::Ed, "???", 2); }
         let op = bytes[0];
         match op {
@@ -654,9 +654,9 @@ impl Z80Decoder {
 
     // ── DDCB prefix ───────────────────────────────────────────────────────────
 
-    fn decode_ddcb(&self, _pc: u16, bytes: &[u8]) -> Z80Instr {
+    fn decode_ddcb(_pc: u16, bytes: &[u8]) -> Z80Instr {
         if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::DdCb, "???", 4); }
-        let d    = bytes[0] as i8;
+        let d    = bytes[0].cast_signed();
         let op   = bytes[1];
         let x = (op >> 6) & 3;
         let y = (op >> 3) & 7;
@@ -671,9 +671,9 @@ impl Z80Decoder {
 
     // ── FDCB prefix ───────────────────────────────────────────────────────────
 
-    fn decode_fdcb(&self, _pc: u16, bytes: &[u8]) -> Z80Instr {
+    fn decode_fdcb(_pc: u16, bytes: &[u8]) -> Z80Instr {
         if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::FdCb, "???", 4); }
-        let d    = bytes[0] as i8;
+        let d    = bytes[0].cast_signed();
         let op   = bytes[1];
         let x = (op >> 6) & 3;
         let y = (op >> 3) & 7;
@@ -688,7 +688,7 @@ impl Z80Decoder {
 }
 
 impl Default for Z80Decoder {
-    fn default() -> Self { Z80Decoder::new() }
+    fn default() -> Self { Self::new() }
 }
 
 const fn alu_mnemonic(op: u8) -> &'static str {
@@ -719,7 +719,7 @@ pub struct Z80DecoderIter<'a> {
 
 impl<'a> Z80DecoderIter<'a> {
     #[must_use]
-    pub fn new(bytes: &'a [u8], start_pc: u16) -> Self {
+    pub const fn new(bytes: &'a [u8], start_pc: u16) -> Self {
         Z80DecoderIter { decoder: Z80Decoder::new(), bytes, offset: 0, pc: start_pc }
     }
 
@@ -729,7 +729,7 @@ impl<'a> Z80DecoderIter<'a> {
     pub const fn offset(&self) -> usize { self.offset }
 }
 
-impl<'a> Iterator for Z80DecoderIter<'a> {
+impl Iterator for Z80DecoderIter<'_> {
     type Item = (u16, Z80Instr);
 
     fn next(&mut self) -> Option<Self::Item> {

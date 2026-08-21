@@ -173,8 +173,7 @@ impl Z80PlatformDetector {
         scores
             .into_iter()
             .max_by_key(|(_, score)| *score)
-            .map(|(platform, _)| platform)
-            .unwrap_or(Z80Platform::Unknown)
+            .map_or(Z80Platform::Unknown, |(platform, _)| platform)
     }
 
     /// Detect from vectors: given interrupt vector addresses, return the most
@@ -263,8 +262,8 @@ impl Z80PlatformDetector {
         }
 
         // MSX BIOS calls (CALL 0x0090..0x01C0 range, step 3)
-        if instr.mnemonic == "CALL" {
-            if let Some(target) = self.parse_call_target(&instr.operands) {
+        if instr.mnemonic == "CALL"
+            && let Some(target) = Self::parse_call_target(&instr.operands) {
                 if (0x0090..=0x01C0).contains(&target) && target % 3 == 0 {
                     self.push(Z80Platform::Msx, addr, 55, format!("MSX BIOS call at ${target:04X}"));
                 }
@@ -277,7 +276,6 @@ impl Z80PlatformDetector {
                     self.push(Z80Platform::Trs80, addr, 40, format!("Possible TRS-80 OS call at ${target:04X}"));
                 }
             }
-        }
 
         // EXX and EX AF,AF' imply we're NOT on Game Boy
         if instr.mnemonic == "EXX" || (instr.mnemonic == "EX" && instr.operands.contains("AF'")) {
@@ -288,7 +286,7 @@ impl Z80PlatformDetector {
         }
     }
 
-    fn parse_call_target(&self, operands: &str) -> Option<u64> {
+    fn parse_call_target(operands: &str) -> Option<u64> {
         let s = operands.trim_start_matches('$');
         let hex: String = s.chars().take_while(char::is_ascii_hexdigit).collect();
         if hex.is_empty() {
@@ -540,7 +538,7 @@ mod tests {
     #[test]
     fn test_confidence_no_evidence() {
         let detector = Z80PlatformDetector::new();
-        assert_eq!(detector.confidence(), 0.0);
+        assert!(detector.confidence().abs() < f64::EPSILON);
     }
 
     #[test]

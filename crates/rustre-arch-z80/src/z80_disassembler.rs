@@ -1,4 +1,6 @@
-/// Z80 disassembler: produces formatted assembly listing lines.
+//! Z80 disassembler: produces formatted assembly listing lines.
+use std::fmt::Write as _;
+
 
 use crate::z80_decoder::{Z80Decoder, Z80Instr, Z80Operand, Z80Prefix};
 
@@ -39,7 +41,7 @@ pub struct Z80DisasmConfig {
 
 impl Default for Z80DisasmConfig {
     fn default() -> Self {
-        Z80DisasmConfig {
+        Self {
             syntax: Z80Syntax::Zilog,
             show_bytes: true,
             hex_column_width: 12,
@@ -136,8 +138,8 @@ pub struct Z80Disassembler {
 
 impl Z80Disassembler {
     #[must_use]
-    pub fn new(config: Z80DisasmConfig) -> Self {
-        Z80Disassembler { decoder: Z80Decoder::new(), config }
+    pub const fn new(config: Z80DisasmConfig) -> Self {
+        Self { decoder: Z80Decoder::new(), config }
     }
 
     #[must_use]
@@ -164,7 +166,7 @@ impl Z80Disassembler {
                 let len = instr.len as usize;
                 out.push(self.format_instr(cur_pc, &instr, slice));
                 offset += len;
-                cur_pc = cur_pc.wrapping_add(len as u16);
+                cur_pc = cur_pc.wrapping_add(u16::from(instr.len));
             } else {
                 // Emit a single invalid byte.
                 let line = self.make_invalid(cur_pc, bytes[offset]);
@@ -255,20 +257,18 @@ impl Z80Disassembler {
     fn format_operand(&self, op: &Z80Operand, pc: u16, instr_len: u8) -> String {
         match op {
             Z80Operand::Rel8(d) => {
-                let target = pc.wrapping_add(u16::from(instr_len)).wrapping_add(*d as u16);
-                if let Some(resolver) = self.config.label_resolver {
-                    if let Some(lbl) = resolver(target) {
+                let target = pc.wrapping_add(u16::from(instr_len)).wrapping_add(i16::from(*d).cast_unsigned());
+                if let Some(resolver) = self.config.label_resolver
+                    && let Some(lbl) = resolver(target) {
                         return lbl;
                     }
-                }
                 self.format_addr(target)
             }
             Z80Operand::Abs16(a) => {
-                if let Some(resolver) = self.config.label_resolver {
-                    if let Some(lbl) = resolver(*a) {
+                if let Some(resolver) = self.config.label_resolver
+                    && let Some(lbl) = resolver(*a) {
                         return lbl;
                     }
-                }
                 self.format_addr(*a)
             }
             _ => match self.config.syntax {
@@ -291,11 +291,14 @@ impl Z80Disassembler {
         let mut s = String::with_capacity(64);
 
         if self.config.show_address {
-            s.push_str(&format!("{:0width$x}  ", pc, width = self.config.addr_width));
+            let _ = write!(s, "{:0width$x}  ", pc, width = self.config.addr_width);
         }
 
         if self.config.show_bytes {
-            let hex: String = raw.iter().map(|b| format!("{b:02x} ")).collect();
+            let hex = raw.iter().fold(String::new(), |mut acc, b| {
+                let _ = write!(acc, "{b:02x} ");
+                acc
+            });
             let hex = format!("{:<width$}", hex, width = self.config.hex_column_width);
             s.push_str(&hex);
         }
@@ -309,7 +312,7 @@ impl Z80Disassembler {
         }
 
         if self.config.show_cycles && cycles > 0 {
-            s.push_str(&format!("  ; {cycles}T"));
+            let _ = write!(s, "  ; {cycles}T");
         }
 
         s

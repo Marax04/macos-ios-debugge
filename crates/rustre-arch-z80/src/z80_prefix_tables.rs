@@ -113,7 +113,7 @@ pub fn decode_fd_prefix(bytes: &[u8]) -> Decoded {
 fn decode_index_prefix(bytes: &[u8], idx: &str) -> Decoded {
     let op2 = if bytes.len() >= 2 { bytes[1] } else { 0 };
     let disp_raw = if bytes.len() >= 3 {
-        bytes[2] as i8
+        bytes[2].cast_signed()
     } else {
         0i8
     };
@@ -280,7 +280,7 @@ pub fn decode_fdcb_prefix(bytes: &[u8]) -> Decoded {
 fn decode_ddcb_or_fdcb(bytes: &[u8], idx: &str) -> Decoded {
     // Format: [prefix] [CB] [disp] [op]  → bytes[0]=prefix, bytes[1]=CB, bytes[2]=disp, bytes[3]=op
     let disp_raw = if bytes.len() >= 3 {
-        bytes[2] as i8
+        bytes[2].cast_signed()
     } else {
         0i8
     };

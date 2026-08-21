@@ -70,7 +70,7 @@ impl Z80Memory {
     }
 
     pub fn write16(&mut self, addr: u16, val: u16) {
-        self.data[addr as usize] = val as u8;
+        self.data[addr as usize] = val.to_le_bytes()[0];
         self.data[addr.wrapping_add(1) as usize] = (val >> 8) as u8;
     }
 }
@@ -207,19 +207,19 @@ impl Z80State {
 
     pub const fn set_af(&mut self, v: u16) {
         self.a = (v >> 8) as u8;
-        self.f = Flags::from_bits_retain(v as u8);
+        self.f = Flags::from_bits_retain(v.to_le_bytes()[0]);
     }
     pub const fn set_bc(&mut self, v: u16) {
         self.b = (v >> 8) as u8;
-        self.c = v as u8;
+        self.c = v.to_le_bytes()[0];
     }
     pub const fn set_de(&mut self, v: u16) {
         self.d = (v >> 8) as u8;
-        self.e = v as u8;
+        self.e = v.to_le_bytes()[0];
     }
     pub const fn set_hl(&mut self, v: u16) {
         self.h = (v >> 8) as u8;
-        self.l = v as u8;
+        self.l = v.to_le_bytes()[0];
     }
 
     // --- Flag helpers ---
@@ -315,7 +315,7 @@ impl Z80State {
         }
     }
 
-    fn rp_write(&mut self, p: u8, val: u16) {
+    const fn rp_write(&mut self, p: u8, val: u16) {
         match p & 3 {
             0 => self.set_bc(val),
             1 => self.set_de(val),
@@ -333,7 +333,7 @@ impl Z80State {
         }
     }
 
-    fn rp2_write(&mut self, p: u8, val: u16) {
+    const fn rp2_write(&mut self, p: u8, val: u16) {
         match p & 3 {
             0 => self.set_bc(val),
             1 => self.set_de(val),
@@ -501,7 +501,7 @@ impl Z80State {
                 let ovf = v == 0x80;
                 self.reg8_write(r, result);
                 self.update_szpv_byte(result);
-                self.set_h((v & 0x0F) == 0x00);
+                self.set_h(v.trailing_zeros() >= 4);
                 self.set_pv(ovf);
                 self.set_n(true);
                 Ok(if r == 6 { 11 } else { 4 })
@@ -534,7 +534,7 @@ impl Z80State {
             }
             0x17 => {
                 // RLA
-                let old_c = if self.flag_c() { 1u8 } else { 0 };
+                let old_c = u8::from(self.flag_c());
                 let new_c = self.a >> 7;
                 self.a = (self.a << 1) | old_c;
                 self.set_c(new_c != 0);
@@ -560,7 +560,7 @@ impl Z80State {
             }
             // DJNZ
             0x10 => {
-                let e = fetch8(&self.mem, &mut self.pc) as i8;
+                let e = fetch8(&self.mem, &mut self.pc).cast_signed();
                 self.b = self.b.wrapping_sub(1);
                 if self.b != 0 {
                     self.pc = self.pc.wrapping_add_signed(i16::from(e));
@@ -571,22 +571,22 @@ impl Z80State {
             }
             // JR
             0x18 => {
-                let e = fetch8(&self.mem, &mut self.pc) as i8;
+                let e = fetch8(&self.mem, &mut self.pc).cast_signed();
                 self.pc = self.pc.wrapping_add_signed(i16::from(e));
                 Ok(12)
             }
             // JR cc
             0x20 => {
-                let e = fetch8(&self.mem, &mut self.pc) as i8;
-                if !self.flag_z() {
+                let e = fetch8(&self.mem, &mut self.pc).cast_signed();
+                if self.flag_z() {
+                    Ok(7)
+                } else {
                     self.pc = self.pc.wrapping_add_signed(i16::from(e));
                     Ok(12)
-                } else {
-                    Ok(7)
                 }
             }
             0x28 => {
-                let e = fetch8(&self.mem, &mut self.pc) as i8;
+                let e = fetch8(&self.mem, &mut self.pc).cast_signed();
                 if self.flag_z() {
                     self.pc = self.pc.wrapping_add_signed(i16::from(e));
                     Ok(12)
@@ -595,16 +595,16 @@ impl Z80State {
                 }
             }
             0x30 => {
-                let e = fetch8(&self.mem, &mut self.pc) as i8;
-                if !self.flag_c() {
+                let e = fetch8(&self.mem, &mut self.pc).cast_signed();
+                if self.flag_c() {
+                    Ok(7)
+                } else {
                     self.pc = self.pc.wrapping_add_signed(i16::from(e));
                     Ok(12)
-                } else {
-                    Ok(7)
                 }
             }
             0x38 => {
-                let e = fetch8(&self.mem, &mut self.pc) as i8;
+                let e = fetch8(&self.mem, &mut self.pc).cast_signed();
                 if self.flag_c() {
                     self.pc = self.pc.wrapping_add_signed(i16::from(e));
                     Ok(12)
@@ -835,7 +835,7 @@ impl Z80State {
             // CB prefix
             0xCB => {
                 let op2 = fetch8(&self.mem, &mut self.pc);
-                self.execute_cb(op2)
+                Ok(self.execute_cb(op2))
             }
             // ED prefix
             0xED => {
@@ -862,9 +862,14 @@ impl Z80State {
                 // ADD A,r
                 let (result, carry) = self.a.overflowing_add(rhs);
                 let half = (self.a & 0x0F) + (rhs & 0x0F) > 0x0F;
-                // simplified ovf calc (first line intentionally discarded)
-                let _discarded = (self.a ^ rhs ^ 0x80) & (rhs ^ result) == 0;
                 let overflow = (!(self.a ^ rhs) & (self.a ^ result)) & 0x80 != 0;
+                // Cross-check against the equivalent "same-sign operands, differing
+                // result sign" formulation; the two must always agree.
+                debug_assert_eq!(
+                    overflow,
+                    (self.a ^ rhs ^ 0x80) & (rhs ^ result) & 0x80 != 0,
+                    "signed-overflow formulations disagree for ADD A,r"
+                );
                 self.a = result;
                 self.update_szpv_byte(result);
                 self.set_c(carry);
@@ -874,7 +879,7 @@ impl Z80State {
             }
             1 => {
                 // ADC A,r
-                let carry_in = if self.flag_c() { 1u8 } else { 0 };
+                let carry_in = u8::from(self.flag_c());
                 let (partial, carry1) = self.a.overflowing_add(rhs);
                 let (result, carry2) = partial.overflowing_add(carry_in);
                 let half = (self.a & 0x0F) + (rhs & 0x0F) + carry_in > 0x0F;
@@ -900,7 +905,7 @@ impl Z80State {
             }
             3 => {
                 // SBC A,r
-                let carry_in = if self.flag_c() { 1u8 } else { 0 };
+                let carry_in = u8::from(self.flag_c());
                 let (partial, carry1) = self.a.overflowing_sub(rhs);
                 let (result, carry2) = partial.overflowing_sub(carry_in);
                 let half = (self.a & 0x0F) < (rhs & 0x0F) + carry_in;
@@ -950,7 +955,7 @@ impl Z80State {
         }
     }
 
-    fn eval_cc(&self, cc: u8) -> bool {
+    const fn eval_cc(&self, cc: u8) -> bool {
         match cc & 7 {
             0 => !self.flag_z(),
             1 => self.flag_z(),
@@ -982,7 +987,9 @@ impl Z80State {
         self.set_h(false);
     }
 
-    fn execute_cb(&mut self, op2: u8) -> Result<u32, String> {
+    /// Executes a CB-prefixed opcode. Every CB opcode is defined, so this
+    /// cannot fail and returns the cycle count directly.
+    fn execute_cb(&mut self, op2: u8) -> u32 {
         let x = (op2 >> 6) & 3;
         let y = (op2 >> 3) & 7;
         let z = op2 & 7;
@@ -1002,7 +1009,7 @@ impl Z80State {
                     } // RRC
                     2 => {
                         let c = val >> 7;
-                        let oc = if self.flag_c() { 1 } else { 0 };
+                        let oc = u8::from(self.flag_c());
                         self.set_c(c != 0);
                         (val << 1) | oc
                     } // RL
@@ -1018,7 +1025,7 @@ impl Z80State {
                     } // SLA
                     5 => {
                         self.set_c(val & 1 != 0);
-                        ((val as i8) >> 1) as u8
+                        (val.cast_signed() >> 1).cast_unsigned()
                     } // SRA
                     6 => {
                         self.set_c(val >> 7 != 0);
@@ -1051,11 +1058,11 @@ impl Z80State {
                 self.reg8_write(z, val | (1 << y));
             }
         }
-        Ok(if z == 6 {
+        if z == 6 {
             if x == 1 { 12 } else { 15 }
         } else {
             8
-        })
+        }
     }
 
     fn execute_ed(&mut self, op2: u8, io: &mut dyn IoPortHandler) -> Result<u32, String> {
@@ -1236,7 +1243,7 @@ impl Z80State {
                 Ok(8)
             }
             0x46 | 0x4E | 0x56 | 0x5E | 0x66 | 0x6E | 0x7E => {
-                let disp = self.mem.read8(self.pc) as i8;
+                let disp = self.mem.read8(self.pc).cast_signed();
                 self.pc = self.pc.wrapping_add(1);
                 let addr =
                     (if is_dd { self.ix } else { self.iy }).wrapping_add_signed(i16::from(disp));
@@ -1247,7 +1254,7 @@ impl Z80State {
             }
             0x70..=0x77 => {
                 let z = op2 & 7;
-                let disp = self.mem.read8(self.pc) as i8;
+                let disp = self.mem.read8(self.pc).cast_signed();
                 self.pc = self.pc.wrapping_add(1);
                 let addr =
                     (if is_dd { self.ix } else { self.iy }).wrapping_add_signed(i16::from(disp));
@@ -1256,7 +1263,7 @@ impl Z80State {
                 Ok(19)
             }
             0x86 => {
-                let disp = self.mem.read8(self.pc) as i8;
+                let disp = self.mem.read8(self.pc).cast_signed();
                 self.pc = self.pc.wrapping_add(1);
                 let addr =
                     (if is_dd { self.ix } else { self.iy }).wrapping_add_signed(i16::from(disp));
@@ -1265,7 +1272,7 @@ impl Z80State {
                 Ok(19)
             }
             0xBE => {
-                let disp = self.mem.read8(self.pc) as i8;
+                let disp = self.mem.read8(self.pc).cast_signed();
                 self.pc = self.pc.wrapping_add(1);
                 let addr =
                     (if is_dd { self.ix } else { self.iy }).wrapping_add_signed(i16::from(disp));

@@ -16,8 +16,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -113,28 +113,28 @@ fn rt_ld_r_n() {
 
 // ── 8 ─────────────────────────────────────────────────────────────────────────
 #[test]
-#[should_panic]
+#[should_panic(expected = "LD r,n: reg must be 0..7")]
 fn ld_r_n_panic_bad_reg_should_panic() {
     let _ = encode_ld_r_n(8, 0);
 }
 
 // ── 9 ─────────────────────────────────────────────────────────────────────────
 #[test]
-#[should_panic]
+#[should_panic(expected = "RST: vector must be 0..7")]
 fn rst_panic_bad_vector_should_panic() {
     let _ = encode_rst(8);
 }
 
 // ── 10 ────────────────────────────────────────────────────────────────────────
 #[test]
-#[should_panic]
+#[should_panic(expected = "PUSH: rp_idx must be 0..3")]
 fn push_panic_bad_rp_should_panic() {
     let _ = encode_push(4);
 }
 
 // ── 11 ────────────────────────────────────────────────────────────────────────
 #[test]
-#[should_panic]
+#[should_panic(expected = "POP: rp_idx must be 0..3")]
 fn pop_panic_bad_rp_should_panic() {
     let _ = encode_pop(4);
 }
@@ -260,8 +260,8 @@ fn fuzz_four_bytes() {
 #[test]
 fn all_256_opcodes_with_pad() {
     let pad = [0u8; 8];
-    for op in 0u32..256 {
-        let mut buf = [op as u8; 8];
+    for op in u8::MIN..=u8::MAX {
+        let mut buf = [op; 8];
         buf[1..].copy_from_slice(&pad[1..]);
         let _ = a().disassemble(ad(0x100), &buf); // must not panic
     }
@@ -270,8 +270,8 @@ fn all_256_opcodes_with_pad() {
 // ── 24: CB all 256 ────────────────────────────────────────────────────────────
 #[test]
 fn cb_all_256() {
-    for op in 0u32..256 {
-        let i = a().disassemble(ad(0), &[0xCB, op as u8]).unwrap();
+    for op in u8::MIN..=u8::MAX {
+        let i = a().disassemble(ad(0), &[0xCB, op]).unwrap();
         assert_eq!(i.size, 2);
         let mn = &i.mnemonic;
         assert!(["RLC","RRC","RL","RR","SLA","SRA","SLL","SRL","BIT","RES","SET"]
@@ -306,8 +306,8 @@ fn opcode_cycles_known() {
     assert_eq!(opcode_cycles(0x10).cycles_taken, 13);
     assert_eq!(opcode_cycles(0x76).cycles, 4);
     // fuzz never panics
-    for op in 0u32..256 {
-        let c = opcode_cycles(op as u8);
+    for op in u8::MIN..=u8::MAX {
+        let c = opcode_cycles(op);
         assert!(c.cycles >= 4);
     }
 }
@@ -526,9 +526,10 @@ fn threaded_arch_stress() {
         handles.push(thread::spawn(move || {
             let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE ^ u64::from(tid);
             for _ in 0..100 {
-                s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                let op = (s & 0xFF) as u8;
-                let buf = [op, (s >> 8) as u8, (s >> 16) as u8, (s >> 24) as u8];
+                s = s.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+                let b = s.to_le_bytes();
+                let op = b[0];
+                let buf = [op, b[1], b[2], b[3]];
                 let _ = arch.disassemble(Address::new(0x100), &buf);
             }
         }));
@@ -542,8 +543,8 @@ fn threaded_arch_stress() {
 #[test]
 fn opcode_cycles_all_consistent() {
     // taken >= cycles for all branches; non-branch they are equal
-    for op in 0u32..256 {
-        let c = opcode_cycles(op as u8);
+    for op in u8::MIN..=u8::MAX {
+        let c = opcode_cycles(op);
         assert!(c.cycles_taken >= c.cycles);
     }
 }

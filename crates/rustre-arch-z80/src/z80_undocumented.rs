@@ -138,7 +138,7 @@ impl Z80State {
     /// IXL = low byte of IX.
     #[must_use]
     pub const fn ixl(&self) -> u8 {
-        self.ix as u8
+        self.ix.to_le_bytes()[0]
     }
     /// IYH = high byte of IY.
     #[must_use]
@@ -148,7 +148,7 @@ impl Z80State {
     /// IYL = low byte of IY.
     #[must_use]
     pub const fn iyl(&self) -> u8 {
-        self.iy as u8
+        self.iy.to_le_bytes()[0]
     }
     /// Set IXH.
     pub const fn set_ixh(&mut self, v: u8) {
@@ -237,7 +237,7 @@ impl Z80State {
     }
 
     /// Set S, Z, PV (parity), H, N flags from result.
-    pub fn set_szp_flags(&mut self, result: u8) {
+    pub const fn set_szp_flags(&mut self, result: u8) {
         self.set_flag_s(result & 0x80 != 0);
         self.set_flag_z(result == 0);
         self.set_flag_pv((result.count_ones()).is_multiple_of(2));
@@ -554,7 +554,7 @@ pub fn undoc_decode(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
                 0x2D => Some((UndocInsn::DecIXL, 2)),
                 // DDCB prefix
                 0xCB if bytes.len() >= 4 => {
-                    let offset = bytes[2] as i8;
+                    let offset = bytes[2].cast_signed();
                     let opcode = bytes[3];
                     decode_ddcb(offset, opcode).map(|i| (i, 4))
                 }
@@ -609,7 +609,7 @@ pub fn undoc_decode(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
                 0x9D => Some((UndocInsn::SbcAIYL, 2)),
                 // FDCB prefix
                 0xCB if bytes.len() >= 4 => {
-                    let offset = bytes[2] as i8;
+                    let offset = bytes[2].cast_signed();
                     let opcode = bytes[3];
                     decode_fdcb(offset, opcode).map(|i| (i, 4))
                 }
@@ -705,7 +705,7 @@ fn decode_fdcb(offset: i8, opcode: u8) -> Option<UndocInsn> {
 // ── SLL execution ─────────────────────────────────────────────────────────────
 
 /// Execute SLL (undocumented): shift left, bit0 = 1.
-pub fn execute_sll(state: &mut Z80State, reg: u8) -> u8 {
+pub const fn execute_sll(state: &mut Z80State, reg: u8) -> u8 {
     let carry_out = (reg & 0x80) != 0;
     let result = (reg << 1) | 1; // bit0 = 1
     state.set_flag_c(carry_out);
@@ -730,7 +730,7 @@ pub enum Z80DecodedInsn {
 
 impl Z80DecodedInsn {
     #[must_use]
-    pub fn byte_count(&self) -> usize {
+    pub const fn byte_count(&self) -> usize {
         match self {
             Self::Undoc(u) => u.byte_count(),
             Self::Official { bytes, .. } => bytes.len(),
@@ -806,7 +806,9 @@ impl Z80FullDecoder {
                 break;
             }
             result.push((offset, insn));
-            offset = offset.wrapping_add(n as u16);
+            // `n` is a decoded instruction length (<= 4); the fallback can never fire
+            // but keeps the loop terminating instead of panicking.
+            offset = offset.wrapping_add(u16::try_from(n).unwrap_or(u16::MAX));
             remaining = &remaining[n..];
         }
         result
@@ -822,7 +824,7 @@ impl Default for Z80FullDecoder {
 /// Very brief official opcode decode (just enough for tests).
 fn decode_official_brief(bytes: &[u8]) -> (String, usize) {
     if bytes.is_empty() {
-        return ("".into(), 0);
+        return (String::new(), 0);
     }
     match bytes[0] {
         0x00 => ("NOP".into(), 1),
@@ -1017,14 +1019,14 @@ mod tests {
         let bytes = [0xDD, 0xCB, 5, 0x87]; // SET 0,(IX+5),A? actually check
         // 0x87 >> 3 = 0x10 which is case n@0x10..=0x17: bit = 0x10 - 0x10 = 0
         let r = undoc_decode(&bytes);
-        if let Some((
+        if r == Some((
             UndocInsn::DdcbSetReg {
                 bit: 0,
                 offset: 5,
                 reg: Z80Reg::A,
             },
             4,
-        )) = r
+        ))
         {
             // expected
         } else {
@@ -1036,13 +1038,13 @@ mod tests {
     fn test_undoc_decode_fdcb_sll_c() {
         let bytes = [0xFD, 0xCB, 10, 0x31]; // SLL (IY+10), C: 0x31 → op_class=6, reg=1=C
         let r = undoc_decode(&bytes);
-        if let Some((
+        if r == Some((
             UndocInsn::FdcbSllReg {
                 offset: 10,
                 reg: Z80Reg::C,
             },
             4,
-        )) = r
+        ))
         {
             // expected
         }

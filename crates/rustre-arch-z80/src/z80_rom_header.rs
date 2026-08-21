@@ -5,6 +5,7 @@
 //! and embedded copyright strings.
 
 use std::fmt;
+use std::fmt::Write as _;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RomFormat
@@ -223,7 +224,7 @@ impl Z80RomHeader {
     pub fn summary(&self) -> String {
         let mut s = format!("{} ({} bytes), entry={:#06x}", self.format, self.rom_size, self.entry_point);
         if let Some(c) = &self.copyright {
-            s.push_str(&format!(", copyright={c:?}"));
+            let _ = write!(s, ", copyright={c:?}");
         }
         s
     }
@@ -247,7 +248,7 @@ pub fn detect_rom_format(data: &[u8]) -> Z80RomHeader {
     // ── 1. MSX: `AB` magic at offset 0 ──────────────────────────────────────
     if data.len() >= 16 && data[0] == b'A' && data[1] == b'B' {
         let msx = MsxRomHeader::parse(data).ok();
-        let entry_point = msx.as_ref().map(|m| m.init_addr).unwrap_or(0);
+        let entry_point = msx.as_ref().map_or(0, |m| m.init_addr);
         let copyright = find_copyright_string(data);
         return Z80RomHeader {
             format: RomFormat::MsxCartridge,
@@ -262,8 +263,8 @@ pub fn detect_rom_format(data: &[u8]) -> Z80RomHeader {
     }
 
     // ── 2. Spectrum 48K: exactly 16384 bytes, starts with DI; XOR A; LD I,A ─
-    if rom_size == 16384 {
-        if data.len() >= 3 && data[0] == 0xF3 && data[1] == 0xAF {
+    if rom_size == 16384
+        && data.len() >= 3 && data[0] == 0xF3 && data[1] == 0xAF {
             let copyright = find_copyright_string(data);
             let checksum = compute_simple_checksum(data);
             return Z80RomHeader {
@@ -277,7 +278,6 @@ pub fn detect_rom_format(data: &[u8]) -> Z80RomHeader {
                 checksum: Some(checksum),
             };
         }
-    }
 
     // ── 3. Spectrum 128K: 32768 bytes (2 × 16 KB banks) ─────────────────────
     if rom_size == 32768 {
@@ -334,7 +334,7 @@ pub fn detect_rom_format(data: &[u8]) -> Z80RomHeader {
 
     // ── 6. Generic Z80 (JP at start) ─────────────────────────────────────────
     if data.len() >= 3 && (data[0] == 0xC3 || (data[0] == 0xF3 && data.get(1).copied() == Some(0xC3))) {
-        let offset = if data[0] == 0xF3 { 1 } else { 0 };
+        let offset = usize::from(data[0] == 0xF3);
         let entry = u16::from_le_bytes([
             data.get(offset + 1).copied().unwrap_or(0),
             data.get(offset + 2).copied().unwrap_or(0),
@@ -376,8 +376,7 @@ pub fn find_copyright_string(data: &[u8]) -> Option<String> {
             let start = pos;
             let end = data[start..].iter().take(128)
                 .position(|&b| b == 0 || b < 0x20 && b != b'\n' && b != b'\r')
-                .map(|p| start + p)
-                .unwrap_or((start + 64).min(data.len()));
+                .map_or_else(|| (start + 64).min(data.len()), |p| start + p);
             if end > start + 4 {
                 let s = String::from_utf8_lossy(&data[start..end]).trim().to_owned();
                 if s.len() >= 4 {
@@ -500,7 +499,7 @@ mod tests {
 
     #[test]
     fn msx_header_too_short() {
-        assert!(MsxRomHeader::parse(&[b'A', b'B']).is_err());
+        assert!(MsxRomHeader::parse(b"AB").is_err());
     }
 
     #[test]

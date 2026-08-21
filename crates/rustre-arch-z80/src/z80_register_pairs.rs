@@ -218,8 +218,11 @@ pub const fn pair_value(hi: u8, lo: u8) -> u16 {
 /// Split a 16-bit pair value into (hi, lo) bytes.
 #[must_use]
 pub const fn split_pair(value: u16) -> (u8, u8) {
-    let bytes = value.to_be_bytes();
-    (bytes[0], bytes[1])
+    // Split explicitly rather than indexing one array into a tuple, so this
+    // stays a pair of independent byte extractions (and remains const).
+    let hi = (value >> 8).to_le_bytes()[0];
+    let lo = value.to_le_bytes()[0];
+    (hi, lo)
 }
 
 // ─── PairUsage ───────────────────────────────────────────────────────────────
@@ -365,7 +368,7 @@ impl PairUsageMap {
     #[must_use]
     pub fn ranked(&self) -> Vec<(&Z80RegisterPair, &PairUsage)> {
         let mut v: Vec<_> = self.usages.iter().collect();
-        v.sort_by(|a, b| b.1.total_uses().cmp(&a.1.total_uses()));
+        v.sort_by_key(|(_, usage)| core::cmp::Reverse(usage.total_uses()));
         v
     }
 
