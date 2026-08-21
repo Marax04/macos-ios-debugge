@@ -6,6 +6,174 @@
 use std::collections::HashMap;
 use std::fmt;
 
+
+// ── Checked numeric conversions ───────────────────────────────────────────────
+//
+// The FPU emulator has to move values between f64, f32, i32 and i64. Written
+// with `as`, every one of those is a silent truncating / precision-losing cast
+// in code that is fed attacker-controlled instruction words. These helpers do
+// the same conversions through explicit IEEE-754 field arithmetic, so each
+// step is either exact or an explicitly chosen rounding, and nothing can
+// truncate unnoticed. `f64::to_int_unchecked` is not an option: it is `unsafe`,
+// and this workspace denies `unsafe_code`.
+
+/// The low 32 bits of `x`, without a narrowing cast.
+///
+/// The four little-endian bytes of a `u64` ARE its low word, so this is an
+/// exact reinterpretation usable in a `const fn` (`u32::try_from` is not).
+const fn low32(x: u64) -> u32 {
+    let b = x.to_le_bytes();
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+}
+
+/// Round an `f64` to the nearest `f32`, ties to even — IEEE-754 `convertFormat`.
+///
+/// This is what `v as f32` does, computed on the bit fields instead: infinities
+/// and NaN are preserved (NaN is quieted, as the hardware does), values too
+/// large for `f32` become infinity, values too small become a subnormal or a
+/// signed zero.
+#[must_use]
+pub const fn narrow_to_f32(v: f64) -> f32 {
+    let bits = v.to_bits();
+    let sign32: u32 = if bits >> 63 == 1 { 0x8000_0000 } else { 0 };
+    let biased_exp = (bits >> 52) & 0x7FF;
+    let frac = bits & 0x000F_FFFF_FFFF_FFFF;
+
+    if biased_exp == 0x7FF {
+        // Infinity, or NaN with its payload's top bits carried over and the
+        // quiet bit forced on.
+        if frac == 0 {
+            return f32::from_bits(sign32 | 0x7F80_0000);
+        }
+        let payload = (low32(frac >> 29) | 0x0040_0000) & 0x007F_FFFF;
+        return f32::from_bits(sign32 | 0x7F80_0000 | payload);
+    }
+    if biased_exp == 0 {
+        // Zero, or an f64 subnormal — smaller than the smallest f32 subnormal
+        // (2^-149) by hundreds of binades, so it rounds to a signed zero.
+        return f32::from_bits(sign32);
+    }
+
+    // Normal f64: value = significand * 2^(exp - 52), significand has 53 bits.
+    let exp = low32(biased_exp).cast_signed() - 1023;
+    let significand = frac | 0x0010_0000_0000_0000;
+
+    // Bits of the significand that do not fit an f32, plus the extra shift a
+    // subnormal f32 result needs.
+    let mut discard: i32 = 29;
+    let mut out_exp: i32 = 0;
+    if exp < -126 {
+        discard += -126 - exp;
+    } else {
+        out_exp = exp + 127;
+    }
+    if discard > 63 {
+        return f32::from_bits(sign32);
+    }
+    let shift = discard.cast_unsigned();
+    let low = significand & ((1u64 << shift) - 1);
+    let half = 1u64 << (shift - 1);
+    let mut rounded = significand >> shift;
+    if low > half || (low == half && rounded & 1 == 1) {
+        rounded += 1;
+    }
+
+    if out_exp == 0 {
+        // Subnormal result. A carry out of the top mantissa bit turns the
+        // pattern into the smallest normal, which this encoding already gives.
+        return f32::from_bits(sign32 | low32(rounded));
+    }
+    if rounded == 0x0100_0000 {
+        rounded >>= 1;
+        out_exp += 1;
+    }
+    if out_exp >= 0xFF {
+        return f32::from_bits(sign32 | 0x7F80_0000);
+    }
+    let exp_field = out_exp.cast_unsigned() << 23;
+    f32::from_bits(sign32 | exp_field | low32(rounded & 0x007F_FFFF))
+}
+
+/// Truncate `v` toward zero into an `i64`, saturating at the bounds.
+///
+/// NaN maps to 0 and out-of-range values saturate, matching both `as` and the
+/// MIPS FPU's default (non-trapping) conversion result.
+#[must_use]
+pub fn trunc_to_i64(v: f64) -> i64 {
+    if v.is_nan() {
+        return 0;
+    }
+    let t = v.trunc();
+    if t >= 9_223_372_036_854_775_808.0 {
+        return i64::MAX;
+    }
+    if t <= -9_223_372_036_854_775_808.0 {
+        return i64::MIN;
+    }
+    magnitude_of_integral(t)
+}
+
+/// Truncate `v` toward zero into an `i32`, saturating at the bounds.
+#[must_use]
+pub fn trunc_to_i32(v: f64) -> i32 {
+    if v.is_nan() {
+        return 0;
+    }
+    let t = v.trunc();
+    if t >= 2_147_483_648.0 {
+        return i32::MAX;
+    }
+    if t <= -2_147_483_648.0 {
+        return i32::MIN;
+    }
+    // |t| < 2^31, so the i64 below is always in i32's range.
+    i32::try_from(magnitude_of_integral(t)).unwrap_or(0)
+}
+
+/// Exact `i64` value of a finite, integral `f64` whose magnitude is < 2^63.
+///
+/// Decoded from the IEEE-754 fields, so no rounding or truncation happens.
+fn magnitude_of_integral(t: f64) -> i64 {
+    let bits = t.to_bits();
+    let negative = bits >> 63 == 1;
+    let exp = i32::try_from((bits >> 52) & 0x7FF).unwrap_or(0) - 1023;
+    if exp < 0 {
+        return 0; // |t| < 1 and t is integral, so t is a zero
+    }
+    let significand = (bits & 0x000F_FFFF_FFFF_FFFF) | 0x0010_0000_0000_0000;
+    let shift = 52 - exp; // exp <= 62 here, so shift >= -10
+    let magnitude = if shift >= 0 {
+        significand >> u32::try_from(shift).unwrap_or(0)
+    } else {
+        significand << u32::try_from(-shift).unwrap_or(0)
+    };
+    let value = i64::try_from(magnitude).unwrap_or(i64::MAX);
+    if negative { -value } else { value }
+}
+
+/// Convert an `i64` to `f64` with round-to-nearest-even, without `as`.
+///
+/// The magnitude is split into two 32-bit halves that each convert exactly;
+/// `mul_add` then rounds the true sum once, which is exactly what the
+/// hardware conversion does.
+#[must_use]
+pub fn i64_to_f64(v: i64) -> f64 {
+    let mag = v.unsigned_abs();
+    let hi = u32::try_from(mag >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(mag & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+    let m = f64::from(hi).mul_add(4_294_967_296.0, f64::from(lo));
+    if v < 0 { -m } else { m }
+}
+
+/// Convert an `i32` to `f32` with round-to-nearest-even, without `as`.
+///
+/// `f64::from` is exact for every `i32`, so the single rounding happens in
+/// [`narrow_to_f32`].
+#[must_use]
+pub fn i32_to_f32(v: i32) -> f32 {
+    narrow_to_f32(f64::from(v))
+}
+
 // ── FPR file ──────────────────────────────────────────────────────────────────
 
 /// The MIPS FPU register file — 32 × f64 (in 64-bit FPU mode).
@@ -37,7 +205,7 @@ impl MipsFpuState {
     /// Read a single-precision float from register `f`.
     #[must_use]
     pub const fn get_single(&self, f: usize) -> f32 {
-        self.fpr[f & 31] as f32
+        narrow_to_f32(self.fpr[f & 31])
     }
 
     /// Read a double-precision float from register `f`.
@@ -700,7 +868,7 @@ impl MipsFpuInsn {
             }
             // ── Conversions ──────────────────────────────────────────────────
             Self::CvtSD { fd, fs } => {
-                let r = fpu.get_double(fs as usize) as f32;
+                let r = narrow_to_f32(fpu.get_double(fs as usize));
                 fpu.set_single(fd as usize, r);
             }
             Self::CvtDS { fd, fs } => {
@@ -708,27 +876,27 @@ impl MipsFpuInsn {
                 fpu.set_double(fd as usize, r);
             }
             Self::CvtWS { fd, fs } => {
-                let r = fpu.get_single(fs as usize) as i32 as f32;
+                let r = i32_to_f32(trunc_to_i32(f64::from(fpu.get_single(fs as usize))));
                 fpu.set_single(fd as usize, r);
             }
             Self::CvtWD { fd, fs } => {
-                let r = f64::from(fpu.get_double(fs as usize) as i32);
+                let r = f64::from(trunc_to_i32(fpu.get_double(fs as usize)));
                 fpu.set_double(fd as usize, r);
             }
             Self::CvtLs { fd, fs } => {
-                let r = fpu.get_single(fs as usize) as i64 as f64;
+                let r = i64_to_f64(trunc_to_i64(f64::from(fpu.get_single(fs as usize))));
                 fpu.fpr[fd as usize] = r;
             }
             Self::CvtLD { fd, fs } => {
-                let r = fpu.get_double(fs as usize) as i64 as f64;
+                let r = i64_to_f64(trunc_to_i64(fpu.get_double(fs as usize)));
                 fpu.fpr[fd as usize] = r;
             }
             Self::CvtSW { fd, fs } => {
-                let i = fpu.get_single(fs as usize) as i32;
-                fpu.set_single(fd as usize, i as f32);
+                let i = trunc_to_i32(f64::from(fpu.get_single(fs as usize)));
+                fpu.set_single(fd as usize, i32_to_f32(i));
             }
             Self::CvtDW { fd, fs } => {
-                let i = fpu.get_double(fs as usize) as i32;
+                let i = trunc_to_i32(fpu.get_double(fs as usize));
                 fpu.set_double(fd as usize, f64::from(i));
             }
             // ── Rounding ─────────────────────────────────────────────────────
@@ -828,7 +996,7 @@ impl MipsFpuInsn {
             }
             Self::Swc1 { ft, base, offset } => {
                 let addr = (gpr[base as usize].cast_signed() + i64::from(offset)).cast_unsigned();
-                let bits = (fpu.fpr[ft as usize] as f32).to_bits();
+                let bits = narrow_to_f32(fpu.fpr[ft as usize]).to_bits();
                 for i in 0..4u64 {
                     memory.insert(addr + i, ((bits >> (i * 8)) & 0xFF) as u8);
                 }
@@ -842,7 +1010,7 @@ impl MipsFpuInsn {
             }
             // ── Move to/from GP ───────────────────────────────────────────────
             Self::MfC1 { rt, fs } => {
-                gpr[rt as usize] = u64::from((fpu.fpr[fs as usize] as f32).to_bits());
+                gpr[rt as usize] = u64::from(narrow_to_f32(fpu.fpr[fs as usize]).to_bits());
             }
             Self::MtC1 { rt, fs } => {
                 let bits = low_u32(gpr[rt as usize]);
@@ -1655,5 +1823,270 @@ mod tests {
         assert!(f.get_fcc(3));
         f.clear_fcc();
         assert!(!f.get_fcc(3));
+    }
+}
+
+#[cfg(test)]
+mod conversion_tests {
+    use super::{i32_to_f32, i64_to_f64, narrow_to_f32, trunc_to_i32, trunc_to_i64};
+
+    // Ground truth for every table below was produced independently of Rust,
+    // by CPython's IEEE-754 `struct` packing, so these tests cannot merely
+    // agree with the implementation they check.
+
+    #[test]
+    fn narrow_to_f32_matches_ieee754_round_to_nearest_even() {
+        const CASES: &[(u64, u32)] = &[
+        (0x0000_0000_0000_0000u64, 0x0000_0000u32),
+        (0x8000_0000_0000_0000u64, 0x8000_0000u32),
+        (0x3FF0_0000_0000_0000u64, 0x3F80_0000u32),
+        (0xBFF0_0000_0000_0000u64, 0xBF80_0000u32),
+        (0x3FE0_0000_0000_0000u64, 0x3F00_0000u32),
+        (0x4009_21FB_5444_2D11u64, 0x4049_0FDBu32),
+        (0x3696_D601_AD37_6AB9u64, 0x0000_0001u32),
+        (0x3662_44CE_242C_5561u64, 0x0000_0000u32),
+        (0x369F_F868_BF4D_956Au64, 0x0000_0001u32),
+        (0x368F_F868_BF4D_956Au64, 0x0000_0000u32),
+        (0x47EF_FFFF_EFFE_4998u64, 0x7F7F_FFFFu32),
+        (0x47EF_FFFF_E54D_AFF8u64, 0x7F7F_FFFFu32),
+        (0x47F0_74F8_C4D3_CD7Bu64, 0x7F80_0000u32),
+        (0xC7F0_74F8_C4D3_CD7Bu64, 0xFF80_0000u32),
+        (0x7FF0_0000_0000_0000u64, 0x7F80_0000u32),
+        (0xFFF0_0000_0000_0000u64, 0xFF80_0000u32),
+        (0x3FF0_0000_1000_0000u64, 0x3F80_0000u32),
+        (0x3FF0_0000_0800_0000u64, 0x3F80_0000u32),
+        (0x3FF0_0000_1800_0000u64, 0x3F80_0001u32),
+        (0x3E70_0000_0000_0000u64, 0x3380_0000u32),
+        (0x37A1_6C26_2777_579Cu64, 0x0001_16C2u32),
+        (0x3810_0000_0000_0000u64, 0x0080_0000u32),
+        (0x3800_0000_0000_0000u64, 0x0040_0000u32),
+        (0x3690_0000_0000_0000u64, 0x0000_0000u32),
+        (0x36A0_0000_0000_0000u64, 0x0000_0001u32),
+        (0x36A8_0000_0000_0000u64, 0x0000_0002u32),
+        (0x7E37_E43C_8800_759Cu64, 0x7F80_0000u32),
+        (0xFE37_E43C_8800_759Cu64, 0xFF80_0000u32),
+        (0x419D_6F34_5400_0000u64, 0x4CEB_79A3u32),
+        (0x4170_0000_1000_0000u64, 0x4B80_0000u32),
+        (0x4170_0000_0000_0000u64, 0x4B80_0000u32),
+        (0xF2A7_4DE4_52E6_B438u64, 0xFF80_0000u32),
+        (0x6513_270E_269E_0D37u64, 0x7F80_0000u32),
+        (0x0C5C_7FD0_A6A3_A450u64, 0x0000_0000u32),
+        (0xD23F_0824_128B_2F33u64, 0xFF80_0000u32),
+        (0x1818_E811_892F_902Bu64, 0x0000_0000u32),
+        (0x9531_985D_5D9D_C9F8u64, 0x8000_0000u32),
+        (0xE8E2_5D94_0ED9_0475u64, 0xFF80_0000u32),
+        (0x36F6_75CC_81E7_4EF5u64, 0x0000_002Du32),
+        (0x1600_A35A_0999_50D8u64, 0x0000_0000u32),
+        (0x6B0D_549B_6F03_675Au64, 0x7F80_0000u32),
+        (0x3D9C_1724_11E2_0B8Fu64, 0x2CE0_B921u32),
+        (0x8D11_6ECE_1738_F7D9u64, 0x8000_0000u32),
+        (0x0F21_DDB6_6CAD_4A26u64, 0x0000_0000u32),
+        (0x90C1_92CF_D3AC_94AFu64, 0x8000_0000u32),
+        (0xF28C_105D_1FB1_7C23u64, 0xFF80_0000u32),
+        (0xA170_B338_3926_3059u64, 0x8000_0000u32),
+        (0x953F_48F1_A09F_76B5u64, 0x8000_0000u32),
+        (0x0FD6_30F1_F29D_0DA9u64, 0x0000_0000u32),
+        (0x95E6_0AF5_93BD_04CFu64, 0x8000_0000u32),
+        (0x0CB1_E29C_658C_DA14u64, 0x0000_0000u32),
+        (0x3898_D190_F9EB_DACCu64, 0x04C6_8C88u32),
+        (0x8E81_973E_0BEC_D7B0u64, 0x8000_0000u32),
+        (0x2217_BEAD_DBC4_96CBu64, 0x0000_0000u32),
+        (0x6B4C_B242_4A23_D596u64, 0x7F80_0000u32),
+        (0x8A6A_63EC_24ED_E6A4u64, 0x8000_0000u32),
+        (0x9227_6658_1E27_A1C0u64, 0x8000_0000u32),
+        (0x8F6D_0558_4EF8_AA38u64, 0x8000_0000u32),
+        (0xAE97_BA94_D0ED_A82Fu64, 0x8000_0000u32),
+        (0x1A61_DBE2_2E44_158Bu64, 0x0000_0000u32),
+        (0x923A_7369_94E3_BF91u64, 0x8000_0000u32),
+        (0x3018_50C5_A38F_D547u64, 0x0000_0000u32),
+        (0x18F1_35D2_5F55_7203u64, 0x0000_0000u32),
+        (0xB64C_E422_8C38_FB29u64, 0x8000_0000u32),
+        (0x907A_70C3_1012_F037u64, 0x8000_0000u32),
+        (0x9E77_69B1_0F42_05B4u64, 0x8000_0000u32),
+        (0x7F15_0524_34B9_B5DFu64, 0x7F80_0000u32),
+        (0x881E_D162_AE2E_B154u64, 0x8000_0000u32),
+        (0xC6F8_7718_6D76_B07Eu64, 0xF7C3_B8C3u32),
+        (0x7731_AF10_506B_F2EFu64, 0x7F80_0000u32),
+        (0xEC66_A787_95E7_61D1u64, 0xFF80_0000u32),
+        (0x5C90_A958_7403_E430u64, 0x7F80_0000u32),
+        (0x3F98_E277_4CBD_87ADu64, 0x3CC7_13BAu32),
+        (0x2E05_319A_CB5C_7427u64, 0x0000_0000u32),
+        (0xC7A2_EA20_B2F1_4C94u64, 0xFD17_5106u32),
+        (0x14F4_733F_3E7D_1BFBu64, 0x0000_0000u32),
+        (0x4CDD_2055_930D_6EAFu64, 0x7F80_0000u32),
+        (0x7EBF_F206_8673_4721u64, 0x7F80_0000u32),
+        (0x57EE_05CD_E009_02C7u64, 0x7F80_0000u32),
+        (0x72E6_CC3A_BABC_ED20u64, 0x7F80_0000u32),
+        (0x9BE4_BCFC_49B6_4A08u64, 0x8000_0000u32),
+        (0x12BD_4ACE_FAEC_BD38u64, 0x0000_0000u32),
+        (0x830E_07BC_1E39_8F10u64, 0x8000_0000u32),
+        (0x2A3A_F4D4_6B0A_18E8u64, 0x0000_0000u32),
+        (0x5790_F82E_C1D3_FCFFu64, 0x7F80_0000u32),
+        (0xEEEA_CBE2_26E8_7555u64, 0xFF80_0000u32),
+        (0x6BF4_6C69_7D2C_AF82u64, 0x7F80_0000u32),
+        (0xF646_E1F4_0A09_7C97u64, 0xFF80_0000u32),
+        (0x13DE_EF86_AB10_31D0u64, 0x0000_0000u32),
+        (0x8EDE_0D7A_C3BA_EA9Eu64, 0x8000_0000u32),
+        (0xCA02_135E_92B1_D3F2u64, 0xFF80_0000u32),
+        ];
+        for &(input, expected) in CASES {
+            let got = narrow_to_f32(f64::from_bits(input)).to_bits();
+            assert_eq!(got, expected, "narrow_to_f32(f64::from_bits({input:#018X}))");
+        }
+    }
+
+    #[test]
+    fn narrow_to_f32_preserves_nan() {
+        let quiet = narrow_to_f32(f64::NAN);
+        assert!(quiet.is_nan());
+        // A signalling NaN payload is carried over and quieted.
+        let signalling = f64::from_bits(0x7FF0_0000_0000_0001);
+        assert!(narrow_to_f32(signalling).is_nan());
+    }
+
+    #[test]
+    fn trunc_to_i64_saturates_and_truncates_toward_zero() {
+        const CASES: &[(u64, i64)] = &[
+        (0x0000_0000_0000_0000u64, 0i64),
+        (0x8000_0000_0000_0000u64, 0i64),
+        (0x3FFE_6666_6666_6666u64, 1i64),
+        (0xBFFE_6666_6666_6666u64, -1i64),
+        (0x4004_0000_0000_0000u64, 2i64),
+        (0xC004_0000_0000_0000u64, -2i64),
+        (0x43AB_C16D_674E_C800u64, 1_000_000_000_000_000_000i64),
+        (0xC3AB_C16D_674E_C800u64, -1_000_000_000_000_000_000i64),
+        (0x43E0_2207_973F_6440u64, 9_223_372_036_854_775_807i64),
+        (0xC3E0_2207_973F_6440u64, -9_223_372_036_854_775_808i64),
+        (0x41DF_FFFF_FFC0_0000u64, 2_147_483_647i64),
+        (0x41E0_0000_0000_0000u64, 2_147_483_648i64),
+        (0xC1E0_0000_0000_0000u64, -2_147_483_648i64),
+        (0xC1E0_0000_0020_0000u64, -2_147_483_649i64),
+        (0x7E37_E43C_8800_759Cu64, 9_223_372_036_854_775_807i64),
+        (0xFE37_E43C_8800_759Cu64, -9_223_372_036_854_775_808i64),
+        (0x7FF0_0000_0000_0000u64, 9_223_372_036_854_775_807i64),
+        (0xFFF0_0000_0000_0000u64, -9_223_372_036_854_775_808i64),
+        (0x7FF8_0000_0000_0000u64, 0i64),
+        (0x3FE0_0000_0000_0000u64, 0i64),
+        (0xBFE0_0000_0000_0000u64, 0i64),
+        (0x40FE_240C_9FBE_76C9u64, 123_456i64),
+        (0xC0FE_240C_9FBE_76C9u64, -123_456i64),
+        (0x43E0_0000_0000_0000u64, 9_223_372_036_854_775_807i64),
+        (0xC3E0_0000_0000_0000u64, -9_223_372_036_854_775_808i64),
+        ];
+        for &(input, expected) in CASES {
+            assert_eq!(trunc_to_i64(f64::from_bits(input)), expected, "{input:#018X}");
+        }
+    }
+
+    #[test]
+    fn trunc_to_i32_saturates_and_truncates_toward_zero() {
+        const CASES: &[(u64, i32)] = &[
+        (0x0000_0000_0000_0000u64, 0i32),
+        (0x8000_0000_0000_0000u64, 0i32),
+        (0x3FFE_6666_6666_6666u64, 1i32),
+        (0xBFFE_6666_6666_6666u64, -1i32),
+        (0x4004_0000_0000_0000u64, 2i32),
+        (0xC004_0000_0000_0000u64, -2i32),
+        (0x43AB_C16D_674E_C800u64, 2_147_483_647i32),
+        (0xC3AB_C16D_674E_C800u64, -2_147_483_648i32),
+        (0x43E0_2207_973F_6440u64, 2_147_483_647i32),
+        (0xC3E0_2207_973F_6440u64, -2_147_483_648i32),
+        (0x41DF_FFFF_FFC0_0000u64, 2_147_483_647i32),
+        (0x41E0_0000_0000_0000u64, 2_147_483_647i32),
+        (0xC1E0_0000_0000_0000u64, -2_147_483_648i32),
+        (0xC1E0_0000_0020_0000u64, -2_147_483_648i32),
+        (0x7E37_E43C_8800_759Cu64, 2_147_483_647i32),
+        (0xFE37_E43C_8800_759Cu64, -2_147_483_648i32),
+        (0x7FF0_0000_0000_0000u64, 2_147_483_647i32),
+        (0xFFF0_0000_0000_0000u64, -2_147_483_648i32),
+        (0x7FF8_0000_0000_0000u64, 0i32),
+        (0x3FE0_0000_0000_0000u64, 0i32),
+        (0xBFE0_0000_0000_0000u64, 0i32),
+        (0x40FE_240C_9FBE_76C9u64, 123_456i32),
+        (0xC0FE_240C_9FBE_76C9u64, -123_456i32),
+        (0x43E0_0000_0000_0000u64, 2_147_483_647i32),
+        (0xC3E0_0000_0000_0000u64, -2_147_483_648i32),
+        ];
+        for &(input, expected) in CASES {
+            assert_eq!(trunc_to_i32(f64::from_bits(input)), expected, "{input:#018X}");
+        }
+    }
+
+    #[test]
+    fn i64_to_f64_rounds_to_nearest_even() {
+        const CASES: &[(i64, u64)] = &[
+        (0i64, 0x0000_0000_0000_0000u64),
+        (1i64, 0x3FF0_0000_0000_0000u64),
+        (-1i64, 0xBFF0_0000_0000_0000u64),
+        (9_007_199_254_740_992i64, 0x4340_0000_0000_0000u64),
+        (9_007_199_254_740_993i64, 0x4340_0000_0000_0000u64),
+        (4_611_686_018_427_400_249i64, 0x43D0_0000_0000_000Cu64),
+        (-4_611_686_018_427_400_249i64, 0xC3D0_0000_0000_000Cu64),
+        (9_223_372_036_854_775_807i64, 0x43E0_0000_0000_0000u64),
+        (-9_223_372_036_854_775_808i64, 0xC3E0_0000_0000_0000u64),
+        (123_456_789_012_345_678i64, 0x437B_69B4_BA63_0F35u64),
+        (6_746_754_309_487_011_181i64, 0x43D7_6852_531C_F3C9u64),
+        (6_582_960_470_780_362_279i64, 0x43D6_D6D7_EAE3_D350u64),
+        (5_187_557_457_942_614_157i64, 0x43D1_FF7A_017B_2644u64),
+        (-888_536_827_832_248_383i64, 0xC3A8_A96F_1311_9650u64),
+        (6_549_435_970_184_405_693i64, 0x43D6_B911_5420_8079u64),
+        (-5_720_297_781_732_648_398i64, 0xC3D3_D8A5_219A_6849u64),
+        (5_605_971_261_777_110_648i64, 0x43D3_731A_4A4B_D17Au64),
+        (-447_089_437_431_795_262i64, 0xC398_D185_E5F3_CE39u64),
+        (2_102_169_396_385_414_777i64, 0x43BD_2C67_EDA1_3FFEu64),
+        (-5_789_073_693_455_906_733i64, 0xC3D4_15BA_F68D_3FDEu64),
+        (-985_182_458_400_441_965i64, 0xC3AB_5824_73CF_CF0Du64),
+        (-6_607_713_467_406_502_783i64, 0xC3D6_ECD4_18EC_9513u64),
+        (713_769_272_303_038_245i64, 0x43A3_CFA2_BE2E_6C5Eu64),
+        (7_201_248_935_695_146_303i64, 0x43D8_FBFE_7033_D137u64),
+        (2_480_216_081_659_408_167i64, 0x43C1_35BF_B158_C298u64),
+        (1_760_492_710_964_800_359i64, 0x43B8_6E86_CB0A_B8ABu64),
+        (-1_915_510_389_950_314_700i64, 0xC3BA_9542_8D04_8EF9u64),
+        (-867_091_727_562_154_568i64, 0xC3A8_110E_AA12_0B45u64),
+        (4_407_220_095_905_396_630i64, 0x43CE_94CB_A9D3_B3BCu64),
+        (2_768_320_932_762_453_118i64, 0x43C3_3586_9C4E_CAC2u64),
+        ];
+        for &(input, expected) in CASES {
+            assert_eq!(i64_to_f64(input).to_bits(), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn i32_to_f32_rounds_to_nearest_even() {
+        const CASES: &[(i32, u32)] = &[
+        (0i32, 0x0000_0000u32),
+        (1i32, 0x3F80_0000u32),
+        (-1i32, 0xBF80_0000u32),
+        (16_777_216i32, 0x4B80_0000u32),
+        (16_777_217i32, 0x4B80_0000u32),
+        (16_777_219i32, 0x4B80_0002u32),
+        (2_147_483_647i32, 0x4F00_0000u32),
+        (-2_147_483_648i32, 0xCF00_0000u32),
+        (123_456_789i32, 0x4CEB_79A3u32),
+        (-123_456_789i32, 0xCCEB_79A3u32),
+        (-1_471_051_673i32, 0xCEAF_5CEFu32),
+        (528_832_678i32, 0x4DFC_2AC5u32),
+        (-2_083_055_996i32, 0xCEF8_51D3u32),
+        (1_424_647_632i32, 0x4EA9_D4CCu32),
+        (121_896_630i32, 0x4CE8_7FD7u32),
+        (-1_876_192_373i32, 0xCEDF_A8D9u32),
+        (-1_891_713_581i32, 0xCEE1_8284u32),
+        (-1_994_356_123i32, 0xCEED_BEEBu32),
+        (-1_330_545_397i32, 0xCE9E_9D06u32),
+        (1_630_219_151i32, 0x4EC2_5657u32),
+        (-1_108_346_312i32, 0xCE84_200Cu32),
+        (427_856_421i32, 0x4DCC_0491u32),
+        (-2_018_279_916i32, 0xCEF0_9904u32),
+        (1_194_466_496i32, 0x4E8E_643Au32),
+        (-154_900_306i32, 0xCD13_B975u32),
+        (-746_064_365i32, 0xCE31_E028u32),
+        (-255_416_904i32, 0xCD73_95A4u32),
+        (390_667_811i32, 0x4DBA_48F1u32),
+        (1_470_713_325i32, 0x4EAF_529Cu32),
+        (-1_308_584_726i32, 0xCE9B_FED6u32),
+        ];
+        for &(input, expected) in CASES {
+            assert_eq!(i32_to_f32(input).to_bits(), expected, "{input}");
+        }
     }
 }
