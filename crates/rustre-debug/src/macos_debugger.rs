@@ -833,7 +833,7 @@ impl MacosDebugger {
             // leave the session exactly as it was.
             return Err(DebugError::DetachError(format!(
                 "debug registers still armed on thread(s) {}; detaching now would leave the target trapping with no debugger to take the trap",
-                still_armed.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(", ")
+                still_armed.iter().map(std::string::ToString::to_string).collect::<Vec<_>>().join(", ")
             )));
         }
         self.hw_watchpoints.lock().clear();
@@ -1260,9 +1260,7 @@ impl MacosDebugger {
                     // report a clean stop for a target that cannot be resumed,
                     // so the failure replaces the event instead of riding
                     // alongside it.
-                    if let Err(e) = self.rewind_past_own_breakpoint(ev).await {
-                        return Err(e);
-                    }
+                    self.rewind_past_own_breakpoint(ev).await?;
                     // A single step CAN be the process's last instruction, and
                     // the event loop returns just the same. Retiring only from
                     // `continue_execution` would leave that path stuck.
@@ -1398,16 +1396,15 @@ impl MacosDebugger {
         // refused: `memory_maps` can legitimately miss freshly mapped code,
         // and refusing what we merely cannot see would break stepping out of
         // JIT-generated frames.
-        if let Ok(maps) = self.memory_maps().await {
-            if let Some(region) = maps
+        if let Ok(maps) = self.memory_maps().await
+            && let Some(region) = maps
                 .iter()
                 .find(|m| target.as_u64() >= m.base.as_u64() && target.as_u64() < m.base.as_u64().saturating_add(m.size))
-                && !region.executable
-            {
-                return Err(DebugError::StepError(format!(
-                    "run_to_return: {target:?} is not executable memory — the return address read                      from the stack does not point at code, and planting a breakpoint there would                      corrupt the target's data"
-                )));
-            }
+            && !region.executable
+        {
+            return Err(DebugError::StepError(format!(
+            "run_to_return: {target:?} is not executable memory — the return address read                      from the stack does not point at code, and planting a breakpoint there would                      corrupt the target's data"
+            )));
         }
         // "Is a trap ARMED there", not "is that address in my map".
         //
@@ -3616,9 +3613,7 @@ impl crate::Debugger for MacosDebugger {
                 // surfaced before `arm_pending_breakpoints`, because arming
                 // more traps in a process parked mid-instruction only widens
                 // the damage.
-                if let Err(e) = self.rewind_past_own_breakpoint(ev).await {
-                    return Err(e);
-                }
+                self.rewind_past_own_breakpoint(ev).await?;
                 self.arm_pending_breakpoints(ev).await;
                 // A library event is RETURNED to the caller, not swallowed.
                 //
@@ -4104,7 +4099,7 @@ impl crate::Debugger for MacosDebugger {
         // `the_architecture_check_precedes_the_implant_in_every_backend`
         // states: a refusal that has already patched memory is not a refusal.
         let alignment = crate::host_trap_alignment();
-        if addr.as_u64() % alignment != 0 {
+        if !addr.as_u64().is_multiple_of(alignment) {
             return Err(DebugError::Unsupported(format!(
                 "a software breakpoint at {addr:?} is not {alignment}-byte aligned; on this                  architecture a trap there would straddle two instructions and corrupt both"
             )));

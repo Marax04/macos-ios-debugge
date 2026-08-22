@@ -11238,9 +11238,25 @@ mod tests_extra {
         let lib = code_only(include_str!("lib.rs"));
 
         // Every `name: "..."` in the declaration, all cfg branches included.
+        // The anchor is matched WITHOUT the `pub`/`const` qualifiers, because
+        // those are exactly what drifts: the declaration became
+        // `pub const fn` and the old anchor `"pub fn backend_capabilities()"`
+        // stopped matching it. The guard did not report a misanchor, because
+        // this test's own source is part of `lib.rs` and the search found the
+        // string literal on this very line. `find` returns the FIRST match and
+        // the declaration precedes the test module, so anchoring on a form the
+        // declaration actually has keeps the self-match harmless — but a scan
+        // that searches its own text can never rely on `expect` alone, which is
+        // why the two count assertions below are the real guard.
+        const ANCHOR: &str = "fn backend_capabilities()";
         let decl_start = lib
-            .find("pub fn backend_capabilities()")
+            .find(ANCHOR)
             .expect("the declaration is gone — guard misanchored");
+        assert!(
+            decl_start < lib.find("mod tests_extra").unwrap_or(lib.len()),
+            "the anchor matched inside the test module, not the declaration: \
+             the declaration was renamed and this scan is now reading itself"
+        );
         let decl = &lib[decl_start..];
         let decl_end = decl.find("
 pub ").unwrap_or(decl.len());
@@ -13016,6 +13032,7 @@ pub ").unwrap_or(decl.len());
             ("linux", include_str!("linux_debugger.rs")),
             ("macos", include_str!("macos_debugger.rs")),
         ] {
+            let mut call_sites = 0usize;
             for (lineno, line) in src.lines().enumerate() {
                 let trimmed = line.trim();
                 if !trimmed.contains("rewind_past_own_breakpoint(") || trimmed.starts_with("//") {
@@ -13025,14 +13042,38 @@ pub ").unwrap_or(decl.len());
                 if trimmed.starts_with("async fn") || trimmed.starts_with("///") {
                     continue;
                 }
+                call_sites += 1;
+                // `self.rewind_past_own_breakpoint(ev).await?;` PROPAGATES the
+                // failure — it is the idiomatic form, not a discard. This guard
+                // used to reject every statement beginning with the call,
+                // which pushed the three backends into writing
+                // `if let Err(e) = … { return Err(e); }` purely to satisfy it.
+                // When one backend later moved to `?`, the guard fired on
+                // correct code and, worse, the shared-logic guard fired too
+                // because the three bodies no longer matched textually. An
+                // over-strict check does not merely annoy: it manufactures the
+                // divergence a second check exists to detect.
+                //
+                // What is actually a discard: a bare statement with no `?`, and
+                // the explicit `let _ =`.
+                let bare_discard = trimmed.starts_with("self.rewind_past_own_breakpoint(")
+                    && !trimmed.contains('?');
+                let explicit_discard =
+                    trimmed.starts_with("let _ = self.rewind_past_own_breakpoint(");
                 assert!(
-                    !trimmed.starts_with("self.rewind_past_own_breakpoint(")
-                        && !trimmed.starts_with("let _ = self.rewind_past_own_breakpoint("),
+                    !bare_discard && !explicit_discard,
                     "{name}:{}: the rewind's result is discarded at the call site — the target \
                      may be left mid-instruction while this event is handed back as a normal stop",
                     lineno + 1
                 );
             }
+            // A scan that finds nothing must not report success: if the call is
+            // renamed, this guard would otherwise pass forever on zero sites.
+            assert!(
+                call_sites > 0,
+                "{name}: no call site of the rewind was found — the scan is misanchored, \
+                 not the code clean"
+            );
         }
     }
 
