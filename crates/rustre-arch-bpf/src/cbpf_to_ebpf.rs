@@ -198,6 +198,9 @@ const REG_CTX: u8 = 6;
 /// R10 = frame pointer.
 const REG_FP: u8 = 10;
 
+/// Number of cBPF M[] scratch slots (the classic BPF spec defines M[0]..M[15]).
+const CBPF_M_SLOTS: u32 = 16;
+
 /// Stack frame offset used for M[] scratch memory (32 slots × 4 bytes).
 const CBPF_M_STACK_OFF: i16 = -128;
 
@@ -205,7 +208,7 @@ const CBPF_M_STACK_OFF: i16 = -128;
 ///
 /// The cBPF spec allows only M[0]..M[15]. Returns `None` if `k` is out of range.
 fn cbpf_m_stack_offset(k: u32, warnings: &mut Vec<String>) -> Option<i16> {
-    if k >= 16 {
+    if k >= CBPF_M_SLOTS {
         warnings.push(format!(
             "M[{k}] index out of cBPF range (0–15); instruction skipped"
         ));
@@ -338,6 +341,22 @@ impl CbpfToEbpf {
         // Initialise A and X to 0.
         ebpf.push(EbpfInsn::new(ebpf_ops::MOV64_IMM, REG_A, 0, 0, 0));
         ebpf.push(EbpfInsn::new(ebpf_ops::MOV64_IMM, REG_X, 0, 0, 0));
+
+        // Zero the 16 M[] scratch slots.
+        //
+        // Classic BPF lets a program read M[k] before writing it; the eBPF
+        // verifier rejects any read from uninitialised stack. Without this
+        // prologue such a program converts "successfully" and is then refused
+        // at load time, so the zeroing is part of a faithful translation.
+        // `without_mem_prologue()` opts out for programs known to write before
+        // reading, which saves 17 instructions.
+        if self.emit_mem_prologue {
+            ebpf.push(EbpfInsn::new(ebpf_ops::MOV64_IMM, REG_TMP, 0, 0, 0));
+            for k in 0..CBPF_M_SLOTS {
+                let off = CBPF_M_STACK_OFF + i16::try_from(k).unwrap_or(0) * 4;
+                ebpf.push(EbpfInsn::new(ebpf_ops::STX_MEM_W, REG_FP, REG_TMP, off, 0));
+            }
+        }
 
         for (ci, insn) in cbpf.iter().enumerate() {
             insn_map.push(ebpf.len());
@@ -670,6 +689,44 @@ pub fn cbpf_filter_ipv4() -> Vec<CbpfInsn> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `without_mem_prologue()` must actually change the output.
+    ///
+    /// The `emit_mem_prologue` field was written by `new()` and
+    /// `without_mem_prologue()` but never READ, so the builder method was a
+    /// silent no-op and the M[] scratch was left uninitialised -- which the
+    /// eBPF verifier rejects on any `ld M[k]` that precedes a `st M[k]`.
+    #[test]
+    fn mem_prologue_zeroes_the_scratch_slots_and_can_be_disabled() {
+        let cbpf = cbpf_accept_all();
+
+        let (with, _) = CbpfToEbpf::new().convert(&cbpf);
+        let (without, _) = CbpfToEbpf::new().without_mem_prologue().convert(&cbpf);
+
+        // One MOV64_IMM zero register + one store per slot.
+        let expected_extra = 1 + CBPF_M_SLOTS as usize;
+        assert_eq!(
+            with.len(),
+            without.len() + expected_extra,
+            "the prologue must add exactly {expected_extra} instructions"
+        );
+
+        // Every M[] slot is stored to, at its own stack offset.
+        for k in 0..CBPF_M_SLOTS {
+            let off = CBPF_M_STACK_OFF + i16::try_from(k).unwrap() * 4;
+            assert!(
+                with.iter().any(|i| i.code == ebpf_ops::STX_MEM_W
+                    && i.dst == REG_FP
+                    && i.off == off),
+                "M[{k}] at fp{off} is never zeroed"
+            );
+            assert!(
+                !without.iter().take(expected_extra).any(|i| i.off == off
+                    && i.code == ebpf_ops::STX_MEM_W),
+                "M[{k}] zeroed despite without_mem_prologue()"
+            );
+        }
+    }
 
     #[test]
     fn test_accept_all_converts() {
