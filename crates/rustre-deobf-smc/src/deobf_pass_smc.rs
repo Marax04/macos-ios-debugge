@@ -474,7 +474,15 @@ impl SmcDeobfPass {
             let enc_bytes = if let Some(off) = rb.va_to_offset(*base_va)
                 && let Ok(off_usize) = usize::try_from(off)
             {
-                let end = off_usize + size;
+                // `off_usize + size` would wrap in release builds (overflow-checks
+                // off), letting an out-of-range region pass the bound check below.
+                let Some(end) = off_usize.checked_add(*size) else {
+                    errors.push(SmcPassError::PatchFailed(*base_va));
+                    if self.config.abort_on_error {
+                        break;
+                    }
+                    continue;
+                };
                 if end > rb.original.len() {
                     errors.push(SmcPassError::PatchFailed(*base_va));
                     if self.config.abort_on_error {

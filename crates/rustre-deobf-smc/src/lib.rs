@@ -425,7 +425,15 @@ impl SmcPatcher {
             needed: usize::MAX,
             have: data.len(),
         })?;
-        let end = file_offset + size;
+        // A raw `file_offset + size` wraps in release builds (overflow-checks
+        // off): the sum can land back inside `data`, passing the check below
+        // while the slice range is still invalid.
+        let end = file_offset
+            .checked_add(size)
+            .ok_or(DeobfError::TooShort {
+                needed: usize::MAX,
+                have: data.len(),
+            })?;
         if end > data.len() {
             return Err(DeobfError::TooShort {
                 needed: end,
@@ -985,6 +993,24 @@ mod tests {
             .unwrap();
         assert_eq!(patches.len(), 1);
         assert_eq!(patches[0].patched, plain);
+    }
+
+    /// Regression: `file_offset + size` used to be computed with a raw `+`.
+    /// Under the release profile `overflow-checks` is OFF, so the sum WRAPS and
+    /// lands back inside `data`, passing `end > data.len()` and then panicking
+    /// on `&data[file_offset..end]` (slice start greater than end).
+    #[test]
+    fn test_build_patches_offset_overflow_is_rejected() {
+        let region = SmcRegion {
+            start: 0,
+            end: 4,
+            decryptor_addr: 0,
+            key: SmcKey::Constant(0x11),
+            algorithm: SmcAlgorithm::Xor,
+        };
+        let data = vec![0u8; 64];
+        let err = SmcPatcher::new().build_patches(&data, &region, usize::MAX - 1);
+        assert!(err.is_err(), "wrapped offset must be rejected, not sliced");
     }
 
     #[test]

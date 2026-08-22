@@ -243,7 +243,11 @@ impl ExtractedCode {
         while offset < bytes.len() {
             // Minimal heuristic: use 1-byte instructions for placeholders.
             let b = bytes[offset];
-            let (mnemonic, len, is_branch, is_call, is_ret) = classify_byte(b);
+            let (mnemonic, decoded_len, is_branch, is_call, is_ret) = classify_byte(b);
+            // `classify_byte` reports the architectural length, which may run
+            // past the end of the buffer for a truncated trailing instruction
+            // (a lone 0xE8 claims 5 bytes). Clamp before slicing.
+            let len = decoded_len.min(bytes.len() - offset);
             let insn = ExtractedInsn {
                 va: base_va + u64::try_from(offset).unwrap_or(u64::MAX),
                 bytes: bytes[offset..offset + len].to_vec(),
@@ -638,6 +642,20 @@ impl Default for SmcExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression: `classify_byte` reports the architectural instruction length,
+    /// so a truncated trailing instruction (a lone 0xE8 claims 5 bytes) made
+    /// `bytes[offset..offset + len]` slice past the end and panic.
+    #[test]
+    fn test_from_linear_sweep_truncated_trailing_instruction() {
+        let ec = ExtractedCode::from_linear_sweep(LayerId(0), 0x1000, &[0x90, 0xE8]);
+        let last = ec.instructions.last().expect("one instruction per byte");
+        assert_eq!(
+            last.bytes.len(),
+            1,
+            "truncated call must be clamped to the bytes that exist"
+        );
+    }
 
     #[test]
     fn test_layer_stack_push_and_get() {

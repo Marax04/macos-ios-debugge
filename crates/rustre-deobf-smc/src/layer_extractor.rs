@@ -255,7 +255,11 @@ impl LayerExtractor {
                 _ => continue,
             };
             let Ok(start) = usize::try_from(region.start) else { continue };
-            if start + size > current.len() {
+            // `start` is attacker-controlled and unbounded; `start + size` would
+            // WRAP under the release profile (overflow-checks = off) and let an
+            // out-of-range region pass this guard, panicking on the slice below.
+            let Some(end) = start.checked_add(size) else { continue };
+            if end > current.len() {
                 continue;
             }
 
@@ -345,7 +349,9 @@ impl LayerExtractor {
                     _ => continue,
                 };
                 let Ok(start) = usize::try_from(region.start) else { continue };
-                if start + size > current.len() {
+                // See `extract`: a raw `start + size` wraps in release builds.
+                let Some(end) = start.checked_add(size) else { continue };
+                if end > current.len() {
                     continue;
                 }
 

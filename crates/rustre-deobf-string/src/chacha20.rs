@@ -247,14 +247,22 @@ impl ChaCha20Detector {
         }
 
         // Count how many of the four constants appear in this data
-        let mut _found_constants = Vec::new();
+        // Offsets at which each of the four constants was observed, indexed by
+        // its position in `CHACHA20_CONSTANTS`. Each list is built in ascending
+        // offset order, which the window pass below relies on for binary search.
+        let mut found_constants: [Vec<u64>; 4] = [
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ];
         for i in 0..data.len() - 3 {
             let word = u32::from_le_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]);
             // Also check big-endian
             let word_be = u32::from_be_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]);
-            for &c in &CHACHA20_CONSTANTS {
+            for (ci, &c) in CHACHA20_CONSTANTS.iter().enumerate() {
                 if word == c || word_be == c {
-                    _found_constants.push((i as u64, c));
+                    found_constants[ci].push(i as u64);
                     results.push(ChaCha20Detection {
                         addr: i as u64,
                         evidence: ChaCha20Evidence::MagicConstant { constant_value: c },
@@ -275,16 +283,21 @@ impl ChaCha20Detector {
             if all_four_count >= ALL_FOUR_CAP {
                 break;
             }
-            let window = &data[start..start + win_size];
-            let present: Vec<bool> = CHACHA20_CONSTANTS
-                .iter()
-                .map(|&c| {
-                    window
-                        .windows(4)
-                        .any(|w| u32::from_le_bytes(w.try_into().unwrap_or([0; 4])) == c)
-                })
-                .collect();
-            if present.iter().all(|&p| p) {
+            // Decide from the occurrences already recorded above rather than
+            // re-scanning the window. This is what makes the pass see
+            // BIG-ENDIAN constants too: the recording loop accepts both
+            // endiannesses, while the previous re-scan tested only
+            // `from_le_bytes` and so never raised `AllFourConstants` for a
+            // big-endian image.
+            let win_start = start as u64;
+            let win_last_start = win_start + (win_size as u64) - 4;
+            let present = found_constants.iter().all(|offsets| {
+                // `offsets` is ascending: the first occurrence at or after
+                // `win_start` is the only candidate worth testing.
+                let idx = offsets.partition_point(|&o| o < win_start);
+                offsets.get(idx).is_some_and(|&o| o <= win_last_start)
+            });
+            if present {
                 results.push(ChaCha20Detection {
                     addr: start as u64,
                     evidence: ChaCha20Evidence::AllFourConstants,
@@ -606,6 +619,25 @@ impl MinBytes for [u8] {
 
 #[cfg(test)]
 mod tests {
+
+    /// Wiring regression: the recording loop accepts constants in BOTH
+    /// endiannesses, but the `AllFourConstants` window pass used to re-scan the
+    /// window with `from_le_bytes` only, so a big-endian image never reached
+    /// 90-confidence. It now decides from the recorded occurrences.
+    #[test]
+    fn test_scan_constants_all_four_big_endian() {
+        let mut data = Vec::new();
+        for c in CHACHA20_CONSTANTS {
+            data.extend_from_slice(&c.to_be_bytes());
+        }
+        let found = ChaCha20Detector::scan_constants(&data);
+        assert!(
+            found
+                .iter()
+                .any(|d| matches!(d.evidence, ChaCha20Evidence::AllFourConstants)),
+            "big-endian ChaCha20 constants must raise AllFourConstants"
+        );
+    }
     use super::*;
 
     // ── Constants ─────────────────────────────────────────────────────────────
