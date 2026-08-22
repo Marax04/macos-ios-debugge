@@ -5,16 +5,18 @@
 //! definition of the operation, not against whatever the code happened to do.
 
 use rustre_symb::{SymExpr, SymType, SymbolicState};
-use rustre_symb_engine::loop_summarizer::{Loop, LoopSummarizer, LoopSummarizerConfig};
+use rustre_symb_engine::loop_summarizer::{
+    ControlFlowGraph, Loop, LoopSummarizer, LoopSummarizerConfig,
+};
 use rustre_symb_engine::path_condition::{Constraint, ConstraintKind};
 use rustre_symb_engine::path_explorer::{ExplorationLimits, ExplorationStrategy, PathExplorer};
 use rustre_symb_engine::symbolic_memory::SymbolicMemory;
 
-fn bv(val: u64, width: u32) -> SymExpr {
+const fn bv(val: u64, width: u32) -> SymExpr {
     SymExpr::ConstBv { val, width }
 }
 
-fn cmp(kind: ConstraintKind, lhs: SymExpr, rhs: SymExpr) -> Constraint {
+const fn cmp(kind: ConstraintKind, lhs: SymExpr, rhs: SymExpr) -> Constraint {
     Constraint {
         kind,
         lhs,
@@ -196,7 +198,7 @@ fn interleaved_pop_never_starves_while_paths_are_live() {
     assert!(e.is_exhausted());
 }
 
-/// The invariant, over every push count: live_count() > 0 implies pop_next()
+/// The invariant, over every push count: `live_count()` > 0 implies `pop_next()`
 /// yields something, and draining returns exactly as many paths as were seeded.
 #[test]
 fn interleaved_drains_every_seeded_path() {
@@ -227,7 +229,7 @@ fn detect(recurrence: SymExpr, reg: &str) -> Loop {
     let mut state = SymbolicState::new();
     state.registers.insert(reg.to_string(), recurrence);
     let s = LoopSummarizer::new(
-        Default::default(),
+        ControlFlowGraph::default(),
         0,
         LoopSummarizerConfig::default(),
     );
