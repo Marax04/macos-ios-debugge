@@ -252,51 +252,9 @@ fn decode_ppc(bytes: &[u8], pc: u64) -> Result<(String, String, InstrFlags), Cor
     let opcd = instr >> 26;
     let rs = (instr >> 21) & 31;
     let ra = (instr >> 16) & 31;
-    let rc_bit = instr & 1;
-    let rc_sfx = if rc_bit != 0 { "." } else { "" };
 
     match opcd {
-        3 => Ok((
-            "TWI".to_string(),
-            format!("{},{},{}", rs, gpr(ra), simm16(instr)),
-            InstrFlags::NONE,
-        )),
-        7 => Ok((
-            "MULLI".to_string(),
-            format!("{},{},{}", gpr(rs), gpr(ra), simm16(instr)),
-            InstrFlags::NONE,
-        )),
-        8 => Ok((
-            "SUBFIC".to_string(),
-            format!("{},{},{}", gpr(rs), gpr(ra), simm16(instr)),
-            InstrFlags::NONE,
-        )),
-        10 => {
-            let crfd = (instr >> 23) & 7;
-            Ok((
-                "CMPLWI".to_string(),
-                format!("{},{},{}", crfield(crfd), gpr(ra), uimm16(instr)),
-                InstrFlags::NONE,
-            ))
-        }
-        11 => {
-            let crfd = (instr >> 23) & 7;
-            Ok((
-                "CMPWI".to_string(),
-                format!("{},{},{}", crfield(crfd), gpr(ra), simm16(instr)),
-                InstrFlags::NONE,
-            ))
-        }
-        12 => Ok((
-            "ADDIC".to_string(),
-            format!("{},{},{}", gpr(rs), gpr(ra), simm16(instr)),
-            InstrFlags::NONE,
-        )),
-        13 => Ok((
-            "ADDIC.".to_string(),
-            format!("{},{},{}", gpr(rs), gpr(ra), simm16(instr)),
-            InstrFlags::NONE,
-        )),
+        3..=13 => Ok(decode_ppc_imm_group(opcd, instr)),
         14 => {
             if ra == 0 {
                 Ok((
@@ -356,7 +314,83 @@ fn decode_ppc(bytes: &[u8], pc: u64) -> Result<(String, String, InstrFlags), Cor
             };
             Ok((format!("{name}{lk_sfx}"), format!("${target:08X}"), flags))
         }
-        17 => Ok(("SC".to_string(), String::new(), InstrFlags::NONE)),
+        17..=20 => Ok(decode_ppc_branch_group(opcd, instr, pc)),
+        _ => Ok(decode_ppc_rest(opcd, instr)),
+    }
+}
+
+/// Decode the PowerPC D-form immediate opcodes 3-13 (`TWI` through `ADDIC.`).
+///
+/// Split out of [`decode_ppc`] to keep that function readable; an opcode
+/// outside 3..=13 cannot reach here and decodes as `DC.W`.
+fn decode_ppc_imm_group(opcd: u32, instr: u32) -> (String, String, InstrFlags) {
+    let rs = (instr >> 21) & 31;
+    let ra = (instr >> 16) & 31;
+    match opcd {
+        3 => (
+            "TWI".to_string(),
+            format!("{},{},{}", rs, gpr(ra), simm16(instr)),
+            InstrFlags::NONE,
+        ),
+        7 => (
+            "MULLI".to_string(),
+            format!("{},{},{}", gpr(rs), gpr(ra), simm16(instr)),
+            InstrFlags::NONE,
+        ),
+        8 => (
+            "SUBFIC".to_string(),
+            format!("{},{},{}", gpr(rs), gpr(ra), simm16(instr)),
+            InstrFlags::NONE,
+        ),
+        10 => {
+            let crfd = (instr >> 23) & 7;
+            (
+                "CMPLWI".to_string(),
+                format!("{},{},{}", crfield(crfd), gpr(ra), uimm16(instr)),
+                InstrFlags::NONE,
+            )
+        }
+        11 => {
+            let crfd = (instr >> 23) & 7;
+            (
+                "CMPWI".to_string(),
+                format!("{},{},{}", crfield(crfd), gpr(ra), simm16(instr)),
+                InstrFlags::NONE,
+            )
+        }
+        12 => (
+            "ADDIC".to_string(),
+            format!("{},{},{}", gpr(rs), gpr(ra), simm16(instr)),
+            InstrFlags::NONE,
+        ),
+        13 => (
+            "ADDIC.".to_string(),
+            format!("{},{},{}", gpr(rs), gpr(ra), simm16(instr)),
+            InstrFlags::NONE,
+        ),
+        _ => (
+            "DC.W".to_string(),
+            format!("${instr:08X}"),
+            InstrFlags::NONE,
+        ),
+    }
+}
+
+/// Decode PowerPC primary opcodes 17-20 (`SC`, `B`, the opcode-19 branch
+/// group and `RLWIMI`).
+///
+/// Split out of [`decode_ppc`], which became too long to read as one unit;
+/// an opcode outside 17..=20 cannot reach here and returns `DC.W`.
+fn decode_ppc_branch_group(
+    opcd: u32,
+    instr: u32,
+    pc: u64,
+) -> (String, String, InstrFlags) {
+    let rs = (instr >> 21) & 31;
+    let ra = (instr >> 16) & 31;
+    let rc_sfx = if instr & 1 != 0 { "." } else { "" };
+    match opcd {
+        17 => ("SC".to_string(), String::new(), InstrFlags::NONE),
         18 => {
             let li_raw = i32::try_from(instr & 0x03FF_FFFC).unwrap_or(0);
             let li = if li_raw & 0x0200_0000 != 0 {
@@ -373,7 +407,7 @@ fn decode_ppc(bytes: &[u8], pc: u64) -> Result<(String, String, InstrFlags), Cor
                 (1, 0) => "BA",
                 _ => "BLA",
             };
-            Ok((
+            (
                 mn.to_string(),
                 format!("${target:08X}"),
                 if lk != 0 {
@@ -381,50 +415,54 @@ fn decode_ppc(bytes: &[u8], pc: u64) -> Result<(String, String, InstrFlags), Cor
                 } else {
                     InstrFlags::BRANCH
                 },
-            ))
+            )
         }
         19 => {
             let xo19 = (instr >> 1) & 0x3FF;
             match xo19 {
-                0 => Ok((
+                0 => (
                     "MCRF".to_string(),
                     format!("{},{}", crfield(rs >> 2), crfield(ra >> 2)),
                     InstrFlags::NONE,
-                )),
+                ),
                 16 => {
                     let lk = instr & 1;
-                    Ok((
+                    (
                         if lk != 0 { "BCLRL" } else { "BCLR" }.to_string(),
                         String::new(),
                         InstrFlags::RET,
-                    ))
+                    )
                 }
-                18 | 50 => Ok(("RFI".to_string(), String::new(), InstrFlags::RET)),
+                18 | 50 => ("RFI".to_string(), String::new(), InstrFlags::RET),
                 528 => {
                     let lk = instr & 1;
-                    Ok((
+                    (
                         if lk != 0 { "BCCTRL" } else { "BCCTR" }.to_string(),
                         String::new(),
                         InstrFlags::BRANCH.union(InstrFlags::INDIRECT),
-                    ))
+                    )
                 }
-                150 => Ok(("ISYNC".to_string(), String::new(), InstrFlags::BARRIER)),
-                _ => Ok((
+                150 => ("ISYNC".to_string(), String::new(), InstrFlags::BARRIER),
+                _ => (
                     "DC.W".to_string(),
                     format!("${instr:08X}"),
                     InstrFlags::NONE,
-                )),
+                ),
             }
         }
         20 => {
             let (sh, mb, me) = ((instr >> 11) & 31, (instr >> 6) & 31, (instr >> 1) & 31);
-            Ok((
+            (
                 format!("RLWIMI{rc_sfx}"),
                 format!("{},{},{},{},{}", gpr(ra), gpr(rs), sh, mb, me),
                 InstrFlags::NONE,
-            ))
+            )
         }
-        _ => Ok(decode_ppc_rest(opcd, instr)),
+        _ => (
+            "DC.W".to_string(),
+            format!("${instr:08X}"),
+            InstrFlags::NONE,
+        ),
     }
 }
 

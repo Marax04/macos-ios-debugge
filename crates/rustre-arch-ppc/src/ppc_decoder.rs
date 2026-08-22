@@ -126,6 +126,57 @@ impl PpcOperand {
 
 // â”€â”€ Decoded instruction struct â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+/// The single-bit modifier fields of a PowerPC instruction word.
+///
+/// Bit order follows the architecture's own naming order LK, AA, Rc, OE.
+/// Four adjacent `bool` fields are interchangeable to the compiler; one bit
+/// set with named constants is not.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PpcInstrBits(u8);
+
+impl PpcInstrBits {
+    /// LK — the Link bit.
+    pub const LINK: u8 = 1 << 0;
+    /// AA — the Absolute Address bit.
+    pub const ABSOLUTE: u8 = 1 << 1;
+    /// Rc — the Record bit.
+    pub const RECORD: u8 = 1 << 2;
+    /// OE — the Overflow Enable bit.
+    pub const OVERFLOW_ENABLE: u8 = 1 << 3;
+
+    /// Every bit this type tracks.
+    pub const MASK: u8 = Self::LINK | Self::ABSOLUTE | Self::RECORD | Self::OVERFLOW_ENABLE;
+
+    /// No bit set.
+    pub const NONE: Self = Self(0);
+
+    /// Keep only the bits this type tracks.
+    #[must_use]
+    pub const fn from_bits(v: u8) -> Self { Self(v & Self::MASK) }
+
+    /// The raw bit image.
+    #[must_use]
+    pub const fn bits(self) -> u8 { self.0 }
+
+    /// True when `bit` (one of the associated constants) is set.
+    #[must_use]
+    pub const fn has(self, bit: u8) -> bool { self.0 & bit != 0 }
+
+    /// A copy with `bit` set (`on`) or cleared.
+    #[must_use]
+    pub const fn with(self, bit: u8, on: bool) -> Self {
+        if on { Self(self.0 | (bit & Self::MASK)) } else { Self(self.0 & !bit) }
+    }
+
+    /// Set or clear `bit` in place.
+    pub const fn set(&mut self, bit: u8, on: bool) { *self = self.with(bit, on); }
+}
+
+impl core::ops::BitOr for PpcInstrBits {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
+}
+
 /// A fully decoded PowerPC instruction.
 #[derive(Debug, Clone)]
 pub struct PpcInstr {
@@ -143,21 +194,36 @@ pub struct PpcInstr {
     pub operands: Vec<PpcOperand>,
     /// Absolute branch target, if this is a branch instruction.
     pub branch_target: Option<u64>,
-    /// Whether the Link bit (LK) is set.
-    pub link: bool,
-    /// Whether the Absolute Address bit (AA) is set.
-    pub absolute: bool,
-    /// Whether the Record bit (Rc) is set.
-    pub record: bool,
-    /// Whether the Overflow Enable bit (OE) is set.
-    pub overflow_enable: bool,
+    /// The LK / AA / Rc / OE bits of the instruction word.
+    pub flags: PpcInstrBits,
 }
 
 impl PpcInstr {
+    /// Whether the `LINK` bit is set.
+    #[must_use]
+    pub const fn link(&self) -> bool { self.flags.has(PpcInstrBits::LINK) }
+    /// Set the `LINK` bit.
+    pub const fn set_link(&mut self, on: bool) { self.flags.set(PpcInstrBits::LINK, on); }
+    /// Whether the `ABSOLUTE` bit is set.
+    #[must_use]
+    pub const fn absolute(&self) -> bool { self.flags.has(PpcInstrBits::ABSOLUTE) }
+    /// Set the `ABSOLUTE` bit.
+    pub const fn set_absolute(&mut self, on: bool) { self.flags.set(PpcInstrBits::ABSOLUTE, on); }
+    /// Whether the `RECORD` bit is set.
+    #[must_use]
+    pub const fn record(&self) -> bool { self.flags.has(PpcInstrBits::RECORD) }
+    /// Set the `RECORD` bit.
+    pub const fn set_record(&mut self, on: bool) { self.flags.set(PpcInstrBits::RECORD, on); }
+    /// Whether the `OVERFLOW_ENABLE` bit is set.
+    #[must_use]
+    pub const fn overflow_enable(&self) -> bool { self.flags.has(PpcInstrBits::OVERFLOW_ENABLE) }
+    /// Set the `OVERFLOW_ENABLE` bit.
+    pub const fn set_overflow_enable(&mut self, on: bool) { self.flags.set(PpcInstrBits::OVERFLOW_ENABLE, on); }
+
     /// Return `true` if this instruction modifies the Link Register.
     #[must_use]
     pub const fn sets_lr(&self) -> bool {
-        self.link
+        self.link()
     }
 
     /// Return `true` if this instruction is a branch of any kind.
@@ -169,7 +235,7 @@ impl PpcInstr {
     /// Return `true` if this instruction is a call (branch-and-link).
     #[must_use]
     pub const fn is_call(&self) -> bool {
-        self.is_branch() && self.link
+        self.is_branch() && self.link()
     }
 
     /// Return `true` if this instruction is a return (BCLR, RFI).
@@ -336,11 +402,7 @@ impl PpcDecoder {
             mnemonic: mn.to_string(),
             operands: vec![PpcOperand::BranchOffset26(li)],
             branch_target: Some(target),
-            link: lk,
-            absolute: aa,
-            record: false,
-            overflow_enable: false,
-        }
+            flags: PpcInstrBits::NONE.with(PpcInstrBits::LINK, lk).with(PpcInstrBits::ABSOLUTE, aa), }
     }
 
     // â”€â”€ B-form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -364,11 +426,7 @@ impl PpcDecoder {
                 PpcOperand::BranchOffset16(bd),
             ],
             branch_target: Some(target),
-            link: lk,
-            absolute: aa,
-            record: false,
-            overflow_enable: false,
-        }
+            flags: PpcInstrBits::NONE.with(PpcInstrBits::LINK, lk).with(PpcInstrBits::ABSOLUTE, aa), }
     }
 
     const fn bc_mnemonic(bo: u8, bi: u8) -> &'static str {
@@ -396,11 +454,7 @@ impl PpcDecoder {
             mnemonic: "SC".to_string(),
             operands: vec![],
             branch_target: None,
-            link: false,
-            absolute: false,
-            record: false,
-            overflow_enable: false,
-        }
+            flags: PpcInstrBits::NONE, }
     }
 
     // â”€â”€ opcd 19 (XL-form branches / CR ops) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -430,11 +484,7 @@ impl PpcDecoder {
             mnemonic: mn.to_string(),
             operands: ops,
             branch_target: None,
-            link: lk,
-            absolute: false,
-            record: false,
-            overflow_enable: false,
-        }
+            flags: PpcInstrBits::NONE.with(PpcInstrBits::LINK, lk), }
     }
 
     // â”€â”€ D-form helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -454,11 +504,7 @@ impl PpcDecoder {
                 PpcOperand::Simm16(simm16_field(instr)),
             ],
             branch_target: None,
-            link: false,
-            absolute: false,
-            record: false,
-            overflow_enable: false,
-        }
+            flags: PpcInstrBits::NONE, }
     }
 
     fn decode_twi(instr: u32) -> PpcInstr {
@@ -476,8 +522,7 @@ impl PpcDecoder {
                 PpcOperand::Simm16(simm16_field(instr)),
             ],
             branch_target: None,
-            link: false, absolute: false, record: false, overflow_enable: false,
-        }
+            flags: PpcInstrBits::NONE, }
     }
 
     fn decode_mulli(instr: u32) -> PpcInstr { Self::d_form(7, "MULLI", instr) }
@@ -491,8 +536,7 @@ impl PpcDecoder {
             form: PpcForm::DForm, mnemonic: "CMPLWI".to_string(),
             operands: vec![PpcOperand::Cr(crfd), PpcOperand::Gpr(ra),
                            PpcOperand::Uimm16(uimm16_field(instr))],
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false,
-        }
+            branch_target: None, flags: PpcInstrBits::NONE, }
     }
 
     fn decode_cmpi(instr: u32) -> PpcInstr {
@@ -503,8 +547,7 @@ impl PpcDecoder {
             form: PpcForm::DForm, mnemonic: "CMPWI".to_string(),
             operands: vec![PpcOperand::Cr(crfd), PpcOperand::Gpr(ra),
                            PpcOperand::Simm16(simm16_field(instr))],
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false,
-        }
+            branch_target: None, flags: PpcInstrBits::NONE, }
     }
 
     fn decode_addic(instr: u32, dot: bool) -> PpcInstr {
@@ -522,8 +565,7 @@ impl PpcDecoder {
         PpcInstr {
             raw: instr, primary: PpcPrimary(14), extended: None,
             form: PpcForm::DForm, mnemonic: mn.to_string(), operands: ops,
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false,
-        }
+            branch_target: None, flags: PpcInstrBits::NONE, }
     }
 
     fn decode_addis(instr: u32) -> PpcInstr {
@@ -537,8 +579,7 @@ impl PpcDecoder {
         PpcInstr {
             raw: instr, primary: PpcPrimary(15), extended: None,
             form: PpcForm::DForm, mnemonic: mn.to_string(), operands: ops,
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false,
-        }
+            branch_target: None, flags: PpcInstrBits::NONE, }
     }
 
     fn decode_ori(instr: u32) -> PpcInstr {
@@ -546,7 +587,7 @@ impl PpcDecoder {
         PpcInstr { raw: instr, primary: PpcPrimary(24), extended: None, form: PpcForm::DForm,
             mnemonic: "ORI".to_string(),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs), PpcOperand::Uimm16(uimm16_field(instr))],
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::NONE}
     }
 
     fn decode_oris(instr: u32) -> PpcInstr {
@@ -554,7 +595,7 @@ impl PpcDecoder {
         PpcInstr { raw: instr, primary: PpcPrimary(25), extended: None, form: PpcForm::DForm,
             mnemonic: "ORIS".to_string(),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs), PpcOperand::Uimm16(uimm16_field(instr))],
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::NONE}
     }
 
     fn decode_xori(instr: u32) -> PpcInstr {
@@ -562,7 +603,7 @@ impl PpcDecoder {
         PpcInstr { raw: instr, primary: PpcPrimary(26), extended: None, form: PpcForm::DForm,
             mnemonic: "XORI".to_string(),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs), PpcOperand::Uimm16(uimm16_field(instr))],
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::NONE}
     }
 
     fn decode_xoris(instr: u32) -> PpcInstr {
@@ -570,7 +611,7 @@ impl PpcDecoder {
         PpcInstr { raw: instr, primary: PpcPrimary(27), extended: None, form: PpcForm::DForm,
             mnemonic: "XORIS".to_string(),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs), PpcOperand::Uimm16(uimm16_field(instr))],
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::NONE}
     }
 
     fn decode_andi_dot(instr: u32) -> PpcInstr {
@@ -578,7 +619,7 @@ impl PpcDecoder {
         PpcInstr { raw: instr, primary: PpcPrimary(28), extended: None, form: PpcForm::DForm,
             mnemonic: "ANDI.".to_string(),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs), PpcOperand::Uimm16(uimm16_field(instr))],
-            branch_target: None, link: false, absolute: false, record: true, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::from_bits(PpcInstrBits::RECORD)}
     }
 
     fn decode_andis_dot(instr: u32) -> PpcInstr {
@@ -586,7 +627,7 @@ impl PpcDecoder {
         PpcInstr { raw: instr, primary: PpcPrimary(29), extended: None, form: PpcForm::DForm,
             mnemonic: "ANDIS.".to_string(),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs), PpcOperand::Uimm16(uimm16_field(instr))],
-            branch_target: None, link: false, absolute: false, record: true, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::from_bits(PpcInstrBits::RECORD)}
     }
 
     // â”€â”€ M-form (rotate) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -600,7 +641,7 @@ impl PpcDecoder {
             mnemonic: format!("RLWIMI{sfx}"),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs),
                            PpcOperand::ShiftAmount(sh), PpcOperand::MaskPair(mb, me)],
-            branch_target: None, link: false, absolute: false, record: rc, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::NONE.with(PpcInstrBits::RECORD, rc)}
     }
 
     fn decode_rlwinm(instr: u32) -> PpcInstr {
@@ -612,7 +653,7 @@ impl PpcDecoder {
             mnemonic: format!("RLWINM{sfx}"),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs),
                            PpcOperand::ShiftAmount(sh), PpcOperand::MaskPair(mb, me)],
-            branch_target: None, link: false, absolute: false, record: rc, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::NONE.with(PpcInstrBits::RECORD, rc)}
     }
 
     fn decode_rlwnm(instr: u32) -> PpcInstr {
@@ -624,7 +665,7 @@ impl PpcDecoder {
             mnemonic: format!("RLWNM{sfx}"),
             operands: vec![PpcOperand::Gpr(ra), PpcOperand::Gpr(rs),
                            PpcOperand::Gpr(rb), PpcOperand::MaskPair(mb, me)],
-            branch_target: None, link: false, absolute: false, record: rc, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::NONE.with(PpcInstrBits::RECORD, rc)}
     }
 
     // â”€â”€ MD-form (64-bit rotate) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -644,7 +685,7 @@ impl PpcDecoder {
         PpcInstr { raw: instr, primary: PpcPrimary(30), extended: Some(PpcExtended(xo as u16)),
             form: PpcForm::MdForm, mnemonic: mn.to_string(),
             operands: vec![PpcOperand::Uimm16(u16::try_from(instr & 0xFFFF).unwrap_or(u16::MAX))],
-            branch_target: None, link: false, absolute: false, record: instr & 1 != 0, overflow_enable: false }
+            branch_target: None, flags: PpcInstrBits::NONE.with(PpcInstrBits::RECORD, instr & 1 != 0)}
     }
 
     // â”€â”€ opcd 31 (X / XO forms) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -715,9 +756,7 @@ impl PpcDecoder {
         PpcInstr {
             raw: instr, primary: PpcPrimary(31), extended: Some(xo),
             form: PpcForm::XForm, mnemonic: mn, operands: ops,
-            branch_target: None, link: false, absolute: false,
-            record: rc, overflow_enable: oe,
-        }
+            branch_target: None, flags: PpcInstrBits::NONE.with(PpcInstrBits::RECORD, rc).with(PpcInstrBits::OVERFLOW_ENABLE, oe), }
     }
 
     // â”€â”€ Memory instructions (opcd 32-55) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -746,8 +785,7 @@ impl PpcDecoder {
             raw: instr, primary: PpcPrimary(opcd), extended: None,
             form: PpcForm::DForm, mnemonic: mn.to_string(),
             operands: vec![first_op, PpcOperand::Simm16(simm), PpcOperand::Gpr(ra)],
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false,
-        }
+            branch_target: None, flags: PpcInstrBits::NONE, }
     }
 
     // â”€â”€ Float opcd 56-63 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -788,8 +826,7 @@ impl PpcDecoder {
             form: PpcForm::AForm,
             mnemonic: format!("{mn}{rc_sfx}"),
             operands: vec![PpcOperand::Fpr(rs), PpcOperand::Fpr(ra), PpcOperand::Fpr(rb)],
-            branch_target: None, link: false, absolute: false, record: rc, overflow_enable: false,
-        }
+            branch_target: None, flags: PpcInstrBits::NONE.with(PpcInstrBits::RECORD, rc), }
     }
 
     // â”€â”€ Fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -800,8 +837,7 @@ impl PpcDecoder {
             form: PpcForm::Unknown,
             mnemonic: "DC.W".to_string(),
             operands: vec![PpcOperand::Uimm16(u16::try_from(instr & 0xFFFF).unwrap_or(u16::MAX))],
-            branch_target: None, link: false, absolute: false, record: false, overflow_enable: false,
-        }
+            branch_target: None, flags: PpcInstrBits::NONE, }
     }
 }
 
@@ -864,21 +900,21 @@ mod tests {
         let i = dec().decode_word(0x1000, 0x4800_0008);
         assert_eq!(i.mnemonic, "B");
         assert_eq!(i.branch_target, Some(0x1008));
-        assert!(!i.link);
+        assert!(!i.link());
     }
 
     #[test]
     fn test_bl() {
         let i = dec().decode_word(0x1000, 0x4800_0001);
         assert_eq!(i.mnemonic, "BL");
-        assert!(i.link);
+        assert!(i.link());
     }
 
     #[test]
     fn test_beq() {
         let i = dec().decode_word(0x1000, 0x4182_0008);
         assert_eq!(i.mnemonic, "BEQ");
-        assert!(!i.link);
+        assert!(!i.link());
     }
 
     #[test]
@@ -987,7 +1023,7 @@ mod tests {
     fn bl_link_bit_set() {
         let i = dec().decode_word(0x1000, 0x4800_0005);
         assert_eq!(i.mnemonic, "BL");
-        assert!(i.link);
+        assert!(i.link());
     }
 
     #[test]
