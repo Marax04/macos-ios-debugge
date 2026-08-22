@@ -549,7 +549,7 @@ fn resource_editor_lifecycle() {
     re.remove_resource(ResourceType::Name("X".into()), 0);
     assert_eq!(re.pending_additions(), 7);
     assert_eq!(re.pending_removals(), 2);
-    assert_eq!(re.total_data_size(), 0 + 1 + 2 + 3 + 4 + 5 + 6);
+    assert_eq!(re.total_data_size(), 1 + 2 + 3 + 4 + 5 + 6);
     re.clear();
     assert_eq!(re.pending_additions(), 0);
     assert_eq!(re.pending_removals(), 0);

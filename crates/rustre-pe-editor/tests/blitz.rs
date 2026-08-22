@@ -123,7 +123,7 @@ fn patch_display_contains_offset_and_description() {
     let s = format!("{p}");
     assert!(s.contains("0x1234"));
     assert!(s.contains("hello"));
-    assert!(s.contains("4"));
+    assert!(s.contains('4'));
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn patchset_display_contains_name_and_count() {
     ps.add(Patch::simple(0, vec![1], String::new()));
     let s = format!("{ps}");
     assert!(s.contains("myset"));
-    assert!(s.contains("1"));
+    assert!(s.contains('1'));
 }
 
 // ---------------------------------------------------------------------------
@@ -679,7 +679,7 @@ fn export_editor_debug() {
     let mut ee = ExportEditor::new("d".into());
     ee.add_export("f".into(), 0, 0);
     let s = format!("{ee:?}");
-    assert!(s.contains("d"));
+    assert!(s.contains('d'));
     assert!(s.contains("edits: 1"));
 }
 
@@ -947,7 +947,7 @@ fn tree_node_total_fields_recursive() {
 fn tree_node_display() {
     let n = PeTreeNode::leaf("X", 0x40, 16);
     let s = format!("{n}");
-    assert!(s.contains("X"));
+    assert!(s.contains('X'));
     assert!(s.contains("0x40"));
     assert!(s.contains("16B"));
 }
@@ -1117,9 +1117,9 @@ fn edit_error_display_variants() {
         file_size: 3,
     };
     let s = format!("{e}");
-    assert!(s.contains("1") && s.contains("2") && s.contains("3"));
+    assert!(s.contains('1') && s.contains('2') && s.contains('3'));
     let e = EditError::InvalidAlignment("x".into());
-    assert!(format!("{e}").contains("x"));
+    assert!(format!("{e}").contains('x'));
     let e = EditError::CryptoError("c".into());
-    assert!(format!("{e}").contains("c"));
+    assert!(format!("{e}").contains('c'));
 }

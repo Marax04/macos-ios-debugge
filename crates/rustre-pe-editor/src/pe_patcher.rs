@@ -760,7 +760,7 @@ pub const fn rel32_displacement(from_va: u64, to_va: u64) -> i32 {
 pub(crate) mod tests {
     use super::*;
 
-    pub(crate) fn make_buf(len: usize) -> Vec<u8> {
+    pub fn make_buf(len: usize) -> Vec<u8> {
         (0..len as u8).collect()
     }
 

@@ -3775,7 +3775,7 @@ mod tests {
         let bytes = make_x64_pe();
         let orig_sections = PeFile::parse(&bytes).unwrap().sections.len();
         let mut ed = PeEditor::new(bytes).unwrap();
-        ed.add_section(".new", &vec![0xBBu8; 16], 0x4000_0040)
+        ed.add_section(".new", &[0xBBu8; 16], 0x4000_0040)
             .unwrap();
         let pe = ed.parse_current().unwrap();
         assert_eq!(pe.sections.len(), orig_sections + 1);
@@ -3786,7 +3786,7 @@ mod tests {
     fn test_add_section_x86() {
         let bytes = make_x86_pe();
         let mut ed = PeEditor::new(bytes).unwrap();
-        ed.add_section(".extra", &vec![0x00u8; 8], 0xC000_0040)
+        ed.add_section(".extra", &[0x00u8; 8], 0xC000_0040)
             .unwrap();
         let pe = ed.parse_current().unwrap();
         assert!(pe.section_by_name(".extra").is_some());
