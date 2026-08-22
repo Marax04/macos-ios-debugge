@@ -1182,8 +1182,8 @@ mod tests {
                     // Only meaningful when the INPUT itself had the temp
                     // defined before its first use; the optimizer cannot be
                     // blamed for garbage it was handed.
-                    if defined_before_first_read(&effects) == Some(true) {
-                        if let Some(still_defined) = defined_before_first_read(&optimised) {
+                    if defined_before_first_read(&effects) == Some(true)
+                        && let Some(still_defined) = defined_before_first_read(&optimised) {
                             prop_assert!(
                                 still_defined,
                                 "optimizer removed the defining write of `{}`, making its \
@@ -1191,7 +1191,6 @@ mod tests {
                                 reg, effects, optimised
                             );
                         }
-                    }
                 }
             }
 

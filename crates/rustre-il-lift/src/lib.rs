@@ -6950,15 +6950,15 @@ mod perarch_tests {
     /// `Arm64Lifter::tokenise` returned NO operands for EVERY instruction.
     ///
     /// It was `let ops: Vec<String> = Vec::new();` under a comment claiming
-    /// "rustre_core::Instruction doesn't expose an op_str" — a FALSE premise:
+    /// "`rustre_core::Instruction` doesn't expose an `op_str`" — a FALSE premise:
     /// `Instruction::operands` exists and every other lifter in this crate
-    /// reads it. So the whole AArch64 dispatch ran on an empty slice and every
+    /// reads it. So the whole `AArch64` dispatch ran on an empty slice and every
     /// handler's `ops.len() >= N` guard was permanently false, which made the
     /// flag-computing bodies dead code.
     ///
     /// The 2311 existing tests all passed with the tokeniser broken, because
     /// none of them lifted an instruction that had operands.
-    /// The AArch64 load/store family, exercised THROUGH `lift()`.
+    /// The `AArch64` load/store family, exercised THROUGH `lift()`.
     ///
     /// Every existing test for these handlers called them directly
     /// (`Arm64Lifter::lift_ldp(&ops)`) with a hand-built token slice — 17 tests
@@ -7023,7 +7023,7 @@ mod perarch_tests {
         );
     }
 
-    /// AArch64 `w` registers are 32-bit: the N flag comes from bit 31, not 63.
+    /// `AArch64` `w` registers are 32-bit: the N flag comes from bit 31, not 63.
     ///
     /// The flag code hard-coded 63, so `cmp w0, w1` read the sign bit of a
     /// 32-bit value from bit 63 — always 0. Only observable once the tokeniser

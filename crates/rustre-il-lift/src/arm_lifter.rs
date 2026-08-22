@@ -1842,12 +1842,11 @@ mod tests {
         let base_written = |instr: &Instruction| -> bool {
             Arm32Lifter::new()
                 .lift(instr)
-                .map(|l| {
+                .is_ok_and(|l| {
                     l.effects
                         .iter()
                         .any(|e| matches!(e, Effect::RegWrite { reg, .. } if reg == "r0"))
                 })
-                .unwrap_or(false)
         };
 
         let ops = || {

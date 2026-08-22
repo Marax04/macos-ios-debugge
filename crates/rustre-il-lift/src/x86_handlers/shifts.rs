@@ -1073,7 +1073,7 @@ mod tests {
         X86LiftCtx::new(0x1000, 32, ModeHint::default())
     }
 
-    /// Count how many RegWrite effects target the given register name.
+    /// Count how many `RegWrite` effects target the given register name.
     fn writes_to(effects: &[Effect], reg: &str) -> usize {
         effects
             .iter()
@@ -1799,7 +1799,7 @@ mod tests {
     // Edge-case / boundary tests
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// SHL count == operand_size - 1 (63 for 64-bit): only bit 0 of original
+    /// SHL count == `operand_size` - 1 (63 for 64-bit): only bit 0 of original
     /// remains, shifted into bit 63.
     #[test]
     fn shl_count_at_width_minus_one() {
@@ -1813,7 +1813,7 @@ mod tests {
         s.assert_reg("rax", 0x8000_0000_0000_0000u64);
     }
 
-    /// SHR count == operand_size - 1 (63): only MSB of original survives.
+    /// SHR count == `operand_size` - 1 (63): only MSB of original survives.
     #[test]
     fn shr_count_at_width_minus_one() {
         // SHR rax, 63  →  48 C1 E8 3F
@@ -1825,7 +1825,7 @@ mod tests {
         s.assert_reg("rax", 1u64);
     }
 
-    /// SAR count == operand_size - 1: all bits become the sign bit.
+    /// SAR count == `operand_size` - 1: all bits become the sign bit.
     #[test]
     fn sar_count_at_width_minus_one_sign_propagation() {
         // SAR rax, 63  →  48 C1 F8 3F
@@ -2165,7 +2165,7 @@ mod tests {
         assert!(!bad, "SHLX must not emit carry or rotate intrinsics");
     }
 
-    /// SHRX emits a result RegWrite (not a bare Undef).
+    /// SHRX emits a result `RegWrite` (not a bare Undef).
     #[test]
     fn shrx_emits_non_undef_result() {
         let i = decode64(&[0xc4, 0xe2, 0xb1, 0xf7, 0xc3]);
@@ -2239,7 +2239,7 @@ mod tests {
         assert!(matches!(x, IrExpr::Xor(_, _)));
     }
 
-    /// Verify `ite()` produces IfThenElse.
+    /// Verify `ite()` produces `IfThenElse`.
     #[test]
     fn ite_produces_ifthenelse() {
         let cond = IrExpr::Const(1);

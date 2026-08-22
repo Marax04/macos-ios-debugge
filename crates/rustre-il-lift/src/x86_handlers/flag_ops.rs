@@ -1723,7 +1723,7 @@ mod tests {
         X86LiftCtx::new(0x1000, 32, ModeHint::default())
     }
 
-    /// Count RegWrite effects targeting the given register name.
+    /// Count `RegWrite` effects targeting the given register name.
     fn writes_to(effects: &[Effect], reg: &str) -> usize {
         effects
             .iter()
@@ -1731,7 +1731,7 @@ mod tests {
             .count()
     }
 
-    /// Return the value written to `reg` if exactly one RegWrite exists.
+    /// Return the value written to `reg` if exactly one `RegWrite` exists.
     fn value_of<'a>(effects: &'a [Effect], reg: &str) -> Option<&'a IrExpr> {
         for e in effects {
             if let Effect::RegWrite { reg: r, value } = e && r == reg {

@@ -30,7 +30,7 @@ use rustre_il_lift::{ArchLifter, Effect, IrExpr, LiftLevel};
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn lifter64() -> X86LifterV2 {
+const fn lifter64() -> X86LifterV2 {
     X86LifterV2::new_64()
 }
 

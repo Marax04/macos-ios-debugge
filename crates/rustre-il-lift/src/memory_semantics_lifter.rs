@@ -586,7 +586,7 @@ mod tests {
         for bytes in [1u8, 2, 4, 8, 16, 32, 64] {
             let sz = MemSize::from_bytes(bytes);
             assert_eq!(sz.as_bytes(), bytes);
-            assert_eq!(sz.as_bits(), bytes as u16 * 8);
+            assert_eq!(sz.as_bits(), u16::from(bytes) * 8);
         }
     }
 

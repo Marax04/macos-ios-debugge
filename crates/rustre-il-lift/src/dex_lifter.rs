@@ -3793,7 +3793,7 @@ mod tests {
                 assert_eq!(lo_reg, "v0");
                 assert_eq!(hi_reg, "v1");
                 // -1 sign-extended â†’ 0xffffffffffffffff
-                let extended = (-1i16 as i64) as u64;
+                let extended = i64::from(-1i16) as u64;
                 assert_eq!(*lo_val, extended & 0xffff_ffff);
                 assert_eq!(*hi_val, extended >> 32);
             }

@@ -1162,7 +1162,7 @@ mod tests {
         effects.len()
     }
 
-    /// Evaluate the written value of the first RegWrite to `reg`.
+    /// Evaluate the written value of the first `RegWrite` to `reg`.
     fn _eval_reg_write(effects: &[Effect], reg: &str) -> Option<EvalValue> {
         let mut s = X86CpuState::new();
         exec_effects(effects, &mut s);
@@ -1951,7 +1951,7 @@ mod tests {
 
     // â"€â"€â"€ REX prefix: R8B destination â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-    /// SETE R8B —" `41 0F 94 C0` (REX.B = 1, ModRM mod=11 reg=0 rm=0 â†' R8B)
+    /// SETE R8B —" `41 0F 94 C0` (REX.B = 1, `ModRM` mod=11 reg=0 rm=0 â†' R8B)
     #[test]
     fn lift_sete_r8b_with_rex_prefix_emits_r8b_write() {
         let instr = decode64(&[0x41, 0x0F, 0x94, 0xC0]);

@@ -681,7 +681,7 @@ pub fn eval_flag_intrinsic_a(
     // implementing them, silently shadowing `_b`'s real shr/sar logic).
     let recognised = matches!(
         (flag, op),
-        ("cf", "add" | "sub" | "adc" | "sbb" | "shl") | ("of", "add" | "sub") | ("af", "add" | "sub")
+        ("cf", "add" | "sub" | "adc" | "sbb" | "shl") | ("of" | "af", "add" | "sub")
     );
     if !recognised {
         return None;
@@ -1557,7 +1557,7 @@ mod tests {
     /// AMD APM vol.3 (24594 rev 3.34) p.254, MUL: "If the upper half of the
     /// product is non-zero, the instruction sets the carry flag (CF) and
     /// overflow flag (OF) both to 1. Otherwise, it clears CF and OF to 0."
-    /// 0x10000 * 0x10000 = 0x1_0000_0000 — upper 32 bits are 1, so CF = 1.
+    /// 0x10000 * 0x10000 = `0x1_0000_0000` — upper 32 bits are 1, so CF = 1.
     #[test]
     fn cf_mul_set_when_upper_half_nonzero() {
         let s = X86CpuState::new();
@@ -1603,7 +1603,7 @@ mod tests {
 
     /// AMD APM vol.3 (24594 rev 3.34), ADOX: "This instruction sets the OF
     /// based on the unsigned addition and whether there is a carry out."
-    /// 0xFFFF_FFFF + 1 + 0 carries out of 32 bits, so OF = 1.
+    /// `0xFFFF_FFFF` + 1 + 0 carries out of 32 bits, so OF = 1.
     #[test]
     fn of_adox_is_unsigned_carry_out() {
         let s = X86CpuState::new();
@@ -1617,7 +1617,7 @@ mod tests {
         );
     }
 
-    /// ADOX carry-in participates: 0xFFFF_FFFE + 1 + OF(1) carries out.
+    /// ADOX carry-in participates: `0xFFFF_FFFE` + 1 + OF(1) carries out.
     #[test]
     fn of_adox_honours_carry_in() {
         let s = X86CpuState::new();

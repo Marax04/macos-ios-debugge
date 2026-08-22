@@ -690,15 +690,14 @@ impl MipsLifter {
         // The first attempt used a bare `signed` flag and broke `test_lift_lw`
         // on the 32-bit lifter — the same static-helper mistake as the shifts
         // one iteration earlier, which is why the width now comes from `self`.
-        if signed && u32::from(size) * 8 < self.bits {
-            if let Some(Effect::MemRead { dest, .. }) = out.first() {
+        if signed && u32::from(size) * 8 < self.bits
+            && let Some(Effect::MemRead { dest, .. }) = out.first() {
                 let reg = dest.clone();
                 out.push(Effect::Intrinsic {
                     name: format!("sext{}", u32::from(size) * 8),
                     args: vec![IrExpr::Reg(reg)],
                 });
             }
-        }
         out
     }
 
@@ -2156,7 +2155,7 @@ mod tests {
         );
     }
 
-    /// `MUL rd, rs, rt` is the MIPS32r2 three-operand multiply: a 32-BIT
+    /// `MUL rd, rs, rt` is the `MIPS32r2` three-operand multiply: a 32-BIT
     /// operation whose result is sign-extended into a 64-bit register on
     /// MIPS64. It emitted a bare `Mul`, so on the 64-bit lifter the full
     /// product survived and the truncation never happened.

@@ -1219,7 +1219,7 @@ mod tests {
     /// four used the sign bit of a subtraction, which misreads every case where
     /// the subtraction overflows.
     ///
-    /// The old comment asked for "an `UGT` IrExpr node" as the ideal fix.
+    /// The old comment asked for "an `UGT` `IrExpr` node" as the ideal fix.
     /// `CmpLtU` had since been added.
     #[test]
     fn ordering_jumps_are_eight_distinct_conditions() {

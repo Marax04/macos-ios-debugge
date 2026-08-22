@@ -1703,7 +1703,7 @@ mod tests {
         let i = decode32(&[0xff, 0xc0]); // INC eax (32-bit mode)
         let mut ctx = ctx32();
         super::lift_inc(&i, &mut ctx).unwrap();
-        let mut state = X86CpuState::with_gp_regs(&[("eax", u32::MAX as u64)]);
+        let mut state = X86CpuState::with_gp_regs(&[("eax", u64::from(u32::MAX))]);
         exec_effects(&ctx.effects, &mut state);
         state.assert_reg("zf", 1);
     }
@@ -1755,7 +1755,7 @@ mod tests {
 
     // ── NEG ──────────────────────────────────────────────────────────────────
 
-    /// NEG rax with rax=5 → rax = 0-5 = u64::MAX-4.
+    /// NEG rax with rax=5 → rax = 0-5 = `u64::MAX-4`.
     #[test]
     fn neg_rax_negates_value() {
         let i = decode(&[0x48, 0xf7, 0xd8]); // NEG rax

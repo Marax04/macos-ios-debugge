@@ -711,7 +711,7 @@ impl CilLifter {
             // â”€â”€ Arithmetic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             "add" => Some(Self::lift_add()),
             "add.ovf" | "add.ovf.un" => {
-                Some(Self::with_overflow_marker(Self::lift_add(), &mnem))
+                Some(Self::with_overflow_marker(Self::lift_add(), mnem))
             }
                 _ => None,
             }
@@ -723,11 +723,11 @@ impl CilLifter {
             match mnem {
             "sub" => Some(Self::lift_sub()),
             "sub.ovf" | "sub.ovf.un" => {
-                Some(Self::with_overflow_marker(Self::lift_sub(), &mnem))
+                Some(Self::with_overflow_marker(Self::lift_sub(), mnem))
             }
             "mul" => Some(Self::lift_mul()),
             "mul.ovf" | "mul.ovf.un" => {
-                Some(Self::with_overflow_marker(Self::lift_mul(), &mnem))
+                Some(Self::with_overflow_marker(Self::lift_mul(), mnem))
             }
             "div" => Some(Self::lift_div(false)),
             "div.un" => Some(Self::lift_div(true)),
