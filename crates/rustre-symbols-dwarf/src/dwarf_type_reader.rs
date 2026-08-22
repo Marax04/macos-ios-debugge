@@ -441,7 +441,11 @@ fn parse_abbrev_table(data: &[u8]) -> HashMap<u64, AbbrevEntry> {
         let Some(tag_u64) = read_uleb128(data, &mut off) else {
             break;
         };
-        let tag = tag_u64 as u16;
+        // Saturate, never narrow: `as u16` would drop the high bits and land
+        // tag 0x1_0011 on DW_TAG_compile_unit (0x11), so an out-of-range tag
+        // would be read as a real, different kind of DIE. u16::MAX is not a
+        // defined tag, so it is inert.
+        let tag = u16::try_from(tag_u64).unwrap_or(u16::MAX);
         let has_children = read_u8(data, &mut off).unwrap_or(0) != 0;
         let mut attrs = Vec::new();
         loop {
@@ -458,9 +462,11 @@ fn parse_abbrev_table(data: &[u8]) -> HashMap<u64, AbbrevEntry> {
                 // DW_FORM_implicit_const: extra SLEB128
                 read_sleb128(data, &mut off);
             }
+            // Same saturation as `tag` above: a truncated attribute or form
+            // code would impersonate a real one.
             attrs.push(AbbrevAttr {
-                name: attr_u64 as u16,
-                form: form_u64 as u16,
+                name: u16::try_from(attr_u64).unwrap_or(u16::MAX),
+                form: u16::try_from(form_u64).unwrap_or(u16::MAX),
             });
         }
         map.insert(code, AbbrevEntry { tag, has_children, attrs });
@@ -1033,5 +1039,43 @@ mod tests {
         let named = reg.named_types();
         assert_eq!(named[0].name.as_deref(), Some("aaa"));
         assert_eq!(named[2].name.as_deref(), Some("zzz"));
+    }
+}
+
+#[cfg(test)]
+mod abbrev_truncation_tests {
+    use super::*;
+
+    fn uleb(mut v: u64, out: &mut Vec<u8>) {
+        loop {
+            let mut b = (v & 0x7f) as u8;
+            v >>= 7;
+            if v != 0 { b |= 0x80; }
+            out.push(b);
+            if v == 0 { break; }
+        }
+    }
+
+    /// DWARF tag / attribute / form codes are ULEB128, so up to u64, but the
+    /// abbrev table stores them as u16. Narrowing with `as u16` DISCARDS the
+    /// high bits, so tag 0x1_0011 becomes 0x0011 = DW_TAG_compile_unit: a
+    /// hostile abbrev declares an out-of-range tag and the reader treats the
+    /// DIE as a completely different, REAL kind of entity.
+    #[test]
+    fn oversized_tag_does_not_alias_a_real_tag() {
+        let mut data = Vec::new();
+        uleb(1, &mut data); // abbrev code 1
+        uleb(0x1_0011, &mut data); // tag: truncates onto DW_TAG_compile_unit (0x11)
+        data.push(0); // has_children = no
+        uleb(0, &mut data); // attr terminator
+        uleb(0, &mut data);
+        uleb(0, &mut data); // end of table
+
+        let map = parse_abbrev_table(&data);
+        let entry = map.get(&1).expect("abbrev 1 must parse");
+        assert_ne!(
+            entry.tag, 0x11,
+            "tag 0x1_0011 was truncated onto real tag DW_TAG_compile_unit"
+        );
     }
 }
