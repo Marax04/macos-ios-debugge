@@ -600,7 +600,13 @@ impl Fat32Reader {
         // and let the Vec grow naturally beyond that if the actual data warrants
         // it (real reads are still bounded by `self.data.len()`).
         const MAX_PREALLOC: usize = 256 * 1024 * 1024;
-        let prealloc = (chain.len() * cluster_sz).min(MAX_PREALLOC);
+        // `read_bytes` can never yield more than the image itself, so the
+        // chain/cluster product (up to ~1 TB from header fields alone) must
+        // also be capped by the real buffer: otherwise a 1 KB crafted image
+        // still forces the full 256 MiB reservation.
+        let prealloc = (chain.len() * cluster_sz)
+            .min(MAX_PREALLOC)
+            .min(self.data.len());
         let mut buf = Vec::with_capacity(prealloc);
         for &c in &chain {
             let off = self.bpb.cluster_byte_offset(c);

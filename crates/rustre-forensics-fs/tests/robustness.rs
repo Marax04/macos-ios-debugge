@@ -8,7 +8,10 @@ use rustre_forensics_fs::lnk_parser::LnkFile;
 use rustre_forensics_fs::ntfs_analyzer::MftRecord;
 use rustre_forensics_fs::prefetch_analyzer::PrefetchFile;
 use rustre_forensics_fs::registry_hive_parser::{NkCell, RegHiveHeader, VkCell};
+use rustre_forensics_fs::artifacts::ArtifactScanner;
 use rustre_forensics_fs::carver::FileCarver;
+use rustre_forensics_fs::inode::parse_mft_record_minimal;
+use rustre_forensics_fs::ntfs_reader::{parse_mbr_partitions, NtfsVbr};
 use rustre_forensics_fs::ext4_reader::Ext4Parser;
 use rustre_forensics_fs::fat32_reader::{parse_directory, Fat32Bpb, Fat32Reader};
 use rustre_forensics_fs::fat_analyzer::FatAnalyzer;
@@ -109,7 +112,9 @@ fn fat32_sweep() {
     sweep(&d, |b| {
         let _ = Fat32Bpb::parse(b);
         let _ = parse_directory(b);
-        let _ = Fat32Reader::new(b.to_vec());
+        if let Ok(mut r) = Fat32Reader::new(b.to_vec()) {
+            let _ = r.list_all();
+        }
         let _ = FatAnalyzer::new(b);
     });
 }
@@ -142,5 +147,39 @@ fn carver_sweep() {
     sweep(&d, |b| {
         let c = FileCarver::new();
         let _ = c.carve(b);
+    });
+}
+
+#[test]
+fn ntfs_reader_sweep() {
+    let mut d = vec![0u8; 4096];
+    d[3..11].copy_from_slice(b"NTFS    ");
+    d[11..13].copy_from_slice(&512u16.to_le_bytes());
+    d[13] = 8;
+    d[510] = 0x55;
+    d[511] = 0xAA;
+    sweep(&d, |b| {
+        let _ = NtfsVbr::parse(b);
+        let _ = parse_mbr_partitions(b);
+    });
+}
+
+#[test]
+fn inode_sweep() {
+    sweep(&mft_seed(), |b| {
+        let _ = parse_mft_record_minimal(b, 0);
+    });
+}
+
+#[test]
+fn artifacts_sweep() {
+    let mut d = vec![0u8; 2048];
+    d[0..4].copy_from_slice(&26u32.to_le_bytes());
+    d[4..8].copy_from_slice(b"SCCA");
+    sweep(&d, |b| {
+        let mut s = ArtifactScanner::new();
+        s.scan_path("C:/Windows/Prefetch/X.pf", b);
+        s.scan_path("C:/x.lnk", b);
+        s.scan_path("C:/SYSTEM", b);
     });
 }
