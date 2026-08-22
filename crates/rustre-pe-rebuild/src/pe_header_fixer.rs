@@ -33,6 +33,34 @@ pub const DD_DELAYIMPORT:  usize = 13;
 pub const DD_CLRRUNTIME:   usize = 14;
 pub const DD_RESERVED:     usize = 15;
 
+/// Conventional name of a data directory index.
+///
+/// The `DD_*` indices above were declared and never read, so a change
+/// report could only say `DataDirectory[6]` and the reader had to know the
+/// table by heart. This routes every index through its documented name.
+#[must_use]
+pub const fn data_dir_name(index: usize) -> &'static str {
+    match index {
+        DD_EXPORT       => "Export",
+        DD_IMPORT       => "Import",
+        DD_RESOURCE     => "Resource",
+        DD_EXCEPTION    => "Exception",
+        DD_SECURITY     => "Security",
+        DD_BASERELOC    => "BaseReloc",
+        DD_DEBUG        => "Debug",
+        DD_ARCHITECTURE => "Architecture",
+        DD_GLOBALPTR    => "GlobalPtr",
+        DD_TLS          => "TLS",
+        DD_LOADCONFIG   => "LoadConfig",
+        DD_BOUNDIMPORT  => "BoundImport",
+        DD_IAT          => "IAT",
+        DD_DELAYIMPORT  => "DelayImport",
+        DD_CLRRUNTIME   => "CLRRuntime",
+        DD_RESERVED     => "Reserved",
+        _               => "OutOfRange",
+    }
+}
+
 // ─── Data directory entry ─────────────────────────────────────────────────────
 
 /// One `IMAGE_DATA_DIRECTORY` entry.
@@ -99,7 +127,9 @@ impl fmt::Display for HeaderField {
             Self::TimeDateStamp         => write!(f, "TimeDateStamp"),
             Self::ImageBase             => write!(f, "ImageBase"),
             Self::NumberOfSections      => write!(f, "NumberOfSections"),
-            Self::DataDirectory(i)      => write!(f, "DataDirectory[{i}]"),
+            Self::DataDirectory(i)      => {
+                write!(f, "DataDirectory[{i}] ({})", data_dir_name(*i))
+            }
             Self::EntryPoint            => write!(f, "AddressOfEntryPoint"),
             Self::SizeOfCode            => write!(f, "SizeOfCode"),
             Self::SizeOfInitializedData => write!(f, "SizeOfInitializedData"),
@@ -640,7 +670,25 @@ mod tests {
     #[test]
     fn test_header_field_display() {
         assert_eq!(format!("{}", HeaderField::CheckSum), "CheckSum");
-        assert_eq!(format!("{}", HeaderField::DataDirectory(5)), "DataDirectory[5]");
+        assert_eq!(
+            format!("{}", HeaderField::DataDirectory(5)),
+            "DataDirectory[5] (BaseReloc)"
+        );
+        // every declared index resolves to its documented name
+        assert_eq!(data_dir_name(DD_EXPORT), "Export");
+        assert_eq!(data_dir_name(DD_EXCEPTION), "Exception");
+        assert_eq!(data_dir_name(DD_ARCHITECTURE), "Architecture");
+        assert_eq!(data_dir_name(DD_GLOBALPTR), "GlobalPtr");
+        assert_eq!(data_dir_name(DD_TLS), "TLS");
+        assert_eq!(data_dir_name(DD_LOADCONFIG), "LoadConfig");
+        assert_eq!(data_dir_name(DD_BOUNDIMPORT), "BoundImport");
+        assert_eq!(data_dir_name(DD_DELAYIMPORT), "DelayImport");
+        assert_eq!(data_dir_name(DD_CLRRUNTIME), "CLRRuntime");
+        assert_eq!(data_dir_name(DD_RESERVED), "Reserved");
+        assert_eq!(data_dir_name(DD_SECURITY), "Security");
+        assert_eq!(data_dir_name(DD_RESOURCE), "Resource");
+        assert_eq!(data_dir_name(DD_DEBUG), "Debug");
+        assert_eq!(data_dir_name(NUM_DATA_DIRECTORIES), "OutOfRange");
         assert_eq!(format!("{}", HeaderField::ImageBase), "ImageBase");
     }
 

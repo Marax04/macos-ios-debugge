@@ -179,6 +179,9 @@ pub const X64_PROLOGUES: &[(&[u8], &str)] = &[
     (&[0x4C, 0x8B, 0xDC],             "MOV R11,RSP"),
 ];
 
+/// COFF machine value for ARM64 (`IMAGE_FILE_MACHINE_ARM64`).
+pub const MACHINE_ARM64: u16 = 0xAA64;
+
 /// ARM64 function prologue patterns.
 pub const ARM64_PROLOGUES: &[(&[u8], &str)] = &[
     (&[0xFD, 0x7B, 0xBE, 0xA9],       "STP X29,X30,[SP,#-0x20]!"),
@@ -249,6 +252,8 @@ pub struct OepFinder {
     sections: Vec<SectionInfo>,
     /// Is 64-bit PE?
     is_x64: bool,
+    /// Is the COFF machine ARM64?
+    is_arm64: bool,
     /// RVA of the `AddressOfEntryPoint` field (current EP, may be packer EP).
     current_ep_rva: u32,
 }
@@ -264,11 +269,13 @@ impl OepFinder {
     ///
     /// Returns [`RebuildError`] if the PE headers cannot be parsed.
     pub fn from_bytes(data: Vec<u8>, image_base: u64) -> Result<Self, RebuildError> {
-        let (sections, is_x64, current_ep_rva) = Self::parse_headers(&data)?;
-        Ok(Self { data, image_base, sections, is_x64, current_ep_rva })
+        let (sections, is_x64, is_arm64, current_ep_rva) = Self::parse_headers(&data)?;
+        Ok(Self { data, image_base, sections, is_x64, is_arm64, current_ep_rva })
     }
 
-    fn parse_headers(data: &[u8]) -> Result<(Vec<SectionInfo>, bool, u32), RebuildError> {
+    fn parse_headers(
+        data: &[u8],
+    ) -> Result<(Vec<SectionInfo>, bool, bool, u32), RebuildError> {
         if data.len() < 0x40 {
             return Err(RebuildError::Other("PE too small".into()));
         }
@@ -283,6 +290,11 @@ impl OepFinder {
         if opt + 2 > data.len() { return Err(RebuildError::Other("no opt header".into())); }
         let magic   = u16::from_le_bytes(data[opt..opt+2].try_into().unwrap());
         let is_x64  = magic == 0x020B;
+        // The COFF machine field was never read, so an ARM64 image was
+        // scanned with the x64 prologue table and ARM64_PROLOGUES -- along
+        // with the OepStrategy::Arm64Prologue variant -- could never fire.
+        let machine = u16::from_le_bytes(data[coff..coff+2].try_into().unwrap());
+        let is_arm64 = machine == MACHINE_ARM64;
         // AddressOfEntryPoint is at opt+16 for both PE32 and PE32+.
         let ep_rva  = if opt + 20 <= data.len() {
             u32::from_le_bytes(data[opt+16..opt+20].try_into().unwrap())
@@ -302,7 +314,7 @@ impl OepFinder {
                 name, rva: virt_addr, virtual_size: virt_sz, characteristics: chars,
             });
         }
-        Ok((sections, is_x64, ep_rva))
+        Ok((sections, is_x64, is_arm64, ep_rva))
     }
 
     // -----------------------------------------------------------------------
@@ -345,7 +357,9 @@ impl OepFinder {
         let (patterns, strategy_ctor): (
             &[(&[u8], &str)],
             StrategyFn,
-        ) = if self.is_x64 {
+        ) = if self.is_arm64 {
+            (ARM64_PROLOGUES, Box::new(|_| OepStrategy::Arm64Prologue))
+        } else if self.is_x64 {
             (X64_PROLOGUES, Box::new(|_| OepStrategy::X64Prologue))
         } else {
             (X86_PROLOGUES, Box::new(|_| OepStrategy::X86ClassicPrologue))
@@ -673,4 +687,34 @@ mod tests {
         assert!(OepConfidence::High > OepConfidence::Medium);
         assert!(OepConfidence::Medium > OepConfidence::Low);
     }
+    #[test]
+    fn arm64_images_use_the_arm64_prologue_table() {
+        // Build a minimal PE32+ whose COFF machine says ARM64 and whose
+        // single executable section starts with an STP X29,X30 prologue.
+        let mut d = vec![0u8; 0x600];
+        d[0] = b'M'; d[1] = b'Z';
+        d[0x3C..0x40].copy_from_slice(&0x80u32.to_le_bytes());
+        let coff = 0x80 + 4;
+        d[0x80..0x84].copy_from_slice(b"PE\0\0");
+        d[coff..coff + 2].copy_from_slice(&MACHINE_ARM64.to_le_bytes());
+        d[coff + 2..coff + 4].copy_from_slice(&1u16.to_le_bytes());   // 1 section
+        d[coff + 16..coff + 18].copy_from_slice(&240u16.to_le_bytes()); // opt size
+        let opt = coff + 20;
+        d[opt..opt + 2].copy_from_slice(&0x020Bu16.to_le_bytes());
+        d[opt + 16..opt + 20].copy_from_slice(&0x400u32.to_le_bytes()); // EP rva
+        let sec = opt + 240;
+        d[sec..sec + 5].copy_from_slice(b".text");
+        d[sec + 8..sec + 12].copy_from_slice(&0x40u32.to_le_bytes());   // virt size
+        d[sec + 12..sec + 16].copy_from_slice(&0x400u32.to_le_bytes()); // rva
+        d[sec + 36..sec + 40].copy_from_slice(&0x6000_0020u32.to_le_bytes());
+        d[0x400..0x404].copy_from_slice(&[0xFD, 0x7B, 0xBE, 0xA9]);
+
+        let f = OepFinder::from_bytes(d, 0x1_4000_0000).expect("headers parse");
+        let cands = f.scan_prologue_patterns();
+        assert!(
+            cands.iter().any(|c| c.strategy == OepStrategy::Arm64Prologue),
+            "ARM64_PROLOGUES never fired: {cands:?}"
+        );
+    }
+
 }
