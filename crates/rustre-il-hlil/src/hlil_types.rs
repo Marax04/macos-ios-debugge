@@ -81,13 +81,13 @@ impl HlilVarType {
 
     /// Returns `true` if the underlying type is a pointer.
     #[must_use]
-    pub fn is_pointer(&self) -> bool {
+    pub const fn is_pointer(&self) -> bool {
         self.ty.is_pointer()
     }
 
     /// Returns `true` if the underlying type is an integer.
     #[must_use]
-    pub fn is_integer(&self) -> bool {
+    pub const fn is_integer(&self) -> bool {
         self.ty.is_integer()
     }
 
@@ -137,7 +137,7 @@ pub struct HlilPointerType {
 impl HlilPointerType {
     /// Create a simple single-element pointer.
     #[must_use]
-    pub fn simple(pointee: HlilType, ptr_bits: u32) -> Self {
+    pub const fn simple(pointee: HlilType, ptr_bits: u32) -> Self {
         Self {
             pointee: HlilVarType::new(pointee),
             ptr_bits,
@@ -149,7 +149,7 @@ impl HlilPointerType {
 
     /// Create a fixed-size array pointer.
     #[must_use]
-    pub fn array_ptr(pointee: HlilType, ptr_bits: u32, count: u64) -> Self {
+    pub const fn array_ptr(pointee: HlilType, ptr_bits: u32, count: u64) -> Self {
         Self {
             pointee: HlilVarType::new(pointee),
             ptr_bits,
@@ -205,7 +205,7 @@ pub struct HlilArrayType {
 
 impl HlilArrayType {
     #[must_use]
-    pub fn new(element: HlilType, count: Option<u64>) -> Self {
+    pub const fn new(element: HlilType, count: Option<u64>) -> Self {
         Self {
             element: HlilVarType::new(element),
             count,

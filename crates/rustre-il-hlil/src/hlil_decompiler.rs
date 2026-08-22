@@ -777,7 +777,7 @@ impl DecompilerPipeline {
 
     /// Create a pipeline with a custom configuration.
     #[must_use]
-    pub fn with_config(config: DecompilerConfig) -> Self {
+    pub const fn with_config(config: DecompilerConfig) -> Self {
         Self {
             decompiler: HlilDecompiler::with_config(config),
             outputs: Vec::new(),
@@ -830,7 +830,7 @@ impl Default for DecompilerPipeline {
 impl TypePrinter {
     /// Create a [`TypePrinter`] from a [`DecompilerConfig`].
     #[must_use]
-    pub fn from_config(config: &DecompilerConfig) -> Self {
+    pub const fn from_config(config: &DecompilerConfig) -> Self {
         if config.stdint_names {
             Self::stdint()
         } else {
