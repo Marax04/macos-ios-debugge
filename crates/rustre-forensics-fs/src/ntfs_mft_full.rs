@@ -574,7 +574,10 @@ impl NtfsMftFull {
                 break;
             }
             let attr_len = read_u32(data, pos + 4) as usize;
-            if attr_len == 0 || pos + attr_len > data.len() {
+            // The fixed attribute header is 16 bytes; accepting any non-zero
+            // `attr_len` let a crafted record slice a shorter buffer that the
+            // fields below then index at offsets 8..16.
+            if attr_len < 16 || pos + attr_len > data.len() {
                 break;
             }
             let attr_data = &data[pos..pos + attr_len];

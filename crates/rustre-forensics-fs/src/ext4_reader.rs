@@ -412,9 +412,13 @@ impl<'a> Ext4Parser<'a> {
     #[must_use] 
     pub fn parse_inode(&self, inode_num: u32) -> Option<Ext4Inode> {
         if inode_num == 0 { return None; }
+        // `inodes_per_group` comes straight from the superblock; a zeroed or
+        // corrupted field would divide by zero below.
+        let per_group = u64::from(self.sb.inodes_per_group);
+        if per_group == 0 { return None; }
         let idx = u64::from(inode_num - 1);
-        let group = idx / u64::from(self.sb.inodes_per_group);
-        let local_idx = idx % u64::from(self.sb.inodes_per_group);
+        let group = idx / per_group;
+        let local_idx = idx % per_group;
         let desc = self.parse_block_group_desc(group)?;
         let inode_table_block = desc.inode_table();
         let inode_size = u64::from(self.sb.inode_size);
