@@ -556,8 +556,8 @@ impl TimelineBuilder {
                 .unwrap_or_default();
             let deleted = if ts.is_deleted { "1" } else { "0" };
             let desc_esc = ev.description.replace('"', "\"\"");
-            let _ = write!(out, 
-                "{},{},{},{},{},{},\"{}\"\r\n",
+            let _ = writeln!(out, 
+                "{},{},{},{},{},{},\"{}\"\r",
                 ts.iso8601(),
                 ts.source,
                 ev.kind,
@@ -582,8 +582,8 @@ impl TimelineBuilder {
                 | EventKind::AnomalyPrecisionLoss => {
                     let ts = &ev.timestamp;
                     let desc_esc = ev.description.replace('"', "\"\"");
-                    let _ = write!(out, 
-                        "{},{},{},\"{}\"\r\n",
+                    let _ = writeln!(out, 
+                        "{},{},{},\"{}\"\r",
                         ts.iso8601(),
                         ev.kind,
                         csv_escape(&ts.file_path),

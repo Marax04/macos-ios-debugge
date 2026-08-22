@@ -37,9 +37,10 @@ pub mod system_records {
 
     /// True if `record_number` is one of the twelve reserved NTFS metafiles.
     ///
-    /// Records 0..=11 are the fixed system files ($MFT, $MFTMirr, $LogFile,
-    /// $Volume, $AttrDef, `.`, $Bitmap, $Boot, $BadClus, $Secure, $UpCase,
-    /// $Extend); everything above is user data.
+    /// Records 0..=11 are the fixed system files (`$MFT`, `$MFTMirr`,
+    /// `$LogFile`, `$Volume`, `$AttrDef`, `.`, `$Bitmap`, `$Boot`,
+    /// `$BadClus`, `$Secure`, `$UpCase`, `$Extend`); everything above is
+    /// user data.
     #[must_use]
     pub const fn is_reserved(record_number: u64) -> bool {
         record_number <= LAST_RESERVED

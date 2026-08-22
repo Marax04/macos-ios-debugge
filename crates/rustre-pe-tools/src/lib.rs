@@ -1213,7 +1213,7 @@ impl PeFile {
 
     /// Returns `true` if the image has a load-configuration directory.
     ///
-    /// Its presence is what carries the SafeSEH table and the Control Flow
+    /// Its presence is what carries the `SafeSEH` table and the Control Flow
     /// Guard metadata, so it is a prerequisite for reading either.
     #[must_use]
     pub fn has_load_config(&self) -> bool {

@@ -245,16 +245,16 @@ impl CarveStats {
     #[must_use] 
     pub fn report(&self) -> String {
         let mut s = String::new();
-        let _ = write!(s, "Total files carved: {}\n", self.total);
-        let _ = write!(s, "  High confidence: {}\n", self.high_confidence);
-        let _ = write!(s, "  Medium confidence: {}\n", self.medium_confidence);
-        let _ = write!(s, "  Low confidence: {}\n", self.low_confidence);
-        let _ = write!(s, "Total bytes: {} MB\n", self.total_bytes / 1_048_576);
+        let _ = writeln!(s, "Total files carved: {}", self.total);
+        let _ = writeln!(s, "  High confidence: {}", self.high_confidence);
+        let _ = writeln!(s, "  Medium confidence: {}", self.medium_confidence);
+        let _ = writeln!(s, "  Low confidence: {}", self.low_confidence);
+        let _ = writeln!(s, "Total bytes: {} MB", self.total_bytes / 1_048_576);
         s.push_str("By type:\n");
         let mut types: Vec<_> = self.by_type.iter().collect();
         types.sort_by(|a, b| b.1.cmp(a.1));
         for (t, c) in types {
-            let _ = write!(s, "  {t}: {c}\n");
+            let _ = writeln!(s, "  {t}: {c}");
         }
         s
     }

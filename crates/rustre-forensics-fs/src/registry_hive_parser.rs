@@ -375,7 +375,7 @@ pub struct SkCell {
     pub next_offset: u32,
     /// Number of keys pointing at this descriptor.
     pub ref_count: u32,
-    /// Raw self-relative SECURITY_DESCRIPTOR bytes.
+    /// Raw self-relative `SECURITY_DESCRIPTOR` bytes.
     pub descriptor: Vec<u8>,
 }
 
@@ -387,7 +387,9 @@ impl SkCell {
     /// not carry the "sk" signature.
     pub fn parse(data: &[u8], abs_offset: usize) -> Result<Self, HiveError> {
         if abs_offset + 20 > data.len() {
-            return Err(HiveError::OffsetOutOfBounds { offset: abs_offset as u32 });
+            return Err(HiveError::OffsetOutOfBounds {
+                offset: u32::try_from(abs_offset).unwrap_or(u32::MAX),
+            });
         }
         let sig = [data[abs_offset], data[abs_offset + 1]];
         if sig != SK_SIG {
@@ -403,7 +405,7 @@ impl SkCell {
         let end = start.saturating_add(desc_size).min(data.len());
         let descriptor = if start <= end { data[start..end].to_vec() } else { Vec::new() };
         Ok(Self {
-            cell_offset: abs_offset as u32,
+            cell_offset: u32::try_from(abs_offset).unwrap_or(u32::MAX),
             prev_offset,
             next_offset,
             ref_count,
@@ -897,7 +899,7 @@ mod tests {
         d[12..16].copy_from_slice(&7u32.to_le_bytes());    // ref count
         d[16..20].copy_from_slice(&8u32.to_le_bytes());    // descriptor size
         for (i, b) in d[20..28].iter_mut().enumerate() {
-            *b = i as u8;
+            *b = u8::try_from(i).unwrap_or(0);
         }
         let sk = SkCell::parse(&d, 0).expect("sk parses");
         assert_eq!(sk.ref_count, 7);

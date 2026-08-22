@@ -302,15 +302,15 @@ impl PrefetchFile {
     #[must_use] 
     pub fn summary(&self) -> String {
         let mut s = String::new();
-        let _ = write!(s, "Executable : {}\n", self.header.exe_name);
-        let _ = write!(s, "Hash       : {:#010x}\n", self.header.prefetch_hash);
-        let _ = write!(s, "Version    : {}\n", self.header.version);
-        let _ = write!(s, "Run count  : {}\n", self.run_count);
-        let _ = write!(s, "Last run   : {}\n", self.last_run_time);
-        let _ = write!(s, "Modules    : {}\n", self.file_metrics.len());
-        let _ = write!(s, "Volumes    : {}\n", self.volumes.len());
+        let _ = writeln!(s, "Executable : {}", self.header.exe_name);
+        let _ = writeln!(s, "Hash       : {:#010x}", self.header.prefetch_hash);
+        let _ = writeln!(s, "Version    : {}", self.header.version);
+        let _ = writeln!(s, "Run count  : {}", self.run_count);
+        let _ = writeln!(s, "Last run   : {}", self.last_run_time);
+        let _ = writeln!(s, "Modules    : {}", self.file_metrics.len());
+        let _ = writeln!(s, "Volumes    : {}", self.volumes.len());
         for v in &self.volumes {
-            let _ = write!(s, "  Volume: {} serial={:#010x}\n", v.device_path, v.serial_number);
+            let _ = writeln!(s, "  Volume: {} serial={:#010x}", v.device_path, v.serial_number);
         }
         s
     }

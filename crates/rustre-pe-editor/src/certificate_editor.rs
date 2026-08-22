@@ -840,7 +840,7 @@ mod tests {
         blob.extend_from_slice(OID_COUNTER_SIGNATURE);
         blob.push(0x17); // UTCTime
         let ts = b"230115120000Z";
-        blob.push(ts.len() as u8);
+        blob.push(u8::try_from(ts.len()).expect("fixture timestamp fits in a byte"));
         blob.extend_from_slice(ts);
 
         assert!(has_countersignature(&blob));

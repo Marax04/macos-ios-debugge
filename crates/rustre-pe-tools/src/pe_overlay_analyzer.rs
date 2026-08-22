@@ -701,7 +701,7 @@ mod tests {
         buf[sect_off..sect_off + 8].copy_from_slice(b".text\0\0\0");
         buf[sect_off + 8..sect_off + 12].copy_from_slice(&(section_data.len() as u32).to_le_bytes()); // virt size
         buf[sect_off + 12..sect_off + 16].copy_from_slice(&0x1000u32.to_le_bytes()); // VA
-        let raw_size = (section_data.len().div_ceil(512) * 512) as u32;
+        let raw_size = u32::try_from(section_data.len().div_ceil(512) * 512).unwrap_or(u32::MAX);
         buf[sect_off + 16..sect_off + 20].copy_from_slice(&raw_size.to_le_bytes()); // raw size
         buf[sect_off + 20..sect_off + 24].copy_from_slice(&0x200u32.to_le_bytes()); // raw offset
         buf[sect_off + 36..sect_off + 40].copy_from_slice(&0x60000020u32.to_le_bytes()); // chars

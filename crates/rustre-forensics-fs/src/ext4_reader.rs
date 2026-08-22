@@ -589,15 +589,15 @@ impl Ext4FsStats {
     #[must_use] 
     pub fn report(&self) -> String {
         let mut s = String::new();
-        let _ = write!(s, "Volume: {}\n", self.volume_name);
-        let _ = write!(s, "Block size: {} bytes\n", self.block_size);
-        let _ = write!(s, "Total blocks: {} ({} MB)\n", self.total_blocks, self.total_space / 1_048_576);
-        let _ = write!(s, "Used: {} MB ({:.1}%)\n", self.used_space / 1_048_576, self.usage_percent());
-        let _ = write!(s, "Free: {} MB\n", self.free_space / 1_048_576);
-        let _ = write!(s, "Inodes: {}/{} used\n", self.inodes_used, self.total_inodes);
-        let _ = write!(s, "Block groups: {}\n", self.group_count);
-        let _ = write!(s, "Journal: {}\n", if self.has_journal { "yes" } else { "no" });
-        let _ = write!(s, "Extents: {}\n", if self.has_extents { "yes" } else { "no" });
+        let _ = writeln!(s, "Volume: {}", self.volume_name);
+        let _ = writeln!(s, "Block size: {} bytes", self.block_size);
+        let _ = writeln!(s, "Total blocks: {} ({} MB)", self.total_blocks, self.total_space / 1_048_576);
+        let _ = writeln!(s, "Used: {} MB ({:.1}%)", self.used_space / 1_048_576, self.usage_percent());
+        let _ = writeln!(s, "Free: {} MB", self.free_space / 1_048_576);
+        let _ = writeln!(s, "Inodes: {}/{} used", self.inodes_used, self.total_inodes);
+        let _ = writeln!(s, "Block groups: {}", self.group_count);
+        let _ = writeln!(s, "Journal: {}", if self.has_journal { "yes" } else { "no" });
+        let _ = writeln!(s, "Extents: {}", if self.has_extents { "yes" } else { "no" });
         s
     }
 }

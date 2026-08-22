@@ -305,8 +305,8 @@ impl Timeline {
         for e in &self.events {
             let proc = e.process.as_deref().unwrap_or("");
             let pid = e.pid.map(|p| p.to_string()).unwrap_or_default();
-            let _ = write!(out, 
-                "{},{},{},{},{}\n",
+            let _ = writeln!(out, 
+                "{},{},{},{},{}",
                 e.timestamp,
                 csv_field(&e.event_type.to_string()),
                 csv_field(&e.path),

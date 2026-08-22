@@ -85,7 +85,7 @@ impl LnkFlags {
     pub const fn has_arguments(self) -> bool { self.has(Self::HAS_ARGUMENTS) }
     #[must_use] 
     pub const fn has_icon_location(self) -> bool { self.has(Self::HAS_ICON_LOCATION) }
-    /// ForceNoLinkInfo: the LinkInfo structure is present but must be ignored
+    /// `ForceNoLinkInfo`: the `LinkInfo` structure is present but must be ignored
     /// when resolving the target (MS-SHLLINK 2.1.1).
     #[must_use]
     pub const fn forces_no_link_info(self) -> bool { self.has(Self::FORCE_NO_LINKINFO) }
@@ -564,15 +564,15 @@ impl LnkFile {
     #[must_use] 
     pub fn summary(&self) -> String {
         let mut s = String::new();
-        let _ = write!(s, "Target     : {}\n", self.target_path().unwrap_or_default());
-        if let Some(n) = &self.strings.name { let _ = write!(s, "Name       : {n}\n"); }
-        if let Some(r) = &self.strings.relative_path { let _ = write!(s, "Rel path   : {r}\n"); }
-        if let Some(w) = &self.strings.working_dir { let _ = write!(s, "Working dir: {w}\n"); }
-        if let Some(a) = &self.strings.arguments { let _ = write!(s, "Arguments  : {a}\n"); }
+        let _ = writeln!(s, "Target     : {}", self.target_path().unwrap_or_default());
+        if let Some(n) = &self.strings.name { let _ = writeln!(s, "Name       : {n}"); }
+        if let Some(r) = &self.strings.relative_path { let _ = writeln!(s, "Rel path   : {r}"); }
+        if let Some(w) = &self.strings.working_dir { let _ = writeln!(s, "Working dir: {w}"); }
+        if let Some(a) = &self.strings.arguments { let _ = writeln!(s, "Arguments  : {a}"); }
         if let Some(tb) = &self.extra.tracker {
-            let _ = write!(s, "Machine ID : {}\n", tb.machine_id);
-            let _ = write!(s, "Vol GUID   : {}\n", tb.format_volume_guid());
-            let _ = write!(s, "File GUID  : {}\n", tb.format_file_guid());
+            let _ = writeln!(s, "Machine ID : {}", tb.machine_id);
+            let _ = writeln!(s, "Vol GUID   : {}", tb.format_volume_guid());
+            let _ = writeln!(s, "File GUID  : {}", tb.format_file_guid());
         }
         s
     }
