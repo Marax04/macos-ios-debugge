@@ -4,6 +4,7 @@
 //! 30 (Win10).  Extracts execution timestamps, loaded DLL/resource strings,
 //! file metrics, and volume information.
 
+use std::fmt::Write as _;
 use std::fmt;
 use std::io;
 
@@ -136,9 +137,10 @@ impl PrefetchHeader {
         }
         let version = read_u32_le(data, 0);
         let magic = [data[4], data[5], data[6], data[7]];
-        if &magic != b"SCCA" {
+        if magic != SCCA_MAGIC_LE {
             return Err(PrefetchError::InvalidMagic(magic));
         }
+        debug_assert_eq!(u32::from_le_bytes(SCCA_MAGIC_LE), SCCA_MAGIC);
         let version_enum = ScccVersion::from_u32(version)
             .ok_or(PrefetchError::UnsupportedVersion(version))?;
         let unknown0 = read_u32_le(data, 8);
@@ -300,15 +302,15 @@ impl PrefetchFile {
     #[must_use] 
     pub fn summary(&self) -> String {
         let mut s = String::new();
-        s.push_str(&format!("Executable : {}\n", self.header.exe_name));
-        s.push_str(&format!("Hash       : {:#010x}\n", self.header.prefetch_hash));
-        s.push_str(&format!("Version    : {}\n", self.header.version));
-        s.push_str(&format!("Run count  : {}\n", self.run_count));
-        s.push_str(&format!("Last run   : {}\n", self.last_run_time));
-        s.push_str(&format!("Modules    : {}\n", self.file_metrics.len()));
-        s.push_str(&format!("Volumes    : {}\n", self.volumes.len()));
+        let _ = write!(s, "Executable : {}\n", self.header.exe_name);
+        let _ = write!(s, "Hash       : {:#010x}\n", self.header.prefetch_hash);
+        let _ = write!(s, "Version    : {}\n", self.header.version);
+        let _ = write!(s, "Run count  : {}\n", self.run_count);
+        let _ = write!(s, "Last run   : {}\n", self.last_run_time);
+        let _ = write!(s, "Modules    : {}\n", self.file_metrics.len());
+        let _ = write!(s, "Volumes    : {}\n", self.volumes.len());
         for v in &self.volumes {
-            s.push_str(&format!("  Volume: {} serial={:#010x}\n", v.device_path, v.serial_number));
+            let _ = write!(s, "  Volume: {} serial={:#010x}\n", v.device_path, v.serial_number);
         }
         s
     }
@@ -755,4 +757,10 @@ mod tests {
         assert_eq!(csv_escape("notepad.exe"), "notepad.exe");
         assert!(csv_escape("a,b").starts_with('"'));
     }
+    #[test]
+    fn scca_magic_constants_agree() {
+        assert_eq!(u32::from_le_bytes(SCCA_MAGIC_LE), SCCA_MAGIC);
+        assert_eq!(&SCCA_MAGIC_LE, b"SCCA");
+    }
+
 }

@@ -5,6 +5,7 @@
 //! string data sections (name, relative path, working dir, command args, icon),
 //! and extra data blocks (`TrackerDataBlock`, `ConsoleFEDataBlock`, `VistaAndAboveIDListDataBlock`).
 
+use std::fmt::Write as _;
 use std::fmt;
 
 // ─── Error ────────────────────────────────────────────────────────────────────
@@ -84,6 +85,10 @@ impl LnkFlags {
     pub const fn has_arguments(self) -> bool { self.has(Self::HAS_ARGUMENTS) }
     #[must_use] 
     pub const fn has_icon_location(self) -> bool { self.has(Self::HAS_ICON_LOCATION) }
+    /// ForceNoLinkInfo: the LinkInfo structure is present but must be ignored
+    /// when resolving the target (MS-SHLLINK 2.1.1).
+    #[must_use]
+    pub const fn forces_no_link_info(self) -> bool { self.has(Self::FORCE_NO_LINKINFO) }
 }
 
 // ─── FileAttributes ──────────────────────────────────────────────────────────
@@ -110,6 +115,9 @@ impl FileAttributes {
     pub const fn is_readonly(self) -> bool { self.0 & Self::READONLY != 0 }
     #[must_use] 
     pub const fn is_hidden(self) -> bool { self.0 & Self::HIDDEN != 0 }
+    /// Sparse-file attribute of the link target.
+    #[must_use]
+    pub const fn is_sparse(self) -> bool { self.0 & Self::SPARSE_FILE != 0 }
 }
 
 // ─── LnkHeader ────────────────────────────────────────────────────────────────
@@ -534,7 +542,14 @@ impl LnkFile {
     /// Best guess at the target path.
     #[must_use] 
     pub fn target_path(&self) -> Option<String> {
-        if let Some(li) = &self.link_info {
+        // ForceNoLinkInfo means the LinkInfo block, though still present and
+        // still parsed above so the following offsets stay correct, must not
+        // be used to resolve the target.
+        let usable_link_info = self
+            .link_info
+            .as_ref()
+            .filter(|_| !self.header.link_flags.forces_no_link_info());
+        if let Some(li) = usable_link_info {
             let p = li.full_path();
             if !p.is_empty() { return Some(p); }
         }
@@ -549,15 +564,15 @@ impl LnkFile {
     #[must_use] 
     pub fn summary(&self) -> String {
         let mut s = String::new();
-        s.push_str(&format!("Target     : {}\n", self.target_path().unwrap_or_default()));
-        if let Some(n) = &self.strings.name { s.push_str(&format!("Name       : {n}\n")); }
-        if let Some(r) = &self.strings.relative_path { s.push_str(&format!("Rel path   : {r}\n")); }
-        if let Some(w) = &self.strings.working_dir { s.push_str(&format!("Working dir: {w}\n")); }
-        if let Some(a) = &self.strings.arguments { s.push_str(&format!("Arguments  : {a}\n")); }
+        let _ = write!(s, "Target     : {}\n", self.target_path().unwrap_or_default());
+        if let Some(n) = &self.strings.name { let _ = write!(s, "Name       : {n}\n"); }
+        if let Some(r) = &self.strings.relative_path { let _ = write!(s, "Rel path   : {r}\n"); }
+        if let Some(w) = &self.strings.working_dir { let _ = write!(s, "Working dir: {w}\n"); }
+        if let Some(a) = &self.strings.arguments { let _ = write!(s, "Arguments  : {a}\n"); }
         if let Some(tb) = &self.extra.tracker {
-            s.push_str(&format!("Machine ID : {}\n", tb.machine_id));
-            s.push_str(&format!("Vol GUID   : {}\n", tb.format_volume_guid()));
-            s.push_str(&format!("File GUID  : {}\n", tb.format_file_guid()));
+            let _ = write!(s, "Machine ID : {}\n", tb.machine_id);
+            let _ = write!(s, "Vol GUID   : {}\n", tb.format_volume_guid());
+            let _ = write!(s, "File GUID  : {}\n", tb.format_file_guid());
         }
         s
     }
@@ -775,4 +790,19 @@ mod tests {
     fn test_tracker_block_sig() {
         assert_eq!(TrackerBlock::SIG, 0xA000_0003);
     }
+    #[test]
+    fn force_no_link_info_and_sparse_flags_are_routed() {
+        let f = LnkFlags(LnkFlags::HAS_LINK_INFO | LnkFlags::FORCE_NO_LINKINFO);
+        assert!(f.has_link_info(), "the block is still present in the file");
+        assert!(
+            f.forces_no_link_info(),
+            "and must be ignored when resolving the target"
+        );
+        assert!(!LnkFlags(LnkFlags::HAS_LINK_INFO).forces_no_link_info());
+
+        let a = FileAttributes(FileAttributes::SPARSE_FILE);
+        assert!(a.is_sparse());
+        assert!(!FileAttributes(FileAttributes::ARCHIVE).is_sparse());
+    }
+
 }

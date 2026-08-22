@@ -363,6 +363,25 @@ pub struct MftRecord {
 }
 
 impl MftRecord {
+    /// Classify the four magic bytes at the start of a record slot.
+    ///
+    /// `MFT_BAAD_MAGIC` was declared but never read, so a record NTFS had
+    /// itself marked corrupt was indistinguishable from an empty or
+    /// never-allocated slot -- both simply failed to parse. They are
+    /// different findings: "BAAD" is positive evidence of damage.
+    #[must_use]
+    pub fn classify_slot(data: &[u8]) -> MftSlot {
+        if data.len() < 4 {
+            return MftSlot::Truncated;
+        }
+        match u32::from_le_bytes([data[0], data[1], data[2], data[3]]) {
+            MFT_FILE_MAGIC => MftSlot::Record,
+            MFT_BAAD_MAGIC => MftSlot::Corrupt,
+            0 => MftSlot::Empty,
+            _ => MftSlot::Unknown,
+        }
+    }
+
     /// Parse an MFT record from raw bytes.
     ///
     /// Returns `None` if the magic signature is invalid.
@@ -375,6 +394,7 @@ impl MftRecord {
         if magic != MFT_FILE_MAGIC {
             return None;
         }
+        debug_assert_ne!(magic, MFT_BAAD_MAGIC);
         let flags = u16::from_le_bytes([data[22], data[23]]);
         let in_use = flags & 0x01 != 0;
         let is_directory = flags & 0x02 != 0;
@@ -519,6 +539,21 @@ impl MftRecord {
 // ── NtfsReader ────────────────────────────────────────────────────────────────
 
 /// NTFS volume reader: parses a byte slice as an NTFS volume.
+/// What occupies a 1024-byte MFT record slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MftSlot {
+    /// A normal "FILE" record.
+    Record,
+    /// A record NTFS marked "BAAD" after detecting corruption.
+    Corrupt,
+    /// An all-zero, never-allocated slot.
+    Empty,
+    /// Some other, unrecognised content.
+    Unknown,
+    /// Fewer than four bytes available.
+    Truncated,
+}
+
 pub struct NtfsReader {
     /// Raw volume data.
     data: Vec<u8>,
@@ -541,6 +576,24 @@ impl NtfsReader {
             vbr,
             mft_cache: HashMap::new(),
         })
+    }
+
+    /// Count each kind of MFT record slot in an already-extracted $MFT.
+    ///
+    /// Returns `(records, corrupt, empty, unknown)`. The `corrupt` count is
+    /// the number of slots NTFS flagged "BAAD".
+    #[must_use]
+    pub fn classify_mft_slots(mft: &[u8]) -> (usize, usize, usize, usize) {
+        let mut counts = (0usize, 0usize, 0usize, 0usize);
+        for slot in mft.chunks(MFT_RECORD_SIZE) {
+            match MftRecord::classify_slot(slot) {
+                MftSlot::Record => counts.0 += 1,
+                MftSlot::Corrupt => counts.1 += 1,
+                MftSlot::Empty => counts.2 += 1,
+                MftSlot::Unknown | MftSlot::Truncated => counts.3 += 1,
+            }
+        }
+        counts
     }
 
     /// Read `len` bytes from the volume at byte `offset`.
@@ -807,4 +860,21 @@ mod tests {
         assert!(part.is_ntfs);
         assert_eq!(part.start_lba, 2048);
     }
+    #[test]
+    fn baad_records_are_distinguished_from_empty_slots() {
+        let mut mft = vec![0u8; MFT_RECORD_SIZE * 4];
+        mft[0..4].copy_from_slice(b"FILE");
+        mft[MFT_RECORD_SIZE..MFT_RECORD_SIZE + 4].copy_from_slice(b"BAAD");
+        mft[MFT_RECORD_SIZE * 2..MFT_RECORD_SIZE * 2 + 4].copy_from_slice(b"JUNK");
+        // slot 3 stays all-zero
+        assert_eq!(MftRecord::classify_slot(&mft[..4]), MftSlot::Record);
+        assert_eq!(
+            MftRecord::classify_slot(&mft[MFT_RECORD_SIZE..]),
+            MftSlot::Corrupt
+        );
+        assert_eq!(MftRecord::classify_slot(&[]), MftSlot::Truncated);
+        let (records, corrupt, empty, unknown) = NtfsReader::classify_mft_slots(&mft);
+        assert_eq!((records, corrupt, empty, unknown), (1, 1, 1, 1));
+    }
+
 }

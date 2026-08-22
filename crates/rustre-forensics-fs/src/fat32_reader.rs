@@ -249,6 +249,24 @@ impl DirEntry {
         self.attributes & ATTR_VOLUME_ID != 0
     }
 
+    /// Read-only bit of the 8.3 attribute byte.
+    #[must_use]
+    pub const fn is_read_only(&self) -> bool {
+        self.attributes & ATTR_READ_ONLY != 0
+    }
+
+    /// Hidden bit: such entries are omitted from ordinary directory views.
+    #[must_use]
+    pub const fn is_hidden(&self) -> bool {
+        self.attributes & ATTR_HIDDEN != 0
+    }
+
+    /// System bit.
+    #[must_use]
+    pub const fn is_system(&self) -> bool {
+        self.attributes & ATTR_SYSTEM != 0
+    }
+
     #[must_use] 
     pub const fn first_cluster(&self) -> u32 {
         ((self.cluster_hi as u32) << 16) | (self.cluster_lo) as u32
@@ -970,4 +988,16 @@ mod tests {
         let e2 = Fat32Error::InvalidCluster(99);
         assert!(e2.to_string().contains("99"));
     }
+    #[test]
+    fn dir_entry_exposes_read_only_hidden_system() {
+        let mut raw = [0u8; 32];
+        raw[0] = b'A';
+        raw[11] = ATTR_READ_ONLY | ATTR_HIDDEN | ATTR_SYSTEM;
+        let e = DirEntry::parse(&raw).expect("short entry parses");
+        assert!(e.is_read_only() && e.is_hidden() && e.is_system());
+        raw[11] = ATTR_ARCHIVE;
+        let e2 = DirEntry::parse(&raw).expect("short entry parses");
+        assert!(!e2.is_read_only() && !e2.is_hidden() && !e2.is_system());
+    }
+
 }
