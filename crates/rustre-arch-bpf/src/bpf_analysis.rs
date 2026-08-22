@@ -286,7 +286,7 @@ impl HelperCallAnalysis {
     pub fn top_helpers(&self, n: usize) -> Vec<(u32, usize)> {
         let mut v: Vec<(u32, usize)> = Vec::with_capacity(self.calls.len());
         v.extend(self.calls.iter().map(|(&h, &c)| (h, c)));
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|&(_, count)| std::cmp::Reverse(count));
         v.truncate(n);
         v
     }

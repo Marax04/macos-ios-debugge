@@ -13,6 +13,7 @@
 //! * Helper call argument type constraints.
 //! * Explanation of why a simulated instruction would be rejected.
 
+use std::fmt::Write as _;
 use crate::numeric;
 use std::collections::HashMap;
 use std::fmt;
@@ -587,7 +588,10 @@ impl VerifierState {
             RegType::PtrToMapValue { map_id, offset: base_off } => {
                 let total = base_off.wrapping_add(i64::from(offset));
                 if let Some(map) = self.maps.get(map_id)
-                    && (total < 0 || (total as u64) + u64::from(size) > u64::from(map.value_size)) {
+                    && (total < 0
+                        || total.cast_unsigned().saturating_add(u64::from(size))
+                            > u64::from(map.value_size))
+                {
                         let e = VerifierError::MapValueOob {
                             map_id: *map_id,
                             offset: total,

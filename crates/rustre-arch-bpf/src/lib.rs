@@ -691,7 +691,7 @@ pub fn disasm_instr<S: ::std::hash::BuildHasher>(
 
             match (class, mode) {
                 (BpfClass::Ld, BpfMode::Imm) if op == 0x18 => {
-                    let wide = instr.wide_imm.unwrap_or(i64::from(imm));
+                    let wide = instr.wide_imm.unwrap_or_else(|| i64::from(imm));
                     Ok((
                         "lddw".to_string(),
                         format!("{dst}, {wide:#018x}"),
@@ -3299,7 +3299,7 @@ impl BpfDisassembler {
             0x02 => {
                 if op == 0x18 {
                     // lddw
-                    let wide = instr.wide_imm.unwrap_or(i64::from(imm));
+                    let wide = instr.wide_imm.unwrap_or_else(|| i64::from(imm));
                     (
                         format!("{dst} = {wide:#018x} ll"),
                         format!("LDDW {dst}, {wide:#018x}"),
@@ -3325,7 +3325,7 @@ impl BpfDisassembler {
             // LD (abs/ind/wide)
             0x00 => {
                 if op == 0x18 {
-                    let wide = instr.wide_imm.unwrap_or(i64::from(imm));
+                    let wide = instr.wide_imm.unwrap_or_else(|| i64::from(imm));
                     (
                         format!("{dst} = {wide:#018x} ll"),
                         format!("LDDW {dst}, {wide:#018x}"),
@@ -5611,7 +5611,6 @@ impl BtfSection {
                     let enc_word = read_u32_le(type_bytes, extra_off).unwrap();
                     // encoding bits [25:24]: 0=none,1=signed,2=char,3=bool
                     let enc_kind = ((enc_word >> 24) & 0x0f) as u8;
-                    let _bits = enc_word & 0xff; // bits [7:0] = nr_bits
                     // Actually BTF int encoding: bits[23:16]=offset, bits[7:0]=nr_bits
                     let nr_bits = enc_word & 0xff;
                     let offset = (enc_word >> 16) & 0xff;
@@ -5921,9 +5920,9 @@ impl BtfSection {
     #[must_use]
     pub fn get_struct_field_offset(&self, struct_id: u32, field: &str) -> Option<u32> {
         let t = self.get_type(struct_id)?;
-        let members = match &t.kind {
-            BtfTypeKind::Struct { members, .. } | BtfTypeKind::Union { members, .. } => members,
-            _ => return None,
+        let (BtfTypeKind::Struct { members, .. } | BtfTypeKind::Union { members, .. }) = &t.kind
+        else {
+            return None;
         };
         for m in members {
             if m.name == field {
@@ -7144,7 +7143,7 @@ mod btf_section_tests {
     }
 
     /// Build a minimal BTF blob with the given types and strings sections.
-    fn build_btf(types_section: Vec<u8>, strings_section: Vec<u8>) -> Vec<u8> {
+    fn build_btf(types_section: &[u8], strings_section: &[u8]) -> Vec<u8> {
         // Header: magic(2) + version(1) + flags(1) + hdr_len(4)
         //       + type_off(4) + type_len(4) + str_off(4) + str_len(4) = 24 bytes
         let hdr_len: u32 = 24;
@@ -7200,7 +7199,7 @@ mod btf_section_tests {
     fn test_btf_parse_empty_type_section() {
         // No types: just strings section with empty string at offset 0.
         let strs = vec![0u8]; // one NUL byte = empty string at offset 0
-        let blob = build_btf(vec![], strs);
+        let blob = build_btf(&[], &strs);
         let btf = BtfSection::parse(&blob).unwrap();
         // Only the synthetic void type should exist.
         assert_eq!(btf.type_count(), 1);
@@ -7221,7 +7220,7 @@ mod btf_section_tests {
         // INT encoding word: bits[7:0]=32 (nr_bits), encoding=0 (unsigned)
         push_u32(&mut types_sec, 32);
 
-        let blob = build_btf(types_sec, strs);
+        let blob = build_btf(&types_sec, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
         assert_eq!(btf.type_count(), 2); // void + u32
         let t = btf.get_type(1).unwrap();
@@ -7245,7 +7244,7 @@ mod btf_section_tests {
         types_sec.extend_from_slice(&btf_type_hdr(off, 1, 0, 8)); // size=8
         push_u32(&mut types_sec, 64); // nr_bits=64
 
-        let blob = build_btf(types_sec, strs);
+        let blob = build_btf(&types_sec, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
         assert_eq!(btf.sizeof(1), Some(8));
         assert_eq!(btf.sizeof(0), None); // void
@@ -7261,7 +7260,7 @@ mod btf_section_tests {
         // type_id 1 = PTR to void (type_id=0).
         types_sec.extend_from_slice(&btf_type_hdr(void_off, 2, 0, 0));
 
-        let blob = build_btf(types_sec, strs);
+        let blob = build_btf(&types_sec, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
         // Pointer is always 8 bytes in BPF.
         assert_eq!(btf.sizeof(1), Some(8));
@@ -7269,7 +7268,7 @@ mod btf_section_tests {
 
     #[test]
     fn test_btf_get_type_void() {
-        let blob = build_btf(vec![], vec![0]);
+        let blob = build_btf(&[], &[0]);
         let btf = BtfSection::parse(&blob).unwrap();
         let v = btf.get_type(0).unwrap();
         assert!(matches!(v.kind, BtfTypeKind::Void));
@@ -7278,7 +7277,7 @@ mod btf_section_tests {
 
     #[test]
     fn test_btf_get_type_out_of_range() {
-        let blob = build_btf(vec![], vec![0]);
+        let blob = build_btf(&[], &[0]);
         let btf = BtfSection::parse(&blob).unwrap();
         assert!(btf.get_type(1).is_none());
     }
@@ -7286,7 +7285,7 @@ mod btf_section_tests {
     #[test]
     fn test_btf_read_string() {
         let strs = b"\0hello\0world\0";
-        let blob = build_btf(vec![], strs.to_vec());
+        let blob = build_btf(&[], strs);
         let btf = BtfSection::parse(&blob).unwrap();
         assert_eq!(btf.read_string(0), "");
         assert_eq!(btf.read_string(1), "hello");
@@ -7303,7 +7302,7 @@ mod btf_section_tests {
         types_sec.extend_from_slice(&btf_type_hdr(off, 1, 0, 4));
         push_u32(&mut types_sec, 32);
 
-        let blob = build_btf(types_sec, strs);
+        let blob = build_btf(&types_sec, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
         let decl = btf.to_c_declaration(1, "x");
         assert!(decl.contains("__u32") && decl.contains('x'));
@@ -7311,7 +7310,7 @@ mod btf_section_tests {
 
     #[test]
     fn test_btf_to_c_declaration_void() {
-        let blob = build_btf(vec![], vec![0]);
+        let blob = build_btf(&[], &[0]);
         let btf = BtfSection::parse(&blob).unwrap();
         let decl = btf.to_c_declaration(0, "p");
         assert!(decl.contains("void") && decl.contains('p'));
@@ -7349,7 +7348,7 @@ mod btf_section_tests {
         push_u32(&mut types_sec, 1);
         push_u32(&mut types_sec, 32);
 
-        let blob = build_btf(types_sec, strs);
+        let blob = build_btf(&types_sec, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         assert_eq!(btf.get_struct_field_offset(2, "a"), Some(0));
@@ -7367,7 +7366,7 @@ mod btf_section_tests {
         // struct s { }; size = 16
         types_sec.extend_from_slice(&btf_type_hdr(s_off, 4, 0, 16));
 
-        let blob = build_btf(types_sec, strs);
+        let blob = build_btf(&types_sec, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
         assert_eq!(btf.sizeof(1), Some(16));
     }
@@ -7387,7 +7386,7 @@ mod btf_section_tests {
         types_sec.extend_from_slice(&btf_type_hdr(0, 10, 0, 1)); // id=2 CONST->1
         types_sec.extend_from_slice(&btf_type_hdr(0, 9, 0, 2)); // id=3 VOLATILE->2
 
-        let blob = build_btf(types_sec, strs);
+        let blob = build_btf(&types_sec, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         assert_eq!(btf.skip_modifiers(3), 1);
@@ -7407,7 +7406,7 @@ mod btf_section_tests {
         types_sec.extend_from_slice(&btf_type_hdr(foo_off, 4, 0, 4)); // struct foo
         types_sec.extend_from_slice(&btf_type_hdr(bar_off, 4, 0, 8)); // struct bar
 
-        let blob = build_btf(types_sec, strs);
+        let blob = build_btf(&types_sec, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         let foos = btf.find_struct_by_name("foo");
@@ -7442,7 +7441,7 @@ mod btf_section_tests {
         push_u32(&mut ts, 1);
         push_u32(&mut ts, 0);
 
-        let blob = build_btf(ts, strs);
+        let blob = build_btf(&ts, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         let res = parse_access_string("0", &btf, 2);
@@ -7474,7 +7473,7 @@ mod btf_section_tests {
         push_u32(&mut ts, 1);
         push_u32(&mut ts, 32); // b at 32 bits
 
-        let blob = build_btf(ts, strs);
+        let blob = build_btf(&ts, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         let res = parse_access_string("0:1", &btf, 2);
@@ -7490,7 +7489,7 @@ mod btf_section_tests {
         let mut ts = Vec::new();
         ts.extend_from_slice(&btf_type_hdr(s_off, 4, 0, 0)); // id=1 struct with 0 members
 
-        let blob = build_btf(ts, strs);
+        let blob = build_btf(&ts, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         // Access member index 5 in an empty struct â†' None.
@@ -7555,7 +7554,7 @@ mod btf_section_tests {
         push_u32(&mut ts, 1);
         push_u32(&mut ts, 32);
 
-        let blob = build_btf(ts, strs);
+        let blob = build_btf(&ts, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         // Instruction 0 = mov r1, 0  (placeholder for offset)
@@ -7581,7 +7580,7 @@ mod btf_section_tests {
         let mut ts = Vec::new();
         ts.extend_from_slice(&btf_type_hdr(s_off, 4, 0, 24)); // struct S; size=24
 
-        let blob = build_btf(ts, strs);
+        let blob = build_btf(&ts, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         let mut prog = vec![make_mov_imm(1, 0)];
@@ -7615,7 +7614,7 @@ mod btf_section_tests {
         push_u32(&mut ts, 1);
         push_u32(&mut ts, 0);
 
-        let blob = build_btf(ts, strs);
+        let blob = build_btf(&ts, &strs);
         let btf = BtfSection::parse(&blob).unwrap();
 
         let mut prog = vec![make_mov_imm(1, 99)];
@@ -7633,7 +7632,7 @@ mod btf_section_tests {
 
     #[test]
     fn test_core_reloc_type_exists() {
-        let blob = build_btf(vec![], vec![0]);
+        let blob = build_btf(&[], &[0]);
         let btf = BtfSection::parse(&blob).unwrap();
 
         let mut prog = vec![make_mov_imm(1, 0)];
@@ -7651,7 +7650,7 @@ mod btf_section_tests {
 
     #[test]
     fn test_core_reloc_type_id_local() {
-        let blob = build_btf(vec![], vec![0]);
+        let blob = build_btf(&[], &[0]);
         let btf = BtfSection::parse(&blob).unwrap();
 
         let mut prog = vec![make_mov_imm(1, 0)];

@@ -557,7 +557,7 @@ impl CbpfToEbpf {
     fn fixup_jumps(
         &self,
         cbpf: &[CbpfInsn],
-        ebpf: &mut Vec<EbpfInsn>,
+        ebpf: &mut [EbpfInsn],
         insn_map: &[usize],
         warnings: &mut Vec<String>,
     ) {
