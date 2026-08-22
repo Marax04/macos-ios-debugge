@@ -958,7 +958,7 @@ mod tests {
             stab(17, 0xA0, 2, 4),            // N_PSYM argv
             stab(0, 0x44, 10, 0x1000),       // N_SLINE line 10
             stab(0, 0x44, 11, 0x1005),       // N_SLINE line 11
-            stab(22, 0x80, 3, -4i32 as u32), // N_LSYM result
+            stab(22, 0x80, 3, (-4i32).cast_unsigned()), // N_LSYM result
         ];
         (stabs, stabstr)
     }

@@ -729,8 +729,8 @@ mod tests {
                 name: "x".into(),
                 type_expr: StabsTypeExpr::Range {
                     base: Box::new(StabsTypeExpr::TypeRef { file: 0, num: 1 }),
-                    lo: -2147483648,
-                    hi: 2147483647,
+                    lo: -2_147_483_648,
+                    hi: 2_147_483_647,
                 },
                 offset: -4,
             }

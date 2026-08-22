@@ -2368,11 +2368,11 @@ mod tests {
         let mut raw = r1.to_vec();
         raw.extend_from_slice(&r2);
         let records = StabRecord::parse_all(&raw, &stabstr);
-        let p = StabsProvider::from_records(&records, 0x400000);
+        let p = StabsProvider::from_records(&records, 0x0040_0000);
         assert_eq!(p.symbol_count(), 1);
         let sym = p.all_symbols()[0].clone();
         assert_eq!(sym.name, "foo");
-        assert_eq!(sym.address, 0x400000 + 0x2000);
+        assert_eq!(sym.address, 0x0040_0000 + 0x2000);
         assert_eq!(sym.kind, SymKind::Function);
     }
 
@@ -2420,8 +2420,8 @@ mod tests {
         let stabstr = build_stabstr(&["fn1:F"]);
         let raw = stab_record(0, 0x24, 0, 0, 0x5000);
         let records = StabRecord::parse_all(&raw, &stabstr);
-        let p = StabsProvider::from_records(&records, 0x100000);
-        assert!(p.lookup_address(0x100000 + 0x5000).is_some());
+        let p = StabsProvider::from_records(&records, 0x0010_0000);
+        assert!(p.lookup_address(0x0010_0000 + 0x5000).is_some());
         assert!(p.lookup_address(0).is_none());
     }
 
@@ -2693,7 +2693,7 @@ mod tests {
         raw.extend_from_slice(&r_fun);
         let records = StabRecord::parse_all(&raw, &stabstr);
         let mut parser = StabsParser::new();
-        parser.process(&records, 0x400000).unwrap();
+        parser.process(&records, 0x0040_0000).unwrap();
         assert_eq!(parser.functions().len(), 1);
         assert_eq!(parser.functions()[0].name, "main");
         assert_eq!(parser.functions()[0].start_line, 5);
@@ -2839,7 +2839,7 @@ mod tests {
         let r_fun = stab_record(7, 0x24, 0, 0, 0x100);
         let mut raw = r_so.to_vec();
         raw.extend_from_slice(&r_fun);
-        let p = StabsProvider::from_bytes(&raw, &stabstr, 0x400000);
+        let p = StabsProvider::from_bytes(&raw, &stabstr, 0x0040_0000);
         assert_eq!(p.symbol_count(), 1);
     }
 }
@@ -3146,7 +3146,7 @@ mod stabs_symbol_parser_tests {
         let entries = make_entries(&[
             ("", 0x64, 0, 0, "src.c"),
             ("", 0x24, 0, 0x100, "fn:F"),
-            ("", 0x80, 0, 0xFFFFFFE0, "local_x:(0,1)"),
+            ("", 0x80, 0, 0xFFFF_FFE0, "local_x:(0,1)"),
         ]);
         let syms = StabsSymbolParser::parse(&entries);
         let local = syms.iter().find(|s| s.kind == StabsKind::Local).unwrap();

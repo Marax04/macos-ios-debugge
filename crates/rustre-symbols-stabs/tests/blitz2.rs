@@ -6,7 +6,7 @@ use rustre_symbols::{SymbolProvider, TypeInfo};
 fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
-        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        s = s.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -117,16 +117,16 @@ fn t06_parse_all_chunk_remainder_ignored() {
 #[test]
 fn t07_parse_all_be_endianness() {
     let stabstr = build_stabstr(&["foo"]);
-    let raw = stab_record_be(0, 0x24, 0, 0x0102, 0xDEADBEEF);
+    let raw = stab_record_be(0, 0x24, 0, 0x0102, 0xDEAD_BEEF);
     let r = StabRecord::parse_all_be(&raw, &stabstr);
     assert_eq!(r.len(), 1);
     assert_eq!(r[0].desc, 0x0102);
-    assert_eq!(r[0].value, 0xDEADBEEF);
+    assert_eq!(r[0].value, 0xDEAD_BEEF);
 }
 
 #[test]
 fn t08_parse_all_le_vs_be_different() {
-    let raw = stab_record(0, 0x24, 0, 0x1234, 0xAABBCCDD);
+    let raw = stab_record(0, 0x24, 0, 0x1234, 0xAABB_CCDD);
     let le = StabRecord::parse_all(&raw, &[]);
     let be = StabRecord::parse_all_be(&raw, &[]);
     assert_ne!(le[0].value, be[0].value);
@@ -389,7 +389,7 @@ fn t30_stabs_parser_n_psym_n_lsym_attached() {
     let r_so = stab_record(0, 0x64, 0, 0, 0);
     let r_fn = stab_record(7, 0x24, 0, 0, 0x100);
     let r_p = stab_record(12, 0xA0, 0, 0, 16);
-    let r_l = stab_record(21, 0x80, 0, 0, (-8i32) as u32);
+    let r_l = stab_record(21, 0x80, 0, 0, (-8i32).cast_unsigned());
     let mut raw = r_so.to_vec();
     raw.extend_from_slice(&r_fn);
     raw.extend_from_slice(&r_p);
@@ -620,15 +620,15 @@ fn t47_stabs_entry_display() {
 #[test]
 fn t48_low_parser_roundtrip_fields() {
     let stabstr = build_stabstr(&["abc"]);
-    let raw = stab_record(0, 0x64, 7, 0xABCD, 0xDEADBEEF);
+    let raw = stab_record(0, 0x64, 7, 0xABCD, 0xDEAD_BEEF);
     let entries = StabsLowParser::parse(&raw, &stabstr).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].n_strx, 0);
     assert_eq!(entries[0].n_type, 0x64);
     assert_eq!(entries[0].n_other, 7);
     // n_desc is i16 LE — 0xABCD as i16 is negative
-    assert_eq!(entries[0].n_desc as u16, 0xABCD);
-    assert_eq!(entries[0].n_value, 0xDEADBEEF);
+    assert_eq!(entries[0].n_desc.cast_unsigned(), 0xABCD);
+    assert_eq!(entries[0].n_value, 0xDEAD_BEEF);
     assert_eq!(entries[0].string_value, "abc");
 }
 

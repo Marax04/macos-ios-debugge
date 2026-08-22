@@ -348,7 +348,7 @@ fn line_table_sort_and_lookup_at_or_before() {
     t.sort();
     assert_eq!(t.lookup(0x1500).unwrap().line, 10);
     assert_eq!(t.lookup(0x3000).unwrap().line, 30);
-    assert_eq!(t.lookup(0xFFFFFFFF).unwrap().line, 30);
+    assert_eq!(t.lookup(0xFFFF_FFFF).unwrap().line, 30);
     assert!(t.lookup(0x0FFF).is_none());
 }
 
@@ -370,7 +370,7 @@ fn stabs_parser_locals_and_params() {
     let mut raw = Vec::new();
     raw.extend_from_slice(&rec_le(1, 0x64, 0, 0, 0)); // N_SO src.c
     raw.extend_from_slice(&rec_le(7, 0x24, 0, 0, 0x100)); // N_FUN fn:F
-    raw.extend_from_slice(&rec_le(12, 0x80, 0, 0, 0xFFFFFFE0)); // N_LSYM loc (offset -32)
+    raw.extend_from_slice(&rec_le(12, 0x80, 0, 0, 0xFFFF_FFE0)); // N_LSYM loc (offset -32)
     raw.extend_from_slice(&rec_le(18, 0xA0, 0, 0, 8)); // N_PSYM p1
     let records = StabRecord::parse_all(&raw, &s);
     let mut p = StabsParser::new();
@@ -393,9 +393,9 @@ fn stabs_parser_nstsym_attaches_file_and_adds_image_base() {
     raw.extend_from_slice(&rec_le(7, 0x26, 0, 0, 0x10)); // N_STSYM
     let recs = StabRecord::parse_all(&raw, &s);
     let mut p = StabsParser::new();
-    p.process(&recs, 0x400000).unwrap();
+    p.process(&recs, 0x0040_0000).unwrap();
     assert_eq!(p.globals().len(), 1);
-    assert_eq!(p.globals()[0].address, 0x400010);
+    assert_eq!(p.globals()[0].address, 0x0040_0010);
     assert_eq!(p.globals()[0].source_file.as_deref(), Some("src.c"));
 }
 

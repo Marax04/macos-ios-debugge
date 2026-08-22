@@ -647,7 +647,7 @@ impl StabsParser {
                 func.locals.push(LocalVar {
                     name: var_name.to_string(),
                     type_str: type_str.to_string(),
-                    frame_offset: raw.value as i32,
+                    frame_offset: raw.value.cast_signed(),
                 });
                 ParserState::InFunction { cu, func, current_file, brace_depth }
             }
@@ -662,7 +662,7 @@ impl StabsParser {
                 func.params.push(Parameter {
                     name: param_name.to_string(),
                     type_str: type_str.to_string(),
-                    frame_offset: raw.value as i32,
+                    frame_offset: raw.value.cast_signed(),
                 });
                 ParserState::InFunction { cu, func, current_file, brace_depth }
             }

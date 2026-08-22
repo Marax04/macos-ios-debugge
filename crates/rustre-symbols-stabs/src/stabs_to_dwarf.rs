@@ -836,7 +836,7 @@ mod tests {
 
     #[test]
     fn test_encode_addr_location() {
-        let loc = encode_addr_location(0x400000);
+        let loc = encode_addr_location(0x0040_0000);
         assert_eq!(loc[0], 0x03); // DW_OP_addr
         assert_eq!(loc.len(), 9); // 1 + 8 bytes
     }
