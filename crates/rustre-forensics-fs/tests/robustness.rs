@@ -7,7 +7,7 @@
 use rustre_forensics_fs::lnk_parser::LnkFile;
 use rustre_forensics_fs::ntfs_analyzer::MftRecord;
 use rustre_forensics_fs::prefetch_analyzer::PrefetchFile;
-use rustre_forensics_fs::registry_hive_parser::{NkCell, RegHiveHeader, VkCell};
+use rustre_forensics_fs::registry_hive_parser::{NkCell, RegHiveHeader, SkCell, VkCell};
 use rustre_forensics_fs::artifacts::ArtifactScanner;
 use rustre_forensics_fs::carver::FileCarver;
 use rustre_forensics_fs::inode::parse_mft_record_minimal;
@@ -97,6 +97,7 @@ fn registry_hive_sweep() {
         let _ = RegHiveHeader::parse(b);
         let _ = NkCell::parse(b, 0);
         let _ = VkCell::parse(b, 0);
+        let _ = SkCell::parse(b, 0);
     });
 }
 

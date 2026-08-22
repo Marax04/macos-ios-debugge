@@ -294,6 +294,8 @@ pub struct NkCell {
     pub value_count: u32,
     /// Offset of the value list.
     pub value_list_offset: u32,
+    /// Offset of the SK (security descriptor) cell for this key.
+    pub security_offset: u32,
     /// Class name offset (0xFFFFFFFF = none).
     pub class_name_offset: u32,
     /// Class name length in bytes.
@@ -319,7 +321,13 @@ impl NkCell {
         let subkey_list_offset = read_u32(data, abs_offset + 28);
         let value_count = read_u32(data, abs_offset + 36);
         let value_list_offset = read_u32(data, abs_offset + 40);
-        let class_name_offset = read_u32(data, abs_offset + 52);
+        // NK layout, relative to the "nk" signature: +0x2C security key
+        // offset, +0x30 class name offset, +0x34 largest-subkey-name length.
+        // class_name_offset was read from +52 (0x34), i.e. the largest
+        // subkey name length, and the security offset was not read at all --
+        // which is why SK_SIG had no user.
+        let security_offset = read_u32(data, abs_offset + 44);
+        let class_name_offset = read_u32(data, abs_offset + 48);
         let class_name_length = read_u16(data, abs_offset + 74);
         let name_length = read_u16(data, abs_offset + 72) as usize;
 
@@ -343,9 +351,63 @@ impl NkCell {
             subkey_list_offset,
             value_count,
             value_list_offset,
+            security_offset,
             class_name_offset,
             class_name_length,
             name,
+        })
+    }
+}
+
+// ─── SK cell ─────────────────────────────────────────────────────────────────
+
+/// A parsed SK (security descriptor) cell.
+///
+/// Reached from [`NkCell::security_offset`]; SK cells are shared between
+/// keys, which is what `ref_count` counts.
+#[derive(Debug, Clone)]
+pub struct SkCell {
+    /// Absolute offset in the hive.
+    pub cell_offset: u32,
+    /// Offset of the previous SK cell in the ring.
+    pub prev_offset: u32,
+    /// Offset of the next SK cell in the ring.
+    pub next_offset: u32,
+    /// Number of keys pointing at this descriptor.
+    pub ref_count: u32,
+    /// Raw self-relative SECURITY_DESCRIPTOR bytes.
+    pub descriptor: Vec<u8>,
+}
+
+impl SkCell {
+    /// Parse an SK cell from `data` at `abs_offset`.
+    ///
+    /// # Errors
+    /// Returns [`HiveError`] if the offset is out of bounds or the cell does
+    /// not carry the "sk" signature.
+    pub fn parse(data: &[u8], abs_offset: usize) -> Result<Self, HiveError> {
+        if abs_offset + 20 > data.len() {
+            return Err(HiveError::OffsetOutOfBounds { offset: abs_offset as u32 });
+        }
+        let sig = [data[abs_offset], data[abs_offset + 1]];
+        if sig != SK_SIG {
+            return Err(HiveError::InvalidSignature { expected: "sk", got: sig });
+        }
+        let prev_offset = read_u32(data, abs_offset + 4);
+        let next_offset = read_u32(data, abs_offset + 8);
+        let ref_count = read_u32(data, abs_offset + 12);
+        let desc_size = read_u32(data, abs_offset + 16) as usize;
+        let start = abs_offset + 20;
+        // desc_size is an attacker-controlled header field; clamp it to the
+        // bytes actually present instead of trusting it.
+        let end = start.saturating_add(desc_size).min(data.len());
+        let descriptor = if start <= end { data[start..end].to_vec() } else { Vec::new() };
+        Ok(Self {
+            cell_offset: abs_offset as u32,
+            prev_offset,
+            next_offset,
+            ref_count,
+            descriptor,
         })
     }
 }
@@ -809,4 +871,48 @@ mod tests {
     fn test_hive_too_short() {
         assert!(matches!(RegHiveHeader::parse(&[]), Err(HiveError::TooShort { .. })));
     }
+    #[test]
+    fn nk_security_and_class_offsets_come_from_the_right_fields() {
+        // Distinct sentinels at +44 (security), +48 (class name offset) and
+        // +52 (largest subkey name length). The parser used to read the
+        // class-name offset from +52 and never read +44 at all.
+        let mut d = vec![0u8; 128];
+        d[0..2].copy_from_slice(&NK_SIG);
+        d[44..48].copy_from_slice(&0xAAAA_AAAAu32.to_le_bytes());
+        d[48..52].copy_from_slice(&0xBBBB_BBBBu32.to_le_bytes());
+        d[52..56].copy_from_slice(&0xCCCC_CCCCu32.to_le_bytes());
+        d[72..74].copy_from_slice(&0u16.to_le_bytes()); // name length
+
+        let nk = NkCell::parse(&d, 0).expect("nk parses");
+        assert_eq!(nk.security_offset, 0xAAAA_AAAA);
+        assert_eq!(nk.class_name_offset, 0xBBBB_BBBB, "must not read +52");
+    }
+
+    #[test]
+    fn sk_cell_parses_and_clamps_its_descriptor() {
+        let mut d = vec![0u8; 64];
+        d[0..2].copy_from_slice(&SK_SIG);
+        d[4..8].copy_from_slice(&0x11u32.to_le_bytes());   // prev
+        d[8..12].copy_from_slice(&0x22u32.to_le_bytes());  // next
+        d[12..16].copy_from_slice(&7u32.to_le_bytes());    // ref count
+        d[16..20].copy_from_slice(&8u32.to_le_bytes());    // descriptor size
+        for (i, b) in d[20..28].iter_mut().enumerate() {
+            *b = i as u8;
+        }
+        let sk = SkCell::parse(&d, 0).expect("sk parses");
+        assert_eq!(sk.ref_count, 7);
+        assert_eq!(sk.prev_offset, 0x11);
+        assert_eq!(sk.next_offset, 0x22);
+        assert_eq!(sk.descriptor, vec![0, 1, 2, 3, 4, 5, 6, 7]);
+
+        // A descriptor size larger than the buffer must clamp, not panic.
+        d[16..20].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+        let sk = SkCell::parse(&d, 0).expect("sk still parses");
+        assert_eq!(sk.descriptor.len(), d.len() - 20);
+
+        // Wrong signature is rejected.
+        d[0..2].copy_from_slice(&NK_SIG);
+        assert!(SkCell::parse(&d, 0).is_err());
+    }
+
 }
