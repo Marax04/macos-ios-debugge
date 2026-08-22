@@ -469,9 +469,23 @@ fn parse_unwind_info(
             None
         };
         let kind = match flags {
+            UNW_FLAG_EHANDLER => HandlerKind::ExceptionHandler,
             UNW_FLAG_UHANDLER => HandlerKind::TerminationHandler,
             UNW_FLAG_FHANDLER => HandlerKind::FilterAndHandler,
-            _ => HandlerKind::ExceptionHandler, // treat unknown as __except
+            // Only 0x00..=0x04 are defined for this 5-bit field, so anything
+            // else is a value this parser does not model. It is still reported
+            // as `__except`, because that is the overwhelmingly common case and
+            // refusing the whole entry would lose the handler RVA that WAS
+            // read — but the distinction is not thrown away: `UnwindInfo.flags`
+            // below carries the raw value, so a caller can tell a real
+            // `UNW_FLAG_EHANDLER` from an unmodelled one.
+            //
+            // The explicit arm above exists for that reason. Folding the real
+            // flag into this catch-all made the two indistinguishable *in the
+            // source*, and left `UNW_FLAG_EHANDLER` as the only one of the five
+            // constants with no reader — the visible symptom of a mapping that
+            // was complete in intent and incomplete in code.
+            _ => HandlerKind::ExceptionHandler,
         };
         (kind, h_rva, None)
     };

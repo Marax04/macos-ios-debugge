@@ -352,7 +352,23 @@ fn parse_idx(path: &Path) -> Result<((TracePosition, TracePosition), Vec<IndexEn
         )));
     }
 
-    let _version = u32::from_le_bytes(header[8..12].try_into().unwrap());
+    // The version was read into `_version` and thrown away, which left
+    // `IDX_VERSION_1` as a constant nothing consulted — and left this parser
+    // accepting ANY version while decoding it with the version-1 layout below
+    // (`IDX_HEADER_SIZE` = 52, `IDX_ENTRY_BYTES` = 24, both fixed). A format
+    // whose header or entry stride changed would not fail: it would be decoded
+    // at the wrong offsets and the resulting positions handed back as a valid
+    // index. Checking the magic and not the version guards the wrong half —
+    // the magic says "this is a TTD index", the version says "and this is a
+    // layout I know".
+    let version = u32::from_le_bytes(header[8..12].try_into().unwrap());
+    if version != IDX_VERSION_1 {
+        return Err(TtdError::Unsupported(format!(
+            ".idx in {} declares format version {version}; this reader decodes version \
+             {IDX_VERSION_1} only, and its header and entry layout are fixed to it",
+            path.display(),
+        )));
+    }
 
     let first_major = u64::from_le_bytes(header[12..20].try_into().unwrap());
     let first_minor = u64::from_le_bytes(header[20..28].try_into().unwrap());

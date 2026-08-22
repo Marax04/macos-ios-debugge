@@ -395,6 +395,51 @@ impl RegisterMap {
     /// placeability rules, so everything it produced can be put back.
     fn encode_into(&self, set: &RegisterSet, block: &mut [u8]) -> Vec<String> {
         let mut dropped = Vec::new();
+        // AArch64 publishes x29/x30 under BOTH their architectural names and
+        // their role names (fp/lr), because which spelling is canonical is an
+        // open question this crate deliberately does not answer. A caller that
+        // reads a set, edits one spelling and writes it back therefore hands
+        // over a map carrying both, disagreeing.
+        //
+        // The loop below applies every entry of `set.regs` by name, and both
+        // spellings resolve to the SAME architectural register — so both write
+        // to the same offset and the survivor was decided by `HashMap`
+        // iteration order. `set.regs` is a `HashMap`, so that order is not even
+        // stable between runs: the caller's edit landed or was silently
+        // discarded at random, while `set_registers` answered `Ok(())` either
+        // way. This is the crate's most-condemned failure shape, arriving
+        // through the register map.
+        //
+        // `aliased_register_write` resolves the pair the only way that is
+        // decidable: exactly one of the two differs from what is CURRENTLY in
+        // the register, and that one is the edit.
+        let mut aliased: std::collections::HashMap<&str, u64> = std::collections::HashMap::new();
+        for (primary, alias) in [("x29", "fp"), ("x30", "lr")] {
+            let (p, a) = (set.regs.get(primary).copied(), set.regs.get(alias).copied());
+            if p.is_none() || a.is_none() {
+                // Only one spelling present: no ambiguity, the loop is right.
+                continue;
+            }
+            let current = self
+                .by_name(primary)
+                .or_else(|| self.by_name(alias))
+                .and_then(|r| r.offset.map(|o| (o as usize, r.byte_size() as usize)))
+                .filter(|&(_, size)| size > 0 && size <= 8)
+                .and_then(|(off, size)| {
+                    let raw = block.get(off..off + size)?;
+                    let mut buf = [0u8; 8];
+                    buf[..size].copy_from_slice(raw);
+                    Some(u64::from_le_bytes(buf))
+                })
+                // Without the current value there is no way to tell which
+                // spelling is the edit; `primary` wins, which is what
+                // `aliased_register_write` does with a contradiction anyway.
+                .unwrap_or_else(|| p.unwrap_or_default());
+            if let Some(v) = crate::aliased_register_write(p, a, current) {
+                aliased.insert(primary, v);
+                aliased.insert(alias, v);
+            }
+        }
         let mut apply = |name: &str, value: u64, dropped: &mut Vec<String>| {
             let Some(r) = self.by_name(name) else {
                 dropped.push(name.to_string());
@@ -416,7 +461,10 @@ impl RegisterMap {
             }
         };
         for (name, value) in &set.regs {
-            apply(name, *value, &mut dropped);
+            // A resolved alias is applied with the value the pair agreed on,
+            // not with whichever of the two this iteration happened to reach.
+            let value = aliased.get(name.as_str()).copied().unwrap_or(*value);
+            apply(name, value, &mut dropped);
         }
         // The generic PC/SP fields are resolved through the map, so a target
         // that names them differently is served correctly and one that has
@@ -7057,6 +7105,65 @@ mod tests {
             .is_none(),
             "the test value must be ambiguous only if the ABI is ignored"
         );
+    }
+
+    /// An edit made through EITHER spelling of an aliased register must reach
+    /// the target, whichever spelling the caller chose.
+    ///
+    /// `x29`/`fp` and `x30`/`lr` are two names for one architectural register,
+    /// and this crate publishes both on read. A read-modify-write that touches
+    /// one therefore hands `encode_into` a map carrying both, disagreeing.
+    /// Both names resolve to the same offset, so before the fix the survivor
+    /// was whichever `set.regs` yielded LAST — and `set.regs` is a `HashMap`,
+    /// whose iteration order is seeded per instance. The caller's edit landed
+    /// or was silently discarded at random while `set_registers` answered
+    /// `Ok(())` either way.
+    ///
+    /// That randomness is why this runs many rounds on FRESH maps rather than
+    /// once: a single round would reproduce the defect only about half the
+    /// time, and a flaky guard is one that gets believed when it passes.
+    #[tokio::test]
+    async fn an_edit_through_either_alias_spelling_reaches_the_register() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let map = dbg.register_map().unwrap();
+
+        const STALE: u64 = 0x1111_1111;
+        const EDITED: u64 = 0x2222_2222;
+
+        for round in 0..64 {
+            for (primary, alias) in [("x29", "fp"), ("x30", "lr")] {
+                // The register currently holds STALE, as a real read would
+                // have reported it under both names.
+                let mut block = vec![0u8; map.g_packet_bytes()];
+                let mut before = RegisterSet::new();
+                before.set(primary, STALE);
+                map.encode_into(&before, &mut block);
+
+                // The caller edited ONE spelling; the other is the stale value
+                // their read handed them. Alternate which one is edited so
+                // neither is privileged by the test itself.
+                let (edited_name, stale_name) =
+                    if round % 2 == 0 { (alias, primary) } else { (primary, alias) };
+                let mut set = RegisterSet::new();
+                set.regs.insert(stale_name.to_string(), STALE);
+                set.regs.insert(edited_name.to_string(), EDITED);
+
+                map.encode_into(&set, &mut block);
+                let back = map.decode(&block).expect("a complete g block decodes");
+                // Read back under whichever spelling this map publishes: the
+                // point is the VALUE that reached the register, and which of
+                // the two names the decoder hands it back under is precisely
+                // the question this crate leaves open.
+                let landed = back.get(primary).or_else(|| back.get(alias));
+                assert_eq!(
+                    landed,
+                    Some(EDITED),
+                    "round {round}: the edit through {edited_name:?} was discarded in favour of \
+                     the stale {stale_name:?}"
+                );
+            }
+        }
     }
 
     #[tokio::test]

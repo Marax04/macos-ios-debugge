@@ -72,6 +72,36 @@ impl RaceCandidate {
     pub fn is_write_write(&self) -> bool {
         self.first.kind == AccessKind::Write && self.second.kind == AccessKind::Write
     }
+
+    /// The bytes the two accesses actually share, as `[start, end)`.
+    ///
+    /// "These two threads race" is only half an answer; the other half is
+    /// *which bytes*, and a candidate reported both accesses without ever
+    /// naming their intersection. Two 8-byte accesses one byte apart contend
+    /// over seven bytes, and whether the contended field is the first byte or
+    /// the last is usually what identifies the struct member involved.
+    ///
+    /// Computed through [`MemoryAccess::end`], which is the right tool HERE and
+    /// was the wrong one in `overlaps`. `end` saturates, so for an access
+    /// touching the final bytes of the address space it reports `u64::MAX`
+    /// where the true end is one past it. Deciding *whether* two accesses
+    /// overlap on that value denied a real race — which is why `overlaps`
+    /// compares the offset between the two starts instead, exactly. Reporting
+    /// the range of an overlap already established is a different question: the
+    /// only imprecision it can carry is that a race ending at the very top of
+    /// memory is described as ending at `u64::MAX`, one byte short, and no
+    /// decision is taken on it.
+    ///
+    /// Returns `None` when the two do not overlap at all.
+    #[must_use]
+    pub fn contended_range(&self) -> Option<(u64, u64)> {
+        if !self.first.overlaps(&self.second) {
+            return None;
+        }
+        let start = self.first.address.as_u64().max(self.second.address.as_u64());
+        let end = self.first.end().min(self.second.end());
+        (start < end).then_some((start, end))
+    }
 }
 
 /// Scan a chronological access trace for candidate races: pairs of accesses
@@ -279,5 +309,44 @@ mod tests {
         sorted.sort_unstable();
         assert_eq!(keys, sorted, "candidates are not listed chronologically");
         assert_eq!(keys, vec![(0, 5), (0, 9), (5, 9)]);
+    }
+    /// The contended range is the INTERSECTION, not either access's own span.
+    ///
+    /// Two 8-byte accesses one byte apart contend over seven bytes; reporting
+    /// either access's full range would name a byte the other never touched,
+    /// and the contended byte is usually what identifies the struct field.
+    #[test]
+    fn a_race_names_the_bytes_the_two_accesses_share() {
+        let a = MemoryAccess {
+            sequence: 0,
+            address: Address::new(0x1000),
+            size: 8,
+            tid: ThreadId(1),
+            kind: AccessKind::Write,
+        };
+        let b = MemoryAccess {
+            sequence: 1,
+            address: Address::new(0x1001),
+            size: 8,
+            tid: ThreadId(2),
+            kind: AccessKind::Read,
+        };
+        let race = RaceCandidate { first: a, second: b };
+        assert_eq!(
+            race.contended_range(),
+            Some((0x1001, 0x1008)),
+            "the intersection is [0x1001, 0x1008), seven bytes — not either access's own span"
+        );
+
+        // Non-overlapping accesses are not a race and have no contended range.
+        let far = MemoryAccess {
+            sequence: 2,
+            address: Address::new(0x2000),
+            size: 8,
+            tid: ThreadId(2),
+            kind: AccessKind::Read,
+        };
+        let apart = RaceCandidate { first: race.first, second: far };
+        assert_eq!(apart.contended_range(), None);
     }
 }
