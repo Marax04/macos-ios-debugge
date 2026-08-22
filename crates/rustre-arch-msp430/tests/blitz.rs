@@ -342,24 +342,24 @@ fn encode_decode_roundtrip_add_reg_reg() {
 fn alu_add_zero_zero() {
     let r = alu_add(0, 0);
     assert_eq!(r.result, 0);
-    assert!(r.zero);
-    assert!(!r.carry);
-    assert!(!r.overflow);
-    assert!(!r.negative);
+    assert!(r.zero());
+    assert!(!r.carry());
+    assert!(!r.overflow());
+    assert!(!r.negative());
 }
 
 #[test]
 fn alu_addc_with_carry_in() {
     let r = alu_addc(0, 0, true);
     assert_eq!(r.result, 1);
-    assert!(!r.carry);
+    assert!(!r.carry());
 }
 
 #[test]
 fn alu_addc_carry_in_triggers_carry_out() {
     let r = alu_addc(0xFFFF, 0, true);
     assert_eq!(r.result, 0);
-    assert!(r.carry);
+    assert!(r.carry());
 }
 
 #[test]
@@ -367,8 +367,8 @@ fn alu_sub_borrow_clears_carry() {
     // 0 - 1 → underflow; MSP430 carry = NOT borrow, so carry should be false.
     let r = alu_sub(1, 0);
     assert_eq!(r.result, 0xFFFF);
-    assert!(!r.carry);
-    assert!(r.negative);
+    assert!(!r.carry());
+    assert!(r.negative());
 }
 
 #[test]
@@ -382,14 +382,14 @@ fn alu_subc_basic() {
 fn alu_and_zero_result_sets_zero_flag() {
     let r = alu_and(0xFF00, 0x00FF);
     assert_eq!(r.result, 0);
-    assert!(r.zero);
+    assert!(r.zero());
 }
 
 #[test]
 fn alu_bis_or() {
     let r = alu_bis(0xF000, 0x000F);
     assert_eq!(r.result, 0xF00F);
-    assert!(!r.carry);
+    assert!(!r.carry());
 }
 
 #[test]
@@ -397,23 +397,23 @@ fn alu_xor_negative_negative_overflow() {
     // Both operands have bit 15 set → overflow flag set per impl.
     let r = alu_xor(0x8000, 0x8000);
     assert_eq!(r.result, 0);
-    assert!(r.zero);
-    assert!(r.overflow);
+    assert!(r.zero());
+    assert!(r.overflow());
 }
 
 #[test]
 fn alu_rrc_carry_out_lsb() {
     let r = alu_rrc(0x0001, false);
     assert_eq!(r.result, 0);
-    assert!(r.carry);
-    assert!(r.zero);
+    assert!(r.carry());
+    assert!(r.zero());
 }
 
 #[test]
 fn alu_rra_zero() {
     let r = alu_rra(0);
     assert_eq!(r.result, 0);
-    assert!(!r.carry);
+    assert!(!r.carry());
 }
 
 #[test]
@@ -436,8 +436,8 @@ fn alu_sxt_clears_high_bits_when_positive() {
 #[test]
 fn aluresult_from_word_zero_negative_inferred() {
     let r = AluResult::from_word(0x8000, false, false);
-    assert!(!r.zero);
-    assert!(r.negative);
+    assert!(!r.zero());
+    assert!(r.negative());
 }
 
 // ── RegisterFile ─────────────────────────────────────────────────────────────

@@ -896,27 +896,139 @@ impl Default for RegisterFile {
 pub struct AluResult {
     /// The 16-bit result value.
     pub result: u16,
-    /// Whether the carry flag should be set.
-    pub carry: bool,
-    /// Whether the overflow flag should be set.
-    pub overflow: bool,
-    /// Whether the zero flag should be set.
-    pub zero: bool,
-    /// Whether the negative flag should be set.
-    pub negative: bool,
+    /// The C/Z/N/V flags this operation produces, packed in status-register
+    /// bit order (see [`AluFlags`]).
+    pub flags: AluFlags,
+}
+
+/// The four ALU condition flags, packed in MSP430 status-register bit order.
+///
+/// Replaces four separate `bool` fields. The bit positions are exactly those
+/// of [`sr_bits`], so [`AluFlags::to_sr_mask`] is the value that can be OR-ed
+/// straight into SR — the packing is the hardware layout, not an invention:
+///
+/// | bit | flag | constant |
+/// |-----|------|----------|
+/// | 0   | carry    | [`sr_bits::C`] |
+/// | 1   | zero     | [`sr_bits::Z`] |
+/// | 2   | negative | [`sr_bits::N`] |
+/// | 8   | overflow | [`sr_bits::V`] |
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AluFlags(u16);
+
+impl AluFlags {
+    /// No flag set.
+    pub const NONE: Self = Self(0);
+
+    /// The carry flag alone.
+    pub const CARRY: Self = Self(sr_bits::C);
+    /// The zero flag alone.
+    pub const ZERO: Self = Self(sr_bits::Z);
+    /// The negative flag alone.
+    pub const NEGATIVE: Self = Self(sr_bits::N);
+    /// The overflow flag alone.
+    pub const OVERFLOW: Self = Self(sr_bits::V);
+
+    /// Return a copy with `other`'s bits also set.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// Return a copy with `other`'s bits set only when `cond` holds.
+    ///
+    /// Composing with this rather than a four-`bool` constructor keeps every
+    /// flag named at the call site.
+    #[must_use]
+    pub const fn with_if(self, other: Self, cond: bool) -> Self {
+        if cond { self.with(other) } else { self }
+    }
+
+    /// The carry flag.
+    #[must_use]
+    pub const fn carry(self) -> bool {
+        self.0 & sr_bits::C != 0
+    }
+
+    /// The zero flag.
+    #[must_use]
+    pub const fn zero(self) -> bool {
+        self.0 & sr_bits::Z != 0
+    }
+
+    /// The negative flag.
+    #[must_use]
+    pub const fn negative(self) -> bool {
+        self.0 & sr_bits::N != 0
+    }
+
+    /// The overflow flag.
+    #[must_use]
+    pub const fn overflow(self) -> bool {
+        self.0 & sr_bits::V != 0
+    }
+
+    /// The bits as a status-register mask, ready to OR into SR.
+    #[must_use]
+    pub const fn to_sr_mask(self) -> u16 {
+        self.0
+    }
 }
 
 impl AluResult {
     /// Construct from a raw 16-bit result and carry.
+    ///
+    /// Zero and negative are derived from the full 16-bit `result`.
     #[must_use]
     pub const fn from_word(result: u16, carry: bool, overflow: bool) -> Self {
         Self {
             result,
-            carry,
-            overflow,
-            zero: result == 0,
-            negative: result & 0x8000 != 0,
+            flags: AluFlags::NONE
+                .with_if(AluFlags::CARRY, carry)
+                .with_if(AluFlags::ZERO, result == 0)
+                .with_if(AluFlags::NEGATIVE, result & 0x8000 != 0)
+                .with_if(AluFlags::OVERFLOW, overflow),
         }
+    }
+
+    /// Construct from a byte-width operation.
+    ///
+    /// Same as [`Self::from_word`] except zero and negative are derived from
+    /// the low 8 bits, which is what byte-width MSP430 instructions set.
+    #[must_use]
+    pub const fn from_byte(result: u16, carry: bool, overflow: bool) -> Self {
+        Self {
+            result,
+            flags: AluFlags::NONE
+                .with_if(AluFlags::CARRY, carry)
+                .with_if(AluFlags::ZERO, result.trailing_zeros() >= 8)
+                .with_if(AluFlags::NEGATIVE, result & 0x80 != 0)
+                .with_if(AluFlags::OVERFLOW, overflow),
+        }
+    }
+
+    /// The carry flag.
+    #[must_use]
+    pub const fn carry(&self) -> bool {
+        self.flags.carry()
+    }
+
+    /// The zero flag.
+    #[must_use]
+    pub const fn zero(&self) -> bool {
+        self.flags.zero()
+    }
+
+    /// The negative flag.
+    #[must_use]
+    pub const fn negative(&self) -> bool {
+        self.flags.negative()
+    }
+
+    /// The overflow flag.
+    #[must_use]
+    pub const fn overflow(&self) -> bool {
+        self.flags.overflow()
     }
 }
 
@@ -1262,11 +1374,11 @@ impl Msp430Emulator {
                 self.regs.set_pc(new_pc);
                 let result = if bw == 0 {
                     let r = alu_rrc(val, self.regs.carry());
-                    self.regs.update_flags_word(r.result, r.carry, r.overflow);
+                    self.regs.update_flags_word(r.result, r.carry(), r.overflow());
                     r.result
                 } else {
                     let rv = alu_rrc(val & 0xFF, self.regs.carry());
-                    self.regs.update_flags_byte((rv.result & 0xFF) as u8, rv.carry, rv.overflow);
+                    self.regs.update_flags_byte((rv.result & 0xFF) as u8, rv.carry(), rv.overflow());
                     rv.result & 0xFF
                 };
                 if as_bits == 0 {
@@ -1277,7 +1389,7 @@ impl Msp430Emulator {
                 let (val, new_pc) = self.read_src_operand(as_bits, reg, cur_pc);
                 self.regs.set_pc(new_pc);
                 let r = alu_rra(val);
-                self.regs.update_flags_word(r.result, r.carry, r.overflow);
+                self.regs.update_flags_word(r.result, r.carry(), r.overflow());
                 if as_bits == 0 {
                     self.regs.write(reg, r.result);
                 }
@@ -1294,7 +1406,7 @@ impl Msp430Emulator {
                 let (val, new_pc) = self.read_src_operand(as_bits, reg, cur_pc);
                 self.regs.set_pc(new_pc);
                 let r = alu_sxt(val);
-                self.regs.update_flags_word(r.result, r.carry, r.overflow);
+                self.regs.update_flags_word(r.result, r.carry(), r.overflow());
                 if as_bits == 0 {
                     self.regs.write(reg, r.result);
                 }
@@ -1377,10 +1489,10 @@ impl Msp430Emulator {
             _ => {
                 if bw == 0 {
                     self.regs
-                        .update_flags_word(result.result, result.carry, result.overflow);
+                        .update_flags_word(result.result, result.carry(), result.overflow());
                 } else {
                     self.regs
-                        .update_flags_byte((result.result & 0xFF) as u8, result.carry, result.overflow);
+                        .update_flags_byte((result.result & 0xFF) as u8, result.carry(), result.overflow());
                 }
             }
         }
@@ -2128,17 +2240,17 @@ mod tests {
     fn test_alu_add_basic() {
         let r = alu_add(0x0001, 0x0001);
         assert_eq!(r.result, 0x0002);
-        assert!(!r.carry);
-        assert!(!r.zero);
-        assert!(!r.negative);
+        assert!(!r.carry());
+        assert!(!r.zero());
+        assert!(!r.negative());
     }
 
     #[test]
     fn test_alu_add_carry() {
         let r = alu_add(0xFFFF, 0x0001);
         assert_eq!(r.result, 0x0000);
-        assert!(r.carry);
-        assert!(r.zero);
+        assert!(r.carry());
+        assert!(r.zero());
     }
 
     #[test]
@@ -2146,31 +2258,31 @@ mod tests {
         // 0x7FFF + 1 = 0x8000 → signed overflow: positive + positive = negative.
         let r = alu_add(0x7FFF, 0x0001);
         assert_eq!(r.result, 0x8000);
-        assert!(r.overflow);
-        assert!(!r.carry);
+        assert!(r.overflow());
+        assert!(!r.carry());
     }
 
     #[test]
     fn test_alu_sub_basic() {
         let r = alu_sub(0x0001, 0x0002);
         assert_eq!(r.result, 0x0001);
-        assert!(r.carry); // MSP430: carry = NOT borrow
+        assert!(r.carry()); // MSP430: carry = NOT borrow
     }
 
     #[test]
     fn test_alu_sub_zero() {
         let r = alu_sub(0x0005, 0x0005);
         assert_eq!(r.result, 0x0000);
-        assert!(r.zero);
-        assert!(r.carry);
+        assert!(r.zero());
+        assert!(r.carry());
     }
 
     #[test]
     fn test_alu_and() {
         let r = alu_and(0xF0F0, 0xFF00);
         assert_eq!(r.result, 0xF000);
-        assert!(!r.carry);
-        assert!(!r.overflow);
+        assert!(!r.carry());
+        assert!(!r.overflow());
     }
 
     #[test]
@@ -2184,7 +2296,7 @@ mod tests {
         // 0x0002, carry_in=1 → result = 0x8001, carry_out = 0.
         let r = alu_rrc(0x0002, true);
         assert_eq!(r.result, 0x8001);
-        assert!(!r.carry);
+        assert!(!r.carry());
     }
 
     #[test]
@@ -2192,7 +2304,7 @@ mod tests {
         // 0x8000 >> 1 arithmetic = 0xC000 (sign bit preserved).
         let r = alu_rra(0x8000);
         assert_eq!(r.result, 0xC000);
-        assert!(!r.carry);
+        assert!(!r.carry());
     }
 
     #[test]
@@ -2205,21 +2317,21 @@ mod tests {
     fn test_alu_sxt_positive() {
         let r = alu_sxt(0x007F);
         assert_eq!(r.result, 0x007F);
-        assert!(r.carry);
+        assert!(r.carry());
     }
 
     #[test]
     fn test_alu_sxt_negative() {
         let r = alu_sxt(0x0080);
         assert_eq!(r.result, 0xFF80);
-        assert!(r.carry);
+        assert!(r.carry());
     }
 
     #[test]
     fn test_alu_sxt_zero() {
         let r = alu_sxt(0x0000);
         assert_eq!(r.result, 0x0000);
-        assert!(!r.carry);
+        assert!(!r.carry());
     }
 
     // ── FlatMemory ────────────────────────────────────────────────────────────

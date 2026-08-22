@@ -204,18 +204,18 @@ impl Msp430State {
 
     /// Update Z/N/C/V flags from a 16-bit result.
     pub const fn update_flags_word(&mut self, r: &AluResult) {
-        self.set_flag(sr_bits::Z, r.zero);
-        self.set_flag(sr_bits::N, r.negative);
-        self.set_flag(sr_bits::C, r.carry);
-        self.set_flag(sr_bits::V, r.overflow);
+        self.set_flag(sr_bits::Z, r.zero());
+        self.set_flag(sr_bits::N, r.negative());
+        self.set_flag(sr_bits::C, r.carry());
+        self.set_flag(sr_bits::V, r.overflow());
     }
 
     /// Update Z/N/C/V flags from an 8-bit result.
     pub const fn update_flags_byte(&mut self, r: &AluResult) {
         self.set_flag(sr_bits::Z, r.result.trailing_zeros() >= 8);
         self.set_flag(sr_bits::N, r.result & 0x80 != 0);
-        self.set_flag(sr_bits::C, r.carry);
-        self.set_flag(sr_bits::V, r.overflow);
+        self.set_flag(sr_bits::C, r.carry());
+        self.set_flag(sr_bits::V, r.overflow());
     }
 
     // ── Memory accessors ──────────────────────────────────────────────────────
@@ -513,13 +513,7 @@ fn exec_single_op(state: &mut Msp430State, word: u16) -> StepResult {
             let r = if bw {
                 let byte_val = ((val & 0xFF) as u8).cast_signed() >> 1;
                 let carry = val & 1 != 0;
-                AluResult {
-                    result:   u16::from(byte_val.cast_unsigned()),
-                    carry,
-                    overflow: false,
-                    zero:     byte_val == 0,
-                    negative: byte_val < 0,
-                }
+                AluResult::from_byte(u16::from(byte_val.cast_unsigned()), carry, false)
             } else {
                 alu_rra(val)
             };
@@ -583,13 +577,7 @@ fn exec_two_op(state: &mut Msp430State, word: u16, opcode4: u8) {
     let carry_in = state.carry();
 
     let result = match opcode4 {
-        4 => AluResult {
-            result: src_val,
-            carry: false,
-            overflow: false,
-            zero: src_val == 0,
-            negative: src_val & 0x8000 != 0,
-        },
+        4 => AluResult::from_word(src_val, false, false),
         5 => alu_add(src_val, dst_val),
         6 => alu_addc(src_val, dst_val, carry_in),
         7 => alu_subc(src_val, dst_val, carry_in),
@@ -600,13 +588,7 @@ fn exec_two_op(state: &mut Msp430State, word: u16, opcode4: u8) {
             alu_addc(src_val, dst_val, carry_in)
         }
         11 | 15 => alu_and(src_val, dst_val), // 11=BIT, 15=AND
-        12 => AluResult {
-            result: dst_val & !src_val,
-            carry: false,
-            overflow: false,
-            zero: (dst_val & !src_val) == 0,
-            negative: (dst_val & !src_val) & 0x8000 != 0,
-        }, // BIC
+        12 => AluResult::from_word(dst_val & !src_val, false, false), // BIC
         13 => alu_bis(src_val, dst_val), // BIS
         14 => alu_xor(src_val, dst_val),
         _ => return,

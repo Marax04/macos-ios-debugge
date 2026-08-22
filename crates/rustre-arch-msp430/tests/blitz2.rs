@@ -227,29 +227,29 @@ fn emulated_unrecognised_returns_none() {
 fn alu_add_basic_and_overflow() {
     let r = alu_add(1, 2);
     assert_eq!(r.result, 3);
-    assert!(!r.carry);
-    assert!(!r.overflow);
-    assert!(!r.zero);
-    assert!(!r.negative);
+    assert!(!r.carry());
+    assert!(!r.overflow());
+    assert!(!r.zero());
+    assert!(!r.negative());
 
     // Carry boundary
     let r = alu_add(0xFFFF, 1);
     assert_eq!(r.result, 0);
-    assert!(r.carry);
-    assert!(r.zero);
+    assert!(r.carry());
+    assert!(r.zero());
 
     // Signed overflow: 0x7FFF + 1 = 0x8000
     let r = alu_add(0x7FFF, 1);
     assert_eq!(r.result, 0x8000);
-    assert!(r.overflow);
-    assert!(r.negative);
+    assert!(r.overflow());
+    assert!(r.negative());
 }
 
 #[test]
 fn alu_addc_carry_in_propagates() {
     let r = alu_addc(0xFFFF, 0, true);
     assert_eq!(r.result, 0);
-    assert!(r.carry);
+    assert!(r.carry());
     let r = alu_addc(1, 2, true);
     assert_eq!(r.result, 4);
 }
@@ -258,14 +258,14 @@ fn alu_addc_carry_in_propagates() {
 fn alu_sub_basic_borrow() {
     let r = alu_sub(1, 3); // dst-src = 3-1 = 2
     assert_eq!(r.result, 2);
-    assert!(r.carry); // no borrow -> carry set on MSP430
+    assert!(r.carry()); // no borrow -> carry set on MSP430
     let r = alu_sub(3, 1); // 1-3 = underflow
     assert_eq!(r.result, 0xFFFE);
-    assert!(!r.carry); // borrow occurred
+    assert!(!r.carry()); // borrow occurred
     let r = alu_sub(5, 5); // 0
     assert_eq!(r.result, 0);
-    assert!(r.zero);
-    assert!(r.carry);
+    assert!(r.zero());
+    assert!(r.carry());
 }
 
 #[test]
@@ -285,8 +285,8 @@ fn alu_subc_matches_addc_with_inverted_src() {
 fn alu_and_or_xor_basic() {
     let r = alu_and(0xF0F0, 0x0FF0);
     assert_eq!(r.result, 0x00F0);
-    assert!(!r.carry);
-    assert!(!r.overflow);
+    assert!(!r.carry());
+    assert!(!r.overflow());
 
     let r = alu_bis(0xF000, 0x0F00);
     assert_eq!(r.result, 0xFF00);
@@ -303,7 +303,7 @@ fn alu_rrc_round_trip_property() {
         let v = lcg.u16();
         let r = alu_rrc(v, false);
         assert_eq!(r.result, v >> 1);
-        assert_eq!(r.carry, v & 1 != 0);
+        assert_eq!(r.carry(), v & 1 != 0);
     }
 }
 
@@ -315,7 +315,7 @@ fn alu_rra_sign_preserving() {
     assert_eq!(r.result, 0x2000);
     let r = alu_rra(0x0001);
     assert_eq!(r.result, 0x0000);
-    assert!(r.carry);
+    assert!(r.carry());
 }
 
 #[test]
@@ -347,11 +347,11 @@ fn alu_sxt_property() {
 #[test]
 fn alu_result_from_word_flags() {
     let r = AluResult::from_word(0, false, false);
-    assert!(r.zero);
-    assert!(!r.negative);
+    assert!(r.zero());
+    assert!(!r.negative());
     let r = AluResult::from_word(0x8000, false, false);
-    assert!(r.negative);
-    assert!(!r.zero);
+    assert!(r.negative());
+    assert!(!r.zero());
 }
 
 // ── 7. RegisterFile ───────────────────────────────────────────────────────────
