@@ -25,7 +25,7 @@ use rustre_analysis_dataflow::ssa::{Instruction, SsaFunction, SsaVar, Var};
 
 struct Rng(u64);
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -33,7 +33,7 @@ impl Rng {
         self.0 = x;
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
-    fn below(&mut self, n: u64) -> u64 {
+    const fn below(&mut self, n: u64) -> u64 {
         self.next() % n
     }
 }
@@ -41,7 +41,7 @@ impl Rng {
 /// One block's instruction list: (optional def, uses) in program order.
 type BlockInstrs = Vec<(Option<u32>, Vec<u32>)>;
 
-/// Derive (gen_set, kill) sets from an instruction sequence, the classic way:
+/// Derive (`gen_set`, kill) sets from an instruction sequence, the classic way:
 /// gen = upward-exposed uses, kill = all defs.
 fn gen_kill(instrs: &BlockInstrs) -> (HashSet<u32>, HashSet<u32>) {
     let mut gen_set = HashSet::new();

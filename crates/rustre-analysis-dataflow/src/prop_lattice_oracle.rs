@@ -390,7 +390,7 @@ mod const_prop_differential {
         vals
     }
 
-    /// `precise[i]`: v_i is defined, comfortably inside i64 (so checked and
+    /// `precise[i]`: `v_i` is defined, comfortably inside i64 (so checked and
     /// wrapping semantics coincide), and all its transitive var operands are
     /// precise too — on these, every impl must find the exact constant.
     fn precise_mask(prog: &[Stmt], vals: &[Option<i64>]) -> Vec<bool> {

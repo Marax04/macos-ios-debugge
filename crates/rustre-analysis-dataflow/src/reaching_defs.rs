@@ -159,8 +159,7 @@ impl ReachingDefs {
     pub fn def_count_at(&self, bb: BBId, var_id: u32) -> usize {
         self.rd_in
             .get(bb.0)
-            .map(|s| s.iter().filter(|d| d.var_id == var_id).count())
-            .unwrap_or(0)
+            .map_or(0, |s| s.iter().filter(|d| d.var_id == var_id).count())
     }
 
     /// Return all definitions (across all variables) reaching the entry of `bb`.

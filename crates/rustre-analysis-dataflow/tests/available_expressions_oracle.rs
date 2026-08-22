@@ -9,7 +9,7 @@
 //! reachable from the entry by following CFG edges and simulating each block's
 //! statements one at a time. Cycles are handled by memoizing visited states —
 //! this is exhaustive path enumeration (finite because the availability set
-//! lattice is finite), NOT a worklist over dataflow equations. avail_in(B) is
+//! lattice is finite), NOT a worklist over dataflow equations. `avail_in(B)` is
 //! the intersection of the availability sets of all states arriving at B.
 
 use std::collections::{BTreeSet, HashSet};
@@ -21,7 +21,7 @@ use rustre_analysis_dataflow::available_expressions::{
 
 struct Rng(u64);
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -29,14 +29,14 @@ impl Rng {
         self.0 = x;
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
-    fn below(&mut self, n: u64) -> u64 {
+    const fn below(&mut self, n: u64) -> u64 {
         self.next() % n
     }
 }
 
 const NUM_VARS: u32 = 3;
 
-/// Build the expression universe: all `va OP vb` pairs over NUM_VARS.
+/// Build the expression universe: all `va OP vb` pairs over `NUM_VARS`.
 fn universe() -> Vec<Expr> {
     let mut v = Vec::new();
     let mut id = 0u32;
@@ -87,7 +87,7 @@ fn step(u: &[Expr], set: &mut BTreeSet<u32>, s: &AvailStmt) {
     }
 }
 
-/// Exhaustive path exploration → avail_in for every reachable block.
+/// Exhaustive path exploration → `avail_in` for every reachable block.
 /// `None` = block unreachable from entry.
 fn oracle(
     u: &[Expr],

@@ -2748,7 +2748,7 @@ mod dataflow_algo_tests {
         );
     }
 
-    /// If the requested `entry` bb_id isn't present in `cfg`, fall back to
+    /// If the requested `entry` `bb_id` isn't present in `cfg`, fall back to
     /// `cfg[0]` (matching `insert_phi_nodes`) instead of panicking.
     #[test]
     fn test_phi_insertion_with_entry_unknown_falls_back_to_first() {

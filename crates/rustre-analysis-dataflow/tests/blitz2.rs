@@ -18,10 +18,10 @@ use rustre_analysis_dataflow::{
 
 struct Lcg(u64);
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self(0xDEAD_BEEF_CAFE_BABE)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
@@ -209,12 +209,12 @@ fn test_lattice_value_meet_commutative_30() {
     for _ in 0..30 {
         let a = match rng.range(3) {
             0 => LatticeValue::Top,
-            1 => LatticeValue::Const(rng.range(5) as i64),
+            1 => LatticeValue::Const(i64::from(rng.range(5))),
             _ => LatticeValue::Bottom,
         };
         let b = match rng.range(3) {
             0 => LatticeValue::Top,
-            1 => LatticeValue::Const(rng.range(5) as i64),
+            1 => LatticeValue::Const(i64::from(rng.range(5))),
             _ => LatticeValue::Bottom,
         };
         assert_eq!(LatticeValue::meet(&a, &b), LatticeValue::meet(&b, &a));

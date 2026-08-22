@@ -374,10 +374,10 @@ mod tests {
     /// `a` live out of block 2 as well, which is wrong — `a` only ever flows
     /// along the 1→3 edge.
     ///
-    ///   0: a_0 = …, b_0 = …
-    ///    ├─1─┐            (nothing; carries a_0 through)
-    ///    └─2─┘            (nothing; carries b_0 through)
-    ///        3: r_0 = φ(a_0 from 1, b_0 from 2)
+    ///   0: `a_0` = …, `b_0` = …
+    ///    ├─1─┐            (nothing; carries `a_0` through)
+    ///    └─2─┘            (nothing; carries `b_0` through)
+    ///        3: `r_0` = `φ(a_0` from 1, `b_0` from 2)
     #[test]
     fn phi_arguments_are_live_on_their_own_incoming_edge() {
         let succs = vec![vec![BBId(1), BBId(2)], vec![BBId(3)], vec![BBId(3)], vec![]];

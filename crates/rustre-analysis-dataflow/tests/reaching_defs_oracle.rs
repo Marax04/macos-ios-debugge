@@ -7,7 +7,7 @@
 //! 2. `reaching_defs::reaching_definitions` — the `cfg_dom::Cfg` +
 //!    `NonSsaInstruction`/`DefId` model (gen/kill derived internally).
 //! 3. `reaching_definitions::ReachingDefs::compute` — the `BasicBlockInfo`
-//!    model with named `Var`s and caller-supplied gen/kill_vars.
+//!    model with named `Var`s and caller-supplied `gen/kill_vars`.
 //! 4. `def_use_analysis::ReachingDefs::compute` — the `Program`/`Block` model
 //!    with `all_defs: ProgramPoint → def_id` and caller-supplied kill sets.
 //!
@@ -41,7 +41,7 @@ use rustre_analysis_dataflow::reaching_defs::{reaching_definitions, DefId, NonSs
 
 struct Rng(u64);
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -49,7 +49,7 @@ impl Rng {
         self.0 = x;
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
-    fn below(&mut self, n: u64) -> u64 {
+    const fn below(&mut self, n: u64) -> u64 {
         self.next() % n
     }
 }
@@ -235,7 +235,7 @@ fn run_lib(succs: &[Vec<usize>], sites: &[DefSite], n: usize) -> HashMap<u32, (V
     compute_reaching_defs(&nodes)
 }
 
-/// Impl 2: `reaching_defs::reaching_definitions` on Cfg + NonSsaInstruction.
+/// Impl 2: `reaching_defs::reaching_definitions` on Cfg + `NonSsaInstruction`.
 fn run_reaching_defs(
     succs: &[Vec<usize>],
     blocks: &[BlockInstrs],
@@ -273,7 +273,7 @@ fn run_reaching_defs(
     reaching_definitions(&cfg, &ns_blocks)
 }
 
-/// Impl 3: `reaching_definitions::ReachingDefs::compute` on BasicBlockInfo.
+/// Impl 3: `reaching_definitions::ReachingDefs::compute` on `BasicBlockInfo`.
 fn run_bb_info(
     succs: &[Vec<usize>],
     blocks: &[BlockInstrs],

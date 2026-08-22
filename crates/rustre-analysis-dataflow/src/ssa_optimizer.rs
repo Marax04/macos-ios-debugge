@@ -1069,11 +1069,10 @@ impl LivenessAnalysis {
         for block in &func.blocks {
             let mut g: HashSet<SsaRef> = HashSet::new();
             let mut k: HashSet<SsaRef> = HashSet::new();
-            if let SsaTerm::Branch(cond, _, _) = &block.term {
-                if !k.contains(cond) {
+            if let SsaTerm::Branch(cond, _, _) = &block.term
+                && !k.contains(cond) {
                     g.insert(cond.clone());
                 }
-            }
             if let SsaTerm::Return(Some(r)) = &block.term
                 && !k.contains(r) {
                     g.insert(r.clone());

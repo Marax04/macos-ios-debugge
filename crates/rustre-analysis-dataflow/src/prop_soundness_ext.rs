@@ -542,7 +542,7 @@ mod alias_analysis_soundness {
     use crate::alias_analysis::{AliasAnalysis, ObjId, PtrVar};
     use std::collections::{HashMap, HashSet};
 
-    /// Build a random analysis using only AddressOf + Copy constraints (the
+    /// Build a random analysis using only `AddressOf` + Copy constraints (the
     /// fragment whose ground truth is a simple copy-closure), and record the
     /// same constraints for the reference solver.
     struct Built {
