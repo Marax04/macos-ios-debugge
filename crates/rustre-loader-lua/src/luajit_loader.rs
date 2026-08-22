@@ -5,6 +5,8 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::parse_limits::capped_capacity;
+
 // ── Magic / Header constants ──────────────────────────────────────────────────
 
 const BCDUMP_HEAD1: u8 = 0x1B; // ESC
@@ -445,8 +447,12 @@ impl<'a> LuaJitLoader<'a> {
             0
         };
 
-        // Instructions
-        let mut instructions = Vec::with_capacity(num_bc as usize);
+        // Instructions. The reservation is clamped to what the remaining bytes
+        // can hold: `num_bc` is an unvalidated ULEB128 from the file, and the
+        // per-element `pos + 4 > data.len()` check below only fires AFTER the
+        // reservation has already been made.
+        let mut instructions =
+            Vec::with_capacity(capped_capacity(u64::from(num_bc), 4, data.len().saturating_sub(pos)));
         for _ in 0..num_bc {
             if pos + 4 > data.len() {
                 bail!("Instructions truncated");
@@ -462,7 +468,8 @@ impl<'a> LuaJitLoader<'a> {
         }
 
         // Upvalue descriptors (2 bytes each)
-        let mut upvalues = Vec::with_capacity(num_upvalues as usize);
+        let mut upvalues =
+            Vec::with_capacity(capped_capacity(u64::from(num_upvalues), 2, data.len().saturating_sub(pos)));
         for _ in 0..num_upvalues {
             if pos + 2 > data.len() {
                 bail!("Upvalue descriptors truncated");
@@ -476,14 +483,16 @@ impl<'a> LuaJitLoader<'a> {
         }
 
         // GC constants (in reverse order, innermost first)
-        let mut kgc = Vec::with_capacity(num_kgc as usize);
+        let mut kgc =
+            Vec::with_capacity(capped_capacity(u64::from(num_kgc), 1, data.len().saturating_sub(pos)));
         for _ in 0..num_kgc {
             kgc.push(self.parse_kgc(data, &mut pos)?);
         }
         kgc.reverse();
 
         // Numeric constants
-        let mut knum = Vec::with_capacity(num_kn as usize);
+        let mut knum =
+            Vec::with_capacity(capped_capacity(u64::from(num_kn), 1, data.len().saturating_sub(pos)));
         for _ in 0..num_kn {
             knum.push(self.parse_knum(data, &mut pos)?);
         }

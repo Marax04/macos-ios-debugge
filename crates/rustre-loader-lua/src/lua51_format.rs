@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::{self, Cursor, Read};
+use crate::parse_limits::{MAX_PROTO_DEPTH, cursor_capacity, depth_exceeded_msg};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Magic / version constants
@@ -399,6 +400,21 @@ impl Lua51Proto {
 
 /// Decode a Lua 5.1 prototype from the cursor.
 pub fn decode_lua51_proto(cur: &mut Cursor<&[u8]>) -> Result<Lua51Proto, String> {
+    decode_lua51_proto_at_depth(cur, 0)
+}
+
+/// Decode a Lua 5.1 prototype, tracking nesting depth.
+///
+/// `depth` is the number of enclosing prototypes; decoding stops with an error
+/// past [`MAX_PROTO_DEPTH`] because each level costs one native stack frame but
+/// only about five bytes of input.
+pub fn decode_lua51_proto_at_depth(
+    cur: &mut Cursor<&[u8]>,
+    depth: usize,
+) -> Result<Lua51Proto, String> {
+    if depth > MAX_PROTO_DEPTH {
+        return Err(depth_exceeded_msg());
+    }
     let source_name = read_lua_string(cur).map_err(|e| format!("source name: {e}"))?;
     let line_defined = read_i32_le(cur).map_err(|e| format!("line_defined: {e}"))?;
     let last_line_defined = read_i32_le(cur).map_err(|e| format!("last_line_defined: {e}"))?;
@@ -409,14 +425,14 @@ pub fn decode_lua51_proto(cur: &mut Cursor<&[u8]>) -> Result<Lua51Proto, String>
 
     // Code
     let n_code = read_u32_le(cur).map_err(|e| format!("n_code: {e}"))?;
-    let mut code = Vec::with_capacity(n_code as usize);
+    let mut code = Vec::with_capacity(cursor_capacity(cur, u64::from(n_code), 4));
     for _ in 0..n_code {
         code.push(read_u32_le(cur).map_err(|e| format!("instr: {e}"))?);
     }
 
     // Constants
     let n_const = read_u32_le(cur).map_err(|e| format!("n_const: {e}"))?;
-    let mut constants = Vec::with_capacity(n_const as usize);
+    let mut constants = Vec::with_capacity(cursor_capacity(cur, u64::from(n_const), 1));
     for _ in 0..n_const {
         let tag = read_u8(cur).map_err(|e| format!("const tag: {e}"))?;
         let constant = match tag {
@@ -442,21 +458,21 @@ pub fn decode_lua51_proto(cur: &mut Cursor<&[u8]>) -> Result<Lua51Proto, String>
 
     // Sub-prototypes
     let n_proto = read_u32_le(cur).map_err(|e| format!("n_proto: {e}"))?;
-    let mut protos = Vec::with_capacity(n_proto as usize);
+    let mut protos = Vec::with_capacity(cursor_capacity(cur, u64::from(n_proto), 1));
     for _ in 0..n_proto {
-        protos.push(decode_lua51_proto(cur)?);
+        protos.push(decode_lua51_proto_at_depth(cur, depth + 1)?);
     }
 
     // Line info
     let n_lines = read_u32_le(cur).map_err(|e| format!("n_lines: {e}"))?;
-    let mut source_lines = Vec::with_capacity(n_lines as usize);
+    let mut source_lines = Vec::with_capacity(cursor_capacity(cur, u64::from(n_lines), 4));
     for _ in 0..n_lines {
         source_lines.push(read_i32_le(cur).map_err(|e| format!("line: {e}"))?);
     }
 
     // Locals
     let n_locals = read_u32_le(cur).map_err(|e| format!("n_locals: {e}"))?;
-    let mut locals = Vec::with_capacity(n_locals as usize);
+    let mut locals = Vec::with_capacity(cursor_capacity(cur, u64::from(n_locals), 1));
     for _ in 0..n_locals {
         let name = read_lua_string(cur)
             .map_err(|e| format!("local name: {e}"))?
@@ -472,7 +488,7 @@ pub fn decode_lua51_proto(cur: &mut Cursor<&[u8]>) -> Result<Lua51Proto, String>
 
     // Upvalue names
     let n_upvals = read_u32_le(cur).map_err(|e| format!("n_upvals: {e}"))?;
-    let mut upvalue_names = Vec::with_capacity(n_upvals as usize);
+    let mut upvalue_names = Vec::with_capacity(cursor_capacity(cur, u64::from(n_upvals), 1));
     for _ in 0..n_upvals {
         let name = read_lua_string(cur)
             .map_err(|e| format!("upval name: {e}"))?

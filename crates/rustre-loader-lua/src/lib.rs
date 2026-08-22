@@ -6,6 +6,7 @@
 //! symbols (line info, local variables, upvalue names), and assembles a full
 //! memory-mapped binary view.
 
+pub mod parse_limits;
 pub mod lua50_format;
 pub mod lua51_format;
 pub mod lua52_53_format;

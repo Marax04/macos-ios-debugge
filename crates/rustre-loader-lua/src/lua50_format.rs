@@ -12,6 +12,8 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use crate::parse_limits::{MAX_PROTO_DEPTH, capped_capacity};
+
 // ─── Lua 5.0 constants ────────────────────────────────────────────────────────
 
 /// Lua bytecode magic bytes.
@@ -606,6 +608,14 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Bytes left after the current position.
+    ///
+    /// Used to clamp `Vec::with_capacity` against what the buffer could really
+    /// hold, so an absurd count field cannot drive a huge reservation.
+    fn remaining(&self) -> usize {
+        self.data.len().saturating_sub(self.pos)
+    }
+
     fn read_string(&mut self) -> Option<Option<String>> {
         let slen = self.read_size_t()?;
         if slen == 0 {
@@ -630,6 +640,18 @@ impl<'a> Reader<'a> {
 
 /// Parse a Lua 5.0 prototype from a `Reader`.
 fn parse_proto_50_reader(r: &mut Reader<'_>) -> Option<Lua50Proto> {
+    parse_proto_50_reader_at_depth(r, 0)
+}
+
+/// Parse a Lua 5.0 prototype, tracking nesting depth.
+///
+/// Returns `None` past [`MAX_PROTO_DEPTH`]: each nesting level costs one native
+/// stack frame but only about five bytes of input, so an unbounded decoder is a
+/// stack-exhaustion primitive.
+fn parse_proto_50_reader_at_depth(r: &mut Reader<'_>, depth: usize) -> Option<Lua50Proto> {
+    if depth > MAX_PROTO_DEPTH {
+        return None;
+    }
     // Source name (string)
     let source = r.read_string()?;
 
@@ -642,7 +664,7 @@ fn parse_proto_50_reader(r: &mut Reader<'_>) -> Option<Lua50Proto> {
 
     // Code
     let code_size = r.read_int()? as usize;
-    let mut code = Vec::with_capacity(code_size);
+    let mut code = Vec::with_capacity(capped_capacity(code_size as u64, 4, r.remaining()));
     for _ in 0..code_size {
         let w = r.read_u32()?;
         code.push(Lua50Instr(w));
@@ -650,7 +672,7 @@ fn parse_proto_50_reader(r: &mut Reader<'_>) -> Option<Lua50Proto> {
 
     // Constants
     let kst_count = r.read_int()? as usize;
-    let mut constants = Vec::with_capacity(kst_count);
+    let mut constants = Vec::with_capacity(capped_capacity(kst_count as u64, 1, r.remaining()));
     for _ in 0..kst_count {
         let tag = r.read_u8()?;
         let kst = match tag {
@@ -667,14 +689,14 @@ fn parse_proto_50_reader(r: &mut Reader<'_>) -> Option<Lua50Proto> {
 
     // Source-line info
     let li_count = r.read_int()? as usize;
-    let mut line_info = Vec::with_capacity(li_count);
+    let mut line_info = Vec::with_capacity(capped_capacity(li_count as u64, 1, r.remaining()));
     for _ in 0..li_count {
         line_info.push(r.read_int()? as u32);
     }
 
     // Locals
     let loc_count = r.read_int()? as usize;
-    let mut locals = Vec::with_capacity(loc_count);
+    let mut locals = Vec::with_capacity(capped_capacity(loc_count as u64, 1, r.remaining()));
     for _ in 0..loc_count {
         let lname = r.read_string()?.unwrap_or_default();
         let start_pc = r.read_int()? as u32;
@@ -688,7 +710,7 @@ fn parse_proto_50_reader(r: &mut Reader<'_>) -> Option<Lua50Proto> {
 
     // Upvalue names (before inner protos in 5.0)
     let uv_count = r.read_int()? as usize;
-    let mut upvalue_names = Vec::with_capacity(uv_count);
+    let mut upvalue_names = Vec::with_capacity(capped_capacity(uv_count as u64, 1, r.remaining()));
     for _ in 0..uv_count {
         let name = r.read_string()?.unwrap_or_default();
         upvalue_names.push(name);
@@ -696,9 +718,9 @@ fn parse_proto_50_reader(r: &mut Reader<'_>) -> Option<Lua50Proto> {
 
     // Inner protos
     let proto_count = r.read_int()? as usize;
-    let mut protos = Vec::with_capacity(proto_count);
+    let mut protos = Vec::with_capacity(capped_capacity(proto_count as u64, 1, r.remaining()));
     for _ in 0..proto_count {
-        protos.push(parse_proto_50_reader(r)?);
+        protos.push(parse_proto_50_reader_at_depth(r, depth + 1)?);
     }
 
     Some(Lua50Proto {
