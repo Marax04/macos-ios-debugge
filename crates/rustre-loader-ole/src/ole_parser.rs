@@ -433,7 +433,19 @@ impl OleParser {
     fn build_fat(data: &[u8], hdr: &OleHeader, ss: usize) -> Result<Vec<u32>, OleParserError> {
         let entries_per_sect = ss / 4;
         let max_fat_sects = hdr.fat_sector_count as usize;
-        let mut fat: Vec<u32> = Vec::with_capacity(max_fat_sects * entries_per_sect);
+        // `fat_sector_count` comes straight from the CFB header, so bound it by the
+        // sectors the file could actually hold before reserving `count * entries`
+        // u32s — the same cap the two sibling paths in `lib.rs` already apply. The
+        // product is computed with `saturating_mul` because even the capped count
+        // times `entries_per_sect` must not wrap.
+        // A FAT entry is a u32 read out of the file, so the file cannot describe
+        // more than `data.len() / 4` of them however large the header claims.
+        let max_file_sectors = data.len().div_ceil(ss).max(1);
+        let reserve = max_fat_sects
+            .min(max_file_sectors)
+            .saturating_mul(entries_per_sect)
+            .min(data.len() / 4);
+        let mut fat: Vec<u32> = Vec::with_capacity(reserve);
 
         // Collect all FAT sector IDs from DIFAT (header + chained DIFAT sectors).
         let fat_sect_ids = Self::collect_difat_entries(data, hdr, ss)?;
