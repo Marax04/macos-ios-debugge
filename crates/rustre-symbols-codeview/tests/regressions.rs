@@ -1,4 +1,4 @@
-//! Regression tests for the correctness / DoS fixes applied to this crate.
+//! Regression tests for the correctness / `DoS` fixes applied to this crate.
 //!
 //! Every test here fails against the pre-fix code and passes after.
 

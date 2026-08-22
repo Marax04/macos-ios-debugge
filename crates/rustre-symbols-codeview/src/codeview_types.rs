@@ -48,7 +48,7 @@ impl std::fmt::Display for TypeIndex {
 // Leaf kind constants (LF_*)
 // ---------------------------------------------------------------------------
 
-/// CodeView leaf-record kind constants (`LF_*`), as defined by `cvinfo.h`.
+/// `CodeView` leaf-record kind constants (`LF_*`), as defined by `cvinfo.h`.
 ///
 /// Every name here is already in Rust's `UPPER_SNAKE_CASE` shape, so no lint
 /// exemption is needed: the historical `non_upper_case_globals` allow was

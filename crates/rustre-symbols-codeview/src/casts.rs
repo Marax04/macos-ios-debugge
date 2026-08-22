@@ -10,56 +10,56 @@
 /// Reinterpret a `u8`'s bit pattern as `i8`.
 #[inline]
 #[must_use]
-pub fn u8_as_i8(x: u8) -> i8 {
+pub const fn u8_as_i8(x: u8) -> i8 {
     i8::from_ne_bytes(x.to_ne_bytes())
 }
 
 /// Reinterpret a `u16`'s bit pattern as `i16`.
 #[inline]
 #[must_use]
-pub fn u16_as_i16(x: u16) -> i16 {
+pub const fn u16_as_i16(x: u16) -> i16 {
     i16::from_ne_bytes(x.to_ne_bytes())
 }
 
 /// Reinterpret a `u32`'s bit pattern as `i32`.
 #[inline]
 #[must_use]
-pub fn u32_as_i32(x: u32) -> i32 {
+pub const fn u32_as_i32(x: u32) -> i32 {
     i32::from_ne_bytes(x.to_ne_bytes())
 }
 
 /// Reinterpret a `u64`'s bit pattern as `i64`.
 #[inline]
 #[must_use]
-pub fn u64_as_i64(x: u64) -> i64 {
+pub const fn u64_as_i64(x: u64) -> i64 {
     i64::from_ne_bytes(x.to_ne_bytes())
 }
 
 /// Reinterpret an `i8`'s bit pattern as `u8`.
 #[inline]
 #[must_use]
-pub fn i8_as_u8(x: i8) -> u8 {
+pub const fn i8_as_u8(x: i8) -> u8 {
     u8::from_ne_bytes(x.to_ne_bytes())
 }
 
 /// Reinterpret an `i16`'s bit pattern as `u16`.
 #[inline]
 #[must_use]
-pub fn i16_as_u16(x: i16) -> u16 {
+pub const fn i16_as_u16(x: i16) -> u16 {
     u16::from_ne_bytes(x.to_ne_bytes())
 }
 
 /// Reinterpret an `i32`'s bit pattern as `u32`.
 #[inline]
 #[must_use]
-pub fn i32_as_u32(x: i32) -> u32 {
+pub const fn i32_as_u32(x: i32) -> u32 {
     u32::from_ne_bytes(x.to_ne_bytes())
 }
 
 /// Reinterpret an `i64`'s bit pattern as `u64`.
 #[inline]
 #[must_use]
-pub fn i64_as_u64(x: i64) -> u64 {
+pub const fn i64_as_u64(x: i64) -> u64 {
     u64::from_ne_bytes(x.to_ne_bytes())
 }
 

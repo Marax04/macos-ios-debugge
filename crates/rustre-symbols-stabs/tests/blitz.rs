@@ -554,7 +554,7 @@ fn stabs_entry_display_contains_fields() {
     assert!(s.contains("FUN"));
     assert!(s.contains("0xcafe"));
     assert!(s.contains("x:F"));
-    assert!(s.contains("7"));
+    assert!(s.contains('7'));
 }
 
 // --- StabsSymbolExtractor --------------------------------------------------
@@ -735,7 +735,7 @@ fn type_desc_info_display() {
     let info = StabsTypeDescParser::parse_type_desc("i");
     let s = info.to_string();
     assert!(s.contains("int"));
-    assert!(s.contains("4"));
+    assert!(s.contains('4'));
 }
 
 // --- StabsSymbolParser (tuple-form) ----------------------------------------
@@ -864,9 +864,9 @@ fn unified_symbol_display_format() {
 #[test]
 fn errors_display_carry_payload() {
     assert!(StabsError::InvalidRecord(42).to_string().contains("42"));
-    assert!(StabsError::StringTable("x".into()).to_string().contains("x"));
-    assert!(StabsError::Parse("y".into()).to_string().contains("y"));
-    assert!(StabsError::TypeParse("z".into()).to_string().contains("z"));
+    assert!(StabsError::StringTable("x".into()).to_string().contains('x'));
+    assert!(StabsError::Parse("y".into()).to_string().contains('y'));
+    assert!(StabsError::TypeParse("z".into()).to_string().contains('z'));
 }
 
 // --- Send / Sync invariants ------------------------------------------------

@@ -715,7 +715,7 @@ pub fn classify_rows(rows: &[CallFrameRow]) -> Vec<(u64, FunctionRegion)> {
             }
         };
         out.push((row.pc, region));
-        last_cfa = row.cfa.clone();
+        last_cfa.clone_from(&row.cfa);
     }
     out
 }

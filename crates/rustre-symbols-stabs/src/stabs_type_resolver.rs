@@ -492,7 +492,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(StabsType::Void)
             }
-            Some('(') | Some('0'..='9') => {
+            Some('(' | '0'..='9') => {
                 let tref = self.parse_type_ref()?;
                 Ok(StabsType::Reference(tref))
             }

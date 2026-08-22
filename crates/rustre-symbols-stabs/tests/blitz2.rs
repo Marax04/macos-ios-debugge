@@ -658,7 +658,7 @@ fn t51_extractor_filters_empty_n_fun() {
     let entries = vec![
         StabsEntry { n_strx: 0, n_type: 0x64, n_other: 0, n_desc: 0, n_value: 0, string_value: "a.c".into() },
         StabsEntry { n_strx: 0, n_type: 0x24, n_other: 0, n_desc: 0, n_value: 0x100, string_value: "f:F".into() },
-        StabsEntry { n_strx: 0, n_type: 0x24, n_other: 0, n_desc: 0, n_value: 0x200, string_value: "".into() },
+        StabsEntry { n_strx: 0, n_type: 0x24, n_other: 0, n_desc: 0, n_value: 0x200, string_value: String::new() },
     ];
     let fns = StabsSymbolExtractor::extract_functions(&entries);
     assert_eq!(fns.len(), 1);
@@ -671,7 +671,7 @@ fn t52_extractor_source_files() {
     let entries = vec![
         StabsEntry { n_strx: 0, n_type: 0x64, n_other: 0, n_desc: 0, n_value: 0, string_value: "a.c".into() },
         StabsEntry { n_strx: 0, n_type: 0x64, n_other: 0, n_desc: 0, n_value: 0, string_value: "b.c".into() },
-        StabsEntry { n_strx: 0, n_type: 0x64, n_other: 0, n_desc: 0, n_value: 0, string_value: "".into() },
+        StabsEntry { n_strx: 0, n_type: 0x64, n_other: 0, n_desc: 0, n_value: 0, string_value: String::new() },
     ];
     let files = StabsSymbolExtractor::extract_source_files(&entries);
     assert_eq!(files, vec!["a.c".to_string(), "b.c".to_string()]);
@@ -681,8 +681,8 @@ fn t52_extractor_source_files() {
 fn t53_extractor_line_info_tracks_fn() {
     let entries = vec![
         StabsEntry { n_strx: 0, n_type: 0x24, n_other: 0, n_desc: 0, n_value: 0x100, string_value: "f:F".into() },
-        StabsEntry { n_strx: 0, n_type: 0x44, n_other: 0, n_desc: 10, n_value: 0, string_value: "".into() },
-        StabsEntry { n_strx: 0, n_type: 0x44, n_other: 0, n_desc: 11, n_value: 4, string_value: "".into() },
+        StabsEntry { n_strx: 0, n_type: 0x44, n_other: 0, n_desc: 10, n_value: 0, string_value: String::new() },
+        StabsEntry { n_strx: 0, n_type: 0x44, n_other: 0, n_desc: 11, n_value: 4, string_value: String::new() },
     ];
     let lines = StabsSymbolExtractor::extract_line_info(&entries);
     assert_eq!(lines.len(), 2);
@@ -808,7 +808,7 @@ fn t66_convert_to_symbol_table_kinds() {
 #[test]
 fn t67_convert_skips_empty_name() {
     let entries = vec![
-        StabsEntry { n_strx: 0, n_type: 0x24, n_other: 0, n_desc: 0, n_value: 0, string_value: "".into() },
+        StabsEntry { n_strx: 0, n_type: 0x24, n_other: 0, n_desc: 0, n_value: 0, string_value: String::new() },
         StabsEntry { n_strx: 0, n_type: 0x24, n_other: 0, n_desc: 0, n_value: 0, string_value: ":F".into() },
     ];
     let syms = convert_to_symbol_table(&entries);
@@ -1001,7 +1001,7 @@ fn t80_stabs_function_display() {
 
     let f2 = StabsFunction { name: "g".into(), addr: 0x200, source_file: None };
     let s2 = f2.to_string();
-    assert!(s2.contains("g"));
+    assert!(s2.contains('g'));
 }
 
 #[test]

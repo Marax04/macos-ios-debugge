@@ -830,7 +830,7 @@ mod tests {
     fn test_die_tree_count() {
         let root = DieTree::new(DwarfDie::new(DwarfTag::CompileUnit));
         assert_eq!(root.count(), 1);
-        let mut root2 = root.clone();
+        let mut root2 = root;
         root2.add_child(DieTree::new(DwarfDie::new(DwarfTag::Subprogram)));
         root2.add_child(DieTree::new(DwarfDie::new(DwarfTag::Variable)));
         assert_eq!(root2.count(), 3);

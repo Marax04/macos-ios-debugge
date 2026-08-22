@@ -233,7 +233,7 @@ impl StabsScopeTracker {
         let top = self.stack.last().map(|s| &s.kind);
         if matches!(
             top,
-            Some(ScopeKind::LexicalBlock { .. }) | Some(ScopeKind::Function { .. })
+            Some(ScopeKind::LexicalBlock { .. } | ScopeKind::Function { .. })
         ) {
             let open = self.stack.pop().unwrap();
             if matches!(open.kind, ScopeKind::LexicalBlock { .. }) && self.block_depth > 0 {
@@ -346,7 +346,7 @@ pub fn scope_at_offset(scopes: &[Scope], offset: u64) -> Option<&Scope> {
 pub fn scopes_at_offset(scopes: &[Scope], offset: u64) -> Vec<&Scope> {
     let mut matching: Vec<&Scope> = scopes.iter().filter(|s| s.contains(offset)).collect();
     // Outermost first: sort by scope size descending.
-    matching.sort_by(|a, b| b.size().cmp(&a.size()));
+    matching.sort_by_key(|b| core::cmp::Reverse(b.size()));
     matching
 }
 

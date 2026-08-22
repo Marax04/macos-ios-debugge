@@ -778,8 +778,8 @@ pub enum BinaryAnnotation {
     ChangeColumnEndDelta(i32),
 }
 
-/// Decode a CodeView zigzag-encoded signed operand.
-fn zigzag(v: u32) -> i32 {
+/// Decode a `CodeView` zigzag-encoded signed operand.
+const fn zigzag(v: u32) -> i32 {
     let s = crate::casts::u32_as_i32(v >> 1);
     if v & 1 != 0 { -s } else { s }
 }
