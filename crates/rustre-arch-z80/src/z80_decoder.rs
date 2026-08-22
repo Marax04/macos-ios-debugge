@@ -152,6 +152,54 @@ impl core::fmt::Display for Z80Operand {
 
 // ── Decoded instruction ───────────────────────────────────────────────────────
 
+/// Control-flow properties of a [`Z80Instr`], one per bit.
+///
+/// Replaces five separate `bool` fields. The bit order is fixed and part of
+/// the type's contract, so a packed value is stable across builds:
+///
+/// | bit | flag |
+/// |-----|------|
+/// | 0   | [`Self::BRANCH`] |
+/// | 1   | [`Self::CONDITIONAL`] |
+/// | 2   | [`Self::CALL`] |
+/// | 3   | [`Self::RET`] |
+/// | 4   | [`Self::HALT`] |
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Z80InstrFlags(u8);
+
+impl Z80InstrFlags {
+    /// No control-flow property set (a plain sequential instruction).
+    pub const NONE: Self = Self(0);
+    /// This is a branch, jump, call or return.
+    pub const BRANCH: Self = Self(1 << 0);
+    /// The branch is taken only when a condition holds.
+    pub const CONDITIONAL: Self = Self(1 << 1);
+    /// This is a `CALL` or `RST`.
+    pub const CALL: Self = Self(1 << 2);
+    /// This is a `RET` / `RETN` / `RETI`.
+    pub const RET: Self = Self(1 << 3);
+    /// This is a `HALT`.
+    pub const HALT: Self = Self(1 << 4);
+
+    /// Return a copy with `other`'s bits also set.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// True when every bit of `other` is set in `self`.
+    #[must_use]
+    pub const fn has(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    /// The raw packed bits, in the documented bit order.
+    #[must_use]
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
 /// A fully decoded Z80 instruction.
 #[derive(Clone, Debug)]
 pub struct Z80Instr {
@@ -165,16 +213,8 @@ pub struct Z80Instr {
     pub mnemonic: &'static str,
     /// Up to 2 operands.
     pub operands: [Option<Z80Operand>; 2],
-    /// True if this is a branch/jump/call/return.
-    pub is_branch: bool,
-    /// True if the branch is conditional.
-    pub is_conditional: bool,
-    /// True if this is a CALL or RST.
-    pub is_call: bool,
-    /// True if this is a RET / RETN / RETI.
-    pub is_ret: bool,
-    /// True if this is a HALT.
-    pub is_halt: bool,
+    /// Control-flow properties of this instruction, packed one per bit.
+    pub flags: Z80InstrFlags,
     /// Absolute branch target if computable at decode time (PC-relative already resolved).
     pub branch_target: Option<u16>,
 }
@@ -187,22 +227,34 @@ impl Z80Instr {
             prefix,
             mnemonic,
             operands: [None, None],
-            is_branch: false,
-            is_conditional: false,
-            is_call: false,
-            is_ret: false,
-            is_halt: false,
+            flags: Z80InstrFlags::NONE,
             branch_target: None,
         }
     }
 
     const fn op0(mut self, op: Z80Operand) -> Self { self.operands[0] = Some(op); self }
     const fn op1(mut self, op: Z80Operand) -> Self { self.operands[1] = Some(op); self }
-    const fn branch(mut self) -> Self { self.is_branch = true; self }
-    const fn cond(mut self) -> Self   { self.is_conditional = true; self }
-    const fn call(mut self) -> Self   { self.is_call = true; self.is_branch = true; self }
-    const fn ret(mut self) -> Self    { self.is_ret = true; self.is_branch = true; self }
-    const fn halt(mut self) -> Self   { self.is_halt = true; self }
+    const fn branch(mut self) -> Self { self.flags = self.flags.with(Z80InstrFlags::BRANCH); self }
+    const fn cond(mut self) -> Self   { self.flags = self.flags.with(Z80InstrFlags::CONDITIONAL); self }
+    const fn call(mut self) -> Self   { self.flags = self.flags.with(Z80InstrFlags::CALL).with(Z80InstrFlags::BRANCH); self }
+    const fn ret(mut self) -> Self    { self.flags = self.flags.with(Z80InstrFlags::RET).with(Z80InstrFlags::BRANCH); self }
+    const fn halt(mut self) -> Self   { self.flags = self.flags.with(Z80InstrFlags::HALT); self }
+
+    /// True if this is a branch/jump/call/return.
+    #[must_use]
+    pub const fn is_branch(&self) -> bool { self.flags.has(Z80InstrFlags::BRANCH) }
+    /// True if the branch is conditional.
+    #[must_use]
+    pub const fn is_conditional(&self) -> bool { self.flags.has(Z80InstrFlags::CONDITIONAL) }
+    /// True if this is a CALL or RST.
+    #[must_use]
+    pub const fn is_call(&self) -> bool { self.flags.has(Z80InstrFlags::CALL) }
+    /// True if this is a RET / RETN / RETI.
+    #[must_use]
+    pub const fn is_ret(&self) -> bool { self.flags.has(Z80InstrFlags::RET) }
+    /// True if this is a HALT.
+    #[must_use]
+    pub const fn is_halt(&self) -> bool { self.flags.has(Z80InstrFlags::HALT) }
     const fn target(mut self, t: u16) -> Self { self.branch_target = Some(t); self }
     fn raw(mut self, raw: &[u8]) -> Self {
         for (i, &b) in raw.iter().enumerate().take(4) { self.bytes[i] = b; }
@@ -783,7 +835,7 @@ mod tests {
     fn halt() {
         let i = dec().decode(0, &[0x76]).unwrap();
         assert_eq!(i.mnemonic, "HALT");
-        assert!(i.is_halt);
+        assert!(i.is_halt());
     }
 
     #[test]
@@ -798,8 +850,8 @@ mod tests {
     fn jp_nn() {
         let i = dec().decode(0, &[0xC3, 0x00, 0x80]).unwrap();
         assert_eq!(i.mnemonic, "JP");
-        assert!(i.is_branch);
-        assert!(!i.is_conditional);
+        assert!(i.is_branch());
+        assert!(!i.is_conditional());
         assert_eq!(i.branch_target, Some(0x8000));
     }
 
@@ -807,7 +859,7 @@ mod tests {
     fn jr_nz() {
         let i = dec().decode(0x100, &[0x20, 0xFE]).unwrap();
         assert_eq!(i.mnemonic, "JR");
-        assert!(i.is_conditional);
+        assert!(i.is_conditional());
         // JR NZ, -2: target = 0x100 + 2 + (-2) = 0x100
         assert_eq!(i.branch_target, Some(0x100));
     }
@@ -816,7 +868,7 @@ mod tests {
     fn call_nn() {
         let i = dec().decode(0, &[0xCD, 0x56, 0x34]).unwrap();
         assert_eq!(i.mnemonic, "CALL");
-        assert!(i.is_call);
+        assert!(i.is_call());
         assert_eq!(i.branch_target, Some(0x3456));
     }
 
@@ -824,7 +876,7 @@ mod tests {
     fn ret() {
         let i = dec().decode(0, &[0xC9]).unwrap();
         assert_eq!(i.mnemonic, "RET");
-        assert!(i.is_ret);
+        assert!(i.is_ret());
     }
 
     #[test]
@@ -852,7 +904,7 @@ mod tests {
     fn ed_reti() {
         let i = dec().decode(0, &[0xED, 0x4D]).unwrap();
         assert_eq!(i.mnemonic, "RETI");
-        assert!(i.is_ret);
+        assert!(i.is_ret());
     }
 
     #[test]

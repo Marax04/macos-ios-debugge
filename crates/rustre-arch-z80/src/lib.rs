@@ -1420,8 +1420,12 @@ pub enum InterruptMode {
 
 impl InterruptMode {
     /// Decode from the IM instruction operand text.
+    ///
+    /// Named `parse_operand` rather than `from_str` so it does not shadow
+    /// [`std::str::FromStr::from_str`], which this type also implements
+    /// (see the `impl FromStr` below); the two agree on every input.
     #[must_use]
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_operand(s: &str) -> Option<Self> {
         match s.trim() {
             "0" => Some(Self::Mode0),
             "1" => Some(Self::Mode1),
@@ -1440,6 +1444,29 @@ impl InterruptMode {
         }
     }
 }
+/// Parse an IM operand, e.g. `"1"` from `im 1`.
+///
+/// Delegates to [`InterruptMode::parse_operand`]; unparseable text yields
+/// [`InterruptModeParseError`].
+impl std::str::FromStr for InterruptMode {
+    type Err = InterruptModeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse_operand(s).ok_or(InterruptModeParseError)
+    }
+}
+
+/// The error returned when a string is not a valid Z80 interrupt mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InterruptModeParseError;
+
+impl std::fmt::Display for InterruptModeParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("expected a Z80 interrupt mode operand of \"0\", \"1\" or \"2\"")
+    }
+}
+
+impl std::error::Error for InterruptModeParseError {}
 
 // ── Opcode info table ─────────────────────────────────────────────────────────
 
@@ -2722,7 +2749,7 @@ mod tests {
     fn test_interrupt_mode() {
         let i = arch().disassemble(addr(0), &[0xED, 0x56]).unwrap();
         assert_eq!(i.mnemonic, "IM");
-        let mode = InterruptMode::from_str(&i.operands).unwrap();
+        let mode = InterruptMode::parse_operand(&i.operands).unwrap();
         assert_eq!(mode, InterruptMode::Mode1);
     }
 

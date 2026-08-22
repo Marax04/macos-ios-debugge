@@ -612,6 +612,7 @@ fn undoc_decode_fd(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
             }
 }
 
+#[must_use]
 pub fn undoc_decode(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
     if bytes.is_empty() {
         return None;

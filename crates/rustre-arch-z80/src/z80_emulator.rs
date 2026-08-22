@@ -98,6 +98,57 @@ pub enum IMode {
     M2,
 }
 
+/// The five one-bit interrupt/halt latches of a [`Z80State`], packed.
+///
+/// Replaces five separate `bool` fields. The bit order is fixed and part of
+/// the type's contract, so [`Self::bits`] is stable across builds:
+///
+/// | bit | latch |
+/// |-----|-------|
+/// | 0   | [`Self::IFF1`] — interrupt enable flip-flop 1 |
+/// | 1   | [`Self::IFF2`] — interrupt enable flip-flop 2 (NMI shadow of IFF1) |
+/// | 2   | [`Self::HALTED`] — the CPU is in the `HALT` state |
+/// | 3   | [`Self::NMI_PENDING`] — a non-maskable interrupt is waiting |
+/// | 4   | [`Self::INT_PENDING`] — a maskable interrupt is waiting |
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Z80Interrupts(u8);
+
+impl Z80Interrupts {
+    /// All latches clear (the reset state).
+    pub const NONE: Self = Self(0);
+    /// Interrupt enable flip-flop 1.
+    pub const IFF1: Self = Self(1 << 0);
+    /// Interrupt enable flip-flop 2 (holds IFF1 across an NMI).
+    pub const IFF2: Self = Self(1 << 1);
+    /// The CPU is halted, waiting for an interrupt.
+    pub const HALTED: Self = Self(1 << 2);
+    /// A non-maskable interrupt is pending.
+    pub const NMI_PENDING: Self = Self(1 << 3);
+    /// A maskable interrupt is pending.
+    pub const INT_PENDING: Self = Self(1 << 4);
+
+    /// True when every bit of `other` is set in `self`.
+    #[must_use]
+    pub const fn has(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    /// Set (`value == true`) or clear (`value == false`) `other`'s bits.
+    pub const fn set(&mut self, other: Self, value: bool) {
+        if value {
+            self.0 |= other.0;
+        } else {
+            self.0 &= !other.0;
+        }
+    }
+
+    /// The raw packed bits, in the documented bit order.
+    #[must_use]
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
 /// Z80 CPU state.
 pub struct Z80State {
     // Main registers
@@ -130,19 +181,13 @@ pub struct Z80State {
     pub h2: u8,
     pub l2: u8,
 
-    // Interrupt flip-flops
-    pub iff1: bool,
-    pub iff2: bool,
+    // Interrupt flip-flops, halt latch and pending-interrupt lines,
+    // packed one per bit (see `Z80Interrupts`).
+    pub intr: Z80Interrupts,
 
     // Interrupt mode
     pub int_mode: IMode,
 
-    // Halt state
-    pub halted: bool,
-
-    // Pending NMI / INT
-    pub nmi_pending: bool,
-    pub int_pending: bool,
     pub int_data: u8, // data bus byte for IM0/IM2
 
     // Total cycles
@@ -169,6 +214,61 @@ fn fetch16(mem: &Z80Memory, pc: &mut u16) -> u16 {
 }
 
 impl Z80State {
+    /// Interrupt enable flip-flop 1.
+    #[must_use]
+    pub const fn iff1(&self) -> bool {
+        self.intr.has(Z80Interrupts::IFF1)
+    }
+
+    /// Set [`Self::iff1`].
+    pub const fn set_iff1(&mut self, value: bool) {
+        self.intr.set(Z80Interrupts::IFF1, value);
+    }
+
+    /// Interrupt enable flip-flop 2.
+    #[must_use]
+    pub const fn iff2(&self) -> bool {
+        self.intr.has(Z80Interrupts::IFF2)
+    }
+
+    /// Set [`Self::iff2`].
+    pub const fn set_iff2(&mut self, value: bool) {
+        self.intr.set(Z80Interrupts::IFF2, value);
+    }
+
+    /// True while the CPU is in the `HALT` state.
+    #[must_use]
+    pub const fn halted(&self) -> bool {
+        self.intr.has(Z80Interrupts::HALTED)
+    }
+
+    /// Set [`Self::halted`].
+    pub const fn set_halted(&mut self, value: bool) {
+        self.intr.set(Z80Interrupts::HALTED, value);
+    }
+
+    /// True while a non-maskable interrupt is pending.
+    #[must_use]
+    pub const fn nmi_pending(&self) -> bool {
+        self.intr.has(Z80Interrupts::NMI_PENDING)
+    }
+
+    /// Set [`Self::nmi_pending`].
+    pub const fn set_nmi_pending(&mut self, value: bool) {
+        self.intr.set(Z80Interrupts::NMI_PENDING, value);
+    }
+
+    /// True while a maskable interrupt is pending.
+    #[must_use]
+    pub const fn int_pending(&self) -> bool {
+        self.intr.has(Z80Interrupts::INT_PENDING)
+    }
+
+    /// Set [`Self::int_pending`].
+    pub const fn set_int_pending(&mut self, value: bool) {
+        self.intr.set(Z80Interrupts::INT_PENDING, value);
+    }
+
     /// Create a new Z80 state (all registers zeroed, SP = 0xFFFF).
     #[must_use]
     pub fn new() -> Self {
@@ -195,12 +295,8 @@ impl Z80State {
             e2: 0,
             h2: 0,
             l2: 0,
-            iff1: false,
-            iff2: false,
+            intr: Z80Interrupts::NONE,
             int_mode: IMode::M1,
-            halted: false,
-            nmi_pending: false,
-            int_pending: false,
             int_data: 0xFF,
             cycles: 0,
             mem: Z80Memory::new(),
@@ -367,32 +463,32 @@ impl Z80State {
 
     /// Trigger a non-maskable interrupt.
     pub const fn nmi(&mut self) {
-        self.nmi_pending = true;
+        self.set_nmi_pending(true);
     }
 
     /// Trigger a maskable interrupt (provides the data-bus byte for IM0/IM2).
     pub const fn int(&mut self, data: u8) {
-        self.int_pending = true;
+        self.set_int_pending(true);
         self.int_data = data;
     }
 
     fn service_nmi(&mut self) {
-        self.halted = false;
-        self.iff2 = self.iff1;
-        self.iff1 = false;
+        self.set_halted(false);
+        self.set_iff2(self.iff1());
+        self.set_iff1(false);
         self.push16(self.pc);
         self.pc = 0x0066;
-        self.nmi_pending = false;
+        self.set_nmi_pending(false);
         self.cycles += 11;
     }
 
     fn service_int(&mut self) {
-        if !self.iff1 {
+        if !self.iff1() {
             return;
         }
-        self.halted = false;
-        self.iff1 = false;
-        self.iff2 = false;
+        self.set_halted(false);
+        self.set_iff1(false);
+        self.set_iff2(false);
         match self.int_mode {
             IMode::M0 => {
                 // Execute RST opcode placed on data bus (simplified: jump to vector * 8)
@@ -411,7 +507,7 @@ impl Z80State {
                 self.pc = target;
             }
         }
-        self.int_pending = false;
+        self.set_int_pending(false);
         self.cycles += 13;
     }
 
@@ -426,14 +522,14 @@ impl Z80State {
     /// # Errors
     /// Returns a string describing unimplemented instructions.
     pub fn step(&mut self, io: &mut dyn IoPortHandler) -> Result<u32, String> {
-        if self.nmi_pending {
+        if self.nmi_pending() {
             self.service_nmi();
             // fall through to execute instruction at new PC
-        } else if self.int_pending {
+        } else if self.int_pending() {
             self.service_int();
             // fall through to execute instruction at new PC
         }
-        if self.halted {
+        if self.halted() {
             self.cycles += 4;
             return Ok(4);
         }
@@ -665,7 +761,7 @@ impl Z80State {
             }
             // HALT
             0x76 => {
-                self.halted = true;
+                self.set_halted(true);
                 self.pc = self.pc.wrapping_sub(1);
                 Ok(4)
             }
@@ -778,13 +874,13 @@ impl Z80State {
             }
             // DI / EI
             0xF3 => {
-                self.iff1 = false;
-                self.iff2 = false;
+                self.set_iff1(false);
+                self.set_iff2(false);
                 Ok(4)
             }
             0xFB => {
-                self.iff1 = true;
-                self.iff2 = true;
+                self.set_iff1(true);
+                self.set_iff2(true);
                 Ok(4)
             }
             // CALL cc,nn (x=3, z=4)
@@ -1107,13 +1203,13 @@ impl Z80State {
             }
             0x45 | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D => {
                 // RETN
-                self.iff1 = self.iff2;
+                self.set_iff1(self.iff2());
                 self.pc = self.pop16();
                 Ok(14)
             }
             0x4D => {
                 // RETI
-                self.iff1 = self.iff2;
+                self.set_iff1(self.iff2());
                 self.pc = self.pop16();
                 Ok(14)
             }
@@ -1524,12 +1620,12 @@ mod tests {
     #[test]
     fn test_di_ei() {
         let mut s = state();
-        s.iff1 = true;
+        s.set_iff1(true);
         s.mem.load(0, &[0xF3, 0xFB]); // DI, EI
         s.step(&mut null_io()).unwrap();
-        assert!(!s.iff1);
+        assert!(!s.iff1());
         s.step(&mut null_io()).unwrap();
-        assert!(s.iff1);
+        assert!(s.iff1());
     }
 
     #[test]
@@ -1537,7 +1633,7 @@ mod tests {
         let mut s = state();
         s.mem.load(0, &[0x76]);
         s.step(&mut null_io()).unwrap();
-        assert!(s.halted);
+        assert!(s.halted());
     }
 
     #[test]
@@ -1566,13 +1662,13 @@ mod tests {
         s.nmi();
         s.step(&mut null_io()).unwrap();
         assert_eq!(s.pc, 0x0067); // NMI handler executed NOP
-        assert!(!s.iff1);
+        assert!(!s.iff1());
     }
 
     #[test]
     fn test_int_mode1() {
         let mut s = state();
-        s.iff1 = true;
+        s.set_iff1(true);
         s.int_mode = IMode::M1;
         s.mem.load(0x0038, &[0x00]); // NOP at IM1 handler
         s.int(0xFF);

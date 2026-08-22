@@ -220,8 +220,8 @@ impl Z80Disassembler {
         let mnemonic = self.format_mnemonic(instr.mnemonic);
         let operands = self.format_operands(instr, pc);
 
-        let is_terminator = instr.is_halt
-            || (instr.is_branch && !instr.is_conditional && !instr.is_call);
+        let is_terminator = instr.is_halt()
+            || (instr.is_branch() && !instr.is_conditional() && !instr.is_call());
 
         let cycles = estimate_cycles(instr);
 

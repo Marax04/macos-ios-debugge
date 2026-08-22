@@ -333,11 +333,11 @@ fn find_opcode_entry_lookups() {
 fn interrupt_mode_roundtrip() {
     for m in [InterruptMode::Mode0, InterruptMode::Mode1, InterruptMode::Mode2] {
         let s = m.operand();
-        assert_eq!(InterruptMode::from_str(s), Some(m));
+        assert_eq!(InterruptMode::parse_operand(s), Some(m));
     }
-    assert_eq!(InterruptMode::from_str("3"), None);
-    assert_eq!(InterruptMode::from_str(""), None);
-    assert_eq!(InterruptMode::from_str(" 1 "), Some(InterruptMode::Mode1));
+    assert_eq!(InterruptMode::parse_operand("3"), None);
+    assert_eq!(InterruptMode::parse_operand(""), None);
+    assert_eq!(InterruptMode::parse_operand(" 1 "), Some(InterruptMode::Mode1));
 }
 
 // ── 30: Flags bits ────────────────────────────────────────────────────────────

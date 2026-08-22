@@ -314,21 +314,21 @@ fn opcode_cycles_ex_sp_hl_19() {
 
 #[test]
 fn interrupt_mode_from_str_valid() {
-    assert_eq!(z::InterruptMode::from_str("0"), Some(z::InterruptMode::Mode0));
-    assert_eq!(z::InterruptMode::from_str("1"), Some(z::InterruptMode::Mode1));
-    assert_eq!(z::InterruptMode::from_str("2"), Some(z::InterruptMode::Mode2));
+    assert_eq!(z::InterruptMode::parse_operand("0"), Some(z::InterruptMode::Mode0));
+    assert_eq!(z::InterruptMode::parse_operand("1"), Some(z::InterruptMode::Mode1));
+    assert_eq!(z::InterruptMode::parse_operand("2"), Some(z::InterruptMode::Mode2));
 }
 
 #[test]
 fn interrupt_mode_from_str_trim() {
-    assert_eq!(z::InterruptMode::from_str("  1  "), Some(z::InterruptMode::Mode1));
+    assert_eq!(z::InterruptMode::parse_operand("  1  "), Some(z::InterruptMode::Mode1));
 }
 
 #[test]
 fn interrupt_mode_from_str_invalid() {
-    assert_eq!(z::InterruptMode::from_str("3"), None);
-    assert_eq!(z::InterruptMode::from_str(""), None);
-    assert_eq!(z::InterruptMode::from_str("bogus"), None);
+    assert_eq!(z::InterruptMode::parse_operand("3"), None);
+    assert_eq!(z::InterruptMode::parse_operand(""), None);
+    assert_eq!(z::InterruptMode::parse_operand("bogus"), None);
 }
 
 #[test]
@@ -992,4 +992,18 @@ fn branch_category_helper_returns_str_for_jp() {
         let s = z::branch_category(br);
         assert!(!s.is_empty());
     }
+}
+
+#[test]
+fn interrupt_mode_fromstr_trait_matches_parse_operand() {
+    use std::str::FromStr as _;
+    for s in ["0", "1", "2", " 2 "] {
+        assert_eq!(
+            z::InterruptMode::from_str(s).ok(),
+            z::InterruptMode::parse_operand(s),
+            "FromStr and parse_operand disagree on {s:?}"
+        );
+    }
+    assert!(z::InterruptMode::from_str("3").is_err());
+    assert!(z::InterruptMode::from_str("").is_err());
 }
