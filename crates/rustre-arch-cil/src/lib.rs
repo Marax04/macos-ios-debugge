@@ -36,6 +36,9 @@ pub mod cil_execution_engine;
 /// CIL pattern recognizer: string encryption, reflection, anti-debug, P/Invoke.
 pub mod cil_pattern_recognition;
 
+/// Explicit numeric conversions used by the CIL interpreter.
+pub mod numeric;
+
 use rustre_core::arch::{
     Architecture, BranchInfo, CallingConvention, InstrFlags, Instruction, RegisterInfo,
 };

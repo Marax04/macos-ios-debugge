@@ -714,7 +714,11 @@ impl CilExecutionEngine {
             // conv.i8 (already i64 in abstract)
             0x6B => { // conv.r4
                 let a = stack.pop();
-                let v = f64::from(a.to_f64().unwrap_or(0.0) as f32);
+                // ECMA-335 conv.r4: round to single precision, then keep
+                // carrying the value in the f64 slot of the abstract stack.
+                let v = f64::from(crate::numeric::narrow_f64_to_f32(
+                    a.to_f64().unwrap_or(0.0),
+                ));
                 stack.push(CilValue::F64(v));
                 pc += 1;
             }
