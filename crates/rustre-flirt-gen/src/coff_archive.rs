@@ -631,16 +631,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("harvest.sig");
         crate::write_sig_file(&pats, "synthlib", 75, &path).unwrap();
-        let raw = std::fs::read(&path).unwrap();
-        assert_eq!(&raw[..6], b"IDASGN");
-        assert_eq!(raw[6], 9);
-        let hdr = rustre_flirt::sig_header::SigFileHeader::decode(&raw)
+        let sig_bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&sig_bytes[..6], b"IDASGN");
+        assert_eq!(sig_bytes[6], 9);
+        let hdr = rustre_flirt::sig_header::SigFileHeader::decode(&sig_bytes)
             .expect("il .sig scritto deve essere decodificabile");
         assert_eq!(hdr.n_functions, 2, "n_functions sta a offset 37, non a 34");
         assert_eq!(hdr.lib_name, "synthlib");
         // The trie starts where the header ends — the header is variable length,
         // so slicing at a constant 104 would cut into the trie or skip part of it.
-        let body = &raw[hdr.len_bytes()..];
+        let body = &sig_bytes[hdr.len_bytes()..];
         let hay = String::from_utf8_lossy(body);
         assert!(hay.contains("alpha") && hay.contains("beta"));
     }

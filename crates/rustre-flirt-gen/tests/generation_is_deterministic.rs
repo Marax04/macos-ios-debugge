@@ -21,14 +21,16 @@ use rustre_flirt::{FlirtName, FlirtPattern, PatternByte};
 fn patterns(n: usize) -> Vec<FlirtPattern> {
     (0..n)
         .map(|i| {
+            let i8b = u8::try_from(i % 256).unwrap();
+            let i16b = u16::try_from(i % 65536).unwrap();
             let mut p = FlirtPattern::new(
                 (0..16u8)
-                    .map(|b| PatternByte::Exact(b.wrapping_mul(3).wrapping_add(i as u8)))
+                    .map(|b| PatternByte::Exact(b.wrapping_mul(3).wrapping_add(i8b)))
                     .collect(),
             );
-            p.crc16 = (i as u16).wrapping_mul(7919);
+            p.crc16 = i16b.wrapping_mul(7919);
             p.crc_length = 8;
-            p.pattern_length = 32 + i as u16;
+            p.pattern_length = 32 + i16b;
             p.names.push(FlirtName {
                 name: format!("function_{i:04}"),
                 offset: 0,
@@ -142,10 +144,10 @@ fn identical_inputs_hash_identically() {
     // a `diff -rq` check relies on.
     let pats = patterns(100);
     let digest = |b: &[u8]| -> u64 {
-        let mut h = 1469598103934665603u64;
+        let mut h = 1_469_598_103_934_665_603_u64;
         for x in b {
             h ^= u64::from(*x);
-            h = h.wrapping_mul(1099511628211);
+            h = h.wrapping_mul(1_099_511_628_211);
         }
         h
     };

@@ -540,7 +540,7 @@ mod tests {
         let crawler = LibCrawler { dedup: true, ..Default::default() };
         let m = CoffMember { name: "a.obj".to_string(), machine: 0x8664,
             data: vec![0x64u8, 0x86], archive_offset: 0 };
-        let members = vec![m.clone(), m.clone()];
+        let members = vec![m.clone(), m];
         let (unique, removed) = crawler.deduplicate_members(members);
         assert_eq!(unique.len(), 1);
         assert_eq!(removed, 1);

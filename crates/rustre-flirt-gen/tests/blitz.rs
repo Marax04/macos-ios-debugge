@@ -150,7 +150,7 @@ fn pat_file_roundtrip_via_display_and_from_str() {
 fn sig_header_roundtrip_preserves_fields() {
     let mut h = SigHeader::new("libfoo");
     h.arch = 0x4B;
-    h.file_types = 0xDEADBEEF;
+    h.file_types = 0xDEAD_BEEF;
     h.os_types = 0xAB;
     h.app_types = 0xCD;
     h.feature_flags = 0xEF;
@@ -162,7 +162,7 @@ fn sig_header_roundtrip_preserves_fields() {
     assert_eq!(buf.len(), 43 + "libfoo".len());
     let h2 = SigHeader::deserialize(&buf).expect("deserialize");
     assert_eq!(h2.arch, 0x4B);
-    assert_eq!(h2.file_types, 0xDEADBEEF);
+    assert_eq!(h2.file_types, 0xDEAD_BEEF);
     assert_eq!(h2.os_types, 0xAB);
     assert_eq!(h2.app_types, 0xCD);
     assert_eq!(h2.feature_flags, 0xEF);

@@ -329,7 +329,7 @@ impl PrologueSampler {
             .into_iter()
             .filter(|(_, count)| *count >= self.min_occurrences)
             .collect();
-        patterns.sort_by(|a, b| b.1.cmp(&a.1));
+        patterns.sort_by_key(|p| std::cmp::Reverse(p.1));
         patterns
     }
 

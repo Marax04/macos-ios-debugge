@@ -1805,10 +1805,10 @@ mod tests {
 
         let mut matcher = FlirtMatcher::new();
         matcher.add_library(lib2);
-        let matches =
+        let hits =
             matcher.match_function(rustre_core::address::Address::new(0x1000), &func_bytes);
-        assert!(!matches.is_empty(), "should match after round-trip");
-        assert_eq!(matches[0].name, "rt_func");
+        assert!(!hits.is_empty(), "should match after round-trip");
+        assert_eq!(hits[0].name, "rt_func");
     }
 
     // ── crc16_flirt via rustre_flirt ─────────────────────────────────────────

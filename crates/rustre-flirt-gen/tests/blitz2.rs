@@ -18,8 +18,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -108,7 +108,7 @@ fn pg_initial_bytes_preserve_byte_values() {
     let bytes: Vec<u8> = (0u8..32).collect();
     let pat = pg.generate(&bytes, &[], vec![]).unwrap();
     for (i, b) in pat.initial_bytes.iter().enumerate() {
-        assert_eq!(*b, PatternByte::Exact(i as u8));
+        assert_eq!(*b, PatternByte::Exact(u8::try_from(i).unwrap()));
     }
 }
 
@@ -217,7 +217,7 @@ fn pg_round_trip_many_inputs() {
     let pg = PatternGenerator::new();
     let mut g = lcg();
     for _ in 0..60 {
-        let len = ((g() % 200) + 1) as usize;
+        let len = usize::try_from((g() % 200) + 1).unwrap();
         let bytes = random_bytes(&mut g, len);
         let pat = pg.generate(&bytes, &[], vec![]).unwrap();
         assert_eq!(pat.pattern_length as usize, len.min(u16::MAX as usize));
@@ -237,8 +237,8 @@ fn pg_fuzz_never_panics() {
         let nrelocs = (g() % 5) as usize;
         let mut relocs = Vec::new();
         for _ in 0..nrelocs {
-            let off = (g() % 80) as u16;
-            let size = ((g() % 8) + 1) as u8;
+            let off = u16::try_from(g() % 80).unwrap();
+            let size = u8::try_from((g() % 8) + 1).unwrap();
             relocs.push(RelocationEntry { offset: off, size });
         }
         let r = pg.generate(&bytes, &relocs, vec![]);
@@ -260,7 +260,7 @@ fn pg_fuzz_from_ranges_never_panics() {
         let nranges = (g() % 4) as usize;
         let mut ranges = Vec::new();
         for _ in 0..nranges {
-            ranges.push(((g() % 64) as u16, ((g() % 5) + 1) as u8));
+            ranges.push((u16::try_from(g() % 64).unwrap(), u8::try_from((g() % 5) + 1).unwrap()));
         }
         let r = pg.generate_from_ranges(&bytes, &ranges, vec![], vec![]);
         if bytes.is_empty() { assert!(r.is_err()); } else { assert!(r.is_ok()); }
@@ -393,10 +393,7 @@ fn sig_writer_empty_header_structure() {
 
 #[test]
 fn sig_writer_header_crc_matches() {
-    let mut w = SigWriter::default();
-    w.arch = 0;
-    w.file_types = 0xDEAD_BEEF;
-    w.os_types = 0x1234;
+    let w = SigWriter { arch: 0, file_types: 0xDEAD_BEEF, os_types: 0x1234, ..SigWriter::default() };
     let out = w.build(&[], "x");
     let stored = u16::from_le_bytes(out[20..22].try_into().unwrap());
     assert_eq!(stored, crc16_sig_header(&out[..20]));
@@ -536,7 +533,7 @@ fn trie_leaf_truncates_long_prefix() {
 fn crc_sig_header_deterministic_30_pairs() {
     let mut g = lcg();
     for _ in 0..30 {
-        let len = ((g() % 64) + 1) as usize;
+        let len = usize::try_from((g() % 64) + 1).unwrap();
         let bytes = random_bytes(&mut g, len);
         let a = crc16_sig_header(&bytes);
         let b = crc16_sig_header(&bytes);
@@ -555,7 +552,7 @@ fn crc_sig_header_changes_with_input() {
     let mut g = lcg();
     let mut seen = HashSet::new();
     for _ in 0..40 {
-        let len = ((g() % 32) + 4) as usize;
+        let len = usize::try_from((g() % 32) + 4).unwrap();
         let bytes = random_bytes(&mut g, len);
         seen.insert(crc16_sig_header(&bytes));
     }
@@ -610,15 +607,15 @@ fn pg_send_sync_threaded() {
     for t in 0..4 {
         let pg = Arc::clone(&pg);
         handles.push(thread::spawn(move || {
-            let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE ^ (t as u64);
+            let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE ^ u64::try_from(t).unwrap();
             let mut g = || {
-                s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                s = s.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
                 s
             };
             for _ in 0..100 {
-                let len = ((g() % 64) + 1) as usize;
+                let len = usize::try_from((g() % 64) + 1).unwrap();
                 let mut bytes = Vec::with_capacity(len);
-                for _ in 0..len { bytes.push((g() & 0xff) as u8); }
+                for _ in 0..len { bytes.push(u8::try_from(g() & 0xff).unwrap()); }
                 let p = pg.generate(&bytes, &[], vec![]).unwrap();
                 assert!(p.matches_initial(&bytes));
             }
@@ -674,7 +671,7 @@ fn matches_initial_holds_under_relocation_replacement() {
     alt[4] = 0xAA; alt[5] = 0xBB; alt[6] = 0xCC; alt[7] = 0xDD;
     assert!(pat.matches_initial(&alt));
     // Replacement of non-masked byte breaks the match.
-    let mut bad = bytes.clone();
+    let mut bad = bytes;
     bad[0] = 0xFF;
     assert!(!pat.matches_initial(&bad));
 }

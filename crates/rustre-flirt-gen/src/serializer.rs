@@ -395,7 +395,7 @@ mod tests {
             is_public: true,
             is_local: false,
         });
-        p.pattern_length = bytes.len() as u16;
+        p.pattern_length = u16::try_from(bytes.len()).expect("test pattern fits in u16");
         p
     }
 

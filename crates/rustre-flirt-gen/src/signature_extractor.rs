@@ -41,7 +41,9 @@ pub fn crc16_table() -> [u16; 256] {
 pub fn crc16_fast(data: &[u8], table: &[u16; 256]) -> u16 {
     let mut crc: u16 = 0xFFFF;
     for &byte in data {
-        let i = ((crc as u8) ^ byte) as usize;
+        // Taking the low byte of the CRC register is the algorithm, not a
+        // lossy cast: `& 0xFF` says so without needing an allow.
+        let i = usize::from(((crc & 0xFF) as u8) ^ byte);
         crc = (crc >> 8) ^ table[i];
     }
     crc

@@ -777,10 +777,12 @@ mod tests {
 
     #[test]
     fn test_batch_report_display() {
-        let mut report = BatchReport::default();
-        report.files_discovered = 10;
-        report.files_processed = 9;
-        report.functions_unique = 100;
+        let report = BatchReport {
+            files_discovered: 10,
+            files_processed: 9,
+            functions_unique: 100,
+            ..BatchReport::default()
+        };
         let s = report.to_string();
         assert!(s.contains("files=9/10"));
     }
