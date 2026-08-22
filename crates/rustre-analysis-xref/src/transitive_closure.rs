@@ -1002,7 +1002,7 @@ mod tests {
 /// fallback, over a `CallGraph` built from an `XrefDatabase`). They were only
 /// ever tested in isolation. On any graph they must agree pairwise for every
 /// ordered pair of DISTINCT nodes (self-reachability contracts differ by
-/// design: xref_query's closure includes `u` in `reach[u]` unconditionally,
+/// design: `xref_query`'s closure includes `u` in `reach[u]` unconditionally,
 /// Floyd-Warshall only via an actual cycle — so `u == v` is excluded).
 #[cfg(test)]
 mod reachability_differential {

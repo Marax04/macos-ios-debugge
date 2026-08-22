@@ -66,7 +66,7 @@ impl CallGraph {
         // order, BFS path selection) depend on hash iteration order, which is
         // not stable across runs/processes. Sort by (from, to) first.
         let mut sorted_edges: Vec<((Address, Address), u32)> = edge_counts.into_iter().collect();
-        sorted_edges.sort_by(|a, b| a.0.cmp(&b.0));
+        sorted_edges.sort_by_key(|a| a.0);
         for ((from, to), count) in sorted_edges {
             adj.entry(from).or_default().push((to, count));
             rev.entry(to).or_default().push((from, count));
@@ -805,7 +805,7 @@ mod tests {
 
     /// Differential soundness: `TransitiveClosure::compute` (which takes an
     /// acyclic reverse-topo fast path and a cyclic fixpoint path) must agree
-    /// exactly with the CallGraph's own plain BFS `reachable_from` on random
+    /// exactly with the `CallGraph`'s own plain BFS `reachable_from` on random
     /// graphs — including graphs with cycles, where a buggy `topological_sort`
     /// returning `Some` for a cyclic graph would make the fast path silently
     /// under-approximate reachability.

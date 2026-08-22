@@ -14,7 +14,7 @@ fn lcg() -> impl FnMut() -> u64 {
     }
 }
 
-fn addr(v: u64) -> Address {
+const fn addr(v: u64) -> Address {
     Address::new(v)
 }
 

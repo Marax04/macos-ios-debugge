@@ -30,7 +30,7 @@ mod soundness_fuzz;
 /// Shared test-only PRNG for the crate's fuzz/property tests.
 ///
 /// One definition instead of the per-module copies (Rng ×2, free `xorshift`,
-/// nested `xs`). `below` is the zero-guarded form; soundness_fuzz's old copy
+/// nested `xs`). `below` is the zero-guarded form; `soundness_fuzz`'s old copy
 /// was plain `% n` but every call site passes n >= 1, so the sequences are
 /// identical.
 #[cfg(test)]
@@ -2184,7 +2184,7 @@ impl XrefGrouper {
         // group's entries by (from, to) so the per-group order is
         // deterministic regardless of the top-level `HashMap`'s own order.
         for v in groups.values_mut() {
-            v.sort_by(|a, b| (a.from.0, a.to.0).cmp(&(b.from.0, b.to.0)));
+            v.sort_by_key(|a| (a.from.0, a.to.0));
         }
         groups
     }

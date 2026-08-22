@@ -453,7 +453,7 @@ fn prop_scanners_never_panic_on_adversarial_input() {
 /// Regression for the duplicate-drop hazard: the same `(from, to, kind)`
 /// triple inserted twice must be retrievable twice from every accessor.
 /// Minimised from `prop_index_insert_retrieve_and_duplicates`
-/// (seed 0xA5A5_1234_DEAD_BEEF).
+/// (seed `0xA5A5_1234_DEAD_BEEF`).
 #[test]
 fn regression_duplicate_triple_not_dropped() {
     let mut idx = XrefIndex::new();
@@ -471,7 +471,7 @@ fn regression_duplicate_triple_not_dropped() {
 /// Regression for self-loop removal accounting: `remove_from` on a node whose
 /// only xref is a self-loop must clear both directions and leave `total` at 0.
 /// Minimised from `prop_removal_matches_rebuild_oracle`
-/// (seed 0xFEED_FACE_2468_1357).
+/// (seed `0xFEED_FACE_2468_1357`).
 #[test]
 fn regression_self_loop_removal_accounting() {
     let mut idx = XrefIndex::new();

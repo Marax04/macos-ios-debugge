@@ -21,16 +21,16 @@ const CORRUPT_ORACLE: bool = false;
 // ── tiny deterministic RNG (no dev-deps) ─────────────────────────────────────
 struct Rng(u64);
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         self.0 ^ (self.0 >> 31)
     }
-    fn below(&mut self, n: usize) -> usize {
+    const fn below(&mut self, n: usize) -> usize {
         if n == 0 { 0 } else { (self.next() % n as u64) as usize }
     }
 }
 
-/// A graph as raw data — the oracle's only input. Deliberately NOT a CallGraph.
+/// A graph as raw data — the oracle's only input. Deliberately NOT a `CallGraph`.
 #[derive(Clone, Debug)]
 struct RawGraph {
     nodes: Vec<u64>,
@@ -64,7 +64,7 @@ impl RawGraph {
     }
 
     fn radj(&self) -> BTreeMap<u64, BTreeSet<u64>> {
-        let rev = RawGraph {
+        let rev = Self {
             nodes: self.nodes.clone(),
             edges: self.edges.iter().map(|&(a, b)| (b, a)).collect(),
         };

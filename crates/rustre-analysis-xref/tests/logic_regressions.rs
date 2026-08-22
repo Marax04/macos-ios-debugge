@@ -16,7 +16,7 @@ fn addrs(code: &[u8]) -> Vec<u64> {
 /// A 4-byte ABSOLUTE operand is an unsigned address, not a signed
 /// displacement. Sign-extending it turned every 32-bit address with the high
 /// bit set into a bogus `0xFFFFFFFF_8xxxxxxx`, so on any x86-32 image based at
-/// or above 0x8000_0000 every single string xref resolved to garbage.
+/// or above `0x8000_0000` every single string xref resolved to garbage.
 /// (Only the PC-relative path needs sign extension.)
 #[test]
 fn absolute_operands_are_zero_extended() {

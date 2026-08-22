@@ -6,11 +6,11 @@
 use rustre_analysis_xref::*;
 use rustre_core::address::{Address, AddressRange};
 
-fn a(v: u64) -> Address {
+const fn a(v: u64) -> Address {
     Address::new(v)
 }
 
-fn r(s: u64, e: u64) -> AddressRange {
+const fn r(s: u64, e: u64) -> AddressRange {
     AddressRange::new(a(s), a(e))
 }
 
