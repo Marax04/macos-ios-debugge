@@ -550,7 +550,7 @@ fn iat_fixer_apply_to_image_writes_pointer() {
     let n = f.apply_to_image(&mut img, 0x0001_4000_0000).unwrap();
     assert_eq!(n, 1);
     let written = u64::from_le_bytes(img[text_raw_off..text_raw_off + 8].try_into().unwrap());
-    assert_eq!(written, 0x0001_4000_0000 + text_rva as u64);
+    assert_eq!(written, 0x0001_4000_0000 + u64::from(text_rva));
 }
 
 #[test]

@@ -601,7 +601,7 @@ mod tests {
     use super::*;
 
     fn ts(secs: u64) -> u128 {
-        (secs as u128) * 1_000_000_000
+        u128::from(secs) * 1_000_000_000
     }
 
     fn build_basic_timeline() -> FilesystemTimeline {

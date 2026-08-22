@@ -1642,7 +1642,7 @@ pub fn compute_entropy(data: &[u8]) -> f64 {
 pub fn crc16_ccitt(data: &[u8]) -> u16 {
     let mut crc: u16 = 0xFFFF;
     for &b in data {
-        let x = (crc >> 8) ^ (b as u16);
+        let x = (crc >> 8) ^ u16::from(b);
         let x = x ^ (x >> 4);
         crc = (crc << 8) ^ (x << 12) ^ (x << 5) ^ x;
     }
@@ -1677,7 +1677,7 @@ pub fn compute_imphash(entries: &[IatEntry]) -> String {
     // Simple djb2-style hash as hex (no MD5 dep)
     let mut h: u64 = 5381;
     for b in joined.bytes() {
-        h = h.wrapping_mul(33).wrapping_add(b as u64);
+        h = h.wrapping_mul(33).wrapping_add(u64::from(b));
     }
     format!("{h:016x}")
 }
@@ -2475,7 +2475,7 @@ impl DumpFixer {
                     // Convert absolute VA → RVA.
                     let rva = (ptr_val - base_addr) as u32;
                     // Write back as a 4-byte RVA (zero-extended to 8 bytes).
-                    let rva64 = rva as u64;
+                    let rva64 = u64::from(rva);
                     dump[file_off..file_off + PTR_SIZE].copy_from_slice(&rva64.to_le_bytes());
                 } else {
                     // External pointer — zero it out.
@@ -3726,8 +3726,7 @@ impl IatRebuilder {
                     return None;
                 }
                 Some(
-                    u32::from_le_bytes(self.process_memory[offset..offset + 4].try_into().ok()?)
-                        as u64,
+                    u64::from(u32::from_le_bytes(self.process_memory[offset..offset + 4].try_into().ok()?)),
                 )
             }
             _ => None,
@@ -3901,7 +3900,7 @@ impl IatRebuilder {
             let int_off = data_base + name_blob.len() as u32;
             for &foff in &func_offs {
                 match self.pointer_size {
-                    8 => name_blob.extend_from_slice(&(foff as u64).to_le_bytes()),
+                    8 => name_blob.extend_from_slice(&u64::from(foff).to_le_bytes()),
                     _ => name_blob.extend_from_slice(&foff.to_le_bytes()),
                 }
             }
@@ -4013,7 +4012,7 @@ impl IatRebuilder {
             } else {
                 u16::from_le_bytes([data[i], data[i + 1]])
             };
-            sum += word as u64;
+            sum += u64::from(word);
             if sum > 0xFFFF_FFFF {
                 sum = (sum & 0xFFFF_FFFF) + (sum >> 32);
             }
@@ -4021,7 +4020,7 @@ impl IatRebuilder {
         }
         // Handle odd trailing byte.
         if !data.len().is_multiple_of(2) {
-            sum += data[data.len() - 1] as u64;
+            sum += u64::from(data[data.len() - 1]);
         }
         // Fold 32-bit sum.
         while sum > 0xFFFF {
@@ -4061,7 +4060,7 @@ impl IatRebuilder {
                     mem[opt_hdr + 16..opt_hdr + 20].try_into().unwrap_or([0; 4]),
                 );
                 if aep != 0 {
-                    candidates.push(self.image_base + aep as u64);
+                    candidates.push(self.image_base + u64::from(aep));
                 }
             }
 
@@ -4092,7 +4091,7 @@ impl IatRebuilder {
                         mem[sec_off + 12..sec_off + 16].try_into().unwrap_or([0; 4]),
                     );
                     if va != 0 {
-                        candidates.push(self.image_base + va as u64);
+                        candidates.push(self.image_base + u64::from(va));
                     }
                 }
             }

@@ -65,7 +65,7 @@ fn smoke_boundary_arith() {
 #[test]
 fn smoke_byte_roundtrip() {
     for b in 0u8..=255 {
-        let v: u32 = b as u32;
+        let v: u32 = u32::from(b);
         let back: u8 = v as u8;
         assert_eq!(b, back);
     }

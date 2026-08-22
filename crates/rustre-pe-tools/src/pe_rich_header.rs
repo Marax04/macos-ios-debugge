@@ -442,7 +442,7 @@ mod tests {
 
         // Entries
         for &(prodid, build, count) in entries {
-            let raw0: u32 = ((prodid as u32) << 16) | (build as u32);
+            let raw0: u32 = (u32::from(prodid) << 16) | u32::from(build);
             let raw1: u32 = count;
             rich_body.extend_from_slice(&(raw0 ^ key).to_le_bytes());
             rich_body.extend_from_slice(&(raw1 ^ key).to_le_bytes());
