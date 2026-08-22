@@ -681,14 +681,21 @@ impl MethodSpec {
 
 // ─── Utility: parse compact generic signature blob ────────────────────────────
 
+/// Maximum nesting accepted while decoding an `ElementType`. Each level costs
+/// at least one blob byte, so without a cap a blob of repeated 0x0F/0x1D bytes
+/// recurses once per byte and overflows the stack -- an abort, not an error.
+/// Matches the cap used by `type_system::SigReader`.
+pub const MAX_ELEMENT_TYPE_DEPTH: u32 = 64;
+
 pub struct BlobDecoder<'a> {
     data: &'a [u8],
     pos: usize,
+    depth: u32,
 }
 
 impl<'a> BlobDecoder<'a> {
     pub fn new(data: &'a [u8]) -> Self {
-        Self { data, pos: 0 }
+        Self { data, pos: 0, depth: MAX_ELEMENT_TYPE_DEPTH }
     }
 
     pub fn remaining(&self) -> usize {
@@ -731,7 +738,19 @@ impl<'a> BlobDecoder<'a> {
         Ok(signed)
     }
 
+    /// Depth-guarded entry point. Recursive arms call this, so the budget is
+    /// enforced at every level.
     pub fn decode_element_type(&mut self) -> Result<ElementType> {
+        if self.depth == 0 {
+            bail!("BlobDecoder: element type nested deeper than {MAX_ELEMENT_TYPE_DEPTH}");
+        }
+        self.depth -= 1;
+        let r = self.decode_element_type_inner();
+        self.depth += 1;
+        r
+    }
+
+    fn decode_element_type_inner(&mut self) -> Result<ElementType> {
         let tag = self.read_byte()?;
         Ok(match tag {
             0x01 => ElementType::Void,
@@ -850,6 +869,48 @@ impl<'a> BlobDecoder<'a> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn element_type_recursion_is_depth_capped() {
+        // 100_000 nested SZARRAY tags. Uncapped this recursed once per byte and
+        // overflowed the stack (abort); capped it returns a normal error.
+        let blob = vec![0x1Du8; 100_000];
+        let err = BlobDecoder::new(&blob)
+            .decode_element_type()
+            .expect_err("must refuse rather than overflow the stack");
+        assert!(
+            err.to_string().contains("nested deeper than"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn element_type_shallow_nesting_still_decodes() {
+        // Well-formed nesting is unaffected by the cap.
+        let blob = vec![0x1D, 0x1D, 0x08]; // SzArray<SzArray<I4>>
+        let ty = BlobDecoder::new(&blob).decode_element_type().expect("decodes");
+        match ty {
+            ElementType::SzArray(inner) => match *inner {
+                ElementType::SzArray(i2) => assert_eq!(*i2, ElementType::I4),
+                other => panic!("inner: {other:?}"),
+            },
+            other => panic!("outer: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn element_type_depth_budget_resets_between_siblings() {
+        // The budget is restored on the way out, so a wide (not deep) signature
+        // with many siblings past the cap still decodes.
+        // GENERICINST, Class(token 0x01), 100 args, each a single I4 tag.
+        let mut blob = vec![0x15, 0x12, 0x01, 100];
+        blob.extend(std::iter::repeat(0x08).take(100));
+        let ty = BlobDecoder::new(&blob).decode_element_type().expect("decodes");
+        match ty {
+            ElementType::GenericInst(_, args) => assert_eq!(args.len(), 100),
+            other => panic!("{other:?}"),
+        }
+    }
+
     use super::*;
 
     #[test]
