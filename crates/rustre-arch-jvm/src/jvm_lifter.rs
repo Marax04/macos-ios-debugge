@@ -471,91 +471,91 @@ impl JvmLifter {
             // ── iload variants ───────────────────────────────────────────────
             0x15 => {
                 let idx = u16::from(instr.raw[1]);
-                self.lift_iload(idx, pc)?;
+                self.lift_iload(idx, pc);
             }
             0x1a => {
-                self.lift_iload(0, pc)?;
+                self.lift_iload(0, pc);
             }
             0x1b => {
-                self.lift_iload(1, pc)?;
+                self.lift_iload(1, pc);
             }
             0x1c => {
-                self.lift_iload(2, pc)?;
+                self.lift_iload(2, pc);
             }
             0x1d => {
-                self.lift_iload(3, pc)?;
+                self.lift_iload(3, pc);
             }
 
             // ── lload variants ───────────────────────────────────────────────
             0x16 => {
                 let idx = u16::from(instr.raw[1]);
-                self.lift_lload(idx, pc)?;
+                self.lift_lload(idx, pc);
             }
             0x1e => {
-                self.lift_lload(0, pc)?;
+                self.lift_lload(0, pc);
             }
             0x1f => {
-                self.lift_lload(1, pc)?;
+                self.lift_lload(1, pc);
             }
             0x20 => {
-                self.lift_lload(2, pc)?;
+                self.lift_lload(2, pc);
             }
             0x21 => {
-                self.lift_lload(3, pc)?;
+                self.lift_lload(3, pc);
             }
 
             // ── fload variants ───────────────────────────────────────────────
             0x17 => {
                 let idx = u16::from(instr.raw[1]);
-                self.lift_fload(idx, pc)?;
+                self.lift_fload(idx, pc);
             }
             0x22 => {
-                self.lift_fload(0, pc)?;
+                self.lift_fload(0, pc);
             }
             0x23 => {
-                self.lift_fload(1, pc)?;
+                self.lift_fload(1, pc);
             }
             0x24 => {
-                self.lift_fload(2, pc)?;
+                self.lift_fload(2, pc);
             }
             0x25 => {
-                self.lift_fload(3, pc)?;
+                self.lift_fload(3, pc);
             }
 
             // ── dload variants ───────────────────────────────────────────────
             0x18 => {
                 let idx = u16::from(instr.raw[1]);
-                self.lift_dload(idx, pc)?;
+                self.lift_dload(idx, pc);
             }
             0x26 => {
-                self.lift_dload(0, pc)?;
+                self.lift_dload(0, pc);
             }
             0x27 => {
-                self.lift_dload(1, pc)?;
+                self.lift_dload(1, pc);
             }
             0x28 => {
-                self.lift_dload(2, pc)?;
+                self.lift_dload(2, pc);
             }
             0x29 => {
-                self.lift_dload(3, pc)?;
+                self.lift_dload(3, pc);
             }
 
             // ── aload variants ───────────────────────────────────────────────
             0x19 => {
                 let idx = u16::from(instr.raw[1]);
-                self.lift_aload(idx, pc)?;
+                self.lift_aload(idx, pc);
             }
             0x2a => {
-                self.lift_aload(0, pc)?;
+                self.lift_aload(0, pc);
             }
             0x2b => {
-                self.lift_aload(1, pc)?;
+                self.lift_aload(1, pc);
             }
             0x2c => {
-                self.lift_aload(2, pc)?;
+                self.lift_aload(2, pc);
             }
             0x2d => {
-                self.lift_aload(3, pc)?;
+                self.lift_aload(3, pc);
             }
 
             // ── Array loads ──────────────────────────────────────────────────
@@ -1261,7 +1261,13 @@ impl JvmLifter {
             .push(LiftedInstr::new(pc, op).with_dest(dest).with_src(src));
     }
 
-    fn lift_iload(&mut self, idx: u16, pc: usize) -> Result<(), LiftError> {
+    /// Lift any of the `*load` opcodes: read a local into a fresh vreg, emit
+    /// the `LoadLocal`, and push the slot `make_slot` builds for it.
+    ///
+    /// The slot constructor is a parameter, not a category flag: `iload`,
+    /// `fload` and `aload` all push one slot but push `cat1`, `float` and
+    /// `reference` respectively, and collapsing them would erase the type.
+    fn lift_load(&mut self, idx: u16, pc: usize, make_slot: fn(u32) -> StackSlot) {
         let v = self.local_vreg(idx);
         self.output.push(LiftedInstr {
             pc,
@@ -1269,56 +1275,27 @@ impl JvmLifter {
             dest: Some(v),
             srcs: vec![],
         });
-        self.stack.push(StackSlot::cat1(v));
-        Ok(())
+        self.stack.push(make_slot(v));
     }
 
-    fn lift_lload(&mut self, idx: u16, pc: usize) -> Result<(), LiftError> {
-        let v = self.local_vreg(idx);
-        self.output.push(LiftedInstr {
-            pc,
-            op: LiftedOpKind::LoadLocal(idx),
-            dest: Some(v),
-            srcs: vec![],
-        });
-        self.stack.push(StackSlot::cat2(v));
-        Ok(())
+    fn lift_iload(&mut self, idx: u16, pc: usize) {
+        self.lift_load(idx, pc, StackSlot::cat1);
     }
 
-    fn lift_fload(&mut self, idx: u16, pc: usize) -> Result<(), LiftError> {
-        let v = self.local_vreg(idx);
-        self.output.push(LiftedInstr {
-            pc,
-            op: LiftedOpKind::LoadLocal(idx),
-            dest: Some(v),
-            srcs: vec![],
-        });
-        self.stack.push(StackSlot::float(v));
-        Ok(())
+    fn lift_lload(&mut self, idx: u16, pc: usize) {
+        self.lift_load(idx, pc, StackSlot::cat2);
     }
 
-    fn lift_dload(&mut self, idx: u16, pc: usize) -> Result<(), LiftError> {
-        let v = self.local_vreg(idx);
-        self.output.push(LiftedInstr {
-            pc,
-            op: LiftedOpKind::LoadLocal(idx),
-            dest: Some(v),
-            srcs: vec![],
-        });
-        self.stack.push(StackSlot::double(v));
-        Ok(())
+    fn lift_fload(&mut self, idx: u16, pc: usize) {
+        self.lift_load(idx, pc, StackSlot::float);
     }
 
-    fn lift_aload(&mut self, idx: u16, pc: usize) -> Result<(), LiftError> {
-        let v = self.local_vreg(idx);
-        self.output.push(LiftedInstr {
-            pc,
-            op: LiftedOpKind::LoadLocal(idx),
-            dest: Some(v),
-            srcs: vec![],
-        });
-        self.stack.push(StackSlot::reference(v));
-        Ok(())
+    fn lift_dload(&mut self, idx: u16, pc: usize) {
+        self.lift_load(idx, pc, StackSlot::double);
+    }
+
+    fn lift_aload(&mut self, idx: u16, pc: usize) {
+        self.lift_load(idx, pc, StackSlot::reference);
     }
 
     fn lift_istore(&mut self, idx: u16, pc: usize) -> Result<(), LiftError> {
@@ -1567,6 +1544,29 @@ mod tests {
             out.iter()
                 .any(|i| matches!(&i.op, LiftedOpKind::LoadLocal(0)))
         );
+    }
+
+    /// Each `*load` opcode must push a slot carrying its OWN type hint and
+    /// category. Guards the shared `lift_load` helper: an earlier version of
+    /// it took a bool "is cat2" flag, which silently mapped fload -> "int",
+    /// dload -> "long" and aload -> "int". The whole suite still passed,
+    /// because nothing else asserted the type hint.
+    #[test]
+    fn each_load_opcode_pushes_its_own_slot_type() {
+        // iload_0, lload_0, fload_0, dload_0, aload_0
+        for (code, hint, cat) in [
+            (0x1au8, "int", SlotCategory::Cat1),
+            (0x1e, "long", SlotCategory::Cat2),
+            (0x22, "float", SlotCategory::Cat1),
+            (0x26, "double", SlotCategory::Cat2),
+            (0x2a, "ref", SlotCategory::Cat1),
+        ] {
+            let mut l = JvmLifter::new();
+            l.lift_method(&[code]).expect("lift failed");
+            let slot = l.stack.last().expect("load must push a slot");
+            assert_eq!(slot.type_hint, hint, "opcode {code:#04x} type hint");
+            assert_eq!(slot.category, cat, "opcode {code:#04x} category");
+        }
     }
 
     // ── Stores ────────────────────────────────────────────────────────────────
