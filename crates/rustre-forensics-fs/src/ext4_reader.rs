@@ -41,7 +41,7 @@ impl Ext4Superblock {
     #[must_use] 
     pub const fn group_count(&self) -> u64 {
         if self.blocks_per_group == 0 { return 0; }
-        (self.blocks_count + (self.blocks_per_group) as u64 - 1) / (self.blocks_per_group) as u64
+        self.blocks_count.div_ceil((self.blocks_per_group) as u64)
     }
 
     #[must_use] 

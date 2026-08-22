@@ -487,13 +487,13 @@ impl MftRecord {
                     StandardInformation::parse(&attr_data).map_or(ParsedAttribute::Raw {
                             attr_type,
                             data: attr_data,
-                        }, |si| ParsedAttribute::StandardInformation(si))
+                        }, ParsedAttribute::StandardInformation)
                 }
                 AttributeType::FileName => {
                     FileNameAttribute::parse(&attr_data).map_or(ParsedAttribute::Raw {
                             attr_type,
                             data: attr_data,
-                        }, |fn_attr| ParsedAttribute::FileName(fn_attr))
+                        }, ParsedAttribute::FileName)
                 }
                 AttributeType::Data => ParsedAttribute::Data(DataAttribute {
                     name: attr_name,
@@ -611,9 +611,7 @@ impl AlternateDataStreams {
     pub fn scan(&mut self, records: &[MftRecord]) {
         for rec in records {
             let base_path = rec
-                .primary_name()
-                .map(std::string::ToString::to_string)
-                .unwrap_or_else(|| format!("[MFT#{}]", rec.record_number));
+                .primary_name().map_or_else(|| format!("[MFT#{}]", rec.record_number), std::string::ToString::to_string);
 
             for data_attr in rec.data_attributes() {
                 if data_attr.name.is_empty() {
@@ -829,9 +827,7 @@ impl DeletedFileRecovery {
                 continue;
             }
             let filename = rec
-                .primary_name()
-                .map(std::string::ToString::to_string)
-                .unwrap_or_else(|| format!("[MFT#{}]", rec.record_number));
+                .primary_name().map_or_else(|| format!("[MFT#{}]", rec.record_number), std::string::ToString::to_string);
 
             let data_attrs = rec.data_attributes();
             let (data, data_recovered) = data_attrs.first().map_or((false, false), |d| (!d.data.is_empty(), !d.data.is_empty()));
@@ -1006,9 +1002,7 @@ impl TimelineBuilder {
                 continue;
             }
             let name = rec
-                .primary_name()
-                .map(std::string::ToString::to_string)
-                .unwrap_or_else(|| format!("[MFT#{}]", rec.record_number));
+                .primary_name().map_or_else(|| format!("[MFT#{}]", rec.record_number), std::string::ToString::to_string);
 
             if let Some(si) = rec.standard_information() {
                 self.push_timestamps(
@@ -1200,7 +1194,7 @@ mod tests {
         // attr_offset at 20 (point to end of header, no attrs)
         buf[20..22].copy_from_slice(&56u16.to_le_bytes());
         // flags at 22
-        let flags: u16 = if in_use { 0x01 } else { 0x00 } | if is_dir { 0x02 } else { 0x00 };
+        let flags: u16 = u16::from(in_use) | if is_dir { 0x02 } else { 0x00 };
         buf[22..24].copy_from_slice(&flags.to_le_bytes());
         // record_real_size at 28
         buf[28..32].copy_from_slice(&56u32.to_le_bytes());

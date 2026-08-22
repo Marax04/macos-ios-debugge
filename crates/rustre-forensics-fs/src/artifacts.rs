@@ -712,7 +712,7 @@ mod tests {
             "C:\\Users\\user\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles\\abc\\places.sqlite",
         )
         .unwrap();
-        assert!(a.metadata.get("browser").map(|s| s.as_str()) == Some("Firefox"));
+        assert!(a.metadata.get("browser").map(std::string::String::as_str) == Some("Firefox"));
     }
 
     #[test]
@@ -721,7 +721,7 @@ mod tests {
             "C:\\Users\\user\\AppData\\Local\\Microsoft\\Windows\\WebCache\\WebCacheV01.dat",
         )
         .unwrap();
-        assert!(a.metadata.get("browser").map(|s| s.as_str()) == Some("Edge/IE"));
+        assert!(a.metadata.get("browser").map(std::string::String::as_str) == Some("Edge/IE"));
     }
 
     #[test]
@@ -858,7 +858,7 @@ mod tests {
     fn artifact_with_meta() {
         let a = Artifact::new(ArtifactKind::LnkFile, "/a", "desc", 80, IssueSeverity::Low)
             .with_meta("k", "v");
-        assert_eq!(a.metadata.get("k").map(|s| s.as_str()), Some("v"));
+        assert_eq!(a.metadata.get("k").map(std::string::String::as_str), Some("v"));
     }
 
     #[test]

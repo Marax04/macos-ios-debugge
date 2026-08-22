@@ -777,7 +777,7 @@ mod tests {
         // First attribute offset at 20
         buf[20] = 56; buf[21] = 0; // attributes start at byte 56
         // Flags at 22
-        buf[22] = if in_use { 0x01 } else { 0x00 };
+        buf[22] = u8::from(in_use);
         // End marker at attribute offset 56
         buf[56] = 0xFF; buf[57] = 0xFF; buf[58] = 0xFF; buf[59] = 0xFF;
         buf
@@ -1121,7 +1121,7 @@ mod tests {
     #[test]
     fn test_utf16le_to_string() {
         let s = "hello";
-        let bytes: Vec<u8> = s.encode_utf16().flat_map(|w| w.to_le_bytes()).collect();
+        let bytes: Vec<u8> = s.encode_utf16().flat_map(u16::to_le_bytes).collect();
         assert_eq!(utf16le_to_string(&bytes), "hello");
     }
 

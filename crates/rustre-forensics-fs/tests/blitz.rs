@@ -28,7 +28,7 @@ fn tmp(name: &str) -> PathBuf {
     p
 }
 
-fn assert_send_sync<T: Send + Sync>() {}
+const fn assert_send_sync<T: Send + Sync>() {}
 
 // ── MemFsNode ────────────────────────────────────────────────────────────────
 
@@ -266,7 +266,7 @@ fn mount_memory_fs_errors_on_non_unix() {
 
 #[test]
 fn memfs_error_from_io() {
-    let io = std::io::Error::new(std::io::ErrorKind::Other, "boom");
+    let io = std::io::Error::other("boom");
     let e: MemFsError = io.into();
     match e {
         MemFsError::Io(_) => {}
@@ -610,7 +610,7 @@ fn content_debug_bytes() {
 
 #[test]
 fn content_debug_provider() {
-    let s = format!("{:?}", Content::provider(|| vec![]));
+    let s = format!("{:?}", Content::provider(std::vec::Vec::new));
     assert!(s.contains("Provider"));
 }
 

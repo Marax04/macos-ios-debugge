@@ -265,8 +265,7 @@ impl FatBootSector {
     /// Root directory size in sectors (FAT12/16 only; 0 for FAT32).
     #[must_use] 
     pub const fn root_dir_sectors(&self) -> u32 {
-        (((self.root_entry_count) as u32 * 32) + (self.bytes_per_sector) as u32 - 1)
-            / (self.bytes_per_sector) as u32
+        ((self.root_entry_count) as u32 * 32).div_ceil((self.bytes_per_sector) as u32)
     }
 
     /// First data sector.

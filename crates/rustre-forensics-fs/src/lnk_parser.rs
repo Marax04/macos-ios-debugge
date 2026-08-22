@@ -656,7 +656,7 @@ impl LnkAnalyzer {
     /// Return all GUID strings from the tracker block.
     #[must_use] 
     pub fn tracker_guids(&self) -> Vec<String> {
-        self.lnk.extra.tracker.as_ref().map_or_else(|| vec![], |tb| vec![tb.format_volume_guid(), tb.format_file_guid()])
+        self.lnk.extra.tracker.as_ref().map_or_else(std::vec::Vec::new, |tb| vec![tb.format_volume_guid(), tb.format_file_guid()])
     }
 }
 

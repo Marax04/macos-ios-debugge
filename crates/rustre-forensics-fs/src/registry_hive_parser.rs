@@ -801,7 +801,7 @@ mod tests {
     #[test]
     fn test_decode_utf16le_limited() {
         let s = "hello";
-        let encoded: Vec<u8> = s.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+        let encoded: Vec<u8> = s.encode_utf16().flat_map(u16::to_le_bytes).collect();
         assert_eq!(decode_utf16le_limited(&encoded), "hello");
     }
 

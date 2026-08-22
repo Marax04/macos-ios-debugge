@@ -730,7 +730,7 @@ mod tests {
     #[test]
     fn test_decode_utf16le_nul() {
         let encoded: Vec<u8> = "Hello\0".encode_utf16()
-            .flat_map(|c| c.to_le_bytes())
+            .flat_map(u16::to_le_bytes)
             .collect();
         let s = decode_utf16le_nul(&encoded).unwrap();
         assert_eq!(s, "Hello");

@@ -20,12 +20,12 @@ struct Lcg {
     s: u64,
 }
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             s: 0xDEAD_BEEF_CAFE_BABE,
         }
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.s = self
             .s
             .wrapping_mul(6364136223846793005)
@@ -291,7 +291,7 @@ fn memfs_error_notadirectory_display() {
 
 #[test]
 fn memfs_error_io_from_std() {
-    let io = std::io::Error::new(std::io::ErrorKind::Other, "boom");
+    let io = std::io::Error::other("boom");
     let e: MemFsError = io.into();
     assert!(matches!(e, MemFsError::Io(_)));
 }

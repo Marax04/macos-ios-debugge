@@ -690,7 +690,7 @@ mod tests {
         let paths2: Vec<String> = t2.events().map(|e| e.path.clone()).collect();
         assert_eq!(
             paths1,
-            paths2.iter().map(|s| s.as_str()).collect::<Vec<_>>()
+            paths2.iter().map(std::string::String::as_str).collect::<Vec<_>>()
         );
     }
 
@@ -734,7 +734,7 @@ mod tests {
     fn event_with_extra() {
         let e =
             TimelineEvent::new(100, TimelineEventType::Create, "/a").with_extra("hash", "deadbeef");
-        assert_eq!(e.extra.get("hash").map(|s| s.as_str()), Some("deadbeef"));
+        assert_eq!(e.extra.get("hash").map(std::string::String::as_str), Some("deadbeef"));
     }
 
     #[test]

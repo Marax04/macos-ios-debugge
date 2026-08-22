@@ -359,7 +359,7 @@ impl DirNode {
     #[must_use]
     pub fn total_files(&self) -> usize {
         let own: usize = self.entries.iter().filter(|e| e.is_regular_file()).count();
-        own + self.children.iter().map(DirNode::total_files).sum::<usize>()
+        own + self.children.iter().map(Self::total_files).sum::<usize>()
     }
 
     /// Total deleted files in this subtree.
@@ -369,7 +369,7 @@ impl DirNode {
         own + self
             .children
             .iter()
-            .map(DirNode::deleted_count)
+            .map(Self::deleted_count)
             .sum::<usize>()
     }
 }
@@ -909,7 +909,7 @@ mod tests {
     fn test_dir_entry_full_name_no_ext() {
         let e = DirectoryEntry {
             name: "NOEXT".to_string(),
-            extension: "".to_string(),
+            extension: String::new(),
             attributes: 0x10,
             first_cluster: 2,
             file_size: 0,
@@ -974,7 +974,7 @@ mod tests {
     fn test_slack_no_slack_when_aligned() {
         let entry = DirectoryEntry {
             name: "FULL".to_string(),
-            extension: "".to_string(),
+            extension: String::new(),
             attributes: 0x20,
             first_cluster: 2,
             file_size: 4096,
@@ -1048,7 +1048,7 @@ mod tests {
     }
     #[test]
     fn test_fat_from_bytes_roundtrip() {
-        let data: Vec<u8> = (0u32..8).flat_map(|i| i.to_le_bytes()).collect();
+        let data: Vec<u8> = (0u32..8).flat_map(u32::to_le_bytes).collect();
         let fat = FileAllocationTable::from_bytes(&data);
         assert_eq!(fat.len(), 8);
     }

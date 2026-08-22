@@ -893,7 +893,7 @@ mod tests {
         fat[14] = ((eoc >> 16) & 0xFF) as u8;
         fat[15] = ((eoc >> 24) & 0xFF) as u8;
         let chain: Vec<u32> = FatChain::new(&fat, 2)
-            .filter_map(|r| r.ok())
+            .filter_map(std::result::Result::ok)
             .collect();
         assert_eq!(chain, vec![2, 3]);
     }
