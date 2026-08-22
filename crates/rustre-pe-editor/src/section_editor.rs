@@ -31,6 +31,51 @@ impl SectionFlags {
     pub const MEM_READ: u32 = 0x4000_0000;
     pub const MEM_WRITE: u32 = 0x8000_0000;
 
+    /// Mask of the 4-bit alignment field (`IMAGE_SCN_ALIGN_*`, bits 20-23).
+    pub const ALIGN_MASK: u32 = 0x00F0_0000;
+
+    /// Byte alignment requested by the alignment field, if it is set.
+    ///
+    /// The `ALIGN_*` constants are *not* independent bits: they encode a
+    /// 4-bit field where 1 means 1 byte, 2 means 2 bytes and so on up to
+    /// 8192. Testing them with `&` -- the obvious thing to do with the
+    /// neighbouring flags -- gives wrong answers, which is why they are
+    /// decoded here rather than listed in `names`.
+    #[must_use]
+    pub const fn alignment(self) -> Option<u32> {
+        let field = (self.0 & Self::ALIGN_MASK) >> 20;
+        if field == 0 {
+            None
+        } else {
+            Some(1u32 << (field - 1))
+        }
+    }
+
+    /// Names of every characteristic bit set, excluding the alignment field.
+    #[must_use]
+    pub fn names(self) -> Vec<&'static str> {
+        const TABLE: [(u32, &str); 13] = [
+            (SectionFlags::CODE, "CODE"),
+            (SectionFlags::INITIALIZED_DATA, "INITIALIZED_DATA"),
+            (SectionFlags::UNINITIALIZED_DATA, "UNINITIALIZED_DATA"),
+            (SectionFlags::LINK_REMOVE, "LNK_REMOVE"),
+            (SectionFlags::GPREL, "GPREL"),
+            (SectionFlags::LNK_NRELOC_OVFL, "LNK_NRELOC_OVFL"),
+            (SectionFlags::MEM_DISCARDABLE, "MEM_DISCARDABLE"),
+            (SectionFlags::MEM_NOT_CACHED, "MEM_NOT_CACHED"),
+            (SectionFlags::MEM_NOT_PAGED, "MEM_NOT_PAGED"),
+            (SectionFlags::MEM_SHARED, "MEM_SHARED"),
+            (SectionFlags::MEM_EXECUTE, "MEM_EXECUTE"),
+            (SectionFlags::MEM_READ, "MEM_READ"),
+            (SectionFlags::MEM_WRITE, "MEM_WRITE"),
+        ];
+        TABLE
+            .iter()
+            .filter(|(bit, _)| self.0 & bit != 0)
+            .map(|(_, name)| *name)
+            .collect()
+    }
+
     /// Return a new flags value with the readable bit set/cleared.
     #[must_use]
     pub const fn with_read(mut self, v: bool) -> Self {
@@ -572,6 +617,21 @@ impl SectionEditor {
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
+impl core::fmt::Display for SectionFlags {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut parts = self.names();
+        let aligned;
+        if let Some(a) = self.alignment() {
+            aligned = format!("ALIGN_{a}BYTES");
+            parts.push(&aligned);
+        }
+        if parts.is_empty() {
+            return write!(f, "(none)");
+        }
+        write!(f, "{}", parts.join(" | "))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -912,4 +972,50 @@ mod tests {
         assert!(!result.is_success());
         assert_eq!(result.total_matches(), 2);
     }
+    #[test]
+    fn section_flag_names_cover_the_previously_unrouted_bits() {
+        let f = SectionFlags(
+            SectionFlags::LINK_REMOVE
+                | SectionFlags::GPREL
+                | SectionFlags::LNK_NRELOC_OVFL
+                | SectionFlags::MEM_NOT_PAGED,
+        );
+        let n = f.names();
+        assert!(n.contains(&"LNK_REMOVE"));
+        assert!(n.contains(&"GPREL"));
+        assert!(n.contains(&"LNK_NRELOC_OVFL"));
+        assert!(n.contains(&"MEM_NOT_PAGED"));
+        assert_eq!(n.len(), 4);
+        assert!(SectionFlags(0).names().is_empty());
+    }
+
+    #[test]
+    fn alignment_is_a_field_not_a_bitmask() {
+        // The ALIGN_* constants encode a 4-bit field; testing them with `&`
+        // would report 1-byte alignment for a 16-byte-aligned section.
+        assert_eq!(SectionFlags(SectionFlags::ALIGN_1BYTES).alignment(), Some(1));
+        assert_eq!(SectionFlags(SectionFlags::ALIGN_16BYTES).alignment(), Some(16));
+        assert_eq!(SectionFlags(0).alignment(), None);
+        // the trap the field decoding avoids:
+        assert_ne!(
+            SectionFlags::ALIGN_16BYTES & SectionFlags::ALIGN_1BYTES,
+            0,
+            "the two constants share a bit, so `&` cannot tell them apart"
+        );
+        // and the alignment bits must not leak into names()
+        assert!(SectionFlags(SectionFlags::ALIGN_16BYTES).names().is_empty());
+    }
+
+    #[test]
+    fn section_flags_display_lists_bits_and_alignment() {
+        let f = SectionFlags(
+            SectionFlags::CODE | SectionFlags::MEM_EXECUTE | SectionFlags::ALIGN_16BYTES,
+        );
+        let s = format!("{f}");
+        assert!(s.contains("CODE"), "{s}");
+        assert!(s.contains("MEM_EXECUTE"), "{s}");
+        assert!(s.contains("ALIGN_16BYTES"), "{s}");
+        assert_eq!(format!("{}", SectionFlags(0)), "(none)");
+    }
+
 }
