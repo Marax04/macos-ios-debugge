@@ -33,7 +33,7 @@ impl Lcg {
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn next_u8(&mut self) -> u8 {
+    const fn next_u8(&mut self) -> u8 {
         (self.next_u64() >> 56) as u8
     }
     fn next_bytes(&mut self, n: usize) -> Vec<u8> {
@@ -41,7 +41,7 @@ impl Lcg {
     }
 }
 
-fn fresh_lcg() -> Lcg {
+const fn fresh_lcg() -> Lcg {
     Lcg::new(0xDEAD_BEEF_CAFE_BABE)
 }
 
