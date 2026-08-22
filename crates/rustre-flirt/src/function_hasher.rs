@@ -302,7 +302,7 @@ mod tests {
         let bytes = [0xE9, 0xAA, 0xBB, 0xCC, 0xDD, 0xC3];
         let norm = hasher().normalize_function_bytes(&bytes);
         assert_eq!(norm[0], Some(0xE9));
-        for i in 1..5 { assert_eq!(norm[i], None); }
+        for b in &norm[1..5] { assert_eq!(*b, None); }
     }
 
     #[test]
@@ -319,7 +319,7 @@ mod tests {
         let norm = hasher().normalize_function_bytes(&bytes);
         assert_eq!(norm[0], Some(0x0F));
         assert_eq!(norm[1], Some(0x84));
-        for i in 2..6 { assert_eq!(norm[i], None); }
+        for b in &norm[2..6] { assert_eq!(*b, None); }
     }
 
     #[test]

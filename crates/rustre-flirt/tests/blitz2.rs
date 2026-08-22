@@ -10,8 +10,8 @@ fn lcg_seq(seed: u64, n: usize) -> Vec<u8> {
     let mut out = Vec::with_capacity(n);
     for _ in 0..n {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         out.push((s >> 32) as u8);
     }
     out
@@ -150,8 +150,7 @@ fn flirt_pattern_primary_and_all_names() {
         is_local: false,
     });
     assert_eq!(p.primary_name(), Some("pub_name"));
-    let all: Vec<&str> = p.all_names().collect();
-    assert_eq!(all.len(), 2);
+    assert_eq!(p.all_names().count(), 2);
 }
 
 #[test]
@@ -916,7 +915,7 @@ fn flirt_applier_renames_unknown() {
     let res = applier.apply_to_view(&view, &mut syms);
     assert_eq!(res.functions_examined, 1);
     assert!(res.functions_renamed >= 1);
-    assert!(syms.names.get(&0x1000).is_some());
+    assert!(syms.names.contains_key(&0x1000));
 }
 
 #[test]

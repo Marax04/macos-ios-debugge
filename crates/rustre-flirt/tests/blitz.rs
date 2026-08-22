@@ -323,10 +323,12 @@ fn parse_sig_header_valid_v9_min() {
     // It now builds the header with the canonical codec, so it cannot agree
     // with a parser that has drifted: the bytes come from the one place that
     // owns the offsets.
-    let mut h = rustre_flirt::sig_header::SigFileHeader::default();
-    h.version = 9;
-    h.arch = FlirtArch::X64.to_u8();
-    h.n_functions = 7;
+    let h = rustre_flirt::sig_header::SigFileHeader {
+        version: 9,
+        arch: FlirtArch::X64.to_u8(),
+        n_functions: 7,
+        ..rustre_flirt::sig_header::SigFileHeader::default()
+    };
     let data = h.encode();
 
     let (hdr, off) = parse_sig_header(&data).expect("should parse");

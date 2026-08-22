@@ -3985,7 +3985,7 @@ mod tests {
 
     #[test]
     fn test_simple_db_default() {
-        let db: SimpleFlirtDatabase = Default::default();
+        let db = SimpleFlirtDatabase::default();
         assert!(db.is_empty());
     }
 

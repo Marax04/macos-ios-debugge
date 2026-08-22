@@ -450,7 +450,7 @@ mod tests {
         let mut idx = FlirtIndex::new();
         let prefix = vec![Some(0x55), Some(0x8B)];
         idx.add_entry(sample_entry("dup_a", 0xAAAA, prefix.clone()));
-        idx.add_entry(sample_entry("dup_b", 0xAAAA, prefix.clone()));
+        idx.add_entry(sample_entry("dup_b", 0xAAAA, prefix));
         let collisions = idx.detect_collisions();
         assert_eq!(collisions.len(), 1);
         assert_eq!(collisions[0].len(), 2);

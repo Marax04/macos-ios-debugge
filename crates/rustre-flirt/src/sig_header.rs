@@ -363,7 +363,7 @@ mod tests {
         v[6] = 4;
         assert_eq!(SigFileHeader::decode(&v), Err(HeaderError::UnsupportedVersion(4)));
 
-        let mut v = good.clone();
+        let mut v = good;
         v[6] = 11;
         assert_eq!(SigFileHeader::decode(&v), Err(HeaderError::UnsupportedVersion(11)));
     }

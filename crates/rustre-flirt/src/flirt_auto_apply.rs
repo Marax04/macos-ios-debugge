@@ -568,9 +568,11 @@ mod tests {
 
     #[test]
     fn test_report_finalize() {
-        let mut report = ApplicationReport::default();
-        report.total_functions = 10;
-        report.matched_functions = 8;
+        let mut report = ApplicationReport {
+            total_functions: 10,
+            matched_functions: 8,
+            ..ApplicationReport::default()
+        };
         report.finalize();
         assert!((report.coverage_pct - 80.0).abs() < 1e-9);
     }

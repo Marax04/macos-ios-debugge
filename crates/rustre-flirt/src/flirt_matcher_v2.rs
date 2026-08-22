@@ -578,7 +578,7 @@ impl BatchStats {
 #[must_use]
 pub fn build_module_priority<S: BuildHasher>(scores: &HashMap<String, u32, S>) -> Vec<String> {
     let mut pairs: Vec<(String, u32)> = scores.iter().map(|(k, &v)| (k.clone(), v)).collect();
-    pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+    pairs.sort_unstable_by_key(|p| std::cmp::Reverse(p.1));
     pairs.into_iter().map(|(n, _)| n).collect()
 }
 

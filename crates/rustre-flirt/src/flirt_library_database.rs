@@ -841,7 +841,7 @@ impl FlirtLibraryDatabase {
                 self.libraries.get(&id).map(|e| (e.display_name(), cnt))
             })
             .collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by_key(|e| std::cmp::Reverse(e.1));
         result
     }
 
@@ -1251,8 +1251,7 @@ mod tests {
         let params = LibrarySearch::new();
         let report = db.search_sliding(&buf, 1, &params);
         assert!(report.has_matches());
-        let offsets: Vec<usize> = report.matches.iter().map(|m| m.offset).collect();
-        assert!(offsets.contains(&2));
+        assert!(report.matches.iter().any(|m| m.offset == 2));
     }
 
     // ── Bulk import ───────────────────────────────────────────────────────
