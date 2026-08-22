@@ -512,7 +512,7 @@ mod tests {
         let cs = rec.checksum();
         // Manually verify: byte_count = 2 + 3 + 1 = 6; sum = 6+0+0+1+2+3 = 12; cs = 0xFF-0x0C = 0xF3
         let bc = rec.byte_count();
-        let sum: u32 = (bc as u32) + 0x01 + 0x02 + 0x03;
+        let sum: u32 = u32::from(bc) + 0x01 + 0x02 + 0x03;
         assert_eq!(cs, (0xFF - (sum & 0xFF)) as u8);
     }
 

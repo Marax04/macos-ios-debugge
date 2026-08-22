@@ -116,7 +116,7 @@ fn random_noise_never_panics() {
     for _ in 0..300 {
         let len = (next() % 128) as usize;
         let buf: Vec<u8> = (0..len).map(|_| (next() & 0xFF) as u8).collect();
-        let expected = (next() % (u32::MAX as u64)) as usize;
+        let expected = (next() % u64::from(u32::MAX)) as usize;
         let _ = nso_loader::lz4_decompress(&buf, expected);
         let _ = nso_nro::lz4_decompress(&buf, expected);
     }

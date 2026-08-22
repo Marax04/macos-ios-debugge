@@ -516,7 +516,7 @@ mod tests {
         let rec = IhexRecord::new(RecordType::Data, 0x0100, vec![0x21, 0x46, 0x01, 0x36]);
         let cs = rec.checksum();
         // Verify that sum of all bytes + checksum = 0 mod 256
-        let total: u32 = (rec.byte_count as u32 + 0x01) + rec.data.iter().map(|&b| u32::from(b)).sum::<u32>() + u32::from(cs);
+        let total: u32 = (u32::from(rec.byte_count) + 0x01) + rec.data.iter().map(|&b| u32::from(b)).sum::<u32>() + u32::from(cs);
         assert_eq!(total & 0xFF, 0);
     }
 

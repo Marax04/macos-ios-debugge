@@ -298,7 +298,7 @@ fn gba_complement_check_valid_then_invalid() {
     let r = gba_rom();
     let h = GbaHeader::parse(&r).unwrap();
     assert!(h.verify_complement(&r));
-    let mut bad = r.clone();
+    let mut bad = r;
     bad[0xBD] = bad[0xBD].wrapping_add(1);
     let h2 = GbaHeader::parse(&bad).unwrap();
     assert!(!h2.verify_complement(&bad));
@@ -317,7 +317,7 @@ fn gba_save_type_detect_all() {
     let mut rf = r.clone();
     rf.extend_from_slice(b"FLASH_V120");
     assert_eq!(GbaSaveType::detect(&rf), GbaSaveType::Flash64);
-    let mut rf128 = r.clone();
+    let mut rf128 = r;
     rf128.extend_from_slice(b"FLASH1M_V103");
     assert_eq!(GbaSaveType::detect(&rf128), GbaSaveType::Flash128);
 }
