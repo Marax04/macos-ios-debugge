@@ -3,6 +3,7 @@
 //! Builds a chronological sequence of filesystem events and provides filtering,
 //! hot-path analysis, CSV export/import, and summary reporting.
 
+use std::fmt::Write as _;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -304,14 +305,14 @@ impl Timeline {
         for e in &self.events {
             let proc = e.process.as_deref().unwrap_or("");
             let pid = e.pid.map(|p| p.to_string()).unwrap_or_default();
-            out.push_str(&format!(
+            let _ = write!(out, 
                 "{},{},{},{},{}\n",
                 e.timestamp,
                 csv_field(&e.event_type.to_string()),
                 csv_field(&e.path),
                 csv_field(proc),
                 pid,
-            ));
+            );
         }
         out
     }

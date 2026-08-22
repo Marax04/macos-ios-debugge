@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::collections::HashMap;
 
 // ── File carver ───────────────────────────────────────────────────────────────
@@ -244,16 +245,16 @@ impl CarveStats {
     #[must_use] 
     pub fn report(&self) -> String {
         let mut s = String::new();
-        s.push_str(&format!("Total files carved: {}\n", self.total));
-        s.push_str(&format!("  High confidence: {}\n", self.high_confidence));
-        s.push_str(&format!("  Medium confidence: {}\n", self.medium_confidence));
-        s.push_str(&format!("  Low confidence: {}\n", self.low_confidence));
-        s.push_str(&format!("Total bytes: {} MB\n", self.total_bytes / 1_048_576));
+        let _ = write!(s, "Total files carved: {}\n", self.total);
+        let _ = write!(s, "  High confidence: {}\n", self.high_confidence);
+        let _ = write!(s, "  Medium confidence: {}\n", self.medium_confidence);
+        let _ = write!(s, "  Low confidence: {}\n", self.low_confidence);
+        let _ = write!(s, "Total bytes: {} MB\n", self.total_bytes / 1_048_576);
         s.push_str("By type:\n");
         let mut types: Vec<_> = self.by_type.iter().collect();
         types.sort_by(|a, b| b.1.cmp(a.1));
         for (t, c) in types {
-            s.push_str(&format!("  {t}: {c}\n"));
+            let _ = write!(s, "  {t}: {c}\n");
         }
         s
     }

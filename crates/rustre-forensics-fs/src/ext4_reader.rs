@@ -1,4 +1,5 @@
-﻿
+﻿use std::fmt::Write as _;
+
 // ── Ext4 on-disk structures ───────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -588,15 +589,15 @@ impl Ext4FsStats {
     #[must_use] 
     pub fn report(&self) -> String {
         let mut s = String::new();
-        s.push_str(&format!("Volume: {}\n", self.volume_name));
-        s.push_str(&format!("Block size: {} bytes\n", self.block_size));
-        s.push_str(&format!("Total blocks: {} ({} MB)\n", self.total_blocks, self.total_space / 1_048_576));
-        s.push_str(&format!("Used: {} MB ({:.1}%)\n", self.used_space / 1_048_576, self.usage_percent()));
-        s.push_str(&format!("Free: {} MB\n", self.free_space / 1_048_576));
-        s.push_str(&format!("Inodes: {}/{} used\n", self.inodes_used, self.total_inodes));
-        s.push_str(&format!("Block groups: {}\n", self.group_count));
-        s.push_str(&format!("Journal: {}\n", if self.has_journal { "yes" } else { "no" }));
-        s.push_str(&format!("Extents: {}\n", if self.has_extents { "yes" } else { "no" }));
+        let _ = write!(s, "Volume: {}\n", self.volume_name);
+        let _ = write!(s, "Block size: {} bytes\n", self.block_size);
+        let _ = write!(s, "Total blocks: {} ({} MB)\n", self.total_blocks, self.total_space / 1_048_576);
+        let _ = write!(s, "Used: {} MB ({:.1}%)\n", self.used_space / 1_048_576, self.usage_percent());
+        let _ = write!(s, "Free: {} MB\n", self.free_space / 1_048_576);
+        let _ = write!(s, "Inodes: {}/{} used\n", self.inodes_used, self.total_inodes);
+        let _ = write!(s, "Block groups: {}\n", self.group_count);
+        let _ = write!(s, "Journal: {}\n", if self.has_journal { "yes" } else { "no" });
+        let _ = write!(s, "Extents: {}\n", if self.has_extents { "yes" } else { "no" });
         s
     }
 }

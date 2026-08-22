@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 // timeline_builder.rs — Filesystem forensic timeline builder
 // Assembles MAC(b) timestamps into chronological event streams,
 // detects timestomping anomalies, and exports CSV reports.
@@ -555,7 +556,7 @@ impl TimelineBuilder {
                 .unwrap_or_default();
             let deleted = if ts.is_deleted { "1" } else { "0" };
             let desc_esc = ev.description.replace('"', "\"\"");
-            out.push_str(&format!(
+            let _ = write!(out, 
                 "{},{},{},{},{},{},\"{}\"\r\n",
                 ts.iso8601(),
                 ts.source,
@@ -564,7 +565,7 @@ impl TimelineBuilder {
                 inode_str,
                 deleted,
                 desc_esc
-            ));
+            );
         }
         out
     }
@@ -581,13 +582,13 @@ impl TimelineBuilder {
                 | EventKind::AnomalyPrecisionLoss => {
                     let ts = &ev.timestamp;
                     let desc_esc = ev.description.replace('"', "\"\"");
-                    out.push_str(&format!(
+                    let _ = write!(out, 
                         "{},{},{},\"{}\"\r\n",
                         ts.iso8601(),
                         ev.kind,
                         csv_escape(&ts.file_path),
                         desc_esc
-                    ));
+                    );
                 }
                 _ => {}
             }

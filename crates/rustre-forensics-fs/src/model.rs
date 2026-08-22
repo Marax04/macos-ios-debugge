@@ -23,6 +23,7 @@
 //! assert!(tree.resolve("/does/not/exist").is_none());
 //! ```
 
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 // ─── Records ────────────────────────────────────────────────────────────────
@@ -710,7 +711,7 @@ impl VfsBuilder {
 pub fn process_csv(processes: &[ProcessRecord]) -> String {
     let mut out = String::from("pid,ppid,name,base,size,handle_count\n");
     for p in processes {
-        out.push_str(&format!(
+        let _ = write!(out, 
             "{},{},{},0x{:016x},{},{}\n",
             p.pid,
             p.ppid,
@@ -718,7 +719,7 @@ pub fn process_csv(processes: &[ProcessRecord]) -> String {
             p.base,
             p.size,
             p.handle_count,
-        ));
+        );
     }
     out
 }
@@ -728,13 +729,13 @@ pub fn process_csv(processes: &[ProcessRecord]) -> String {
 pub fn modules_csv(modules: &[ModuleRecord]) -> String {
     let mut out = String::from("name,base,size,path\n");
     for m in modules {
-        out.push_str(&format!(
+        let _ = write!(out, 
             "{},0x{:016x},{},{}\n",
             csv_escape(&m.name),
             m.base,
             m.size,
             csv_escape(&m.path),
-        ));
+        );
     }
     out
 }
@@ -745,7 +746,7 @@ pub fn modules_csv(modules: &[ModuleRecord]) -> String {
 pub fn connections_csv(connections: &[NetConnRecord]) -> String {
     let mut out = String::from("proto,local_addr,local_port,remote_addr,remote_port,state,pid\n");
     for c in connections {
-        out.push_str(&format!(
+        let _ = write!(out, 
             "{},{},{},{},{},{},{}\n",
             c.proto.as_str(),
             csv_escape(&c.local_addr),
@@ -754,7 +755,7 @@ pub fn connections_csv(connections: &[NetConnRecord]) -> String {
             c.remote_port,
             csv_escape(&c.state),
             c.pid,
-        ));
+        );
     }
     out
 }
@@ -764,13 +765,13 @@ pub fn connections_csv(connections: &[NetConnRecord]) -> String {
 pub fn handles_csv(handles: &[HandleRecord]) -> String {
     let mut out = String::from("handle,object_type,name,access\n");
     for h in handles {
-        out.push_str(&format!(
+        let _ = write!(out, 
             "0x{:x},{},{},0x{:08x}\n",
             h.handle,
             csv_escape(&h.object_type),
             csv_escape(&h.name),
             h.access,
-        ));
+        );
     }
     out
 }

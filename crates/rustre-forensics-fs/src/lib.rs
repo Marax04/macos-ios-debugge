@@ -6,6 +6,7 @@
 //!
 //! § 24.4 — MemProcFS-style filesystem view with optional FUSE mount (Unix only).
 
+use std::fmt::Write as _;
 pub mod artifacts;
 pub mod export;
 pub mod ext4_reader;
@@ -916,13 +917,13 @@ impl Iterator for MemFsV2Walker<'_> {
 fn build_modules_csv(modules: &[ModuleInfo]) -> String {
     let mut out = String::from("name,base,size,path\n");
     for m in modules {
-        out.push_str(&format!(
+        let _ = write!(out, 
             "{},0x{:016x},{},'{}'\n",
             csv_escape(&m.name),
             m.base,
             m.size,
             csv_escape(&m.path),
-        ));
+        );
     }
     out
 }
@@ -931,7 +932,7 @@ fn build_connections_csv(connections: &[NetworkConnection]) -> String {
     let mut out =
         String::from("protocol,local_addr,local_port,remote_addr,remote_port,state,pid\n");
     for c in connections {
-        out.push_str(&format!(
+        let _ = write!(out, 
             "{},{},{},{},{},{:?},{}\n",
             c.protocol.as_str(),
             c.local_addr,
@@ -940,7 +941,7 @@ fn build_connections_csv(connections: &[NetworkConnection]) -> String {
             c.remote_port,
             c.state,
             c.pid,
-        ));
+        );
     }
     out
 }
@@ -1007,7 +1008,7 @@ fn build_handles_csv(proc: &ProcessInfo) -> String {
     // avoid generating huge files).
     let rows = std::cmp::min(proc.handle_count, 8) as usize;
     for i in 0..rows {
-        out.push_str(&format!("0x{:04x},unknown,<handle-{}>\n", i * 4, i));
+        let _ = write!(out, "0x{:04x},unknown,<handle-{}>\n", i * 4, i);
     }
     out
 }
