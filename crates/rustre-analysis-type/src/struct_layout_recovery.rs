@@ -1609,7 +1609,7 @@ mod tests {
                 for _ in 0..n {
                     let off = (xorshift(&mut state) % 5) * 4;
                     let size = 1u32 << (xorshift(&mut state) % 4);
-                    let pat = if xorshift(&mut state) % 2 == 0 {
+                    let pat = if xorshift(&mut state).is_multiple_of(2) {
                         FieldAccessPattern::read("p", off, size, 0)
                     } else {
                         FieldAccessPattern::write("p", off, size, 0)
@@ -1993,8 +1993,8 @@ mod tests {
             let size = [1u32, 2, 4, 8][(rng.next() % 4) as usize];
             let mut f = RecoveredField::new(off, size);
             f.access_count = (rng.next() % 5) as usize + 1;
-            f.ever_written = rng.next() % 2 == 0;
-            if size == 8 && rng.next() % 3 == 0 {
+            f.ever_written = rng.next().is_multiple_of(2);
+            if size == 8 && rng.next().is_multiple_of(3) {
                 f.inferred_type = "void *".into(); // simulated pointer detection
             }
             c.fields.insert(off, f);

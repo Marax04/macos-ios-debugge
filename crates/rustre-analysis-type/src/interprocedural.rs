@@ -1961,7 +1961,7 @@ mod tests {
             2 => IpaType::Bool,
             3 => IpaType::UInt(8 << (xorshift(state) % 4)),
             4 => IpaType::SInt(8 << (xorshift(state) % 4)),
-            5 => IpaType::Float(if xorshift(state) % 2 == 0 { 32 } else { 64 }),
+            5 => IpaType::Float(if xorshift(state).is_multiple_of(2) { 32 } else { 64 }),
             6 => IpaType::Struct(format!("S{}", xorshift(state) % 4)),
             7 => IpaType::Pointer(Box::new(random_type(state, depth - 1))),
             8 => IpaType::Array(Box::new(random_type(state, depth - 1)), xorshift(state) % 4),
@@ -2170,7 +2170,7 @@ mod tests {
             let arg_types: Vec<IpaType> = (0..n_args)
                 .map(|_| sample_types[(g.next() % 5) as usize].clone())
                 .collect();
-            let assigned = g.next() % 2 == 0;
+            let assigned = g.next().is_multiple_of(2);
             edges.push(CallEdge {
                 caller,
                 callee,

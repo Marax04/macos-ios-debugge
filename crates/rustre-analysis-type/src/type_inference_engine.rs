@@ -1704,10 +1704,10 @@ mod tests {
             match choice {
                 0 => BaseType::UInt(8 << (rng() % 4)),
                 1 => BaseType::Int(8 << (rng() % 4)),
-                2 => BaseType::Float(if rng() % 2 == 0 { 32 } else { 64 }),
+                2 => BaseType::Float(if rng().is_multiple_of(2) { 32 } else { 64 }),
                 3 => BaseType::Bool,
                 4 => {
-                    if rng() % 2 == 0 {
+                    if rng().is_multiple_of(2) {
                         BaseType::Void
                     } else {
                         BaseType::Unknown
