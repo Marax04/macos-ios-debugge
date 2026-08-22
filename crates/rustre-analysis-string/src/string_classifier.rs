@@ -35,22 +35,22 @@ impl StringCategory {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            StringCategory::Url => "url",
-            StringCategory::FilePath => "file_path",
-            StringCategory::RegistryKey => "registry_key",
-            StringCategory::Guid => "guid",
-            StringCategory::IpAddress => "ip_address",
-            StringCategory::EmailAddress => "email",
-            StringCategory::FormatString => "format_string",
-            StringCategory::CryptoConstant => "crypto_constant",
-            StringCategory::ErrorMessage => "error_message",
-            StringCategory::CommandLine => "command_line",
-            StringCategory::EnvironmentVariable => "env_var",
-            StringCategory::DllName => "dll_name",
-            StringCategory::ApiName => "api_name",
-            StringCategory::Base64Data => "base64",
-            StringCategory::HexData => "hex_data",
-            StringCategory::Unknown => "unknown",
+            Self::Url => "url",
+            Self::FilePath => "file_path",
+            Self::RegistryKey => "registry_key",
+            Self::Guid => "guid",
+            Self::IpAddress => "ip_address",
+            Self::EmailAddress => "email",
+            Self::FormatString => "format_string",
+            Self::CryptoConstant => "crypto_constant",
+            Self::ErrorMessage => "error_message",
+            Self::CommandLine => "command_line",
+            Self::EnvironmentVariable => "env_var",
+            Self::DllName => "dll_name",
+            Self::ApiName => "api_name",
+            Self::Base64Data => "base64",
+            Self::HexData => "hex_data",
+            Self::Unknown => "unknown",
         }
     }
 }
@@ -233,7 +233,7 @@ impl IpPattern {
         if octets.len() != 4 { return false; }
         matches!(
             (octets[0], octets[1]),
-            (10, _) | (172, 16..=31) | (192, 168) | (127, _) | (169, 254)
+            (10 | 127, _) | (172, 16..=31) | (192, 168) | (169, 254)
         )
     }
 }
@@ -318,13 +318,11 @@ impl FormatStringPattern {
         let mut count = 0usize;
         let mut chars = s.chars().peekable();
         while let Some(c) = chars.next() {
-            if c == '%' {
-                if let Some(&next) = chars.peek() {
-                    if "dioxXufeEgGscSpnhljztqL%".contains(next) {
+            if c == '%'
+                && let Some(&next) = chars.peek()
+                    && "dioxXufeEgGscSpnhljztqL%".contains(next) {
                         count += 1;
                     }
-                }
-            }
         }
         if count >= 1 {
             let conf = (0.5 + count as f64 * 0.15).min(0.95);
@@ -481,11 +479,10 @@ impl StringClassifier {
         if let Some(conf) = self.fmt.matches(s) {
             candidates.push((StringCategory::FormatString, conf, None));
         }
-        if self.config.detect_crypto {
-            if let Some((conf, desc)) = self.crypto.matches(s) {
+        if self.config.detect_crypto
+            && let Some((conf, desc)) = self.crypto.matches(s) {
                 candidates.push((StringCategory::CryptoConstant, conf, Some(desc)));
             }
-        }
         // Base64 heuristic
         if is_base64_like(s) {
             candidates.push((StringCategory::Base64Data, 0.75, None));
@@ -540,7 +537,7 @@ impl StringClassifier {
 }
 
 fn is_base64_like(s: &str) -> bool {
-    if s.len() < 8 || s.len() % 4 != 0 { return false; }
+    if s.len() < 8 || !s.len().is_multiple_of(4) { return false; }
     s.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
 }
 

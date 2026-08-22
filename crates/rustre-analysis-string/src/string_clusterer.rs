@@ -549,7 +549,7 @@ fn choose_centroid(members: &[StringRef]) -> String {
     let scores: Vec<f64> = members.iter().map(|m| {
         members.iter().map(|other| normalized_edit_similarity(&m.value, &other.value)).sum::<f64>()
     }).collect();
-    let best = scores.iter().enumerate().max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).map(|(i, _)| i).unwrap_or(0);
+    let best = scores.iter().enumerate().max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).map_or(0, |(i, _)| i);
     members[best].value.clone()
 }
 

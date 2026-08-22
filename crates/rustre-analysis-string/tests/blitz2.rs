@@ -1,23 +1,23 @@
 //! blitz2 — deep adversarial tests for rustre-analysis-string.
 //!
-//! No std::time, no rand. Seeded LCG only.
+//! No `std::time`, no rand. Seeded LCG only.
 
 use rustre_analysis_string::*;
 use rustre_core::address::Address;
 
-fn a(v: u64) -> Address { Address::new(v) }
+const fn a(v: u64) -> Address { Address::new(v) }
 
 /// Seeded LCG used by all fuzz tests.
 struct Lcg(u64);
 impl Lcg {
-    fn new() -> Self { Self(0xDEAD_BEEF_CAFE_BABE) }
-    fn next_u64(&mut self) -> u64 {
+    const fn new() -> Self { Self(0xDEAD_BEEF_CAFE_BABE) }
+    const fn next_u64(&mut self) -> u64 {
         self.0 = self.0
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
         self.0
     }
-    fn byte(&mut self) -> u8 { (self.next_u64() >> 24) as u8 }
+    const fn byte(&mut self) -> u8 { (self.next_u64() >> 24) as u8 }
     fn range(&mut self, lo: usize, hi: usize) -> usize {
         debug_assert!(hi > lo);
         lo + (self.next_u64() as usize % (hi - lo))
@@ -711,7 +711,7 @@ fn t55_base64_roundtrip() {
         let b0 = pt[i];
         let b1 = if i+1 < pt.len() { pt[i+1] } else { 0 };
         let b2 = if i+2 < pt.len() { pt[i+2] } else { 0 };
-        let n = ((b0 as u32) << 16) | ((b1 as u32) << 8) | (b2 as u32);
+        let n = (u32::from(b0) << 16) | (u32::from(b1) << 8) | u32::from(b2);
         enc.push(alphabet[((n >> 18) & 0x3F) as usize]);
         enc.push(alphabet[((n >> 12) & 0x3F) as usize]);
         if i + 1 < pt.len() {

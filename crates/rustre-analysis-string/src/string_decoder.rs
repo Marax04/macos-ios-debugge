@@ -28,18 +28,18 @@ pub enum Encoding {
 impl fmt::Display for Encoding {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Encoding::Utf8 => write!(f, "UTF-8"),
-            Encoding::Utf16Le => write!(f, "UTF-16LE"),
-            Encoding::Utf16Be => write!(f, "UTF-16BE"),
-            Encoding::Latin1 => write!(f, "Latin-1"),
-            Encoding::Cp1252 => write!(f, "CP-1252"),
-            Encoding::ShiftJis => write!(f, "Shift-JIS"),
-            Encoding::Ascii => write!(f, "ASCII"),
-            Encoding::Base64 => write!(f, "Base64"),
-            Encoding::Hex => write!(f, "Hex"),
-            Encoding::UrlEncoded => write!(f, "URL-Encoded"),
-            Encoding::Rot13 => write!(f, "ROT-13"),
-            Encoding::Xor1Byte(k) => write!(f, "XOR(0x{k:02x})"),
+            Self::Utf8 => write!(f, "UTF-8"),
+            Self::Utf16Le => write!(f, "UTF-16LE"),
+            Self::Utf16Be => write!(f, "UTF-16BE"),
+            Self::Latin1 => write!(f, "Latin-1"),
+            Self::Cp1252 => write!(f, "CP-1252"),
+            Self::ShiftJis => write!(f, "Shift-JIS"),
+            Self::Ascii => write!(f, "ASCII"),
+            Self::Base64 => write!(f, "Base64"),
+            Self::Hex => write!(f, "Hex"),
+            Self::UrlEncoded => write!(f, "URL-Encoded"),
+            Self::Rot13 => write!(f, "ROT-13"),
+            Self::Xor1Byte(k) => write!(f, "XOR(0x{k:02x})"),
         }
     }
 }
@@ -278,8 +278,8 @@ impl StringDecoder {
             let raw = &data[start..i];
             // base64 requires at least ~4 chars and length divisible by 4 (with padding)
             if raw.len() < 8 { continue; }
-            if let Some(decoded) = decode_base64(raw) {
-                if decoded.len() >= self.config.min_length && printable_ratio(&decoded) >= self.config.min_printable_ratio {
+            if let Some(decoded) = decode_base64(raw)
+                && decoded.len() >= self.config.min_length && printable_ratio(&decoded) >= self.config.min_printable_ratio {
                     out.push(DetectedString {
                         offset: start as u64,
                         raw: raw.to_vec(),
@@ -288,7 +288,6 @@ impl StringDecoder {
                         confidence: 0.75,
                     });
                 }
-            }
         }
     }
 
@@ -300,9 +299,9 @@ impl StringDecoder {
             while i < data.len() && data[i].is_ascii_hexdigit() { i += 1; }
             let raw = &data[start..i];
             if raw.len() < self.config.min_length * 2 { continue; }
-            if raw.len() % 2 != 0 { continue; }
-            if let Some(decoded) = decode_hex_string(raw) {
-                if decoded.len() >= self.config.min_length && printable_ratio(&decoded) >= self.config.min_printable_ratio {
+            if !raw.len().is_multiple_of(2) { continue; }
+            if let Some(decoded) = decode_hex_string(raw)
+                && decoded.len() >= self.config.min_length && printable_ratio(&decoded) >= self.config.min_printable_ratio {
                     out.push(DetectedString {
                         offset: start as u64,
                         raw: raw.to_vec(),
@@ -311,7 +310,6 @@ impl StringDecoder {
                         confidence: 0.70,
                     });
                 }
-            }
         }
     }
 
@@ -324,8 +322,8 @@ impl StringDecoder {
             while i < data.len() && is_url_byte(data[i]) { i += 1; }
             let raw = &data[start..i];
             if raw.len() < 3 { continue; }
-            if let Some(decoded) = decode_url_encoded(raw) {
-                if decoded.len() >= self.config.min_length {
+            if let Some(decoded) = decode_url_encoded(raw)
+                && decoded.len() >= self.config.min_length {
                     out.push(DetectedString {
                         offset: start as u64,
                         raw: raw.to_vec(),
@@ -334,7 +332,6 @@ impl StringDecoder {
                         confidence: 0.65,
                     });
                 }
-            }
         }
     }
 
@@ -375,7 +372,7 @@ pub fn decode_ascii(raw: &[u8]) -> Option<String> {
 /// Decode UTF-16 LE byte pairs into a String.
 #[must_use]
 pub fn decode_utf16_le(raw: &[u8]) -> Option<String> {
-    if raw.len() % 2 != 0 {
+    if !raw.len().is_multiple_of(2) {
         return None;
     }
     let units: Vec<u16> = raw.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
@@ -385,7 +382,7 @@ pub fn decode_utf16_le(raw: &[u8]) -> Option<String> {
 /// Decode UTF-16 BE byte pairs into a String.
 #[must_use]
 pub fn decode_utf16_be(raw: &[u8]) -> Option<String> {
-    if raw.len() % 2 != 0 {
+    if !raw.len().is_multiple_of(2) {
         return None;
     }
     let units: Vec<u16> = raw.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
@@ -487,7 +484,7 @@ pub fn base64_decode_bytes(raw: &[u8]) -> Option<Vec<u8>> {
 /// Decode a sequence of hex digit pairs (e.g. `"48656c6c6f"`) into a UTF-8 string.
 #[must_use]
 pub fn decode_hex_string(raw: &[u8]) -> Option<String> {
-    if raw.len() % 2 != 0 { return None; }
+    if !raw.len().is_multiple_of(2) { return None; }
     let bytes: Option<Vec<u8>> = raw.chunks_exact(2).map(|pair| {
         let hi = hex_nibble(pair[0])?;
         let lo = hex_nibble(pair[1])?;

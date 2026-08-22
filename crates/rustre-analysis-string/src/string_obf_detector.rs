@@ -35,19 +35,19 @@ impl ObfType {
     #[must_use]
     pub fn name(&self) -> String {
         match self {
-            ObfType::XorSingleByte { key } => format!("xor_byte({key:#04x})"),
-            ObfType::XorMultiByte { key } => format!("xor_multi({} bytes)", key.len()),
-            ObfType::Base64 { variant } => match variant {
+            Self::XorSingleByte { key } => format!("xor_byte({key:#04x})"),
+            Self::XorMultiByte { key } => format!("xor_multi({} bytes)", key.len()),
+            Self::Base64 { variant } => match variant {
                 Base64Variant::Standard => "base64_std".to_owned(),
                 Base64Variant::UrlSafe => "base64_url".to_owned(),
                 Base64Variant::Custom => "base64_custom".to_owned(),
             },
-            ObfType::HexEncoded => "hex_encoded".to_owned(),
-            ObfType::StackString => "stack_string".to_owned(),
-            ObfType::RotN { n } => format!("rot{n}"),
-            ObfType::Reversed => "reversed".to_owned(),
-            ObfType::NullPadded => "null_padded".to_owned(),
-            ObfType::Custom(s) => format!("custom({s})"),
+            Self::HexEncoded => "hex_encoded".to_owned(),
+            Self::StackString => "stack_string".to_owned(),
+            Self::RotN { n } => format!("rot{n}"),
+            Self::Reversed => "reversed".to_owned(),
+            Self::NullPadded => "null_padded".to_owned(),
+            Self::Custom(s) => format!("custom({s})"),
         }
     }
 }
@@ -147,7 +147,7 @@ impl XorObf {
     pub fn frequency_key(data: &[u8]) -> u8 {
         let mut freq = [0u32; 256];
         for &b in data { freq[b as usize] += 1; }
-        let most_common = freq.iter().enumerate().max_by_key(|&(_, &c)| c).map(|(i, _)| i).unwrap_or(0) as u8;
+        let most_common = freq.iter().enumerate().max_by_key(|&(_, &c)| c).map_or(0, |(i, _)| i) as u8;
         most_common ^ 0x20 // XOR with ASCII space
     }
 }
@@ -226,7 +226,7 @@ impl Base64Obf {
     /// Detect and classify base64.
     #[must_use]
     pub fn detect(data: &[u8]) -> Option<(Base64Variant, f64)> {
-        if data.len() < 4 || data.len() % 4 != 0 {
+        if data.len() < 4 || !data.len().is_multiple_of(4) {
             return None;
         }
         let std_score = alphabet_score(data, Self::STD_ALPHABET);
@@ -247,7 +247,7 @@ impl Base64Obf {
     #[must_use]
     pub fn decode_standard(data: &[u8]) -> Option<Vec<u8>> {
         let clean: Vec<u8> = data.iter().copied().filter(|&b| b != b'\r' && b != b'\n').collect();
-        if clean.len() % 4 != 0 { return None; }
+        if !clean.len().is_multiple_of(4) { return None; }
         let mut out = Vec::with_capacity(clean.len() / 4 * 3);
         for chunk in clean.chunks(4) {
             let a = decode_char(chunk[0])?;
@@ -289,14 +289,14 @@ pub struct HexObf;
 impl HexObf {
     #[must_use]
     pub fn detect(data: &[u8]) -> Option<f64> {
-        if data.len() < 8 || data.len() % 2 != 0 { return None; }
+        if data.len() < 8 || !data.len().is_multiple_of(2) { return None; }
         let score = alphabet_score_fn(data, |b| matches!(b, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F'));
         if score >= 0.98 { Some(score) } else { None }
     }
 
     #[must_use]
     pub fn decode(data: &[u8]) -> Option<Vec<u8>> {
-        if data.len() % 2 != 0 { return None; }
+        if !data.len().is_multiple_of(2) { return None; }
         let mut out = Vec::with_capacity(data.len() / 2);
         for chunk in data.chunks(2) {
             let hi = hex_nybble(chunk[0])?;
@@ -468,8 +468,8 @@ impl ObfDetector {
         let mut results = Vec::new();
 
         // Base64
-        if self.config.detect_base64 {
-            if let Some((variant, conf)) = Base64Obf::detect(data) {
+        if self.config.detect_base64
+            && let Some((variant, conf)) = Base64Obf::detect(data) {
                 let decoded = Base64Obf::decode_standard(data);
                 results.push(ObfDetectionResult {
                     obf_type: ObfType::Base64 { variant },
@@ -479,11 +479,10 @@ impl ObfDetector {
                     entropy,
                 });
             }
-        }
 
         // Hex
-        if self.config.detect_hex {
-            if let Some(conf) = HexObf::detect(data) {
+        if self.config.detect_hex
+            && let Some(conf) = HexObf::detect(data) {
                 let decoded = HexObf::decode(data);
                 results.push(ObfDetectionResult {
                     obf_type: ObfType::HexEncoded,
@@ -493,12 +492,11 @@ impl ObfDetector {
                     entropy,
                 });
             }
-        }
 
         // XOR single-byte
-        if self.config.detect_xor {
-            if let Some((key, score, decoded)) = XorObf::best_key(data) {
-                if score >= self.config.xor_min_printable_score {
+        if self.config.detect_xor
+            && let Some((key, score, decoded)) = XorObf::best_key(data)
+                && score >= self.config.xor_min_printable_score {
                     results.push(ObfDetectionResult {
                         obf_type: ObfType::XorSingleByte { key },
                         decoded: Some(decoded),
@@ -507,8 +505,6 @@ impl ObfDetector {
                         entropy,
                     });
                 }
-            }
-        }
 
         for r in &results {
             *self.stats.by_type.entry(r.obf_type.name()).or_default() += 1;

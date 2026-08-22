@@ -490,27 +490,20 @@ impl StringFilter {
     /// Return `true` if `s` passes all filter criteria.
     #[must_use]
     pub fn accepts(&self, s: &str) -> bool {
-        if let Some(min) = self.min_length {
-            if s.len() < min { return false; }
-        }
-        if let Some(max) = self.max_length {
-            if s.len() > max { return false; }
-        }
-        if let Some(c) = &self.contains {
-            if !s.contains(c.as_str()) { return false; }
-        }
-        if let Some(pfx) = &self.starts_with {
-            if !s.starts_with(pfx.as_str()) { return false; }
-        }
-        if let Some(sfx) = &self.ends_with {
-            if !s.ends_with(sfx.as_str()) { return false; }
-        }
-        if let Some(min_e) = self.min_entropy {
-            if shannon_entropy_str(s) < min_e { return false; }
-        }
-        if let Some(max_e) = self.max_entropy {
-            if shannon_entropy_str(s) > max_e { return false; }
-        }
+        if let Some(min) = self.min_length
+            && s.len() < min { return false; }
+        if let Some(max) = self.max_length
+            && s.len() > max { return false; }
+        if let Some(c) = &self.contains
+            && !s.contains(c.as_str()) { return false; }
+        if let Some(pfx) = &self.starts_with
+            && !s.starts_with(pfx.as_str()) { return false; }
+        if let Some(sfx) = &self.ends_with
+            && !s.ends_with(sfx.as_str()) { return false; }
+        if let Some(min_e) = self.min_entropy
+            && shannon_entropy_str(s) < min_e { return false; }
+        if let Some(max_e) = self.max_entropy
+            && shannon_entropy_str(s) > max_e { return false; }
         if self.ascii_only && !s.is_ascii() {
             return false;
         }
@@ -534,27 +527,20 @@ impl StringFilter {
     /// evaluating [`required_patterns`].
     #[must_use]
     pub fn accepts_with_matcher(&self, s: &str, matcher: &PatternMatcher) -> bool {
-        if let Some(min) = self.min_length {
-            if s.len() < min { return false; }
-        }
-        if let Some(max) = self.max_length {
-            if s.len() > max { return false; }
-        }
-        if let Some(c) = &self.contains {
-            if !s.contains(c.as_str()) { return false; }
-        }
-        if let Some(pfx) = &self.starts_with {
-            if !s.starts_with(pfx.as_str()) { return false; }
-        }
-        if let Some(sfx) = &self.ends_with {
-            if !s.ends_with(sfx.as_str()) { return false; }
-        }
-        if let Some(min_e) = self.min_entropy {
-            if shannon_entropy_str(s) < min_e { return false; }
-        }
-        if let Some(max_e) = self.max_entropy {
-            if shannon_entropy_str(s) > max_e { return false; }
-        }
+        if let Some(min) = self.min_length
+            && s.len() < min { return false; }
+        if let Some(max) = self.max_length
+            && s.len() > max { return false; }
+        if let Some(c) = &self.contains
+            && !s.contains(c.as_str()) { return false; }
+        if let Some(pfx) = &self.starts_with
+            && !s.starts_with(pfx.as_str()) { return false; }
+        if let Some(sfx) = &self.ends_with
+            && !s.ends_with(sfx.as_str()) { return false; }
+        if let Some(min_e) = self.min_entropy
+            && shannon_entropy_str(s) < min_e { return false; }
+        if let Some(max_e) = self.max_entropy
+            && shannon_entropy_str(s) > max_e { return false; }
         if self.ascii_only && !s.is_ascii() {
             return false;
         }
@@ -654,15 +640,14 @@ impl BinaryStringScanner {
             } else {
                 if let Some(s) = start.take() {
                     let run = &data[s..i];
-                    if run.len() >= min_len {
-                        if let Ok(val) = std::str::from_utf8(run) {
+                    if run.len() >= min_len
+                        && let Ok(val) = std::str::from_utf8(run) {
                             results.push(ScannedString {
                                 value: val.to_string(),
                                 offset: s,
                                 is_wide: false,
                             });
                         }
-                    }
                 }
             }
             i += 1;
@@ -671,15 +656,14 @@ impl BinaryStringScanner {
         // Flush trailing run
         if let Some(s) = start {
             let run = &data[s..];
-            if run.len() >= min_len {
-                if let Ok(val) = std::str::from_utf8(run) {
+            if run.len() >= min_len
+                && let Ok(val) = std::str::from_utf8(run) {
                     results.push(ScannedString {
                         value: val.to_string(),
                         offset: s,
                         is_wide: false,
                     });
                 }
-            }
         }
 
         results
@@ -728,12 +712,11 @@ impl BinaryStringScanner {
             }
 
             // Flush trailing run
-            if let Some(s) = run_start {
-                if run_chars.len() >= min_len {
+            if let Some(s) = run_start
+                && run_chars.len() >= min_len {
                     let val: String = run_chars.iter().map(|&c| char::from(c as u8)).collect();
                     results.push(ScannedString { value: val, offset: s, is_wide: true });
                 }
-            }
         }
 
         // Deduplicate: if both alignments produce the same string at the same offset,

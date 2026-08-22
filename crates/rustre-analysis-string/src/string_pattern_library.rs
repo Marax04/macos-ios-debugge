@@ -37,27 +37,27 @@ pub enum PatternCategory {
 impl fmt::Display for PatternCategory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            PatternCategory::Url => "URL",
-            PatternCategory::IpAddress => "IP Address",
-            PatternCategory::EmailAddress => "Email",
-            PatternCategory::FilePathWindows => "Windows Path",
-            PatternCategory::FilePathUnix => "Unix Path",
-            PatternCategory::RegistryKey => "Registry Key",
-            PatternCategory::WindowsApi => "Windows API",
-            PatternCategory::CryptoKey => "Crypto Key",
-            PatternCategory::Base64Data => "Base64 Data",
-            PatternCategory::SqlQuery => "SQL Query",
-            PatternCategory::ShellCommand => "Shell Command",
-            PatternCategory::NetworkProtocol => "Network Protocol",
-            PatternCategory::ErrorMessage => "Error Message",
-            PatternCategory::DebugString => "Debug String",
-            PatternCategory::Pdb => "PDB Path",
-            PatternCategory::VersionInfo => "Version Info",
-            PatternCategory::Guid => "GUID",
-            PatternCategory::MutexName => "Mutex Name",
-            PatternCategory::EventName => "Event Name",
-            PatternCategory::ServiceName => "Service Name",
-            PatternCategory::ScheduledTask => "Scheduled Task",
+            Self::Url => "URL",
+            Self::IpAddress => "IP Address",
+            Self::EmailAddress => "Email",
+            Self::FilePathWindows => "Windows Path",
+            Self::FilePathUnix => "Unix Path",
+            Self::RegistryKey => "Registry Key",
+            Self::WindowsApi => "Windows API",
+            Self::CryptoKey => "Crypto Key",
+            Self::Base64Data => "Base64 Data",
+            Self::SqlQuery => "SQL Query",
+            Self::ShellCommand => "Shell Command",
+            Self::NetworkProtocol => "Network Protocol",
+            Self::ErrorMessage => "Error Message",
+            Self::DebugString => "Debug String",
+            Self::Pdb => "PDB Path",
+            Self::VersionInfo => "Version Info",
+            Self::Guid => "GUID",
+            Self::MutexName => "Mutex Name",
+            Self::EventName => "Event Name",
+            Self::ServiceName => "Service Name",
+            Self::ScheduledTask => "Scheduled Task",
         };
         write!(f, "{s}")
     }
@@ -228,7 +228,7 @@ impl StringPatternLibrary {
             let Some(slice) = s.get(i..i + 3) else { continue; };
             let ch = slice.chars().next().unwrap_or(' ');
             if ch.is_ascii_alphabetic() && (slice.as_bytes()[1] == b':') && (slice.as_bytes()[2] == b'\\' || slice.as_bytes()[2] == b'/') {
-                let end = s[i..].find(|c: char| c.is_whitespace() || c == '"' || c == '\'').map(|e| i + e).unwrap_or(s.len());
+                let end = s[i..].find(|c: char| c.is_whitespace() || c == '"' || c == '\'').map_or(s.len(), |e| i + e);
                 out.push(PatternMatch {
                     category: PatternCategory::FilePathWindows,
                     value: s[i..end].to_owned(),
@@ -391,7 +391,7 @@ impl StringPatternLibrary {
         let upper = s.to_ascii_uppercase();
         for kw in SQL_KW {
             if let Some(pos) = upper.find(kw) {
-                let end = s[pos..].find(|c: char| c == ';').map(|e| pos + e + 1).unwrap_or(s.len().min(pos + 128));
+                let end = s[pos..].find(|c: char| c == ';').map_or(s.len().min(pos + 128), |e| pos + e + 1);
                 out.push(PatternMatch {
                     category: PatternCategory::SqlQuery,
                     value: s[pos..end].to_owned(),
@@ -412,7 +412,7 @@ impl StringPatternLibrary {
         let lower = s.to_ascii_lowercase();
         for cmd in CMD {
             if let Some(pos) = lower.find(cmd) {
-                let end = s[pos..].find(|c: char| c == '\n' || c == '\0').map(|e| pos + e).unwrap_or(s.len().min(pos + 256));
+                let end = s[pos..].find(|c: char| c == '\n' || c == '\0').map_or(s.len().min(pos + 256), |e| pos + e);
                 out.push(PatternMatch {
                     category: PatternCategory::ShellCommand,
                     value: s[pos..end].to_owned(),
@@ -431,8 +431,8 @@ impl StringPatternLibrary {
                                    "POP3", "IMAP", "FTP", "SSH", "RDP", "SMB", "LDAP",
                                    "TLS", "SSL", "IRC", "XMPP"];
         for proto in PROTOS {
-            if s.contains(proto) {
-                if let Some(pos) = s.find(proto) {
+            if s.contains(proto)
+                && let Some(pos) = s.find(proto) {
                     out.push(PatternMatch {
                         category: PatternCategory::NetworkProtocol,
                         value: proto.to_string(),
@@ -441,7 +441,6 @@ impl StringPatternLibrary {
                         end: pos + proto.len(),
                     });
                 }
-            }
         }
     }
 
@@ -449,7 +448,7 @@ impl StringPatternLibrary {
 
     fn find_pdb(&self, s: &str, out: &mut Vec<PatternMatch>) {
         if let Some(pos) = s.to_ascii_lowercase().find(".pdb") {
-            let start = s[..pos].rfind(|c: char| c.is_whitespace() || c == '"').map(|p| p + 1).unwrap_or(0);
+            let start = s[..pos].rfind(|c: char| c.is_whitespace() || c == '"').map_or(0, |p| p + 1);
             out.push(PatternMatch {
                 category: PatternCategory::Pdb,
                 value: s[start..pos + 4].to_owned(),
@@ -534,7 +533,7 @@ impl StringPatternLibrary {
         const MUTEX_KW: &[&str] = &["Global\\", "Local\\", "Mutex_", "MTX_", "_mutex", "_Mutex"];
         for kw in MUTEX_KW {
             if let Some(pos) = s.find(kw) {
-                let end = s[pos..].find(|c: char| c.is_whitespace() || c == '"').map(|e| pos + e).unwrap_or(s.len().min(pos + 64));
+                let end = s[pos..].find(|c: char| c.is_whitespace() || c == '"').map_or(s.len().min(pos + 64), |e| pos + e);
                 out.push(PatternMatch {
                     category: PatternCategory::MutexName,
                     value: s[pos..end].to_owned(),
@@ -552,7 +551,7 @@ impl StringPatternLibrary {
         const EVENT_KW: &[&str] = &["Event_", "EVT_", "_event", "CreateEvent", "OpenEvent"];
         for kw in EVENT_KW {
             if let Some(pos) = s.find(kw) {
-                let end = s[pos..].find(|c: char| c.is_whitespace() || c == '"').map(|e| pos + e).unwrap_or(s.len().min(pos + 64));
+                let end = s[pos..].find(|c: char| c.is_whitespace() || c == '"').map_or(s.len().min(pos + 64), |e| pos + e);
                 out.push(PatternMatch {
                     category: PatternCategory::EventName,
                     value: s[pos..end].to_owned(),
@@ -570,7 +569,7 @@ impl StringPatternLibrary {
         const SVC_KW: &[&str] = &["SERVICE_", "Svc", "SVC", "service.exe", "svchost"];
         for kw in SVC_KW {
             if let Some(pos) = s.find(kw) {
-                let end = s[pos..].find(|c: char| c.is_whitespace() || c == '"').map(|e| pos + e).unwrap_or(s.len().min(pos + 64));
+                let end = s[pos..].find(|c: char| c.is_whitespace() || c == '"').map_or(s.len().min(pos + 64), |e| pos + e);
                 out.push(PatternMatch {
                     category: PatternCategory::ServiceName,
                     value: s[pos..end].to_owned(),
@@ -589,7 +588,7 @@ impl StringPatternLibrary {
                                     "ITaskScheduler", "SCHTASKS /"];
         for kw in TASK_KW {
             if let Some(pos) = s.find(kw) {
-                let end = s[pos..].find(|c: char| c == '\n' || c == '\0').map(|e| pos + e).unwrap_or(s.len().min(pos + 128));
+                let end = s[pos..].find(|c: char| c == '\n' || c == '\0').map_or(s.len().min(pos + 128), |e| pos + e);
                 out.push(PatternMatch {
                     category: PatternCategory::ScheduledTask,
                     value: s[pos..end].to_owned(),
