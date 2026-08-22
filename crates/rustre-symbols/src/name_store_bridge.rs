@@ -17,7 +17,9 @@ pub trait NameStoreSink {
     fn set_name(&mut self, addr: u64, name: &str);
 }
 
-impl NameStoreSink for HashMap<u64, String> {
+/// Generic over the hasher so a caller using a faster `BuildHasher` (`rustc-hash`,
+/// `ahash`) still gets the impl instead of being forced back onto `SipHash`.
+impl<S: std::hash::BuildHasher> NameStoreSink for HashMap<u64, String, S> {
     fn set_name(&mut self, addr: u64, name: &str) {
         self.insert(addr, name.to_string());
     }
@@ -78,7 +80,7 @@ pub fn populate_from_provider(
     for sym in provider.all_symbols() {
         let is_fn = sym.kind == SymKind::Function;
         let is_data = matches!(sym.kind, SymKind::Data | SymKind::Common | SymKind::TLS);
-        if !is_fn && !(opts.include_data && is_data) {
+        if !(is_fn || opts.include_data && is_data) {
             continue;
         }
         let name = if opts.prefer_demangled {

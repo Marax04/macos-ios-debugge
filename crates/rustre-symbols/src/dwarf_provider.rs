@@ -2822,15 +2822,16 @@ mod tests {
     // ── Real line-number program ─────────────────────────────────────────────
 
     /// Handcraft a tiny DWARF v3 line program:
-    /// files: ["a.c"], `set_address` 0x1000, copy (line 1), `advance_line` +4,
+    /// files: `["a.c"]`, `set_address` 0x1000, copy (line 1), `advance_line` +4,
     /// `advance_pc` 0x10, copy (line 5), `end_sequence`.
     fn synthetic_line_program() -> Vec<u8> {
-        let mut hdr_tail = Vec::new();
-        hdr_tail.push(1); // min_inst_length
-        hdr_tail.push(1); // default_is_stmt
-        hdr_tail.push(0xfb_u8); // line_base = -5
-        hdr_tail.push(14); // line_range
-        hdr_tail.push(13); // opcode_base
+        let mut hdr_tail = vec![
+            1,       // min_inst_length
+            1,       // default_is_stmt
+            0xfb_u8, // line_base = -5
+            14,      // line_range
+            13,      // opcode_base
+        ];
         hdr_tail.extend([0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]); // std opcode lengths
         hdr_tail.push(0); // include_directories terminator
         hdr_tail.extend(b"a.c\0"); // file 1
@@ -2896,12 +2897,7 @@ mod tests {
         // Simpler: append a second CU is overkill; instead just verify the
         // existing program parses when a special opcode is appended before
         // end_sequence is not trivial — craft minimal one instead.
-        let mut tail = Vec::new();
-        tail.push(1);
-        tail.push(1);
-        tail.push(0xfb_u8);
-        tail.push(14);
-        tail.push(13);
+        let mut tail = vec![1, 1, 0xfb_u8, 14, 13];
         tail.extend([0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]);
         tail.push(0);
         tail.extend(b"s.c\0");

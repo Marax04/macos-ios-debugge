@@ -53,7 +53,7 @@ fn push_record(out: &mut Vec<u8>, kind: u16, body: &[u8]) {
     out.extend_from_slice(&len.to_le_bytes());
     out.extend_from_slice(&kind.to_le_bytes());
     out.extend_from_slice(body);
-    while out.len() % 4 != 0 {
+    while !out.len().is_multiple_of(4) {
         out.push(0);
     }
 }
@@ -123,7 +123,7 @@ fn info_with(records: Vec<(u32, TypeRecord)>) -> PdbTypeInfo {
     }
 }
 
-fn modifier(base_ti: u32) -> TypeRecord {
+const fn modifier(base_ti: u32) -> TypeRecord {
     TypeRecord::Modifier(ModifierType {
         base_ti,
         attr: 0x01, // const
@@ -354,15 +354,15 @@ fn numeric_leaf_rejects_unknown_tag() {
 fn signed_numeric_leaves_sign_extend() {
     let mut c = 0x8000u16.to_le_bytes().to_vec(); // LF_CHAR
     c.push(0xFF);
-    assert_eq!(read_numeric_leaf(&c, 0).unwrap().0 as i64, -1);
+    assert_eq!(read_numeric_leaf(&c, 0).unwrap().0.cast_signed(), -1);
 
     let mut s = 0x8001u16.to_le_bytes().to_vec(); // LF_SHORT
     s.extend_from_slice(&(-1i16).to_le_bytes());
-    assert_eq!(read_numeric_leaf(&s, 0).unwrap().0 as i64, -1);
+    assert_eq!(read_numeric_leaf(&s, 0).unwrap().0.cast_signed(), -1);
 
     let mut l = 0x8003u16.to_le_bytes().to_vec(); // LF_LONG
     l.extend_from_slice(&(-1i32).to_le_bytes());
-    assert_eq!(read_numeric_leaf(&l, 0).unwrap().0 as i64, -1);
+    assert_eq!(read_numeric_leaf(&l, 0).unwrap().0.cast_signed(), -1);
 
     // Unsigned counterparts stay unsigned.
     let mut us = 0x8002u16.to_le_bytes().to_vec(); // LF_USHORT

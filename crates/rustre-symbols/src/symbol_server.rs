@@ -249,8 +249,7 @@ impl SymbolServerClient {
     #[must_use]
     pub fn is_cached(&self, pdb_name: &str, guid: &str, age: u32) -> bool {
         self.cache_path(pdb_name, guid, age)
-            .map(|p| p.is_file())
-            .unwrap_or(false)
+            .is_ok_and(|p| p.is_file())
     }
 
     /// Fetch a PDB: cache-first, then the symbol server. Returns the local
@@ -423,10 +422,12 @@ mod tests {
         let mut mock = MockFetcher::new();
         mock.insert(msdl_url("app.pdb", GUID, 3).unwrap(), b"BODY".to_vec());
         let client = SymbolServerClient::new(MSDL_SERVER, dir.path(), Box::new(mock));
-        let mut di = rustre_loader_pe::DebugInfo::default();
-        di.pdb_guid = Some(GUID.to_string());
-        di.pdb_age = Some(3);
-        di.pdb_path = Some(r"C:\build\out\app.pdb".to_string());
+        let di = rustre_loader_pe::DebugInfo {
+            pdb_guid: Some(GUID.to_string()),
+            pdb_age: Some(3),
+            pdb_path: Some(r"C:\build\out\app.pdb".to_string()),
+            ..Default::default()
+        };
         let path = client.fetch_pdb_for_debug_info(&di).unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"BODY");
         assert!(path.to_string_lossy().contains("app.pdb"));

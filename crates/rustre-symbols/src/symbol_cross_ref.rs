@@ -348,8 +348,9 @@ impl XrefGraph {
             if frame.2 < frame.1.len() {
                 let next = frame.1[frame.2];
                 frame.2 += 1;
-                if !visited.contains(&next) {
-                    visited.insert(next);
+                // `insert` returns false when the node was already present, so
+                // this is the `contains` + `insert` pair in one hash lookup.
+                if visited.insert(next) {
                     stack.insert(next);
                     let next_succs = code_succs(next);
                     frames.push((next, next_succs, 0));
@@ -808,10 +809,10 @@ mod tests {
 
     #[test]
     fn find_cycles_deep_chain_no_stack_overflow() {
-        // A 200k-node linear chain used to overflow the stack in the
-        // recursive DFS; the iterative version must handle it.
-        let mut g = XrefGraph::new();
+        /// Chain length: a 200k-node linear chain used to overflow the stack in
+        /// the recursive DFS; the iterative version must handle it.
         const N: u64 = 200_000;
+        let mut g = XrefGraph::new();
         for i in 0..N {
             g.add_xref(call(i, i + 1));
         }

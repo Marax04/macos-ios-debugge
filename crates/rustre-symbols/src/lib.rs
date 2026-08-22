@@ -3187,7 +3187,7 @@ mod tests {
     fn export_as_csv_escapes_commas_in_names() {
         // A demangled C++ name contains commas; unescaped it would turn a
         // 5-field row into 7 fields.
-        let mut sym = Symbol::new("_ZN6Widget4drawEiPKc".to_string(), 0x401000, SymKind::Function);
+        let mut sym = Symbol::new("_ZN6Widget4drawEiPKc".to_string(), 0x0040_1000, SymKind::Function);
         sym.demangled_name = Some("Widget::draw(int, char const*)".to_string());
         sym.size = Some(64);
         let mut t = SymbolStore::new();

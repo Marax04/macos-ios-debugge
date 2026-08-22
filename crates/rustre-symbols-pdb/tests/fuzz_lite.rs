@@ -29,7 +29,7 @@ use rustre_symbols_pdb::{parse_tpi_stream, PdbReader, PdbStreamReader};
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -124,7 +124,7 @@ fn record_shaped_noise_never_panics() {
         let mut data = Vec::new();
         for _ in 0..8 {
             let len = (rng.next() % 96) as u16;
-            let code = codes[(rng.next() as usize) % codes.len()];
+            let code = codes[usize::try_from(rng.next() % codes.len() as u64).unwrap_or(0)];
             data.extend_from_slice(&len.to_le_bytes());
             data.extend_from_slice(&code.to_le_bytes());
             let n = (rng.next() % 64) as usize;
@@ -188,13 +188,13 @@ fn mutated_valid_msf_never_panics() {
     // Random single-byte flips.
     for _ in 0..256 {
         let mut data = base.clone();
-        let pos = (rng.next() as usize) % data.len();
-        data[pos] ^= (rng.next() as u8) | 1;
+        let pos = usize::try_from(rng.next() % data.len() as u64).unwrap_or(0);
+        data[pos] ^= (rng.next() & 0xFF) as u8 | 1;
         exercise_file_parsers(&data);
     }
     // Truncations at random points.
     for _ in 0..64 {
-        let cut = (rng.next() as usize) % base.len();
+        let cut = usize::try_from(rng.next() % base.len() as u64).unwrap_or(0);
         exercise_file_parsers(&base[..cut]);
     }
 }

@@ -570,7 +570,6 @@ fn unified_to_legacy(u: &UnifiedSymbol) -> Symbol {
         // `SymKind::File` with `SymbolKind::Module`, yet a compilation unit came
         // out of here labelled as executable code with a call target.
         kind: match u.kind {
-            crate::SymbolKind::Function => SymKind::Function,
             crate::SymbolKind::Variable => SymKind::Data,
             crate::SymbolKind::Label => SymKind::Label,
             crate::SymbolKind::Section => SymKind::Section,
@@ -578,8 +577,12 @@ fn unified_to_legacy(u: &UnifiedSymbol) -> Symbol {
             crate::SymbolKind::Module => SymKind::File,
             // `SymKind` has no Thunk/Import/Export, and the reverse map never
             // produces them; all three are executable code, so `Function` is
-            // the nearest honest answer rather than a silent default.
-            crate::SymbolKind::Thunk
+            // the nearest honest answer rather than a silent default. They are
+            // listed beside `Function` (rather than in an arm of their own)
+            // only because the answer coincides — the arm stays explicit so a
+            // newly added `SymbolKind` still fails to compile here.
+            crate::SymbolKind::Function
+            | crate::SymbolKind::Thunk
             | crate::SymbolKind::Import
             | crate::SymbolKind::Export => SymKind::Function,
         },

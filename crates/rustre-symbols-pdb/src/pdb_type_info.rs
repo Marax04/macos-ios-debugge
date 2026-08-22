@@ -926,6 +926,41 @@ fn parse_field_item_data(
     }
 }
 
+/// `LF_ONEMETHOD`: u16 attr, u32 `type_ti`, `[u32 vbaseoff]` when the method
+/// property is intro/pure-intro virtual, then the name and its zero padding.
+///
+/// Split out of `parse_field_item_misc` so that function stays under the
+/// readable-length limit; the body is byte-for-byte the arm it replaces.
+fn parse_one_method(data: &[u8], pos: &mut usize) -> Result<FieldItemResult, TpiError> {
+    if *pos + 6 > data.len() {
+        return Ok(FieldItemResult::Stop);
+    }
+    let attr = read_u16(data, *pos)?;
+    let type_ti = read_u32(data, *pos + 2)?;
+    *pos += 6;
+    let vbase_offset = if mprop_has_vbase_offset(attr) {
+        if *pos + 4 > data.len() {
+            return Ok(FieldItemResult::Stop);
+        }
+        let v = read_u32(data, *pos)?;
+        *pos += 4;
+        Some(v)
+    } else {
+        None
+    };
+    let (name, nn) = read_cstring(data, *pos);
+    *pos += nn;
+    while *pos < data.len() && data[*pos] == 0 {
+        *pos += 1;
+    }
+    Ok(FieldItemResult::Item(FieldListItem::OneMethod(OneMethod {
+        name,
+        type_ti,
+        attr,
+        vbase_offset,
+    })))
+}
+
 fn parse_field_item_misc(
     data: &[u8],
     pos: &mut usize,
@@ -971,35 +1006,7 @@ fn parse_field_item_misc(
         // Layout: u16 attr, u32 type_ti, [u32 vbaseoff if intro/pure-intro
         // virtual], name. Missing this arm truncated every C++ class field list
         // at its first member function.
-        leaf::LF_ONEMETHOD => {
-            if *pos + 6 > data.len() {
-                return Ok(FieldItemResult::Stop);
-            }
-            let attr = read_u16(data, *pos)?;
-            let type_ti = read_u32(data, *pos + 2)?;
-            *pos += 6;
-            let vbase_offset = if mprop_has_vbase_offset(attr) {
-                if *pos + 4 > data.len() {
-                    return Ok(FieldItemResult::Stop);
-                }
-                let v = read_u32(data, *pos)?;
-                *pos += 4;
-                Some(v)
-            } else {
-                None
-            };
-            let (name, nn) = read_cstring(data, *pos);
-            *pos += nn;
-            while *pos < data.len() && data[*pos] == 0 {
-                *pos += 1;
-            }
-            Ok(FieldItemResult::Item(FieldListItem::OneMethod(OneMethod {
-                name,
-                type_ti,
-                attr,
-                vbase_offset,
-            })))
-        }
+        leaf::LF_ONEMETHOD => parse_one_method(data, pos),
         // Layout: u16 pad, u32 type_ti, name.
         leaf::LF_FRIENDFCN => {
             if *pos + 6 > data.len() {
