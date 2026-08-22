@@ -1,7 +1,7 @@
 //! Deep adversarial test suite for `rustre-flirt-gen` (Y057).
 //!
-//! Covers PatternGenerator, ElfObjectParser, LibraryBuilder, SigWriter,
-//! SigTrieNode, crc16_sig_header, and write_sig_file via the lib.rs public API.
+//! Covers `PatternGenerator`, `ElfObjectParser`, `LibraryBuilder`, `SigWriter`,
+//! `SigTrieNode`, `crc16_sig_header`, and `write_sig_file` via the lib.rs public API.
 
 use rustre_flirt::{FlirtArch, FlirtOs, FlirtPattern, PatternByte, ReferencedName, FlirtName};
 use rustre_flirt_gen::{

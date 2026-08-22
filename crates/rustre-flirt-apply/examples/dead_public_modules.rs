@@ -97,8 +97,8 @@ fn main() {
     for (path, text) in &owned {
         for line in text.lines() {
             let t = line.trim();
-            if let Some(rest) = t.strip_prefix("pub mod ") {
-                if let Some(name) = rest.strip_suffix(';') {
+            if let Some(rest) = t.strip_prefix("pub mod ")
+                && let Some(name) = rest.strip_suffix(';') {
                     let krate = path
                         .parent()
                         .and_then(|p| p.parent())
@@ -107,7 +107,6 @@ fn main() {
                         .unwrap_or_default();
                     modules.insert(name.to_string(), krate);
                 }
-            }
         }
     }
 
@@ -167,11 +166,10 @@ fn main() {
                 let d = e.path().join(sub);
                 let Ok(inner) = std::fs::read_dir(&d) else { continue };
                 for f in inner.flatten() {
-                    if f.path().extension().is_some_and(|x| x == "rs") {
-                        if let Ok(t) = std::fs::read_to_string(f.path()) {
+                    if f.path().extension().is_some_and(|x| x == "rs")
+                        && let Ok(t) = std::fs::read_to_string(f.path()) {
                             aux_files.push(t);
                         }
-                    }
                 }
             }
         }

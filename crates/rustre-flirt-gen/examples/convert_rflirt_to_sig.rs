@@ -5,8 +5,8 @@
 //! This turns it into a `.sig` that `rustre_flirt_apply::FlirtScanner` loads.
 //!
 //! Usage:
-//!   cargo run --release -p rustre-flirt-gen --example convert_rflirt_to_sig \
-//!       <input.rflirtbin> <output.sig> [lib_name] [arch]
+//!   cargo run --release -p rustre-flirt-gen --example `convert_rflirt_to_sig` \
+//!       <input.rflirtbin> <output.sig> [`lib_name`] [arch]
 //!
 //! With no arguments it reports what it would do against the repo's assets.
 
@@ -31,8 +31,8 @@ fn main() {
 
     match rustre_flirt_gen::rflirt_bin::convert_file(src, dst, lib, arch) {
         Ok(n) => {
-            let in_size = std::fs::metadata(src).map(|m| m.len()).unwrap_or(0);
-            let out_size = std::fs::metadata(dst).map(|m| m.len()).unwrap_or(0);
+            let in_size = std::fs::metadata(src).map_or(0, |m| m.len());
+            let out_size = std::fs::metadata(dst).map_or(0, |m| m.len());
             println!(
                 "convertiti {n} pattern\n  {} ({in_size} byte)\n  -> {} ({out_size} byte)",
                 src.display(),

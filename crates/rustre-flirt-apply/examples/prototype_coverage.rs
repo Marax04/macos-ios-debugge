@@ -7,7 +7,7 @@
 //! actually contains?".
 //!
 //! Usage:
-//!   cargo run --release -p rustre-flirt-apply --example prototype_coverage \
+//!   cargo run --release -p rustre-flirt-apply --example `prototype_coverage` \
 //!       [path/to/prototypes.json]
 //!
 //! With no argument it just lists what the bridge knows.
@@ -41,8 +41,8 @@ fn main() {
     let mut truth: BTreeSet<String> = BTreeSet::new();
     for line in text.lines() {
         let t = line.trim();
-        if let Some(rest) = t.strip_prefix('"') {
-            if let Some(end) = rest.find('"') {
+        if let Some(rest) = t.strip_prefix('"')
+            && let Some(end) = rest.find('"') {
                 let name = &rest[..end];
                 if rest[end..].trim_start_matches('"').trim_start().starts_with(':')
                     && !name.starts_with('_')
@@ -51,7 +51,6 @@ fn main() {
                     truth.insert(name.to_string());
                 }
             }
-        }
     }
 
     let covered: Vec<&String> = truth.iter().filter(|n| known.contains(*n)).collect();

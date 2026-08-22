@@ -15,7 +15,7 @@
 //! and prints both columns side by side.
 //!
 //! Usage:
-//!   flirt_demo [<archive>] [<target.exe>] [<control.exe>]
+//!   `flirt_demo` [<archive>] [<target.exe>] [<control.exe>]
 
 use std::collections::HashSet;
 
@@ -75,7 +75,7 @@ fn main() {
     let dir = std::env::var("TEMP").unwrap_or_else(|_| ".".to_string());
     let tmp = std::path::Path::new(&dir).join("rustre_flirt_demo.sig");
     std::fs::write(&tmp, &sig).ok();
-    let reread = rustre_flirt_apply::load_sig_file(&tmp).map(|v| v.len()).unwrap_or(0);
+    let reread = rustre_flirt_apply::load_sig_file(&tmp).map_or(0, |v| v.len());
     let _ = std::fs::remove_file(&tmp);
     println!("   firme rilette dal file: {reread} su {} scritte", pats.len());
 

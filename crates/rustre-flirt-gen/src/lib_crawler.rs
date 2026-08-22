@@ -416,7 +416,7 @@ mod tests {
         hdr.extend_from_slice(b"0     ");    // [28..34] uid
         hdr.extend_from_slice(b"0     ");    // [34..40] gid
         hdr.extend_from_slice(b"100644  ");  // [40..48] mode
-        let size_str = format!("{:<10}", size);
+        let size_str = format!("{size:<10}");
         hdr.extend_from_slice(size_str.as_bytes()); // [48..58] size
         hdr.push(b'`');
         hdr.push(b'\n');

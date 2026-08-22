@@ -17,7 +17,7 @@
 //! never instead of them.
 //!
 //! Usage:
-//!   cargo run --release -p rustre-flirt-apply --example false_positive_rate \
+//!   cargo run --release -p rustre-flirt-apply --example `false_positive_rate` \
 //!       -- <database.sig> <binary1> [binary2 …]
 
 fn main() {

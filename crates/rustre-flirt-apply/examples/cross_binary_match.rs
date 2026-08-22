@@ -28,7 +28,7 @@
 //! produces: the short patterns are exactly the ones that lost their wildcards.
 //!
 //! Usage:
-//!   cargo run --release -p rustre-flirt-apply --example cross_binary_match \
+//!   cargo run --release -p rustre-flirt-apply --example `cross_binary_match` \
 //!       -- <archive.a> <target.exe> <foreign.exe>
 
 use std::collections::HashSet;
@@ -123,7 +123,7 @@ fn main() {
         );
     };
 
-    println!("{:<26} {:<13} {}", "sottoinsieme", "nomi distinti", "");
+    println!("{:<26} {:<13} ", "sottoinsieme", "nomi distinti");
     run("tutti", &pats);
     run("solo integri", &intact);
     run("solo troncati", &truncated);

@@ -9,7 +9,7 @@
 //! shared, concurrently-built machine cannot deliver.
 //!
 //! Usage:
-//!   cargo run --release -p rustre-flirt-apply --example scan_benchmark \
+//!   cargo run --release -p rustre-flirt-apply --example `scan_benchmark` \
 //!       -- <database.sig> [binary…]
 
 use std::time::Instant;

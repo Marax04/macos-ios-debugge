@@ -1014,7 +1014,7 @@ mod tests {
             offset: 0,
             refs: Vec::new(),
         };
-        let s = format!("{}", sig);
+        let s = format!("{sig}");
         assert!(s.contains("my_func"));
         assert!(s.contains("1234"));
     }

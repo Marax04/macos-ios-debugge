@@ -47,8 +47,8 @@ fn main() {
     // Do they cover the names our scan matched but could not publish?
     let sig_path = r"C:\Users\Fra\AppData\Local\Temp\sigdb\mingwrt.sig";
     let bin_path = r"tests\decompiler_corpus\bin\sample1_c.exe";
-    if let (Ok(sig), Ok(bin)) = (std::fs::read(sig_path), std::fs::read(bin_path)) {
-        if let Ok(scanner) = rustre_flirt_apply::FlirtScanner::from_sig_bytes(&sig) {
+    if let (Ok(sig), Ok(bin)) = (std::fs::read(sig_path), std::fs::read(bin_path))
+        && let Ok(scanner) = rustre_flirt_apply::FlirtScanner::from_sig_bytes(&sig) {
             let matched: HashSet<String> = scanner
                 .scan_fast(&bin, 0)
                 .into_iter()
@@ -61,5 +61,4 @@ fn main() {
             println!("nomi combacianti senza prototipo nel ponte : {}", missing.len());
             println!("  di questi, coperti dal propagatore       : {rescued}");
         }
-    }
 }

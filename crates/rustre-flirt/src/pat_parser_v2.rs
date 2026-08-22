@@ -442,7 +442,7 @@ mod tests {
     use std::io::Cursor;
 
     fn make_line(pattern: &str, crc_len: &str, crc16: &str, total: &str, refs: &str) -> String {
-        format!("{} {} {} {} {}", pattern, crc_len, crc16, total, refs)
+        format!("{pattern} {crc_len} {crc16} {total} {refs}")
     }
 
     #[test]

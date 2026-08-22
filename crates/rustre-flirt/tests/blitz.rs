@@ -765,7 +765,7 @@ fn flirt_error_display() {
     let e = FlirtError::InvalidPattern("x".into());
     assert!(e.to_string().contains("invalid pattern"));
     let e = FlirtError::UnsupportedVersion(7);
-    assert!(e.to_string().contains("7"));
+    assert!(e.to_string().contains('7'));
     let e = FlirtError::IndexOutOfRange(42);
     assert!(e.to_string().contains("42"));
     let e = FlirtError::InvalidSigMagic;

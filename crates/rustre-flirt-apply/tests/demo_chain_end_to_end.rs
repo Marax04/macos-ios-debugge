@@ -147,7 +147,7 @@ fn most_patterns_carry_wildcards_and_still_survive() {
     let back = rustre_flirt_apply::load_sig_file(&tmp).expect("rilettura");
     let _ = std::fs::remove_file(&tmp);
 
-    let back_wc = back.iter().filter(|s| s.mask.iter().any(|m| *m == 0)).count();
+    let back_wc = back.iter().filter(|s| s.mask.contains(&0)).count();
     assert!(
         back_wc > 0,
         "nessun wildcard sopravvive alla scrittura: il container li sta \

@@ -112,7 +112,7 @@ fn wildcards_survive_and_patterns_stay_long() {
         eprintln!("SKIP: asset assente");
         return;
     };
-    let with_wc = sigs.iter().filter(|s| s.mask.iter().any(|m| *m == 0)).count();
+    let with_wc = sigs.iter().filter(|s| s.mask.contains(&0)).count();
     assert!(
         with_wc > 100,
         "solo {with_wc} firme con wildcard: il container avrebbe ripreso a \

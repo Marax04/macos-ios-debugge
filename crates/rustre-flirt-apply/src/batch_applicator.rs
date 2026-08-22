@@ -553,7 +553,7 @@ mod tests {
         let summary = batch.apply_prevalidated(&mut db, &matches, &NullSink);
         let report = format_coverage_report(&summary);
         assert!(report.contains("FLIRT Coverage Report"));
-        assert!(report.contains("50.0%") || report.contains("5"));
+        assert!(report.contains("50.0%") || report.contains('5'));
     }
 
     #[test]

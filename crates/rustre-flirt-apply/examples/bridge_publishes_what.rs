@@ -62,7 +62,7 @@ fn main() {
         *counts.entry(n.as_str()).or_default() += 1;
     }
     let mut dup: Vec<(&str, usize)> = counts.iter().filter(|(_, c)| **c > 1).map(|(n, c)| (*n, *c)).collect();
-    dup.sort();
+    dup.sort_unstable();
     println!("nomi a piu' indirizzi (scartati come ambigui): {dup:?}");
 
     let survivors: Vec<(u64, &str)> = ids

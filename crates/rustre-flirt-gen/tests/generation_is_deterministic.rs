@@ -158,7 +158,7 @@ fn identical_inputs_hash_identically() {
 
 /// Locate an archive that actually contains compiled objects.
 ///
-/// The corpus `.lib` files are C# NativeAOT **import** libraries: one member,
+/// The corpus `.lib` files are C# `NativeAOT` **import** libraries: one member,
 /// zero objects, zero patterns. Harvesting them exercises none of the
 /// section-walking code, so a determinism test built on them would pass while
 /// testing nothing — the vacuity guard below caught exactly that.

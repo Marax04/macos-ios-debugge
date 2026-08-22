@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn extract_prefix_max_32() {
-        let norm: Vec<Option<u8>> = (0..64u8).map(|b| Some(b)).collect();
+        let norm: Vec<Option<u8>> = (0..64u8).map(Some).collect();
         let prefix = hasher().extract_prefix(&norm);
         assert_eq!(prefix.len(), 32);
     }

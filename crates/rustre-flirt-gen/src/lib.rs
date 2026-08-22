@@ -2145,7 +2145,7 @@ mod tests {
     fn test_quality_no_relocs_is_high() {
         let pg = PatternGenerator::new();
         let mut bytes = vec![0x55u8, 0x48, 0x89, 0xE5];
-        bytes.extend(std::iter::repeat(0x90u8).take(40));
+        bytes.extend(std::iter::repeat_n(0x90u8, 40));
         let q = pg.generate_pattern_with_quality(&bytes, "leaf").unwrap();
         assert_eq!(q.quality, PatternQuality::High);
         assert_eq!(q.masked_bytes, 0);
@@ -2161,7 +2161,7 @@ mod tests {
             0xE8, 0x11, 0x22, 0x33, 0x44,
             0x48, 0x89, 0xC3, 0x5D, 0xC3,
         ];
-        bytes.extend(std::iter::repeat(0x90u8).take(20));
+        bytes.extend(std::iter::repeat_n(0x90u8, 20));
         let q = pg.generate_pattern_with_quality(&bytes, "calls_one").unwrap();
         assert_eq!(q.masked_bytes, 4);
         assert!(q.mask_ratio > 0.0);

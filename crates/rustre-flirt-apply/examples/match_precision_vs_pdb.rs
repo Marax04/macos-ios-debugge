@@ -26,7 +26,7 @@
 //! defects.
 //!
 //! Usage:
-//!   cargo run --release -p rustre-flirt-apply --example match_precision_vs_pdb \
+//!   cargo run --release -p rustre-flirt-apply --example `match_precision_vs_pdb` \
 //!       -- <binary.exe> <symbols.pdb> <database.sig>
 
 use std::collections::BTreeMap;

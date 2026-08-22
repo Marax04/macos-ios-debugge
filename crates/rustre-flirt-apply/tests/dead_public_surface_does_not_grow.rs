@@ -91,11 +91,10 @@ fn module_refs() -> BTreeMap<String, usize> {
     for (p, text) in srcs.iter().filter(|(p, _)| is_ours(p)) {
         let _ = p;
         for line in text.lines() {
-            if let Some(rest) = line.trim().strip_prefix("pub mod ") {
-                if let Some(n) = rest.strip_suffix(';') {
+            if let Some(rest) = line.trim().strip_prefix("pub mod ")
+                && let Some(n) = rest.strip_suffix(';') {
                     modules.push(n.to_string());
                 }
-            }
         }
     }
 

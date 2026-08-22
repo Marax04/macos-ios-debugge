@@ -37,7 +37,7 @@ fn main() {
 
     let with_wc = named
         .iter()
-        .filter(|s| s.mask.iter().any(|m| *m == 0))
+        .filter(|s| s.mask.contains(&0))
         .count();
     let with_crc = named.iter().filter(|s| s.crc_len > 0).count();
     println!("  con wildcard       : {with_wc}");

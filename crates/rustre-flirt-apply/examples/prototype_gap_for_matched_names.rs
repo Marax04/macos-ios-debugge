@@ -13,7 +13,7 @@
 //! sitting at zero, and "no prototype" is a claim worth turning into a list —
 //! a gap you can read is a gap you can close.
 //!
-//! Usage: prototype_gap_for_matched_names [<sig-dir>] [<binary>]
+//! Usage: `prototype_gap_for_matched_names` [<sig-dir>] [<binary>]
 
 use std::collections::HashSet;
 

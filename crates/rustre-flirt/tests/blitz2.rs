@@ -871,7 +871,7 @@ struct TestView<'a> {
     base: u64,
     data: &'a [u8],
 }
-impl<'a> FlirtByteView for TestView<'a> {
+impl FlirtByteView for TestView<'_> {
     fn read_bytes(&self, address: Address, len: usize) -> Option<&[u8]> {
         let abs: u64 = address.into();
         if abs < self.base {
@@ -907,7 +907,7 @@ fn flirt_applier_renames_unknown() {
     let applier = FlirtApplier::with_builtin_sigs();
     // memset MSVC pattern bytes followed by filler
     let mut data = vec![0x48, 0x89, 0xC8, 0x4D, 0x85, 0xC0, 0x74, 0x10];
-    data.extend(std::iter::repeat(0x90).take(64));
+    data.extend(std::iter::repeat_n(0x90, 64));
     let view = TestView { base: 0x1000, data: &data };
     let mut syms = TestSymTab {
         fns: vec![Address::from(0x1000u64)],
@@ -923,7 +923,7 @@ fn flirt_applier_renames_unknown() {
 fn flirt_applier_skips_user_named() {
     let applier = FlirtApplier::with_builtin_sigs();
     let mut data = vec![0x48, 0x89, 0xC8, 0x4D, 0x85, 0xC0, 0x74, 0x10];
-    data.extend(std::iter::repeat(0x90).take(64));
+    data.extend(std::iter::repeat_n(0x90, 64));
     let view = TestView { base: 0x1000, data: &data };
     let mut syms = TestSymTab {
         fns: vec![Address::from(0x1000u64)],

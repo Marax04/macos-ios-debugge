@@ -28,16 +28,16 @@ fn ground_truth_arities(text: &str) -> HashMap<String, i64> {
     let mut current: Option<String> = None;
     for raw in text.lines() {
         let line = raw.trim();
-        if let Some(rest) = line.strip_prefix('"') {
-            if let Some(end) = rest.find('"') {
+        if let Some(rest) = line.strip_prefix('"')
+            && let Some(end) = rest.find('"') {
                 let key = &rest[..end];
                 let after = rest[end + 1..].trim_start();
                 if after.starts_with(':') && after.trim_start_matches(':').trim_start().starts_with('{') {
                     current = Some(key.to_string());
                     continue;
                 }
-                if key == "arity" {
-                    if let Some(name) = current.clone() {
+                if key == "arity"
+                    && let Some(name) = current.clone() {
                         let v: String = after
                             .trim_start_matches(':')
                             .trim()
@@ -48,9 +48,7 @@ fn ground_truth_arities(text: &str) -> HashMap<String, i64> {
                             out.insert(name, n);
                         }
                     }
-                }
             }
-        }
     }
     out
 }

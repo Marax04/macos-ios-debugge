@@ -1,7 +1,7 @@
 //! Harvest classic FLIRT signatures from every `.rlib`/`.lib` in the given
 //! directories, dedup them, and emit one IDA-compatible `.sig` v9 file.
 //!
-//! Usage: harvest_archives <out.sig> <archive-dir> [<archive-dir> ...]
+//! Usage: `harvest_archives` <out.sig> <archive-dir> [<archive-dir> ...]
 
 use rustre_flirt_gen::coff_archive::{
     ArchiveHarvestOptions, dedup_discriminative, harvest_archive_file,

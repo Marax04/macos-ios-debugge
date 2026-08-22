@@ -17,7 +17,7 @@
 //! match, the wildcarded ones should not.
 //!
 //! Usage:
-//!   cargo run --release -p rustre-flirt-apply --example self_match_experiment \
+//!   cargo run --release -p rustre-flirt-apply --example `self_match_experiment` \
 //!       -- <archive.a>
 
 use std::collections::HashSet;
