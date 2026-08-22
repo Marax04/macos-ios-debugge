@@ -394,7 +394,7 @@ impl ByteHistogram {
         (0..=(data.len() - window_size))
             .step_by(step_size)
             .map(|off| {
-                let h = ByteHistogram::from_data(&data[off..off + window_size]);
+                let h = Self::from_data(&data[off..off + window_size]);
                 (off, h.entropy())
             })
             .collect()
@@ -585,8 +585,7 @@ pub fn detect_binary_arch(data: &[u8]) -> BinaryArch {
     scores
         .into_iter()
         .max_by_key(|(_, s)| *s)
-        .map(|(arch, _)| arch)
-        .unwrap_or(BinaryArch::Unknown)
+        .map_or(BinaryArch::Unknown, |(arch, _)| arch)
 }
 
 /// Auto-detect endianness for a raw binary using the detected architecture.
@@ -681,9 +680,7 @@ impl fmt::Display for FirmwareInfo {
             self.binary_arch,
             self.endian_hint.as_deref().unwrap_or("?"),
             self.rtos
-                .as_ref()
-                .map(std::string::ToString::to_string)
-                .unwrap_or_else(|| "none".to_string()),
+                .as_ref().map_or_else(|| "none".to_string(), std::string::ToString::to_string),
             self.entropy,
         )
     }
@@ -1543,8 +1540,7 @@ pub fn classify_string(s: &str) -> StringCategory {
     }
     if s.chars()
         .next()
-        .map(|c| c.is_ascii_digit())
-        .unwrap_or(false)
+        .is_some_and(|c| c.is_ascii_digit())
         && s.contains('.')
         && s.split('.').count() == 4
         && s.split('.').all(|p| p.parse::<u8>().is_ok())
@@ -1722,9 +1718,7 @@ impl Loader for FirmwareLoader {
         let hint_base = input.hints.base_address().map(rustre_core::Address::as_u64);
         let arch_name = input
             .hints
-            .architecture()
-            .map(std::string::ToString::to_string)
-            .unwrap_or_else(|| "unknown".to_string());
+            .architecture().map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
 
         let (entry, actual_base) = if let Some(hdr) = UBootHeader::parse(&input.data) {
             (u64::from(hdr.entry_point), u64::from(hdr.load_addr))
@@ -1791,9 +1785,7 @@ impl Loader for IntelHexLoader {
     async fn load(&self, input: LoaderInput) -> Result<LoadResult, CoreError> {
         let arch_name = input
             .hints
-            .architecture()
-            .map(std::string::ToString::to_string)
-            .unwrap_or_else(|| "unknown".to_string());
+            .architecture().map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
         let image =
             IntelHexImage::parse(&input.data).map_err(|e| CoreError::parse(0, e.to_string()))?;
         let mut mem = Memory::new();
@@ -1854,9 +1846,7 @@ impl Loader for SrecLoader {
     async fn load(&self, input: LoaderInput) -> Result<LoadResult, CoreError> {
         let arch_name = input
             .hints
-            .architecture()
-            .map(std::string::ToString::to_string)
-            .unwrap_or_else(|| "unknown".to_string());
+            .architecture().map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
         let image =
             SrecImage::parse(&input.data).map_err(|e| CoreError::parse(0, e.to_string()))?;
         let mut mem = Memory::new();
@@ -1917,9 +1907,7 @@ impl Loader for Uf2Loader {
     async fn load(&self, input: LoaderInput) -> Result<LoadResult, CoreError> {
         let arch_name = input
             .hints
-            .architecture()
-            .map(std::string::ToString::to_string)
-            .unwrap_or_else(|| "unknown".to_string());
+            .architecture().map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
         let records =
             Uf2Record::parse_all(&input.data).map_err(|e| CoreError::parse(0, e.to_string()))?;
         let regions = Uf2Record::assemble(&records);
@@ -1932,7 +1920,7 @@ impl Loader for Uf2Loader {
                 data: data.clone(),
             });
         }
-        let entry = regions.first().map(|(a, _)| *a).unwrap_or(0);
+        let entry = regions.first().map_or(0, |(a, _)| *a);
         let arch = Arc::new(FirmwareArch::new(arch_name));
         let view = BinaryView::new(
             ViewId::from_raw(rustre_core::loader::next_view_id().into_raw()),

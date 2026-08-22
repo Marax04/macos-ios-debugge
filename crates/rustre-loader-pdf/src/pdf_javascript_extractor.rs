@@ -128,7 +128,7 @@ impl ScriptEntry {
             .collect();
         labels.sort();
         labels.dedup();
-        ScriptEntry {
+        Self {
             id,
             label: label.into(),
             actions,
@@ -180,7 +180,7 @@ pub struct ExtractorConfig {
 
 impl Default for ExtractorConfig {
     fn default() -> Self {
-        ExtractorConfig {
+        Self {
             deobfuscate: true,
             max_script_bytes: 4 * 1024 * 1024,
             run_heuristics: true,
@@ -231,13 +231,12 @@ fn deobfuscate_js(raw: &str) -> DeobfuscationResult {
     }
 
     // Pass 4: strip eval() wrappers (just unwrap the argument).
-    if code.trim_start().starts_with("eval(") {
-        if let Some(inner) = strip_eval_wrapper(&code) {
+    if code.trim_start().starts_with("eval(")
+        && let Some(inner) = strip_eval_wrapper(&code) {
             code = inner;
             passes.push("eval-unwrap".into());
             confidence *= 0.85; // Lower confidence after eval unwrap.
         }
-    }
 
     // Pass 5: decode hex-encoded strings like "\x41\x42".
     if code.contains("\\x") {
@@ -261,13 +260,12 @@ fn unescape_unicode(s: &str) -> String {
             && (bytes[i + 1] == b'u' || bytes[i + 1] == b'U')
         {
             let hex = &s[i + 2..i + 6];
-            if let Ok(cp) = u16::from_str_radix(hex, 16) {
-                if let Some(ch) = char::from_u32(u32::from(cp)) {
+            if let Ok(cp) = u16::from_str_radix(hex, 16)
+                && let Some(ch) = char::from_u32(u32::from(cp)) {
                     result.push(ch);
                     i += 6;
                     continue;
                 }
-            }
         }
         result.push(bytes[i] as char);
         i += 1;
@@ -471,7 +469,7 @@ impl PdfJavaScriptExtractor {
     /// Construct with default configuration.
     #[must_use]
     pub fn new() -> Self {
-        PdfJavaScriptExtractor {
+        Self {
             config: ExtractorConfig::default(),
             next_id: 0,
             stats: ExtractionStats::default(),
@@ -481,7 +479,7 @@ impl PdfJavaScriptExtractor {
     /// Construct with a custom configuration.
     #[must_use]
     pub fn with_config(config: ExtractorConfig) -> Self {
-        PdfJavaScriptExtractor { config, next_id: 0, stats: ExtractionStats::default() }
+        Self { config, next_id: 0, stats: ExtractionStats::default() }
     }
 
     // -----------------------------------------------------------------------
@@ -800,7 +798,7 @@ trait IsAsciiOctdigit {
     fn is_ascii_octdigit(self) -> bool;
 }
 impl IsAsciiOctdigit for u8 {
-    fn is_ascii_octdigit(self) -> bool { self >= b'0' && self <= b'7' }
+    fn is_ascii_octdigit(self) -> bool { (b'0'..=b'7').contains(&self) }
 }
 
 // ---------------------------------------------------------------------------

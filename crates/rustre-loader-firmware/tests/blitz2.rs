@@ -1,12 +1,12 @@
 //! Y083 blitz2 deep adversarial test suite for rustre-loader-firmware.
 //!
-//! Targets the public API exposed in `lib.rs`: detect_firmware_kind,
-//! ByteHistogram, UBootHeader, IntelHexRecord/Image, SrecRecord/Image,
-//! Uf2Record, FirmwareKind/BinaryArch/RtosKind/StringCategory display,
-//! classify_string, extract_firmware_strings, detect_rtos,
-//! detect_arch_hint, detect_endian_hint, detect_boot_sections,
-//! scan_embedded_signatures, detect_binary_arch, detect_raw_endian,
-//! FirmwareError variants, FirmwareInfo::analyse.
+//! Targets the public API exposed in `lib.rs`: `detect_firmware_kind`,
+//! `ByteHistogram`, `UBootHeader`, IntelHexRecord/Image, SrecRecord/Image,
+//! `Uf2Record`, FirmwareKind/BinaryArch/RtosKind/StringCategory display,
+//! `classify_string`, `extract_firmware_strings`, `detect_rtos`,
+//! `detect_arch_hint`, `detect_endian_hint`, `detect_boot_sections`,
+//! `scan_embedded_signatures`, `detect_binary_arch`, `detect_raw_endian`,
+//! `FirmwareError` variants, `FirmwareInfo::analyse`.
 
 use rustre_loader_firmware::*;
 use std::collections::hash_map::DefaultHasher;
@@ -15,17 +15,17 @@ use std::hash::{Hash, Hasher};
 // ─── Seeded LCG (no rand/no time) ────────────────────────────────────────────
 struct Lcg(u64);
 impl Lcg {
-    fn new() -> Self {
-        Lcg(0xDEAD_BEEF_CAFE_BABE)
+    const fn new() -> Self {
+        Self(0xDEAD_BEEF_CAFE_BABE)
     }
-    fn next_u64(&mut self) -> u64 {
+    const fn next_u64(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
         self.0
     }
-    fn next_byte(&mut self) -> u8 {
+    const fn next_byte(&mut self) -> u8 {
         (self.next_u64() >> 56) as u8
     }
     fn next_bytes(&mut self, n: usize) -> Vec<u8> {
@@ -43,29 +43,29 @@ fn make_ihex_line(rt: u8, addr: u16, data: &[u8]) -> Vec<u8> {
         sum = sum.wrapping_add(b);
     }
     let cs = (!sum).wrapping_add(1);
-    let mut s = format!(":{:02X}{:04X}{:02X}", bc, addr, rt);
+    let mut s = format!(":{bc:02X}{addr:04X}{rt:02X}");
     for &b in data {
-        s.push_str(&format!("{:02X}", b));
+        s.push_str(&format!("{b:02X}"));
     }
-    s.push_str(&format!("{:02X}", cs));
+    s.push_str(&format!("{cs:02X}"));
     s.into_bytes()
 }
 
 fn make_srec_line(rt: char, addr_bytes: usize, addr: u64, data: &[u8]) -> Vec<u8> {
     let bc = (addr_bytes + data.len() + 1) as u8;
-    let mut s = format!("S{}{:02X}", rt, bc);
+    let mut s = format!("S{rt}{bc:02X}");
     let mut sum: u32 = bc as u32;
     for i in (0..addr_bytes).rev() {
         let b = ((addr >> (i * 8)) & 0xFF) as u8;
-        s.push_str(&format!("{:02X}", b));
+        s.push_str(&format!("{b:02X}"));
         sum += b as u32;
     }
     for &b in data {
-        s.push_str(&format!("{:02X}", b));
+        s.push_str(&format!("{b:02X}"));
         sum += b as u32;
     }
     let cs = (!(sum & 0xFF)) as u8;
-    s.push_str(&format!("{:02X}", cs));
+    s.push_str(&format!("{cs:02X}"));
     s.into_bytes()
 }
 
@@ -442,7 +442,7 @@ fn t30_intel_hex_bad_checksum() {
     let mut line = make_ihex_line(0x00, 0, &[0x10, 0x20]);
     *line.last_mut().unwrap() ^= 1; // corrupt low nibble of cksum char
     let r = IntelHexRecord::parse_line(&line);
-    assert!(matches!(r, Err(FirmwareError::ChecksumMismatch { .. }) | Err(FirmwareError::ParseError(_))));
+    assert!(matches!(r, Err(FirmwareError::ChecksumMismatch { .. } | FirmwareError::ParseError(_))));
 }
 
 #[test]
@@ -551,7 +551,7 @@ fn t42_srec_bad_checksum() {
     let mut line = make_srec_line('1', 2, 0, &[0x10]);
     *line.last_mut().unwrap() ^= 1;
     let r = SrecRecord::parse_line(&line);
-    assert!(matches!(r, Err(FirmwareError::ChecksumMismatch { .. }) | Err(FirmwareError::ParseError(_))));
+    assert!(matches!(r, Err(FirmwareError::ChecksumMismatch { .. } | FirmwareError::ParseError(_))));
 }
 
 #[test]
@@ -1068,7 +1068,7 @@ fn t92_srec_50_deterministic_round_trips() {
     for _ in 0..50 {
         let n = ((lcg.next_u64() % 8) + 1) as usize;
         let payload: Vec<u8> = (0..n).map(|_| lcg.next_byte()).collect();
-        let addr = (lcg.next_u64() & 0xFFFF) as u64;
+        let addr = lcg.next_u64() & 0xFFFF;
         let line = make_srec_line('1', 2, addr, &payload);
         let rec = SrecRecord::parse_line(&line).expect("parse");
         assert_eq!(rec.data, payload);

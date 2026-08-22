@@ -1,4 +1,4 @@
-//! Termination and output-bound properties for the LuaJIT bytecode loader.
+//! Termination and output-bound properties for the `LuaJIT` bytecode loader.
 //!
 //! Same shape as `rustre-loader/tests/parser_termination.rs`, and motivated by
 //! the same real defect: in `rustre-trace-pt` a decoder rewound its position on
@@ -16,7 +16,7 @@ use rustre_loader_luajit::{read_sleb128, read_uleb128, LuaJitLoader};
 struct Lcg(u64);
 
 impl Lcg {
-    fn next_u64(&mut self) -> u64 {
+    const fn next_u64(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6_364_136_223_846_793_005)
@@ -29,7 +29,7 @@ impl Lcg {
     }
 }
 
-/// LuaJIT bytecode magic: ESC 'L' 'J'. Without it the loader rejects the input
+/// `LuaJIT` bytecode magic: ESC 'L' 'J'. Without it the loader rejects the input
 /// immediately and never reaches the length-prefixed parsing paths.
 const LJ_MAGIC: [u8; 3] = [0x1B, 0x4C, 0x4A];
 
@@ -93,7 +93,7 @@ fn uleb128_is_bounded_on_hostile_input() {
 /// The signed decoder must obey the same bounds.
 #[test]
 fn sleb128_is_bounded_on_hostile_input() {
-    assert_eq!(read_sleb128(&vec![0xFFu8; 32], 0), None);
+    assert_eq!(read_sleb128(&[0xFFu8; 32], 0), None);
     assert_eq!(read_sleb128(&[], 0), None);
 
     for bytes in [vec![0x00u8], vec![0x3F], vec![0x40], vec![0xFF, 0x00]] {

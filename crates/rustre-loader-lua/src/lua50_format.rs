@@ -121,44 +121,44 @@ pub fn opcode_name_50(opcode: u8) -> &'static str {
 /// bits 14–22: C      (9 bits)
 /// bits 23–31: B      (9 bits)
 /// Bx = B<<9|C (18 bits unsigned)
-/// sBx = Bx - MAXARG_sBx  (MAXARG_sBx = (1<<17)-1 = 131071)
+/// sBx = Bx - `MAXARG_sBx`  (`MAXARG_sBx` = (1<<17)-1 = 131071)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Lua50Instr(pub u32);
 
 impl Lua50Instr {
     /// Opcode (bits 0–5).
     #[must_use]
-    pub fn opcode(self) -> u8 {
+    pub const fn opcode(self) -> u8 {
         (self.0 & 0x3F) as u8
     }
 
     /// A operand (bits 6–13).
     #[must_use]
-    pub fn a(self) -> u8 {
+    pub const fn a(self) -> u8 {
         ((self.0 >> 6) & 0xFF) as u8
     }
 
     /// C operand (bits 14–22).
     #[must_use]
-    pub fn c(self) -> u16 {
+    pub const fn c(self) -> u16 {
         ((self.0 >> 14) & 0x1FF) as u16
     }
 
     /// B operand (bits 23–31).
     #[must_use]
-    pub fn b(self) -> u16 {
+    pub const fn b(self) -> u16 {
         ((self.0 >> 23) & 0x1FF) as u16
     }
 
     /// Bx = B<<9|C (unsigned 18-bit).
     #[must_use]
-    pub fn bx(self) -> u32 {
+    pub const fn bx(self) -> u32 {
         self.0 >> 14
     }
 
     /// sBx = Bx - 131071.
     #[must_use]
-    pub fn sbx(self) -> i32 {
+    pub const fn sbx(self) -> i32 {
         self.bx() as i32 - 131_071
     }
 
@@ -170,7 +170,7 @@ impl Lua50Instr {
 
     /// Return `true` if this is a jump instruction.
     #[must_use]
-    pub fn is_jump(self) -> bool {
+    pub const fn is_jump(self) -> bool {
         matches!(
             self.opcode(),
             op::JMP | op::FORLOOP | op::TFORPREP | op::EQ | op::LT | op::LE | op::TEST
@@ -179,13 +179,13 @@ impl Lua50Instr {
 
     /// Return `true` if this instruction uses the sBx format.
     #[must_use]
-    pub fn uses_sbx(self) -> bool {
+    pub const fn uses_sbx(self) -> bool {
         matches!(self.opcode(), op::JMP | op::FORLOOP | op::TFORPREP)
     }
 
     /// Return `true` if this instruction uses the Bx format.
     #[must_use]
-    pub fn uses_bx(self) -> bool {
+    pub const fn uses_bx(self) -> bool {
         matches!(
             self.opcode(),
             op::LOADK | op::GETGLOBAL | op::SETGLOBAL | op::CLOSURE | op::SETLIST | op::SETLISTO
@@ -271,18 +271,18 @@ impl Lua50Header {
         let mut v = Vec::with_capacity(Self::SIZE);
         v.extend_from_slice(LUA50_MAGIC);
         v.push(LUA50_VERSION);
-        v.push(if self.little_endian { 1 } else { 0 });
+        v.push(u8::from(self.little_endian));
         v.push(self.int_size);
         v.push(self.size_t_size);
         v.push(self.instruction_size);
         v.push(self.number_size);
-        v.push(if self.is_integer_num { 1 } else { 0 });
+        v.push(u8::from(self.is_integer_num));
         v
     }
 
     /// Create a standard little-endian, 32-bit header.
     #[must_use]
-    pub fn standard() -> Self {
+    pub const fn standard() -> Self {
         Self {
             little_endian: true,
             int_size: 4,
@@ -332,13 +332,13 @@ impl Lua50Const {
 
     /// Return `true` if this is a string.
     #[must_use]
-    pub fn is_string(&self) -> bool {
+    pub const fn is_string(&self) -> bool {
         matches!(self, Self::String(_))
     }
 
     /// Return the string value if applicable.
     #[must_use]
-    pub fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(s) => Some(s.as_str()),
             _ => None,
@@ -397,7 +397,7 @@ pub struct Lua50Proto {
     /// Constant pool.
     pub constants: Vec<Lua50Const>,
     /// Nested prototypes.
-    pub protos: Vec<Lua50Proto>,
+    pub protos: Vec<Self>,
     /// Source-line mapping: instruction index → line number.
     pub line_info: Vec<u32>,
     /// Local variable debug info.
@@ -441,7 +441,7 @@ impl Lua50Proto {
             + self
                 .protos
                 .iter()
-                .map(|p| p.total_instructions())
+                .map(Self::total_instructions)
                 .sum::<usize>()
     }
 
@@ -504,7 +504,7 @@ struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
-    fn new(data: &'a [u8], hdr: &Lua50Header) -> Self {
+    const fn new(data: &'a [u8], hdr: &Lua50Header) -> Self {
         Self {
             data,
             pos: 0,
@@ -765,6 +765,14 @@ pub fn disassemble_50(proto: &Lua50Proto) -> Vec<String> {
         lines.push(format!("{pc:04}: {instr_str:<30}{line_comment}"));
     }
     lines
+}
+
+impl Lua50Header {
+    /// Return the version byte (always `0x50`).
+    #[must_use]
+    pub const fn version(&self) -> u8 {
+        LUA50_VERSION
+    }
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -1087,13 +1095,5 @@ mod tests {
         let lines = disassemble_50(&p);
         // The mock has line_info = [1], so first instruction should have "; line 1"
         assert!(lines[0].contains("line 1"));
-    }
-}
-
-impl Lua50Header {
-    /// Return the version byte (always `0x50`).
-    #[must_use]
-    pub fn version(&self) -> u8 {
-        LUA50_VERSION
     }
 }

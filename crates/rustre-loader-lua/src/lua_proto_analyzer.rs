@@ -27,7 +27,7 @@ pub struct ComplexityMetrics {
     pub return_count: usize,
     /// Number of closure-creation instructions (CLOSURE).
     pub closure_count: usize,
-    /// McCabe cyclomatic complexity: `branch_count - return_count + 2`.
+    /// `McCabe` cyclomatic complexity: `branch_count - return_count + 2`.
     pub cyclomatic: u32,
     /// Instruction density: `insn_count / (last_line - first_line + 1)`.
     pub density: f64,
@@ -40,7 +40,7 @@ pub struct ComplexityMetrics {
 impl ComplexityMetrics {
     /// Compute metrics from a proto for the given Lua version.
     pub fn compute(proto: &LuaProto, ver: LuaVersion) -> Self {
-        let mut m = ComplexityMetrics::default();
+        let mut m = Self::default();
         m.insn_count = proto.insn_count();
 
         let mut opcodes_seen: HashSet<u8> = HashSet::new();
@@ -103,7 +103,7 @@ fn classify_51(op: u8, insn: u32, i: usize, m: &mut ComplexityMetrics, bts: &mut
             bts.insert(target);
             bts.insert(i + 1);
         }
-        23 | 24 | 25 | 26 | 27 => { // EQ LT LE TEST TESTSET
+        23..=27 => { // EQ LT LE TEST TESTSET
             m.branch_count += 1;
             bts.insert(i + 2);
         }
@@ -124,7 +124,7 @@ fn classify_53(op: u8, insn: u32, i: usize, m: &mut ComplexityMetrics, bts: &mut
             bts.insert(target);
             bts.insert(i + 1);
         }
-        24 | 25 | 26 | 27 | 28 => { // EQ LT LE TEST TESTSET
+        24..=28 => { // EQ LT LE TEST TESTSET
             m.branch_count += 1;
             bts.insert(i + 2);
         }
@@ -145,7 +145,7 @@ fn classify_54(op: u8, insn: u32, i: usize, m: &mut ComplexityMetrics, bts: &mut
             bts.insert(target);
             bts.insert(i + 1);
         }
-        48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 => { // various comparisons / test
+        48..=56 => { // various comparisons / test
             m.branch_count += 1;
             bts.insert(i + 2);
         }
@@ -186,17 +186,17 @@ impl UpvalueChain {
     ///
     /// `ancestors`: list of ancestor protos from outermost (index 0) to the
     /// direct parent of `proto`.
-    pub fn build_for_proto(proto: &LuaProto, ancestors: &[&LuaProto]) -> Vec<UpvalueChain> {
+    pub fn build_for_proto(proto: &LuaProto, ancestors: &[&LuaProto]) -> Vec<Self> {
         proto
             .upvalues
             .iter()
-            .map(|uv| UpvalueChain::trace(uv, ancestors))
+            .map(|uv| Self::trace(uv, ancestors))
             .collect()
     }
 
     /// Trace a single upvalue descriptor through the ancestor chain.
-    fn trace(start: &UpvalueDesc, ancestors: &[&LuaProto]) -> UpvalueChain {
-        let mut chain = UpvalueChain {
+    fn trace(start: &UpvalueDesc, ancestors: &[&LuaProto]) -> Self {
+        let mut chain = Self {
             name: start.name.clone(),
             steps: Vec::new(),
             resolved: false,
@@ -230,7 +230,7 @@ impl UpvalueChain {
     }
 
     /// Depth of the chain (number of closure boundaries crossed).
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.steps.len()
     }
 }
@@ -280,16 +280,16 @@ pub enum ProtoPattern {
 impl fmt::Display for ProtoPattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            ProtoPattern::TableConstructor => "table_constructor",
-            ProtoPattern::Metatable => "metatable",
-            ProtoPattern::ClassConstructor => "class_constructor",
-            ProtoPattern::SetMetatable => "set_metatable",
-            ProtoPattern::SimpleGetter => "simple_getter",
-            ProtoPattern::SimpleSetter => "simple_setter",
-            ProtoPattern::TailCall => "tail_call",
-            ProtoPattern::NumericFor => "numeric_for",
-            ProtoPattern::GenericFor => "generic_for",
-            ProtoPattern::Recursive => "recursive",
+            Self::TableConstructor => "table_constructor",
+            Self::Metatable => "metatable",
+            Self::ClassConstructor => "class_constructor",
+            Self::SetMetatable => "set_metatable",
+            Self::SimpleGetter => "simple_getter",
+            Self::SimpleSetter => "simple_setter",
+            Self::TailCall => "tail_call",
+            Self::NumericFor => "numeric_for",
+            Self::GenericFor => "generic_for",
+            Self::Recursive => "recursive",
         };
         f.write_str(s)
     }
@@ -324,7 +324,7 @@ pub struct ProtoCallGraph {
 impl ProtoCallGraph {
     /// Create an empty call graph.
     pub fn new() -> Self {
-        ProtoCallGraph { edges: Vec::new(), adj: HashMap::new() }
+        Self { edges: Vec::new(), adj: HashMap::new() }
     }
 
     /// Add an edge from `caller` to `callee`.
@@ -370,14 +370,14 @@ impl ProtoCallGraph {
     }
 
     /// Number of unique call edges.
-    pub fn edge_count(&self) -> usize {
+    pub const fn edge_count(&self) -> usize {
         self.edges.len()
     }
 }
 
 impl Default for ProtoCallGraph {
     fn default() -> Self {
-        ProtoCallGraph::new()
+        Self::new()
     }
 }
 
@@ -452,7 +452,7 @@ impl ProtoAnalysis {
             })
             .collect();
 
-        ProtoAnalysis {
+        Self {
             index,
             source_name: proto.source_name.clone(),
             line_range: (proto.line_defined, proto.last_line_defined),
@@ -475,7 +475,7 @@ impl ProtoAnalysis {
     }
 
     /// Estimated complexity category.
-    pub fn complexity_category(&self) -> &'static str {
+    pub const fn complexity_category(&self) -> &'static str {
         match self.metrics.cyclomatic {
             0..=3 => "simple",
             4..=7 => "moderate",
@@ -570,7 +570,7 @@ fn detect_patterns(proto: &LuaProto, ver: LuaVersion) -> Vec<ProtoPattern> {
     found.into_iter().collect()
 }
 
-fn is_newtable_op(op: u8, ver: LuaVersion) -> bool {
+const fn is_newtable_op(op: u8, ver: LuaVersion) -> bool {
     match ver {
         LuaVersion::Lua51 | LuaVersion::Lua52 => op == 10,
         LuaVersion::Lua53 => op == 11,
@@ -578,7 +578,7 @@ fn is_newtable_op(op: u8, ver: LuaVersion) -> bool {
     }
 }
 
-fn is_setlist_op(op: u8, ver: LuaVersion) -> bool {
+const fn is_setlist_op(op: u8, ver: LuaVersion) -> bool {
     match ver {
         LuaVersion::Lua51 | LuaVersion::Lua52 => op == 34,
         LuaVersion::Lua53 => op == 38,
@@ -586,7 +586,7 @@ fn is_setlist_op(op: u8, ver: LuaVersion) -> bool {
     }
 }
 
-fn is_tailcall_op(op: u8, ver: LuaVersion) -> bool {
+const fn is_tailcall_op(op: u8, ver: LuaVersion) -> bool {
     match ver {
         LuaVersion::Lua51 => op == 29,
         LuaVersion::Lua52 | LuaVersion::Lua53 => op == 30,
@@ -594,7 +594,7 @@ fn is_tailcall_op(op: u8, ver: LuaVersion) -> bool {
     }
 }
 
-fn is_numfor_op(op: u8, ver: LuaVersion) -> bool {
+const fn is_numfor_op(op: u8, ver: LuaVersion) -> bool {
     match ver {
         LuaVersion::Lua51 => op == 31,
         LuaVersion::Lua52 => op == 32,
@@ -603,7 +603,7 @@ fn is_numfor_op(op: u8, ver: LuaVersion) -> bool {
     }
 }
 
-fn is_genfor_op(op: u8, ver: LuaVersion) -> bool {
+const fn is_genfor_op(op: u8, ver: LuaVersion) -> bool {
     match ver {
         LuaVersion::Lua51 => op == 33,
         LuaVersion::Lua52 => op == 34,
@@ -629,7 +629,7 @@ pub struct LuaProtoAnalyzer {
 impl LuaProtoAnalyzer {
     /// Create a new analyzer for the given Lua version.
     pub fn new(version: LuaVersion) -> Self {
-        LuaProtoAnalyzer {
+        Self {
             version,
             analyses: HashMap::new(),
             call_graph: ProtoCallGraph::new(),

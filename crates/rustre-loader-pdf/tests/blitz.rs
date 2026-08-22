@@ -373,7 +373,7 @@ fn pdf_stream_struct_fields() {
 #[test]
 fn js_extractor_default() {
     let _ = PdfJsExtractor;
-    let _ = PdfJsExtractor::default();
+    let _ = PdfJsExtractor;
 }
 
 #[test]
@@ -487,7 +487,7 @@ async fn loader_find_nested_empty() {
 
 // ---------- Send/Sync ----------
 
-fn assert_send_sync<T: Send + Sync>() {}
+const fn assert_send_sync<T: Send + Sync>() {}
 
 #[test]
 fn loader_send_sync() {

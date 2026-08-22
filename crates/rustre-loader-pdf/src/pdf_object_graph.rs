@@ -675,15 +675,14 @@ impl PdfObjectGraph {
             }
             // Suspicious if update modifies an action object.
             for &obj in &update.modified_objects {
-                if let Some(node) = self.nodes.get(&obj) {
-                    if node.obj_type == ObjectType::Action || node.obj_type == ObjectType::JavaScript {
+                if let Some(node) = self.nodes.get(&obj)
+                    && (node.obj_type == ObjectType::Action || node.obj_type == ObjectType::JavaScript) {
                         update.flag_suspicious(format!(
                             "Object {} ({}) modified in incremental update",
                             obj, node.obj_type
                         ));
                         break;
                     }
-                }
             }
         }
         updates
@@ -765,9 +764,9 @@ impl PdfObjectGraphBuilder {
             let skip = after.iter().take_while(|&&b| matches!(b, b'\n' | b'\r' | b' ')).count();
             let num_start = abs + needle.len() + skip;
             let num_len = data[num_start..].iter().take_while(|&&b| b.is_ascii_digit()).count();
-            if num_len > 0 {
-                if let Ok(s) = std::str::from_utf8(&data[num_start..num_start + num_len]) {
-                    if let Ok(off) = s.parse::<usize>() {
+            if num_len > 0
+                && let Ok(s) = std::str::from_utf8(&data[num_start..num_start + num_len])
+                    && let Ok(off) = s.parse::<usize>() {
                         if off + 4 <= data.len() && &data[off..off + 4] == b"xref" {
                             let is_incremental = update_index > 0;
                             self.parse_single_xref(data, off, is_incremental, update_index, &mut table);
@@ -777,8 +776,6 @@ impl PdfObjectGraphBuilder {
                         }
                         update_index += 1;
                     }
-                }
-            }
             search = abs + needle.len();
         }
 
@@ -900,7 +897,7 @@ impl PdfObjectGraphBuilder {
             if rest.first() == Some(&b'/') {
                 let name_end = rest[1..].iter().position(|&b| matches!(b, b' ' | b'\n' | b'/' | b'>'))
                     .unwrap_or(rest.len() - 1);
-                let name = std::str::from_utf8(&rest[1..1 + name_end]).unwrap_or("");
+                let name = std::str::from_utf8(&rest[1..=name_end]).unwrap_or("");
                 return match name {
                     "Catalog" => ObjectType::Catalog,
                     "Pages" => ObjectType::Pages,
@@ -942,13 +939,12 @@ impl PdfObjectGraphBuilder {
             // Look for " R" that terminates an indirect reference.
             if data[pos] == b'R' && pos > 0 && data[pos - 1] == b' ' {
                 // Try to parse "N G R" ending at pos.
-                if let Some((target_num, target_gen)) = self.parse_ref_ending_at(data, pos) {
-                    if current_obj > 0 && target_num > 0 {
+                if let Some((target_num, target_gen)) = self.parse_ref_ending_at(data, pos)
+                    && current_obj > 0 && target_num > 0 {
                         let from = ObjectRef::gen0(current_obj);
                         let to = ObjectRef::new(target_num, target_gen as u16);
                         graph.add_edge(from, to);
                     }
-                }
             }
             pos += 1;
         }

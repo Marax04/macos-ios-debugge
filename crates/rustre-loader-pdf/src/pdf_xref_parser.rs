@@ -253,11 +253,10 @@ impl<'a> PdfXrefParser<'a> {
                 let skip = slice.iter().take_while(|&&b| matches!(b, b'\n' | b'\r' | b' ')).count();
                 let num_slice = &slice[skip..];
                 let num_len = num_slice.iter().take_while(|&&b| b.is_ascii_digit()).count();
-                if let Ok(s) = std::str::from_utf8(&num_slice[..num_len]) {
-                    if let Ok(n) = s.parse::<u64>() {
+                if let Ok(s) = std::str::from_utf8(&num_slice[..num_len])
+                    && let Ok(n) = s.parse::<u64>() {
                         offsets.push(n);
                     }
-                }
             }
             search = pos + needle.len();
         }

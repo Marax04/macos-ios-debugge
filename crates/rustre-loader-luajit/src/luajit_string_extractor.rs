@@ -458,7 +458,7 @@ mod tests {
     fn make_input(idx: usize, kgc: &[&str]) -> ProtoStringInput {
         ProtoStringInput {
             proto_idx: idx,
-            kgc_strings: kgc.iter().map(|s| s.to_string()).collect(),
+            kgc_strings: kgc.iter().map(std::string::ToString::to_string).collect(),
             source_name: Some("@test.lua".to_string()),
             local_names: vec!["a".to_string(), "b".to_string()],
             upvalue_names: vec!["_ENV".to_string()],
@@ -578,7 +578,7 @@ mod tests {
     fn shannon_entropy_uniform() {
         let bytes: Vec<u8> = (0..=255).collect();
         let h = shannon_entropy(&bytes);
-        assert!((h - 8.0).abs() < 0.01, "expected ~8.0 bits, got {}", h);
+        assert!((h - 8.0).abs() < 0.01, "expected ~8.0 bits, got {h}");
     }
 
     #[test]

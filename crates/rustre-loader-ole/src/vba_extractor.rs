@@ -562,7 +562,7 @@ mod tests {
         // An uncompressed chunk is 4096 bytes of raw data prefixed by a
         // 2-byte header with bit 15 = 0 and size field = 4093 (stored as 4096 - 3).
         let mut data = vec![0x01u8]; // signature
-        let chunk_header: u16 = 0x0000 | (4093 as u16); // uncompressed, 4096 bytes
+        let chunk_header: u16 = 4093_u16; // uncompressed, 4096 bytes
         data.extend_from_slice(&chunk_header.to_le_bytes());
         data.extend_from_slice(&vec![b'A'; 4096]);
         let result = decompress_ovba(&data);

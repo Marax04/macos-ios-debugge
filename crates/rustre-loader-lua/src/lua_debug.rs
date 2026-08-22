@@ -225,7 +225,7 @@ pub struct LuaProtoDebugInfo {
 
 impl LuaProtoDebugInfo {
     #[must_use]
-    pub fn new(version: LuaVersion, source: Option<String>) -> Self {
+    pub const fn new(version: LuaVersion, source: Option<String>) -> Self {
         Self {
             version,
             source_map: LuaSourceMap::new(source, Vec::new(), 0, 0),

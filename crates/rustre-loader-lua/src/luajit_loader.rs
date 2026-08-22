@@ -26,7 +26,7 @@ pub const PROTO_F_ILOOP: u8 = 0x10;
 
 /// Returns `true` if the proto flag byte indicates a JIT-blocked interpreter loop.
 #[must_use]
-pub fn proto_has_iloop(flags: u8) -> bool {
+pub const fn proto_has_iloop(flags: u8) -> bool {
     flags & PROTO_F_ILOOP != 0
 }
 
@@ -40,7 +40,7 @@ pub const KGC_STR: u8 = 5; // and above
 
 /// Returns a textual name for a KGC tag byte (used for diagnostics).
 #[must_use]
-pub fn kgc_tag_name(tag: u8) -> &'static str {
+pub const fn kgc_tag_name(tag: u8) -> &'static str {
     match tag {
         KGC_CHILD => "child",
         KGC_TAB => "tab",
@@ -62,7 +62,7 @@ pub const KTAB_STR: u8 = 5;
 
 /// Returns a textual name for a KTAB sub-type tag byte.
 #[must_use]
-pub fn ktab_tag_name(tag: u8) -> &'static str {
+pub const fn ktab_tag_name(tag: u8) -> &'static str {
     match tag {
         KTAB_NIL => "nil",
         KTAB_FALSE => "false",
@@ -84,7 +84,7 @@ pub enum LuaJitVersion {
 
 impl LuaJitVersion {
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::V20 => "LuaJIT 2.0",
             Self::V21 => "LuaJIT 2.1",
@@ -120,7 +120,7 @@ impl BcDumpHeader {
         let version = match data.get(3).copied() {
             Some(BCDUMP_VERSION_20) => LuaJitVersion::V20,
             Some(BCDUMP_VERSION_21) => LuaJitVersion::V21,
-            Some(v) => bail!("Unknown LuaJIT version byte: {}", v),
+            Some(v) => bail!("Unknown LuaJIT version byte: {v}"),
             None => bail!("Truncated BCDUMP header at version"),
         };
         let flags = data.get(4).copied().unwrap_or(0);
@@ -144,7 +144,7 @@ impl BcDumpHeader {
         };
 
         Ok((
-            BcDumpHeader {
+            Self {
                 version,
                 flags,
                 is_big_endian,
@@ -159,7 +159,7 @@ impl BcDumpHeader {
 
 // ── LuaJIT Instructions ───────────────────────────────────────────────────────
 
-/// A single LuaJIT instruction is 4 bytes: op(8) a(8) b(8)/cd(16)
+/// A single `LuaJIT` instruction is 4 bytes: op(8) a(8) b(8)/cd(16)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct JitInstr {
     pub op: u8,
@@ -171,27 +171,27 @@ pub struct JitInstr {
 }
 
 impl JitInstr {
-    fn from_u32_le(word: u32) -> Self {
+    const fn from_u32_le(word: u32) -> Self {
         let op = (word & 0xFF) as u8;
         let a = ((word >> 8) & 0xFF) as u8;
         let d = ((word >> 16) & 0xFFFF) as u16;
         let c = (d & 0xFF) as u8;
         let b = ((d >> 8) & 0xFF) as u8;
-        JitInstr { op, a, b, c, d, raw: word }
+        Self { op, a, b, c, d, raw: word }
     }
 
-    fn from_u32_be(word: u32) -> Self {
+    const fn from_u32_be(word: u32) -> Self {
         let op = ((word >> 24) & 0xFF) as u8;
         let a = ((word >> 16) & 0xFF) as u8;
         let d = (word & 0xFFFF) as u16;
         let c = (d & 0xFF) as u8;
         let b = ((d >> 8) & 0xFF) as u8;
-        JitInstr { op, a, b, c, d, raw: word }
+        Self { op, a, b, c, d, raw: word }
     }
 
-    /// Return the signed jump offset (d - BCBIAS_J).
+    /// Return the signed jump offset (d - `BCBIAS_J`).
     #[must_use]
-    pub fn jump_offset(self) -> i32 {
+    pub const fn jump_offset(self) -> i32 {
         const BCBIAS_J: i32 = 0x8000;
         self.d as i32 - BCBIAS_J
     }
@@ -255,17 +255,17 @@ pub struct JitProto {
 
 impl JitProto {
     #[must_use]
-    pub fn is_vararg(&self) -> bool {
+    pub const fn is_vararg(&self) -> bool {
         self.flags & PROTO_F_VARARG != 0
     }
 
     #[must_use]
-    pub fn has_ffi(&self) -> bool {
+    pub const fn has_ffi(&self) -> bool {
         self.flags & PROTO_F_FFI != 0
     }
 
     #[must_use]
-    pub fn is_jit_disabled(&self) -> bool {
+    pub const fn is_jit_disabled(&self) -> bool {
         self.flags & PROTO_F_NOJIT != 0
     }
 }
@@ -357,7 +357,7 @@ pub struct LuaJitLoader<'a> {
 }
 
 impl<'a> LuaJitLoader<'a> {
-    pub fn new(data: &'a [u8]) -> Self {
+    pub const fn new(data: &'a [u8]) -> Self {
         Self {
             data,
             pos: 0,
@@ -390,11 +390,10 @@ impl<'a> LuaJitLoader<'a> {
             let proto = self.parse_proto(proto_data, id, parent_id, &header)?;
 
             // Track children relationship
-            if let Some(pid) = parent_id {
-                if let Some(parent) = protos.get_mut(pid as usize) {
+            if let Some(pid) = parent_id
+                && let Some(parent) = protos.get_mut(pid as usize) {
                     parent.children.push(id);
                 }
-            }
 
             protos.push(proto);
             self.proto_counter += 1;
@@ -409,7 +408,7 @@ impl<'a> LuaJitLoader<'a> {
             .enumerate()
             .filter(|(_, p)| p.parent_id.is_none())
             .map(|(i, _)| i as u32)
-            .last();
+            .next_back();
 
         Ok(JitDump { header, protos, root_proto_id })
     }
@@ -695,7 +694,7 @@ fn read_byte(data: &[u8], pos: &mut usize) -> Result<u8> {
 
 // ── Top-level entry point ─────────────────────────────────────────────────────
 
-/// Detect whether `data` is a LuaJIT bytecode file.
+/// Detect whether `data` is a `LuaJIT` bytecode file.
 #[must_use]
 pub fn is_luajit_bytecode(data: &[u8]) -> bool {
     data.len() >= 4
@@ -705,7 +704,7 @@ pub fn is_luajit_bytecode(data: &[u8]) -> bool {
         && (data[3] == BCDUMP_VERSION_20 || data[3] == BCDUMP_VERSION_21)
 }
 
-/// Load a LuaJIT bytecode file and return the parsed dump.
+/// Load a `LuaJIT` bytecode file and return the parsed dump.
 pub fn load_luajit(data: &[u8]) -> Result<JitDump> {
     let mut loader = LuaJitLoader::new(data);
     loader.load()
@@ -713,7 +712,7 @@ pub fn load_luajit(data: &[u8]) -> Result<JitDump> {
 
 // ── Opcode names (LuaJIT 2.x) ────────────────────────────────────────────────
 
-/// Return the mnemonic for a LuaJIT 2.x opcode, or "UNKNOWN".
+/// Return the mnemonic for a `LuaJIT` 2.x opcode, or "UNKNOWN".
 #[must_use]
 pub fn opcode_name(op: u8) -> &'static str {
     // LuaJIT 2.x opcodes (ordered by value 0..=92)

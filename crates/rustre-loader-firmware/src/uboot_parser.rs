@@ -561,7 +561,7 @@ pub struct FdtNode {
     /// Properties of this node.
     pub props: Vec<FdtProperty>,
     /// Child nodes.
-    pub children: Vec<FdtNode>,
+    pub children: Vec<Self>,
 }
 
 impl FdtNode {
@@ -582,7 +582,7 @@ impl FdtNode {
 
     /// Find a direct child by name.
     #[must_use]
-    pub fn child(&self, name: &str) -> Option<&FdtNode> {
+    pub fn child(&self, name: &str) -> Option<&Self> {
         self.children
             .iter()
             .find(|c| c.name == name || c.full_name() == name)
@@ -819,11 +819,11 @@ impl FitImageFile {
                 let load_addr = child
                     .prop("load")
                     .and_then(FdtProperty::as_u32_be)
-                    .map(|v| u64::from(v));
+                    .map(u64::from);
                 let entry = child
                     .prop("entry")
                     .and_then(FdtProperty::as_u32_be)
-                    .map(|v| u64::from(v));
+                    .map(u64::from);
                 let raw_data = child.data_prop().map(<[u8]>::to_vec).unwrap_or_default();
                 images.push(FitImage {
                     node_name: child.full_name(),

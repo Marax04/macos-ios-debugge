@@ -1124,7 +1124,7 @@ impl SignatureDb {
                 }
             }
         }
-        results.sort_by(|a, b| a.offset.cmp(&b.offset));
+        results.sort_by_key(|a| a.offset);
         results
     }
 
@@ -1207,7 +1207,7 @@ mod tests {
 
     #[test]
     fn test_all_confidences_in_range() {
-        for e in db().entries.iter() {
+        for e in &db().entries {
             assert!(
                 e.confidence <= 100,
                 "confidence {} > 100 for {}",

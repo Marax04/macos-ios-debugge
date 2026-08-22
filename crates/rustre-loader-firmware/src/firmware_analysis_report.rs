@@ -73,7 +73,7 @@ impl EmbeddedOs {
     /// Detect the OS from firmware bytes using string signatures.
     #[must_use]
     pub fn detect(data: &[u8]) -> Self {
-        let sigs: &[(&[u8], EmbeddedOs)] = &[
+        let sigs: &[(&[u8], Self)] = &[
             (b"OpenWrt", Self::OpenWrt),
             (b"uClinux", Self::UClinux),
             (b"Linux version", Self::Linux),
@@ -164,11 +164,11 @@ impl KernelVersion {
 
         let is_lts = matches!(
             (major, minor),
-            (4, 4) | (4, 9) | (4, 14) | (4, 19) | (5, 4) | (5, 10) | (5, 15) | (6, 1) | (6, 6)
+            (4 | 5, 4) | (4, 9 | 14 | 19) | (5, 10 | 15) | (6, 1 | 6)
         );
         let is_eol = major < 4 || (major == 4 && minor < 4);
 
-        Some(KernelVersion {
+        Some(Self {
             full_string: full,
             major,
             minor,
@@ -329,7 +329,7 @@ impl NetworkEndpoint {
     pub fn is_unencrypted(&self) -> bool {
         matches!(
             self.protocol.as_deref(),
-            Some("http") | Some("telnet") | Some("ftp") | Some("mqtt")
+            Some("http" | "telnet" | "ftp" | "mqtt")
         )
     }
 }
@@ -376,10 +376,9 @@ impl CryptoKey {
                 let block_end = data[pos + header.len()..]
                     .windows(end_marker.len())
                     .position(|w| w == end_marker)
-                    .map(|e| pos + header.len() + e + 50)
-                    .unwrap_or(pos + header.len() + 1024);
+                    .map_or(pos + header.len() + 1024, |e| pos + header.len() + e + 50);
                 let length = block_end.min(data.len()) - pos;
-                keys.push(CryptoKey {
+                keys.push(Self {
                     key_type: (*key_type).to_string(),
                     pem_header: String::from_utf8_lossy(header).to_string(),
                     offset: pos,
@@ -615,9 +614,7 @@ impl FirmwareReport {
             "Firmware: os={} kernel={} risk={:.1} creds={} keys={} vulns={}",
             self.embedded_os,
             self.kernel_version
-                .as_ref()
-                .map(std::string::ToString::to_string)
-                .unwrap_or_else(|| "N/A".into()),
+                .as_ref().map_or_else(|| "N/A".into(), std::string::ToString::to_string),
             self.risk_score,
             self.credentials.len(),
             self.crypto_keys.len(),
@@ -798,7 +795,7 @@ mod tests {
         let c = HardcodedCredential {
             category: "password".into(),
             value: "maybe".into(),
-            source_path: "".into(),
+            source_path: String::new(),
             offset: 0,
             confidence: 0.5,
         };

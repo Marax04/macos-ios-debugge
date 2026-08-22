@@ -41,7 +41,7 @@ impl Lcg {
             .wrapping_add(1442695040888963407);
         self.0
     }
-    fn next_u8(&mut self) -> u8 {
+    const fn next_u8(&mut self) -> u8 {
         (self.next() >> 56) as u8
     }
 }

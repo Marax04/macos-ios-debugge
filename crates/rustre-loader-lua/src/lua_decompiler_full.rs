@@ -59,7 +59,7 @@ pub enum LuaConst {
 }
 
 impl LuaConst {
-    pub fn type_name(&self) -> &'static str {
+    pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Nil => "nil",
             Self::Bool(_) => "boolean",
@@ -69,7 +69,7 @@ impl LuaConst {
         }
     }
 
-    pub fn is_falsy(&self) -> bool {
+    pub const fn is_falsy(&self) -> bool {
         matches!(self, Self::Nil | Self::Bool(false))
     }
 }
@@ -97,37 +97,37 @@ pub enum ExpressionTree {
     },
     GlobalVar(String),
     TableIndex {
-        table: Box<ExpressionTree>,
-        key: Box<ExpressionTree>,
+        table: Box<Self>,
+        key: Box<Self>,
     },
     TableField {
-        table: Box<ExpressionTree>,
+        table: Box<Self>,
         field: String,
     },
     BinOp {
         op: BinOp,
-        lhs: Box<ExpressionTree>,
-        rhs: Box<ExpressionTree>,
+        lhs: Box<Self>,
+        rhs: Box<Self>,
     },
     UnOp {
         op: UnOp,
-        operand: Box<ExpressionTree>,
+        operand: Box<Self>,
     },
     FunctionCall {
-        func: Box<ExpressionTree>,
-        args: Vec<ExpressionTree>,
+        func: Box<Self>,
+        args: Vec<Self>,
     },
     MethodCall {
-        obj: Box<ExpressionTree>,
+        obj: Box<Self>,
         method: String,
-        args: Vec<ExpressionTree>,
+        args: Vec<Self>,
     },
     VarArg,
     Closure {
         proto_index: u32,
     },
     Concat {
-        values: Vec<ExpressionTree>,
+        values: Vec<Self>,
     },
     TableConstructor {
         fields: Vec<TableField>,
@@ -161,7 +161,7 @@ pub enum BinOp {
 }
 
 impl BinOp {
-    pub fn symbol(self) -> &'static str {
+    pub const fn symbol(self) -> &'static str {
         match self {
             Self::Add => "+",
             Self::Sub => "-",
@@ -187,14 +187,14 @@ impl BinOp {
         }
     }
 
-    pub fn is_comparison(self) -> bool {
+    pub const fn is_comparison(self) -> bool {
         matches!(
             self,
             Self::Eq | Self::Ne | Self::Lt | Self::Le | Self::Gt | Self::Ge
         )
     }
 
-    pub fn is_logical(self) -> bool {
+    pub const fn is_logical(self) -> bool {
         matches!(self, Self::And | Self::Or)
     }
 }
@@ -209,7 +209,7 @@ pub enum UnOp {
 }
 
 impl UnOp {
-    pub fn symbol(self) -> &'static str {
+    pub const fn symbol(self) -> &'static str {
         match self {
             Self::Neg => "-",
             Self::Not => "not ",
@@ -310,10 +310,10 @@ impl StatementList {
         self.statements.push(s);
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.statements.len()
     }
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.statements.is_empty()
     }
 
@@ -368,7 +368,7 @@ impl BasicBlock {
     }
 
     /// `true` if this block has more than one successor (conditional branch).
-    pub fn is_conditional(&self) -> bool {
+    pub const fn is_conditional(&self) -> bool {
         self.successors.len() > 1
     }
 }
@@ -415,7 +415,7 @@ pub struct FunctionAst {
     pub locals: Vec<String>,
     pub upvalues: Vec<String>,
     pub body: StatementList,
-    pub nested_functions: Vec<FunctionAst>,
+    pub nested_functions: Vec<Self>,
     /// Original PC range.
     pub pc_start: u32,
     pub pc_end: u32,
@@ -441,12 +441,12 @@ impl FunctionAst {
             + self
                 .nested_functions
                 .iter()
-                .map(|f| f.total_statement_count())
+                .map(Self::total_statement_count)
                 .sum::<usize>()
     }
 
     /// `true` if the function has a variable argument list.
-    pub fn accepts_vararg(&self) -> bool {
+    pub const fn accepts_vararg(&self) -> bool {
         self.is_vararg
     }
 }
@@ -477,7 +477,7 @@ pub enum LuaInferredType {
 }
 
 impl LuaInferredType {
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
             Self::Nil => "nil",
@@ -492,7 +492,7 @@ impl LuaInferredType {
         }
     }
 
-    pub fn is_primitive(self) -> bool {
+    pub const fn is_primitive(self) -> bool {
         matches!(
             self,
             Self::Nil | Self::Boolean | Self::Integer | Self::Float
@@ -562,7 +562,7 @@ impl LuaLocal {
     }
 
     /// `true` if this local is live at `pc`.
-    pub fn is_live_at(&self, pc: u32) -> bool {
+    pub const fn is_live_at(&self, pc: u32) -> bool {
         pc >= self.pc_start && pc < self.pc_end
     }
 }
@@ -595,10 +595,10 @@ impl LuaLocalScope {
         self.locals.iter().filter(|l| l.is_live_at(pc)).collect()
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.locals.len()
     }
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.locals.is_empty()
     }
 }
@@ -634,7 +634,7 @@ pub fn fold_binop(op: BinOp, lhs: &ExpressionTree, rhs: &ExpressionTree) -> Opti
         (BinOp::And, ExpressionTree::False, _) => Some(ExpressionTree::False),
         (BinOp::Or, ExpressionTree::True, _) => Some(ExpressionTree::True),
         (BinOp::Concat, ExpressionTree::StringLit(a), ExpressionTree::StringLit(b)) => {
-            Some(ExpressionTree::StringLit(format!("{}{}", a, b)))
+            Some(ExpressionTree::StringLit(format!("{a}{b}")))
         }
         _ => None,
     }
@@ -663,45 +663,45 @@ pub struct LuaBytecodeInstruction(pub u32);
 
 impl LuaBytecodeInstruction {
     /// Opcode field (bits 0-5 in Lua 5.1, bits 0-6 in 5.4).
-    pub fn opcode_51(self) -> u8 {
+    pub const fn opcode_51(self) -> u8 {
         (self.0 & 0x3f) as u8
     }
     /// Register A (bits 6-13).
-    pub fn a_51(self) -> u8 {
+    pub const fn a_51(self) -> u8 {
         ((self.0 >> 6) & 0xff) as u8
     }
     /// Register B (bits 23-31).
-    pub fn b_51(self) -> u16 {
+    pub const fn b_51(self) -> u16 {
         ((self.0 >> 23) & 0x1ff) as u16
     }
     /// Register C (bits 14-22).
-    pub fn c_51(self) -> u16 {
+    pub const fn c_51(self) -> u16 {
         ((self.0 >> 14) & 0x1ff) as u16
     }
     /// sBx field (B+C combined as signed).
-    pub fn sbx_51(self) -> i32 {
+    pub const fn sbx_51(self) -> i32 {
         (self.b_51() as u32 * 512 + self.c_51() as u32) as i32 - 131_071
     }
     /// Bx field.
-    pub fn bx_51(self) -> u32 {
+    pub const fn bx_51(self) -> u32 {
         (self.0 >> 14) & 0x3ffff
     }
 
     /// `true` if B field has the `isk` bit set (constant reference).
-    pub fn b_is_k(self) -> bool {
+    pub const fn b_is_k(self) -> bool {
         self.b_51() & 0x100 != 0
     }
     /// `true` if C field has the `isk` bit set.
-    pub fn c_is_k(self) -> bool {
+    pub const fn c_is_k(self) -> bool {
         self.c_51() & 0x100 != 0
     }
 
     /// Constant index from B (when `b_is_k`).
-    pub fn b_const_idx(self) -> u8 {
+    pub const fn b_const_idx(self) -> u8 {
         (self.b_51() & 0xff) as u8
     }
     /// Constant index from C (when `c_is_k`).
-    pub fn c_const_idx(self) -> u8 {
+    pub const fn c_const_idx(self) -> u8 {
         (self.c_51() & 0xff) as u8
     }
 }
@@ -722,14 +722,14 @@ pub struct LuaPrototype {
     pub max_stack: u8,
     pub instructions: Vec<LuaBytecodeInstruction>,
     pub constants: Vec<LuaConst>,
-    pub sub_prototypes: Vec<LuaPrototype>,
+    pub sub_prototypes: Vec<Self>,
     pub line_info: Vec<u32>,
     pub local_vars: Vec<(String, u32, u32)>, // (name, startpc, endpc)
     pub upvalue_names: Vec<String>,
 }
 
 impl LuaPrototype {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             source_name: String::new(),
             line_defined: 0,
@@ -747,13 +747,13 @@ impl LuaPrototype {
         }
     }
 
-    pub fn instruction_count(&self) -> usize {
+    pub const fn instruction_count(&self) -> usize {
         self.instructions.len()
     }
-    pub fn constant_count(&self) -> usize {
+    pub const fn constant_count(&self) -> usize {
         self.constants.len()
     }
-    pub fn nested_count(&self) -> usize {
+    pub const fn nested_count(&self) -> usize {
         self.sub_prototypes.len()
     }
 
@@ -795,7 +795,7 @@ impl UpvalueInfo {
     }
 
     /// `true` if the upvalue is a register capture (closed-over variable).
-    pub fn is_closed_over(&self) -> bool {
+    pub const fn is_closed_over(&self) -> bool {
         self.in_stack
     }
 }
@@ -813,10 +813,10 @@ impl UpvalueAnalysis {
     pub fn add(&mut self, info: UpvalueInfo) {
         self.upvalues.push(info);
     }
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.upvalues.len()
     }
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.upvalues.is_empty()
     }
 
@@ -947,7 +947,7 @@ impl LuaDecompilerFull {
         Ok(())
     }
 
-    /// Synthesise an AST from a pre-built FunctionAst (for testing).
+    /// Synthesise an AST from a pre-built `FunctionAst` (for testing).
     pub fn from_function_ast(&mut self, func: FunctionAst, source: impl Into<String>) {
         let mut lua_ast = LuaAst::new(source, 0x51);
         lua_ast.top_level = func;
@@ -955,7 +955,7 @@ impl LuaDecompilerFull {
     }
 
     /// `true` if decompilation produced any errors.
-    pub fn has_errors(&self) -> bool {
+    pub const fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
 
@@ -963,8 +963,7 @@ impl LuaDecompilerFull {
     pub fn total_statements(&self) -> usize {
         self.ast
             .as_ref()
-            .map(|a| a.top_level.total_statement_count())
-            .unwrap_or(0)
+            .map_or(0, |a| a.top_level.total_statement_count())
     }
 }
 
@@ -1457,10 +1456,10 @@ pub struct LuaChunkInfo {
 }
 
 impl LuaChunkInfo {
-    pub fn is_64bit(&self) -> bool {
+    pub const fn is_64bit(&self) -> bool {
         self.size_t_size == 8
     }
-    pub fn is_float_numbers(&self) -> bool {
+    pub const fn is_float_numbers(&self) -> bool {
         !self.integral_flag
     }
     pub fn lua_version_str(&self) -> String {
@@ -1483,7 +1482,7 @@ pub struct LuaVersionConfig {
 }
 
 impl LuaVersionConfig {
-    pub fn lua51() -> Self {
+    pub const fn lua51() -> Self {
         Self {
             version: 0x51,
             instruction_size: 4,
@@ -1493,7 +1492,7 @@ impl LuaVersionConfig {
             uses_int_numbers: false,
         }
     }
-    pub fn lua52() -> Self {
+    pub const fn lua52() -> Self {
         Self {
             version: 0x52,
             instruction_size: 4,
@@ -1503,7 +1502,7 @@ impl LuaVersionConfig {
             uses_int_numbers: false,
         }
     }
-    pub fn lua53() -> Self {
+    pub const fn lua53() -> Self {
         Self {
             version: 0x53,
             instruction_size: 4,
@@ -1513,7 +1512,7 @@ impl LuaVersionConfig {
             uses_int_numbers: false,
         }
     }
-    pub fn lua54() -> Self {
+    pub const fn lua54() -> Self {
         Self {
             version: 0x54,
             instruction_size: 4,
@@ -1524,10 +1523,10 @@ impl LuaVersionConfig {
         }
     }
 
-    pub fn is_64bit(&self) -> bool {
+    pub const fn is_64bit(&self) -> bool {
         self.size_t_size == 8
     }
-    pub fn version_name(&self) -> &'static str {
+    pub const fn version_name(&self) -> &'static str {
         match self.version {
             0x51 => "5.1",
             0x52 => "5.2",
@@ -1568,11 +1567,11 @@ impl LuaDecompilerConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn with_line_numbers(mut self) -> Self {
+    pub const fn with_line_numbers(mut self) -> Self {
         self.emit_line_numbers = true;
         self
     }
-    pub fn without_constant_folding(mut self) -> Self {
+    pub const fn without_constant_folding(mut self) -> Self {
         self.fold_constants = false;
         self
     }
@@ -1601,16 +1600,16 @@ impl LuaInternedString {
             is_long,
         }
     }
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.content.len()
     }
 
     /// Returns `true` when [`len`](Self::len) is zero.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    pub fn is_empty_str(&self) -> bool {
+    pub const fn is_empty_str(&self) -> bool {
         self.content.is_empty()
     }
 }
@@ -1649,10 +1648,10 @@ impl LuaGlobalTable {
     pub fn contains(&self, name: &str) -> bool {
         self.names.iter().any(|n| n == name)
     }
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.names.len()
     }
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
 }
@@ -1669,15 +1668,14 @@ pub fn read_cstring(data: &[u8], offset: usize) -> Option<String> {
     let end = data[offset..]
         .iter()
         .position(|&b| b == 0)
-        .map(|p| offset + p)
-        .unwrap_or(data.len());
+        .map_or(data.len(), |p| offset + p);
     std::str::from_utf8(&data[offset..end])
         .ok()
-        .map(|s| s.to_owned())
+        .map(std::borrow::ToOwned::to_owned)
 }
 
 /// Align a value up to `align` (power-of-two).
-pub fn align_up(val: u64, align: u64) -> u64 {
+pub const fn align_up(val: u64, align: u64) -> u64 {
     if align == 0 {
         return val;
     }
@@ -1685,7 +1683,7 @@ pub fn align_up(val: u64, align: u64) -> u64 {
 }
 
 /// Align a value down to `align` (power-of-two).
-pub fn align_down(val: u64, align: u64) -> u64 {
+pub const fn align_down(val: u64, align: u64) -> u64 {
     if align == 0 {
         return val;
     }
@@ -1693,7 +1691,7 @@ pub fn align_down(val: u64, align: u64) -> u64 {
 }
 
 /// Check whether `val` is a power of two.
-pub fn is_power_of_two(val: u64) -> bool {
+pub const fn is_power_of_two(val: u64) -> bool {
     val != 0 && val.is_power_of_two()
 }
 
@@ -1803,7 +1801,7 @@ pub fn is_zeroed(data: &[u8]) -> bool {
     data.iter().all(|&b| b == 0)
 }
 /// Reverse bytes in-place.
-pub fn reverse_bytes(data: &mut [u8]) {
+pub const fn reverse_bytes(data: &mut [u8]) {
     data.reverse();
 }
 /// XOR all bytes with `key`.
@@ -1813,10 +1811,10 @@ pub fn xor_bytes(data: &mut [u8], key: u8) {
     }
 }
 /// Rotate `val` left by `n` bits (32-bit).
-pub fn rol32(val: u32, n: u32) -> u32 {
+pub const fn rol32(val: u32, n: u32) -> u32 {
     val.rotate_left(n)
 }
 /// Rotate `val` right by `n` bits (32-bit).
-pub fn ror32(val: u32, n: u32) -> u32 {
+pub const fn ror32(val: u32, n: u32) -> u32 {
     val.rotate_right(n)
 }

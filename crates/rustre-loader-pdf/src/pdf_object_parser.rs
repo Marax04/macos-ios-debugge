@@ -174,7 +174,7 @@ pub enum PdfObject {
     Real(f64),
     Name(String),
     String(Vec<u8>),
-    Array(Vec<PdfObject>),
+    Array(Vec<Self>),
     Dictionary(PdfDict),
     Stream(PdfStream),
     Indirect { obj_num: u32, generation: u32 },
@@ -220,7 +220,7 @@ impl PdfObject {
 
     /// Returns the array, if this is `Array`.
     #[must_use]
-    pub const fn as_array(&self) -> Option<&Vec<PdfObject>> {
+    pub const fn as_array(&self) -> Option<&Vec<Self>> {
         match self {
             Self::Array(a) => Some(a),
             _ => None,
@@ -608,6 +608,23 @@ const fn is_whitespace(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x00 | 0x0C)
 }
 
+impl PartialEq for PdfObject {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Null, Self::Null) => true,
+            (Self::Boolean(a), Self::Boolean(b)) => a == b,
+            (Self::Integer(a), Self::Integer(b)) => a == b,
+            (Self::Name(a), Self::Name(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            (
+                Self::Indirect { obj_num: o1, generation: g1 },
+                Self::Indirect { obj_num: o2, generation: g2 },
+            ) => o1 == o2 && g1 == g2,
+            _ => false,
+        }
+    }
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -712,22 +729,5 @@ mod tests {
         assert!(d.contains_key("Foo"));
         assert_eq!(d.get_int("Foo"), Some(99));
         assert_eq!(d.len(), 1);
-    }
-}
-
-impl PartialEq for PdfObject {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Null, Self::Null) => true,
-            (Self::Boolean(a), Self::Boolean(b)) => a == b,
-            (Self::Integer(a), Self::Integer(b)) => a == b,
-            (Self::Name(a), Self::Name(b)) => a == b,
-            (Self::String(a), Self::String(b)) => a == b,
-            (
-                Self::Indirect { obj_num: o1, generation: g1 },
-                Self::Indirect { obj_num: o2, generation: g2 },
-            ) => o1 == o2 && g1 == g2,
-            _ => false,
-        }
     }
 }

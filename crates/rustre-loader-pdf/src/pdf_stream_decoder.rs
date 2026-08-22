@@ -290,18 +290,18 @@ impl StreamDecoder {
 
     fn flate_decode(&self, data: &[u8], parms: Option<&DecodeParams>) -> Result<Vec<u8>, DecodeError> {
         let decompressed = flate_decompress(data)?;
-        let predictor = parms.map(|p| p.predictor).unwrap_or(1);
+        let predictor = parms.map_or(1, |p| p.predictor);
         if predictor >= 10 {
-            let colors = parms.map(|p| p.colors).unwrap_or(1) as usize;
-            let bits = parms.map(|p| p.bits_per_component).unwrap_or(8) as usize;
-            let columns = parms.map(|p| p.columns).unwrap_or(1) as usize;
+            let colors = parms.map_or(1, |p| p.colors) as usize;
+            let bits = parms.map_or(8, |p| p.bits_per_component) as usize;
+            let columns = parms.map_or(1, |p| p.columns) as usize;
             png_predictor_undo(&decompressed, colors, bits, columns)
                 .map_err(|e| DecodeError::DecompressionFailed(format!("PNG predictor: {e}")))
         } else if predictor == 2 {
             // TIFF predictor
-            let colors = parms.map(|p| p.colors).unwrap_or(1) as usize;
-            let bits = parms.map(|p| p.bits_per_component).unwrap_or(8) as usize;
-            let columns = parms.map(|p| p.columns).unwrap_or(1) as usize;
+            let colors = parms.map_or(1, |p| p.colors) as usize;
+            let bits = parms.map_or(8, |p| p.bits_per_component) as usize;
+            let columns = parms.map_or(1, |p| p.columns) as usize;
             Ok(tiff_predictor_undo(&decompressed, colors, bits, columns))
         } else {
             Ok(decompressed)
@@ -420,7 +420,7 @@ impl StreamDecoder {
                     }
                     let byte = data[i];
                     i += 1;
-                    out.extend(std::iter::repeat(byte).take(count));
+                    out.extend(std::iter::repeat_n(byte, count));
                 }
             }
         }
@@ -431,7 +431,7 @@ impl StreamDecoder {
 
     fn lzw_decode(&self, data: &[u8], parms: Option<&DecodeParams>) -> Result<Vec<u8>, DecodeError> {
         // Simple early-change LZW implementation.
-        let early_change = parms.map(|p| p.early_change != 0).unwrap_or(true);
+        let early_change = parms.map_or(true, |p| p.early_change != 0);
         lzw_decompress(data, early_change)
     }
 
@@ -462,11 +462,10 @@ impl StreamDecoder {
             PdfFilter::RunLengthDecode,
         ];
         for filter in &candidates {
-            if let Ok(decoded) = self.apply_filter(data, filter, None) {
-                if decoded.len() > data.len() / 2 {
+            if let Ok(decoded) = self.apply_filter(data, filter, None)
+                && decoded.len() > data.len() / 2 {
                     return Some(filter.clone());
                 }
-            }
         }
         None
     }
@@ -565,14 +564,14 @@ pub fn png_predictor_undo(
     // Validate parameters before multiplying to avoid overflow on untrusted input.
     let bits_per_pixel = colors.checked_mul(bits_per_component)
         .ok_or_else(|| "PNG predictor: colors * bits_per_component overflow".to_string())?;
-    let bpp = (bits_per_pixel + 7) / 8;
+    let bpp = bits_per_pixel.div_ceil(8);
     let row_bits = columns.checked_mul(bits_per_pixel)
         .ok_or_else(|| "PNG predictor: columns * bits_per_pixel overflow".to_string())?;
-    let row_size = (row_bits + 7) / 8;
+    let row_size = row_bits.div_ceil(8);
     let stride = row_size.checked_add(1)
         .ok_or_else(|| "PNG predictor: stride overflow".to_string())?;
 
-    if data.len() % stride != 0 && data.len() != stride * (data.len() / stride) {
+    if !data.len().is_multiple_of(stride) && data.len() != stride * (data.len() / stride) {
         // Tolerant: process as many complete rows as possible.
     }
 
@@ -611,7 +610,7 @@ pub fn png_predictor_undo(
                     let raw = if i < src.len() { src[i] } else { 0 };
                     let a = if i >= bpp { dst[i - bpp] } else { 0 };
                     let b = prev_row[i];
-                    dst[i] = raw.wrapping_add(((u16::from(a) + u16::from(b)) / 2) as u8);
+                    dst[i] = raw.wrapping_add(u16::midpoint(u16::from(a), u16::from(b)) as u8);
                 }
             }
             4 => {
@@ -661,7 +660,7 @@ pub fn tiff_predictor_undo(data: &[u8], colors: usize, bits: usize, columns: usi
         Some(n) if n > 0 => n,
         _ => return data.to_vec(), // overflow or zero: return raw data
     };
-    if data.len() % row_size != 0 {
+    if !data.len().is_multiple_of(row_size) {
         return data.to_vec();
     }
     let mut out = data.to_vec();

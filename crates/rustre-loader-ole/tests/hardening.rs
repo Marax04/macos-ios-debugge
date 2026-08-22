@@ -89,7 +89,7 @@ fn random_noise_never_panics() {
 
     for _ in 0..150 {
         let mut data = vec![0u8; 512 + (next() % 1024) as usize];
-        for b in data.iter_mut() {
+        for b in &mut data {
             *b = (next() & 0xFF) as u8;
         }
         data[..8].copy_from_slice(&CFB_MAGIC);

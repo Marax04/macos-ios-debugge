@@ -108,7 +108,7 @@ pub enum LuaVersion {
 impl LuaVersion {
     /// Decode a version byte.
     #[must_use]
-    pub fn from_byte(b: u8) -> Self {
+    pub const fn from_byte(b: u8) -> Self {
         match b {
             0x51 => Self::Lua51,
             0x52 => Self::Lua52,
@@ -120,13 +120,13 @@ impl LuaVersion {
 
     /// Return `true` if this version is known.
     #[must_use]
-    pub fn is_known(self) -> bool {
+    pub const fn is_known(self) -> bool {
         matches!(self, Self::Lua51 | Self::Lua52 | Self::Lua53 | Self::Lua54)
     }
 
     /// Return the raw version byte.
     #[must_use]
-    pub fn as_byte(self) -> u8 {
+    pub const fn as_byte(self) -> u8 {
         match self {
             Self::Lua51 => 0x51,
             Self::Lua52 => 0x52,
@@ -138,13 +138,13 @@ impl LuaVersion {
 
     /// Return the minor version number.
     #[must_use]
-    pub fn minor(self) -> u8 {
+    pub const fn minor(self) -> u8 {
         self.as_byte() & 0x0F
     }
 
     /// Return the major version number.
     #[must_use]
-    pub fn major(self) -> u8 {
+    pub const fn major(self) -> u8 {
         self.as_byte() >> 4
     }
 }
@@ -177,13 +177,13 @@ pub enum LuaEndian {
 impl LuaEndian {
     /// Decode from a raw byte.
     #[must_use]
-    pub fn from_byte(b: u8) -> Self {
+    pub const fn from_byte(b: u8) -> Self {
         if b == 0 { Self::Be } else { Self::Le }
     }
 
     /// Convert to `rustre_core::endian::Endian`.
     #[must_use]
-    pub fn to_core_endian(self) -> Endian {
+    pub const fn to_core_endian(self) -> Endian {
         match self {
             Self::Be => Endian::Big,
             Self::Le => Endian::Little,
@@ -192,7 +192,7 @@ impl LuaEndian {
 
     /// Return `true` if little-endian.
     #[must_use]
-    pub fn is_le(self) -> bool {
+    pub const fn is_le(self) -> bool {
         matches!(self, Self::Le)
     }
 }
@@ -235,7 +235,7 @@ struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
-    fn new(data: &'a [u8], is_le: bool) -> Self {
+    const fn new(data: &'a [u8], is_le: bool) -> Self {
         Self {
             data,
             pos: 0,
@@ -243,7 +243,7 @@ impl<'a> Reader<'a> {
         }
     }
 
-    fn remaining(&self) -> usize {
+    const fn remaining(&self) -> usize {
         self.data.len().saturating_sub(self.pos)
     }
 
@@ -321,7 +321,7 @@ impl<'a> Reader<'a> {
         Ok(slice)
     }
 
-    /// Read a Lua string: size field (int_size bytes) followed by bytes.
+    /// Read a Lua string: size field (`int_size` bytes) followed by bytes.
     fn read_lua_string(&mut self, int_size: u8) -> Result<Option<String>, LuaLoaderError> {
         let slen = self.read_sized_int(int_size)? as usize;
         if slen == 0 {
@@ -337,7 +337,7 @@ impl<'a> Reader<'a> {
         Ok(Some(String::from_utf8_lossy(without_nul).into_owned()))
     }
 
-    /// Read a Lua 5.4-style string (LUAI_MAXSHORTLEN marker byte then length).
+    /// Read a Lua 5.4-style string (`LUAI_MAXSHORTLEN` marker byte then length).
     fn read_lua54_string(&mut self) -> Result<Option<String>, LuaLoaderError> {
         if self.remaining() == 0 {
             return Err(LuaLoaderError::TruncatedData);
@@ -412,7 +412,7 @@ impl LuaHeader {
         let ptr_size = data[8];
         let instruction_size = data[9];
         let num_size = data.get(10).copied().unwrap_or(8);
-        let is_integer_num = data.get(11).map(|&b| b != 0).unwrap_or(false);
+        let is_integer_num = data.get(11).is_some_and(|&b| b != 0);
 
         // 5.4 adds a 6-byte LUAC_DATA integrity block at data[12..18],
         // followed by integer_size at data[18] and float_size at data[19].
@@ -448,13 +448,13 @@ impl LuaHeader {
 
     /// Returns the endianness as a `rustre_core::endian::Endian`.
     #[must_use]
-    pub fn to_endian(&self) -> Endian {
+    pub const fn to_endian(&self) -> Endian {
         self.endian.to_core_endian()
     }
 
     /// Returns `true` if the format is the official Lua reference implementation.
     #[must_use]
-    pub fn is_official_format(&self) -> bool {
+    pub const fn is_official_format(&self) -> bool {
         self.format == 0
     }
 
@@ -467,7 +467,7 @@ impl LuaHeader {
     /// Falls back to the pointer width recorded in the header, or 8 when the
     /// header records an implausible value.
     #[must_use]
-    pub fn size_t_size_51(&self) -> u8 {
+    pub const fn size_t_size_51(&self) -> u8 {
         match self.ptr_size {
             1 | 2 | 4 | 8 => self.ptr_size,
             _ => 8,
@@ -531,13 +531,13 @@ impl LuaConst {
 
     /// Return `true` if this is a string constant.
     #[must_use]
-    pub fn is_string(&self) -> bool {
+    pub const fn is_string(&self) -> bool {
         matches!(self, Self::Str(_) | Self::LongStr(_))
     }
 
     /// Return the string value if this is a string constant.
     #[must_use]
-    pub fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&self) -> Option<&str> {
         match self {
             Self::Str(s) | Self::LongStr(s) => Some(s.as_str()),
             _ => None,
@@ -561,50 +561,50 @@ impl fmt::Display for LuaConst {
 // Lua instruction representation
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// A decoded Lua VM instruction (32 bits, ABC or ABx format).
+/// A decoded Lua VM instruction (32 bits, ABC or `ABx` format).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LuaInstr(pub u32);
 
 impl LuaInstr {
     /// Decode opcode (bits 0–5).
     #[must_use]
-    pub fn opcode(self) -> u8 {
+    pub const fn opcode(self) -> u8 {
         (self.0 & 0x3F) as u8
     }
 
     /// Decode A operand (bits 6–13 in 5.x, but shifted differently per version).
     #[must_use]
-    pub fn a(self) -> u8 {
+    pub const fn a(self) -> u8 {
         ((self.0 >> 6) & 0xFF) as u8
     }
 
     /// Decode B operand (bits 23–31).
     #[must_use]
-    pub fn b(self) -> u16 {
+    pub const fn b(self) -> u16 {
         ((self.0 >> 23) & 0x1FF) as u16
     }
 
     /// Decode C operand (bits 14–22).
     #[must_use]
-    pub fn c(self) -> u16 {
+    pub const fn c(self) -> u16 {
         ((self.0 >> 14) & 0x1FF) as u16
     }
 
     /// Decode Bx operand (bits 14–31, 18-bit unsigned).
     #[must_use]
-    pub fn bx(self) -> u32 {
+    pub const fn bx(self) -> u32 {
         self.0 >> 14
     }
 
-    /// Decode sBx operand (Bx minus MAXARG_sBx = 131071).
+    /// Decode sBx operand (Bx minus `MAXARG_sBx` = 131071).
     #[must_use]
-    pub fn sbx(self) -> i32 {
+    pub const fn sbx(self) -> i32 {
         self.bx() as i32 - 131_071
     }
 
     /// Return `true` if this instruction modifies the A register.
     #[must_use]
-    pub fn writes_a(self) -> bool {
+    pub const fn writes_a(self) -> bool {
         !matches!(self.opcode(), 0x00..=0x05 | 0x24 | 0x25 | 0x29)
     }
 }
@@ -860,7 +860,7 @@ pub struct LuaProto {
     /// Upvalue descriptors.
     pub upvalues: Vec<LuaUpvalue>,
     /// Nested function prototypes.
-    pub protos: Vec<LuaProto>,
+    pub protos: Vec<Self>,
     /// Source line info: instruction index → line number.
     pub line_info: Vec<u32>,
     /// Local variable debug info.
@@ -1180,7 +1180,7 @@ impl LuaProto {
             + self
                 .protos
                 .iter()
-                .map(|p| p.total_instructions())
+                .map(Self::total_instructions)
                 .sum::<usize>()
     }
 
@@ -1367,7 +1367,7 @@ pub struct LuaArch {
 impl LuaArch {
     /// Create for a given Lua version.
     #[must_use]
-    pub fn new(version: LuaVersion) -> Self {
+    pub const fn new(version: LuaVersion) -> Self {
         Self { version }
     }
 }
@@ -1462,7 +1462,7 @@ pub struct LuaLoader;
 impl LuaLoader {
     /// Create a new `LuaLoader`.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -1480,12 +1480,11 @@ impl Loader for LuaLoader {
     /// # Errors
     /// Returns [`CoreError::Load`] if the Lua header is invalid or truncated.
     async fn load(&self, input: LoaderInput) -> Result<LoadResult, CoreError> {
-        let base = input.hints.base_address().map_or(0_u64, |a| a.as_u64());
+        let base = input.hints.base_address().map_or(0_u64, rustre_core::Address::as_u64);
 
         // Try to parse the header to detect version for the arch stub
         let version = LuaHeader::parse(&input.data)
-            .map(|(h, _)| h.version)
-            .unwrap_or(LuaVersion::Lua54);
+            .map_or(LuaVersion::Lua54, |(h, _)| h.version);
 
         let mut mem = Memory::new();
         let size = input.data.len() as u64;
@@ -1749,7 +1748,7 @@ pub struct LuaBytecodeLoader;
 impl LuaBytecodeLoader {
     /// Create a new loader instance.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -1878,7 +1877,7 @@ fn instr_fmt_54(opcode: u8) -> InstrFmt {
 /// iAx:   [Ax:25][OP:7]
 /// isJ:   [sJ:25][OP:7]          sJ  = J  - (2^24 - 1)
 /// ```
-fn decode_54(word: u32) -> (u8, u32, u32, u32, bool) {
+const fn decode_54(word: u32) -> (u8, u32, u32, u32, bool) {
     let op = (word & 0x7F) as u8;
     let a = (word >> 7) & 0xFF;
     let k = ((word >> 15) & 1) != 0;

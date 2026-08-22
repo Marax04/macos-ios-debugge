@@ -50,6 +50,10 @@ pub enum PdfError {
     /// File is too short to parse.
     #[error("truncated data")]
     TruncatedData,
+    /// A stream filter rejected structurally invalid input (e.g. an LZW code
+    /// that names a dictionary entry past the end of the dictionary).
+    #[error("invalid stream structure: {0}")]
+    InvalidStructure(String),
 }
 
 // â"€â"€ Magic detection â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -93,12 +97,12 @@ pub enum PdfObjKind {
     /// String object.
     PdfString(String),
     /// Array of objects.
-    Array(Vec<PdfObjKind>),
+    Array(Vec<Self>),
     /// Dictionary.
-    Dictionary(Vec<(String, PdfObjKind)>),
+    Dictionary(Vec<(String, Self)>),
     /// Stream object with its dictionary and raw data location.
     Stream {
-        dict: Vec<(String, PdfObjKind)>,
+        dict: Vec<(String, Self)>,
         offset: usize,
         length: usize,
     },
@@ -306,7 +310,7 @@ fn parse_trailer(data: &[u8]) -> PdfTrailer {
         .enumerate()
         .filter(|(_, w)| *w == trailer_keyword)
         .map(|(i, _)| i)
-        .last();
+        .next_back();
 
     let mut size: u32 = 0;
     let mut root_ref: Option<u32> = None;
@@ -322,8 +326,7 @@ fn parse_trailer(data: &[u8]) -> PdfTrailer {
             let dict_end = after_kw[dict_start..]
                 .windows(2)
                 .position(|w| w == b">>")
-                .map(|p| dict_start + p)
-                .unwrap_or(after_kw.len());
+                .map_or(after_kw.len(), |p| dict_start + p);
             let dict_bytes = &after_kw[dict_start..dict_end];
             let dict_str = std::str::from_utf8(dict_bytes).unwrap_or("");
 
@@ -600,11 +603,10 @@ pub fn xref_offsets(bytes: &[u8]) -> Vec<(u32, u64)> {
             if let Ok(s) = std::str::from_utf8(entry) {
                 let ep: Vec<&str> = s.split_ascii_whitespace().collect();
                 if ep.len() >= 3 && ep[2] == "n"
-                    && let Ok(off) = ep[0].parse::<u64>() {
-                        if let Some(obj_num) = first_obj.checked_add(i) {
+                    && let Ok(off) = ep[0].parse::<u64>()
+                        && let Some(obj_num) = first_obj.checked_add(i) {
                             result.push((obj_num, off));
                         }
-                    }
             }
             pos += 20;
         }
@@ -666,8 +668,7 @@ pub fn extract_streams(bytes: &[u8]) -> Vec<PdfStream> {
         let end_pos = bytes[data_start..]
             .windows(endstream_marker.len())
             .position(|w| w == endstream_marker)
-            .map(|p| data_start + p)
-            .unwrap_or(data_start + length.unwrap_or(0));
+            .map_or(data_start + length.unwrap_or(0), |p| data_start + p);
 
         let actual_length = length.unwrap_or(end_pos.saturating_sub(data_start));
 
@@ -1409,7 +1410,7 @@ pub enum PdfObject {
     Real(f64),
     Name(String),
     Bytes(Vec<u8>),
-    Array(Vec<PdfObject>),
+    Array(Vec<Self>),
     Dict(PdfDict),
     Stream { dict: PdfDict, data: Vec<u8> },
     Indirect(u32, u16),
@@ -1631,27 +1632,23 @@ impl PdfParser {
             }
         };
         let w: Vec<usize> = dict
-            .get_array("W")
-            .map(|a| {
+            .get_array("W").map_or_else(|| vec![1, 2, 1], |a| {
                 a.iter()
                     .filter_map(PdfObject::as_int)
                     .map(|n| n as usize)
                     .collect()
-            })
-            .unwrap_or_else(|| vec![1, 2, 1]);
+            });
         if w.len() < 3 {
             return Err(PdfError::XrefError("/W must have 3 elements".into()));
         }
         let size = dict.get_int("Size").unwrap_or(0) as u32;
         let index: Vec<u32> = dict
-            .get_array("Index")
-            .map(|a| {
+            .get_array("Index").map_or_else(|| vec![0, size], |a| {
                 a.iter()
                     .filter_map(PdfObject::as_int)
                     .map(|n| n as u32)
                     .collect()
-            })
-            .unwrap_or_else(|| vec![0, size]);
+            });
         let row_size = w[0] + w[1] + w[2];
         if row_size == 0 {
             return Ok(());
@@ -1815,8 +1812,7 @@ impl PdfParser {
                 let end = self.data[pos..]
                     .iter()
                     .position(|&b| matches!(b, b' ' | b'\n' | b'\r' | b'/'))
-                    .map(|p| pos + p)
-                    .unwrap_or(self.data.len());
+                    .map_or(self.data.len(), |p| pos + p);
                 Ok((PdfObject::Null, end))
             }
         }
@@ -1883,8 +1879,7 @@ impl PdfParser {
                     b' ' | b'\n' | b'\r' | b'\t' | b'/' | b'<' | b'>' | b'[' | b']' | b'(' | b')'
                 )
             })
-            .map(|p| start + p)
-            .unwrap_or(self.data.len());
+            .map_or(self.data.len(), |p| start + p);
         Ok((
             String::from_utf8_lossy(&self.data[start..end]).into_owned(),
             end,
@@ -1966,8 +1961,7 @@ impl PdfParser {
         let end = self.data[pos..]
             .iter()
             .position(|&b| !matches!(b, b'0'..=b'9' | b'.' | b'-' | b'+'))
-            .map(|p| pos + p)
-            .unwrap_or(self.data.len());
+            .map_or(self.data.len(), |p| pos + p);
         let s = std::str::from_utf8(&self.data[pos..end])
             .map_err(|e| PdfError::ParseError(e.to_string()))?;
         if s.contains('.') {
@@ -2222,7 +2216,7 @@ impl PdfParser {
     fn scan_js(&self, obj: &PdfObject, path: &str, out: &mut Vec<(String, String)>) {
         match obj {
             PdfObject::Dict(d) => {
-                if d.get_name("S").map(|s| s == "JavaScript").unwrap_or(false)
+                if d.get_name("S").is_some_and(|s| s == "JavaScript")
                     && let Some(js_obj) = d.get("JS") {
                         let r = self.resolve(js_obj);
                         let src = match &r {
@@ -2277,7 +2271,7 @@ impl PdfParser {
     fn scan_launch(&self, obj: &PdfObject, out: &mut Vec<String>) {
         match obj {
             PdfObject::Dict(d) => {
-                if d.get_name("S").map(|s| s == "Launch").unwrap_or(false)
+                if d.get_name("S").is_some_and(|s| s == "Launch")
                     && let Some(f) = d.get("F")
                         && let Some(s) = self.resolve(f).as_str_lossy() {
                             out.push(s.into_owned());
@@ -2310,8 +2304,7 @@ impl PdfParser {
         match obj {
             PdfObject::Dict(d) => {
                 if d.get_name("Type")
-                    .map(|s| s == "Filespec" || s == "F")
-                    .unwrap_or(false)
+                    .is_some_and(|s| s == "Filespec" || s == "F")
                 {
                     let name = d
                         .get("F")
@@ -2351,7 +2344,7 @@ impl PdfParser {
     fn scan_uri(&self, obj: &PdfObject, out: &mut Vec<String>) {
         match obj {
             PdfObject::Dict(d) => {
-                if d.get_name("S").map(|s| s == "URI").unwrap_or(false)
+                if d.get_name("S").is_some_and(|s| s == "URI")
                     && let Some(u) = d.get("URI")
                         && let Some(s) = self.resolve(u).as_str_lossy() {
                             out.push(s.into_owned());
@@ -2440,8 +2433,8 @@ fn parser_png_predictor(
     bits: usize,
     columns: usize,
 ) -> Result<Vec<u8>, PdfError> {
-    let bpp = (colors * bits + 7) / 8;
-    let row_size = (columns * colors * bits + 7) / 8;
+    let bpp = (colors * bits).div_ceil(8);
+    let row_size = (columns * colors * bits).div_ceil(8);
     let stride = row_size + 1;
     let mut out = Vec::with_capacity(data.len());
     let mut prev = vec![0u8; row_size];
@@ -2459,7 +2452,7 @@ fn parser_png_predictor(
                 0 => raw,
                 1 => raw.wrapping_add(a),
                 2 => raw.wrapping_add(b),
-                3 => raw.wrapping_add(((u16::from(a) + u16::from(b)) / 2) as u8),
+                3 => raw.wrapping_add(u16::midpoint(u16::from(a), u16::from(b)) as u8),
                 4 => raw.wrapping_add(paeth_p(a, b, c)),
                 _ => raw,
             };
@@ -2516,22 +2509,54 @@ fn parser_lzw_decompress(data: &[u8], early_change: bool) -> Result<Vec<u8>, Pdf
         if code == EOD {
             break;
         }
-        let entry: Vec<u8> = if (code as usize) < table.len() {
-            table[code as usize].clone()
-        } else if let Some(p) = prev {
-            let mut e = table[p as usize].clone();
-            let f = e[0];
-            e.push(f);
-            e
-        } else {
-            break;
+        // A hostile stream can name a code beyond the end of the table. The only
+        // legal such code is the KwKwK case `code == table.len()`; anything
+        // larger is corrupt. Accepting it used to leave `prev` pointing past the
+        // table, which panicked on the *next* iteration's `table[p]`.
+        let entry: Vec<u8> = match table.get(code as usize) {
+            Some(e) => e.clone(),
+            None => {
+                let Some(p) = prev else {
+                    return Err(PdfError::InvalidStructure(
+                        "LZW code before CLEAR".to_string(),
+                    ));
+                };
+                if code as usize != table.len() {
+                    return Err(PdfError::InvalidStructure(format!(
+                        "LZW code {code} out of range (table has {} entries)",
+                        table.len()
+                    )));
+                }
+                // `p` was validated as an in-range index when it was stored.
+                let Some(base) = table.get(p as usize) else {
+                    return Err(PdfError::InvalidStructure(format!(
+                        "LZW previous code {p} out of range"
+                    )));
+                };
+                let mut e = base.clone();
+                let f = *e.first().ok_or_else(|| {
+                    PdfError::InvalidStructure("LZW empty table entry".to_string())
+                })?;
+                e.push(f);
+                e
+            }
         };
         out.extend_from_slice(&entry);
         if let Some(p) = prev {
-            let mut ne = table[p as usize].clone();
-            ne.push(entry[0]);
+            let Some(base) = table.get(p as usize) else {
+                return Err(PdfError::InvalidStructure(format!(
+                    "LZW previous code {p} out of range"
+                )));
+            };
+            let mut ne = base.clone();
+            let Some(&first) = entry.first() else {
+                return Err(PdfError::InvalidStructure(
+                    "LZW produced an empty entry".to_string(),
+                ));
+            };
+            ne.push(first);
             table.push(ne);
-            let t = if early_change { 1 } else { 0 };
+            let t = usize::from(early_change);
             code_size = if table.len() >= (1 << 11) + t {
                 12
             } else if table.len() >= (1 << 10) + t {
@@ -2678,9 +2703,7 @@ impl PdfMalwareReport {
         let version = parser.version.clone();
         let encrypted = parser
             .trailer
-            .as_ref()
-            .map(|t| t.contains_key("Encrypt"))
-            .unwrap_or_else(|| parser.data.windows(8).any(|w| w == b"/Encrypt"));
+            .as_ref().map_or_else(|| parser.data.windows(8).any(|w| w == b"/Encrypt"), |t| t.contains_key("Encrypt"));
 
         let js_pairs = parser.find_all_js();
         let javascript_sources: Vec<JsInPdf> = js_pairs
@@ -2948,8 +2971,7 @@ impl PdfMalwareReport {
                 if data.len() > 1_000_000 {
                     let is_img = dict
                         .get_name("Subtype")
-                        .map(|s| s == "Image")
-                        .unwrap_or(false);
+                        .is_some_and(|s| s == "Image");
                     if !is_img {
                         results.push(SuspiciousStream {
                             object_id: id,
@@ -2987,7 +3009,7 @@ impl PdfMalwareReport {
 
     /// Compute aggregate threat score 0-100.
     #[must_use]
-    pub fn calculate_threat_score(report: &PdfMalwareReport) -> u8 {
+    pub fn calculate_threat_score(report: &Self) -> u8 {
         let mut score: u32 = 0;
         if report.open_action && report.javascript_count > 0 {
             score += 30;
@@ -3067,7 +3089,7 @@ pub fn deobfuscate_js_simple(js: &str) -> String {
                 .filter_map(char::from_u32)
                 .collect();
             let replacement = format!("\"{}\"", decoded.replace('"', "\\\""));
-            let fm = output[start..start + 20 + end + 1].to_string();
+            let fm = output[start..=(start + 20 + end)].to_string();
             output = output.replacen(&fm, &replacement, 1);
         } else {
             break;
@@ -3841,3 +3863,65 @@ mod extended_tests {
 }
 
 
+
+// ── LZW hostile-input regression tests ──────────────────────────────────────
+
+#[cfg(test)]
+mod lzw_hardening_tests {
+    use super::{parser_lzw_decompress, PdfError};
+
+    /// Pack a sequence of codes into an MSB-first bit stream at `width` bits.
+    fn pack(codes: &[u16], width: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut acc: u32 = 0;
+        let mut nbits: u32 = 0;
+        for &c in codes {
+            acc = (acc << width) | u32::from(c);
+            nbits += width;
+            while nbits >= 8 {
+                nbits -= 8;
+                out.push(((acc >> nbits) & 0xFF) as u8);
+            }
+        }
+        if nbits > 0 {
+            out.push(((acc << (8 - nbits)) & 0xFF) as u8);
+        }
+        out
+    }
+
+    #[test]
+    fn lzw_rejects_code_past_end_of_table_instead_of_panicking() {
+        // 0x41 is a literal; 1000 is far past the 258-entry initial table.
+        // Before the fix this stored prev = Some(1000) and the *next* code
+        // panicked with "index out of bounds" inside `table[p as usize]`.
+        let data = pack(&[0x41, 1000, 0x42], 9);
+        match parser_lzw_decompress(&data, true) {
+            Err(PdfError::InvalidStructure(msg)) => {
+                assert!(msg.contains("out of range"), "{msg}");
+            }
+            other => panic!("expected InvalidStructure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn lzw_rejects_first_code_without_clear_context() {
+        let data = pack(&[1000], 9);
+        assert!(matches!(
+            parser_lzw_decompress(&data, true),
+            Err(PdfError::InvalidStructure(_))
+        ));
+    }
+
+    #[test]
+    fn lzw_accepts_the_legal_kwkwk_case() {
+        // code == table.len() is the one legal "not yet in table" code.
+        let data = pack(&[0x41, 258, 257], 9);
+        assert!(parser_lzw_decompress(&data, true).is_ok());
+    }
+
+    #[test]
+    fn lzw_plain_literals_round_trip() {
+        let data = pack(&[0x41, 0x42, 0x43, 257], 9);
+        assert_eq!(parser_lzw_decompress(&data, true).unwrap(), b"ABC");
+    }
+}

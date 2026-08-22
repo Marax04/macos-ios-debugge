@@ -28,7 +28,7 @@ fn lua51(body: &[u8]) -> Vec<u8> {
     v
 }
 
-/// Build a Lua 5.4 header (20 bytes, includes the LUAC_DATA block) plus `body`.
+/// Build a Lua 5.4 header (20 bytes, includes the `LUAC_DATA` block) plus `body`.
 fn lua54(body: &[u8]) -> Vec<u8> {
     let mut v = Vec::new();
     v.extend_from_slice(LUA_MAGIC);

@@ -477,8 +477,7 @@ fn scan_backward_for_obj_num(data: &[u8]) -> Option<u32> {
     let gen_start = before[..gen_end]
         .iter()
         .rposition(|&b| !b.is_ascii_digit())
-        .map(|p| p + 1)
-        .unwrap_or(0);
+        .map_or(0, |p| p + 1);
     if gen_start >= gen_end {
         return None;
     }
@@ -487,15 +486,13 @@ fn scan_backward_for_obj_num(data: &[u8]) -> Option<u32> {
     let ws_start = before[..ws_end]
         .iter()
         .rposition(|&b| b != b' ' && b != b'\t')
-        .map(|p| p + 1)
-        .unwrap_or(0);
+        .map_or(0, |p| p + 1);
     // Parse object number
     let obj_end = ws_start;
     let obj_start = before[..obj_end]
         .iter()
         .rposition(|&b| !b.is_ascii_digit())
-        .map(|p| p + 1)
-        .unwrap_or(0);
+        .map_or(0, |p| p + 1);
     if obj_start >= obj_end {
         return None;
     }

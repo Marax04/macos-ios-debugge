@@ -153,8 +153,7 @@ impl IhexRecord {
         let line = line
             .iter()
             .rposition(|&b| b != b'\r' && b != b'\n')
-            .map(|end| &line[..end + 1])
-            .unwrap_or(line);
+            .map_or(line, |end| &line[..=end]);
 
         if line.is_empty() || line[0] != b':' {
             return Err(FirmwareError::InvalidMagic(
@@ -269,7 +268,7 @@ impl MemRegion {
 
     /// Return `true` if `addr` falls within this region.
     #[must_use]
-    pub fn contains(&self, addr: u64) -> bool {
+    pub const fn contains(&self, addr: u64) -> bool {
         addr >= self.start_addr && addr < self.end_addr()
     }
 

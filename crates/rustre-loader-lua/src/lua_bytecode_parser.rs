@@ -21,43 +21,43 @@ pub enum LuaVersion {
 
 impl LuaVersion {
     /// Parse from the version byte in the bytecode header.
-    pub fn from_byte(b: u8) -> Option<LuaVersion> {
+    pub const fn from_byte(b: u8) -> Option<Self> {
         match b {
-            0x51 => Some(LuaVersion::Lua51),
-            0x52 => Some(LuaVersion::Lua52),
-            0x53 => Some(LuaVersion::Lua53),
-            0x54 => Some(LuaVersion::Lua54),
+            0x51 => Some(Self::Lua51),
+            0x52 => Some(Self::Lua52),
+            0x53 => Some(Self::Lua53),
+            0x54 => Some(Self::Lua54),
             _ => None,
         }
     }
 
     /// Human-readable version string.
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
-            LuaVersion::Lua51 => "5.1",
-            LuaVersion::Lua52 => "5.2",
-            LuaVersion::Lua53 => "5.3",
-            LuaVersion::Lua54 => "5.4",
+            Self::Lua51 => "5.1",
+            Self::Lua52 => "5.2",
+            Self::Lua53 => "5.3",
+            Self::Lua54 => "5.4",
         }
     }
 
     /// Whether integers in the bytecode file are encoded as 64-bit (5.3+).
-    pub fn uses_integer64(self) -> bool {
-        matches!(self, LuaVersion::Lua53 | LuaVersion::Lua54)
+    pub const fn uses_integer64(self) -> bool {
+        matches!(self, Self::Lua53 | Self::Lua54)
     }
 
-    /// Float constant tag used in constant encoding (LUA_TNUMBER / LUA_TFLT).
+    /// Float constant tag used in constant encoding (`LUA_TNUMBER` / `LUA_TFLT`).
     /// Both old (5.1/5.2) and new (5.3/5.4) encodings use tag value 3 for floats.
-    pub fn float_tag(self) -> u8 {
+    pub const fn float_tag(self) -> u8 {
         3 // LUA_TNUMBER for 5.1/5.2; LUA_TFLT (0x03) for 5.3/5.4 — same value
     }
 
-    /// Integer constant tag used in constant encoding (Lua 5.3+ only: LUA_TINT = 0x13).
+    /// Integer constant tag used in constant encoding (Lua 5.3+ only: `LUA_TINT` = 0x13).
     /// Returns `None` for Lua 5.1/5.2 which have no native integer constant type.
-    pub fn integer_tag(self) -> Option<u8> {
+    pub const fn integer_tag(self) -> Option<u8> {
         match self {
-            LuaVersion::Lua53 | LuaVersion::Lua54 => Some(0x13),
-            LuaVersion::Lua51 | LuaVersion::Lua52 => None,
+            Self::Lua53 | Self::Lua54 => Some(0x13),
+            Self::Lua51 | Self::Lua52 => None,
         }
     }
 }
@@ -89,14 +89,14 @@ pub enum LuaConstant {
 
 impl LuaConstant {
     /// Returns `true` if this constant is a string of any kind.
-    pub fn is_string(&self) -> bool {
-        matches!(self, LuaConstant::String(_) | LuaConstant::ShortString(_))
+    pub const fn is_string(&self) -> bool {
+        matches!(self, Self::String(_) | Self::ShortString(_))
     }
 
     /// Extract the string value regardless of short/long tag.
-    pub fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&self) -> Option<&str> {
         match self {
-            LuaConstant::String(s) | LuaConstant::ShortString(s) => Some(s.as_str()),
+            Self::String(s) | Self::ShortString(s) => Some(s.as_str()),
             _ => None,
         }
     }
@@ -105,11 +105,11 @@ impl LuaConstant {
 impl fmt::Display for LuaConstant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LuaConstant::Nil => write!(f, "nil"),
-            LuaConstant::Boolean(b) => write!(f, "{b}"),
-            LuaConstant::Integer(n) => write!(f, "{n}"),
-            LuaConstant::Float(n) => write!(f, "{n}"),
-            LuaConstant::String(s) | LuaConstant::ShortString(s) => write!(f, "{s:?}"),
+            Self::Nil => write!(f, "nil"),
+            Self::Boolean(b) => write!(f, "{b}"),
+            Self::Integer(n) => write!(f, "{n}"),
+            Self::Float(n) => write!(f, "{n}"),
+            Self::String(s) | Self::ShortString(s) => write!(f, "{s:?}"),
         }
     }
 }
@@ -134,12 +134,12 @@ pub struct UpvalueDesc {
 
 impl UpvalueDesc {
     /// Construct a simple upvalue descriptor with only index info.
-    pub fn simple(in_stack: u8, idx: u8) -> Self {
-        UpvalueDesc { name: String::new(), in_stack, idx, kind: 0 }
+    pub const fn simple(in_stack: u8, idx: u8) -> Self {
+        Self { name: String::new(), in_stack, idx, kind: 0 }
     }
 
     /// Returns `true` if this upvalue is a register-local capture.
-    pub fn is_local_capture(&self) -> bool {
+    pub const fn is_local_capture(&self) -> bool {
         self.in_stack != 0
     }
 }
@@ -168,7 +168,7 @@ pub struct LocalVar {
 
 impl LocalVar {
     /// Returns `true` if `pc` is within the live range of this local.
-    pub fn is_live_at(&self, pc: u32) -> bool {
+    pub const fn is_live_at(&self, pc: u32) -> bool {
         pc >= self.start_pc && pc < self.end_pc
     }
 }
@@ -205,7 +205,7 @@ pub struct LuaProto {
     /// Upvalue descriptors.
     pub upvalues: Vec<UpvalueDesc>,
     /// Nested function prototypes.
-    pub protos: Vec<LuaProto>,
+    pub protos: Vec<Self>,
     /// Per-instruction source-line mapping (debug info).
     pub line_info: Vec<u32>,
     /// Local variable descriptors (debug info).
@@ -218,8 +218,8 @@ pub struct LuaProto {
 
 impl LuaProto {
     /// Create an empty proto.
-    pub fn empty() -> Self {
-        LuaProto {
+    pub const fn empty() -> Self {
+        Self {
             source_name: String::new(),
             line_defined: 0,
             last_line_defined: 0,
@@ -238,13 +238,13 @@ impl LuaProto {
     }
 
     /// Number of instructions.
-    pub fn insn_count(&self) -> usize {
+    pub const fn insn_count(&self) -> usize {
         self.instructions.len()
     }
 
     /// Recursively count this proto plus all nested protos.
     pub fn total_proto_count(&self) -> usize {
-        1 + self.protos.iter().map(|p| p.total_proto_count()).sum::<usize>()
+        1 + self.protos.iter().map(Self::total_proto_count).sum::<usize>()
     }
 
     /// Collect all string constants (including nested protos).
@@ -256,8 +256,8 @@ impl LuaProto {
         result
     }
 
-    /// Returns `true` if this proto has debug info (non-empty line_info).
-    pub fn has_debug_info(&self) -> bool {
+    /// Returns `true` if this proto has debug info (non-empty `line_info`).
+    pub const fn has_debug_info(&self) -> bool {
         !self.line_info.is_empty()
     }
 
@@ -321,7 +321,7 @@ pub struct LuaHeader {
 }
 
 impl LuaHeader {
-    /// LUAC_MAGIC prefix: `\x1bLua`.
+    /// `LUAC_MAGIC` prefix: `\x1bLua`.
     pub const MAGIC: [u8; 4] = [0x1b, 0x4c, 0x75, 0x61];
 
     /// Validate the magic bytes.
@@ -357,7 +357,7 @@ impl LuaChunk {
     /// Build a chunk from a header and main proto.
     pub fn new(header: LuaHeader, main_proto: LuaProto) -> Self {
         let total_protos = main_proto.total_proto_count();
-        LuaChunk { header, main_proto, total_protos, warnings: Vec::new() }
+        Self { header, main_proto, total_protos, warnings: Vec::new() }
     }
 
     /// Collect all string constants in the entire chunk.
@@ -390,11 +390,11 @@ struct Cursor<'a> {
 }
 
 impl<'a> Cursor<'a> {
-    fn new(data: &'a [u8], big_endian: bool) -> Self {
+    const fn new(data: &'a [u8], big_endian: bool) -> Self {
         Cursor { data, pos: 0, big_endian }
     }
 
-    fn remaining(&self) -> usize {
+    const fn remaining(&self) -> usize {
         self.data.len().saturating_sub(self.pos)
     }
 
@@ -477,7 +477,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Read a Lua string: size_t length followed by bytes (or 0 for nil string).
+    /// Read a Lua string: `size_t` length followed by bytes (or 0 for nil string).
     fn read_lua_string(&mut self, size_t: u8) -> Result<Option<String>, ParseError> {
         let len = self.read_size_t(size_t)?;
         if len == 0 {
@@ -540,11 +540,11 @@ pub enum ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::Truncated => write!(f, "truncated data"),
-            ParseError::BadMagic => write!(f, "invalid magic"),
-            ParseError::UnknownVersion(v) => write!(f, "unknown version {v:#04x}"),
-            ParseError::Unsupported(s) => write!(f, "unsupported: {s}"),
-            ParseError::Malformed(s) => write!(f, "malformed: {s}"),
+            Self::Truncated => write!(f, "truncated data"),
+            Self::BadMagic => write!(f, "invalid magic"),
+            Self::UnknownVersion(v) => write!(f, "unknown version {v:#04x}"),
+            Self::Unsupported(s) => write!(f, "unsupported: {s}"),
+            Self::Malformed(s) => write!(f, "malformed: {s}"),
         }
     }
 }
@@ -566,13 +566,13 @@ pub struct LuaBytecodeParser {
 
 impl LuaBytecodeParser {
     /// Create a new parser.
-    pub fn new() -> Self {
-        LuaBytecodeParser { warnings: Vec::new(), trailing_bytes: 0 }
+    pub const fn new() -> Self {
+        Self { warnings: Vec::new(), trailing_bytes: 0 }
     }
 
     /// Number of unconsumed trailing bytes recorded by the last `parse()` call.
     #[must_use]
-    pub fn trailing_bytes(&self) -> usize {
+    pub const fn trailing_bytes(&self) -> usize {
         self.trailing_bytes
     }
 
@@ -719,7 +719,7 @@ impl LuaBytecodeParser {
         // Instructions.
         let insn_count = {
             let n = cur.read_int(int_size)?;
-            if n < 0 || n > 0x00FF_FFFF {
+            if !(0..=0x00FF_FFFF).contains(&n) {
                 return Err(ParseError::Malformed(format!("insn_count out of range: {n}")));
             }
             n as usize
@@ -732,7 +732,7 @@ impl LuaBytecodeParser {
         // Constants.
         let const_count = {
             let n = cur.read_int(int_size)?;
-            if n < 0 || n > 0x00FF_FFFF {
+            if !(0..=0x00FF_FFFF).contains(&n) {
                 return Err(ParseError::Malformed(format!("const_count out of range: {n}")));
             }
             n as usize
@@ -746,7 +746,7 @@ impl LuaBytecodeParser {
         // Nested protos.
         let proto_count = {
             let n = cur.read_int(int_size)?;
-            if n < 0 || n > 0x00FF_FFFF {
+            if !(0..=0x00FF_FFFF).contains(&n) {
                 return Err(ParseError::Malformed(format!("proto_count out of range: {n}")));
             }
             n as usize
@@ -764,7 +764,7 @@ impl LuaBytecodeParser {
             0usize
         } else {
             let n = cur.read_int(int_size)?;
-            if n < 0 || n > 0x0000_FFFF {
+            if !(0..=0x0000_FFFF).contains(&n) {
                 return Err(ParseError::Malformed(format!("uv_count out of range: {n}")));
             }
             n as usize
@@ -780,7 +780,7 @@ impl LuaBytecodeParser {
         // Debug info — line positions.
         let line_count = {
             let n = cur.read_int(int_size)?;
-            if n < 0 || n > 0x00FF_FFFF {
+            if !(0..=0x00FF_FFFF).contains(&n) {
                 return Err(ParseError::Malformed(format!("line_count out of range: {n}")));
             }
             n as usize
@@ -793,7 +793,7 @@ impl LuaBytecodeParser {
         // Debug info — local variables.
         let local_count = {
             let n = cur.read_int(int_size)?;
-            if n < 0 || n > 0x00FF_FFFF {
+            if !(0..=0x00FF_FFFF).contains(&n) {
                 return Err(ParseError::Malformed(format!("local_count out of range: {n}")));
             }
             n as usize
@@ -812,7 +812,7 @@ impl LuaBytecodeParser {
         // Debug info — upvalue names.
         let uv_name_count = {
             let n = cur.read_int(int_size)?;
-            if n < 0 || n > 0x0000_FFFF {
+            if !(0..=0x0000_FFFF).contains(&n) {
                 return Err(ParseError::Malformed(format!("uv_name_count out of range: {n}")));
             }
             n as usize
@@ -910,7 +910,7 @@ impl LuaBytecodeParser {
 
 impl Default for LuaBytecodeParser {
     fn default() -> Self {
-        LuaBytecodeParser::new()
+        Self::new()
     }
 }
 

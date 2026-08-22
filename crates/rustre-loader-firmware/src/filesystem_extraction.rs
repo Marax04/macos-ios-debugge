@@ -566,7 +566,7 @@ impl Jffs2Extractor {
             let total_len     = u32::from_le_bytes(data[pos+4..pos+8].try_into().unwrap_or([0;4]));
             let node_crc      = u32::from_le_bytes(data[pos+8..pos+12].try_into().unwrap_or([0;4]));
 
-            if total_len < 12 || total_len > 1024 * 1024 {
+            if !(12..=1024 * 1024).contains(&total_len) {
                 pos += 4;
                 continue;
             }
@@ -980,12 +980,11 @@ impl FilesystemExtraction {
             self.filesystems.push(fs);
         }
         // Ext2 (needs 1 KiB before superblock)
-        if offset + EXT2_SUPERBLOCK_OFFSET + 264 <= data.len() {
-            if Ext2Extractor::detect(data, offset).is_some() {
+        if offset + EXT2_SUPERBLOCK_OFFSET + 264 <= data.len()
+            && Ext2Extractor::detect(data, offset).is_some() {
                 let fs = Ext2Extractor::extract(data, offset);
                 self.filesystems.push(fs);
             }
-        }
         // FAT
         if FatExtractor::detect(data, offset).is_some() {
             let fs = FatExtractor::extract(data, offset);

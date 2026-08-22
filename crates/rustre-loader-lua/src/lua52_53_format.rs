@@ -69,7 +69,7 @@ impl Lua52Header {
         ))
     }
 
-    pub fn is_little_endian(&self) -> bool {
+    pub const fn is_little_endian(&self) -> bool {
         self.endian == 1
     }
 }
@@ -126,7 +126,7 @@ pub enum Lua52Opcode {
 }
 
 impl Lua52Opcode {
-    pub fn from_u8(n: u8) -> Option<Self> {
+    pub const fn from_u8(n: u8) -> Option<Self> {
         Some(match n {
             0 => Self::Move,
             1 => Self::LoadK,
@@ -174,7 +174,7 @@ impl Lua52Opcode {
         })
     }
 
-    pub fn mnemonic(self) -> &'static str {
+    pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::Move => "MOVE",
             Self::LoadK => "LOADK",
@@ -238,9 +238,9 @@ impl fmt::Display for Lua52Constant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Nil => f.write_str("nil"),
-            Self::Boolean(b) => write!(f, "{}", b),
-            Self::Number(n) => write!(f, "{}", n),
-            Self::String(s) => write!(f, "{:?}", s),
+            Self::Boolean(b) => write!(f, "{b}"),
+            Self::Number(n) => write!(f, "{n}"),
+            Self::String(s) => write!(f, "{s:?}"),
         }
     }
 }
@@ -266,7 +266,7 @@ pub struct Lua52Proto {
     pub code: Vec<u32>,
     pub constants: Vec<Lua52Constant>,
     pub upvalues: Vec<Lua52UpvalDesc>,
-    pub protos: Vec<Lua52Proto>,
+    pub protos: Vec<Self>,
     pub source_lines: Vec<i32>,
     pub locals: Vec<Lua52Local>,
     pub upvalue_names: Vec<Option<String>>,
@@ -280,7 +280,7 @@ pub struct Lua52Local {
 }
 
 impl Lua52Proto {
-    pub fn instr_count(&self) -> usize {
+    pub const fn instr_count(&self) -> usize {
         self.code.len()
     }
 }
@@ -290,63 +290,63 @@ impl Lua52Proto {
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub fn decode_lua52_proto(cur: &mut Cursor<&[u8]>) -> Result<Lua52Proto, String> {
-    let source_name = read_lua_string(cur).map_err(|e| format!("52 source: {}", e))?;
-    let line_defined = read_i32_le(cur).map_err(|e| format!("52 line_def: {}", e))?;
-    let last_line_defined = read_i32_le(cur).map_err(|e| format!("52 last_line: {}", e))?;
-    let num_params = read_u8(cur).map_err(|e| format!("52 params: {}", e))?;
-    let is_vararg = read_u8(cur).map_err(|e| format!("52 vararg: {}", e))?;
-    let max_stack_size = read_u8(cur).map_err(|e| format!("52 stack: {}", e))?;
+    let source_name = read_lua_string(cur).map_err(|e| format!("52 source: {e}"))?;
+    let line_defined = read_i32_le(cur).map_err(|e| format!("52 line_def: {e}"))?;
+    let last_line_defined = read_i32_le(cur).map_err(|e| format!("52 last_line: {e}"))?;
+    let num_params = read_u8(cur).map_err(|e| format!("52 params: {e}"))?;
+    let is_vararg = read_u8(cur).map_err(|e| format!("52 vararg: {e}"))?;
+    let max_stack_size = read_u8(cur).map_err(|e| format!("52 stack: {e}"))?;
 
-    let n_code = read_u32_le(cur).map_err(|e| format!("52 n_code: {}", e))?;
+    let n_code = read_u32_le(cur).map_err(|e| format!("52 n_code: {e}"))?;
     let mut code = Vec::with_capacity(n_code as usize);
     for _ in 0..n_code {
-        code.push(read_u32_le(cur).map_err(|e| format!("52 instr: {}", e))?);
+        code.push(read_u32_le(cur).map_err(|e| format!("52 instr: {e}"))?);
     }
 
-    let n_const = read_u32_le(cur).map_err(|e| format!("52 n_const: {}", e))?;
+    let n_const = read_u32_le(cur).map_err(|e| format!("52 n_const: {e}"))?;
     let mut constants = Vec::with_capacity(n_const as usize);
     for _ in 0..n_const {
-        let tag = read_u8(cur).map_err(|e| format!("52 const tag: {}", e))?;
+        let tag = read_u8(cur).map_err(|e| format!("52 const tag: {e}"))?;
         let c = match tag {
             0 => Lua52Constant::Nil,
-            1 => Lua52Constant::Boolean(read_u8(cur).map_err(|e| format!("{}", e))? != 0),
-            3 => Lua52Constant::Number(read_f64_le(cur).map_err(|e| format!("{}", e))?),
+            1 => Lua52Constant::Boolean(read_u8(cur).map_err(|e| format!("{e}"))? != 0),
+            3 => Lua52Constant::Number(read_f64_le(cur).map_err(|e| format!("{e}"))?),
             4 => Lua52Constant::String(
                 read_lua_string(cur)
-                    .map_err(|e| format!("{}", e))?
+                    .map_err(|e| format!("{e}"))?
                     .unwrap_or_default(),
             ),
-            _ => return Err(format!("52 unknown const tag {}", tag)),
+            _ => return Err(format!("52 unknown const tag {tag}")),
         };
         constants.push(c);
     }
 
-    let n_upvals = read_u32_le(cur).map_err(|e| format!("52 n_upvals: {}", e))?;
+    let n_upvals = read_u32_le(cur).map_err(|e| format!("52 n_upvals: {e}"))?;
     let mut upvalues = Vec::with_capacity(n_upvals as usize);
     for _ in 0..n_upvals {
-        let in_stack = read_u8(cur).map_err(|e| format!("{}", e))? != 0;
-        let idx = read_u8(cur).map_err(|e| format!("{}", e))?;
+        let in_stack = read_u8(cur).map_err(|e| format!("{e}"))? != 0;
+        let idx = read_u8(cur).map_err(|e| format!("{e}"))?;
         upvalues.push(Lua52UpvalDesc { in_stack, idx });
     }
 
-    let n_proto = read_u32_le(cur).map_err(|e| format!("52 n_proto: {}", e))?;
+    let n_proto = read_u32_le(cur).map_err(|e| format!("52 n_proto: {e}"))?;
     let mut protos = Vec::with_capacity(n_proto as usize);
     for _ in 0..n_proto {
         protos.push(decode_lua52_proto(cur)?);
     }
 
-    let n_lines = read_u32_le(cur).map_err(|e| format!("52 n_lines: {}", e))?;
+    let n_lines = read_u32_le(cur).map_err(|e| format!("52 n_lines: {e}"))?;
     let mut source_lines = Vec::with_capacity(n_lines as usize);
     for _ in 0..n_lines {
-        source_lines.push(read_i32_le(cur).map_err(|e| format!("{}", e))?);
+        source_lines.push(read_i32_le(cur).map_err(|e| format!("{e}"))?);
     }
 
-    let n_locals = read_u32_le(cur).map_err(|e| format!("52 n_locals: {}", e))?;
+    let n_locals = read_u32_le(cur).map_err(|e| format!("52 n_locals: {e}"))?;
     let mut locals = Vec::with_capacity(n_locals as usize);
     for _ in 0..n_locals {
-        let name = read_lua_string(cur).map_err(|e| format!("{}", e))?;
-        let start_pc = read_i32_le(cur).map_err(|e| format!("{}", e))?;
-        let end_pc = read_i32_le(cur).map_err(|e| format!("{}", e))?;
+        let name = read_lua_string(cur).map_err(|e| format!("{e}"))?;
+        let start_pc = read_i32_le(cur).map_err(|e| format!("{e}"))?;
+        let end_pc = read_i32_le(cur).map_err(|e| format!("{e}"))?;
         locals.push(Lua52Local {
             name,
             start_pc,
@@ -354,10 +354,10 @@ pub fn decode_lua52_proto(cur: &mut Cursor<&[u8]>) -> Result<Lua52Proto, String>
         });
     }
 
-    let n_upval_names = read_u32_le(cur).map_err(|e| format!("52 n_upval_names: {}", e))?;
+    let n_upval_names = read_u32_le(cur).map_err(|e| format!("52 n_upval_names: {e}"))?;
     let mut upvalue_names = Vec::with_capacity(n_upval_names as usize);
     for _ in 0..n_upval_names {
-        upvalue_names.push(read_lua_string(cur).map_err(|e| format!("{}", e))?);
+        upvalue_names.push(read_lua_string(cur).map_err(|e| format!("{e}"))?);
     }
 
     Ok(Lua52Proto {
@@ -448,7 +448,7 @@ impl Lua53Header {
         ))
     }
 
-    pub fn is_little_endian(&self) -> bool {
+    pub const fn is_little_endian(&self) -> bool {
         self.endian == 1
     }
 }
@@ -510,7 +510,7 @@ pub enum Lua53Opcode {
 }
 
 impl Lua53Opcode {
-    pub fn from_u8(n: u8) -> Option<Self> {
+    pub const fn from_u8(n: u8) -> Option<Self> {
         Some(match n {
             0 => Self::Move,
             1 => Self::LoadK,
@@ -563,7 +563,7 @@ impl Lua53Opcode {
         })
     }
 
-    pub fn mnemonic(self) -> &'static str {
+    pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::Move => "MOVE",
             Self::LoadK => "LOADK",
@@ -616,7 +616,7 @@ impl Lua53Opcode {
     }
 
     /// Returns true if this opcode is new in Lua 5.3.
-    pub fn is_new_in_53(self) -> bool {
+    pub const fn is_new_in_53(self) -> bool {
         matches!(
             self,
             Self::IDiv | Self::BAnd | Self::BOr | Self::BXor | Self::Shl | Self::Shr | Self::BNot
@@ -641,10 +641,10 @@ impl fmt::Display for Lua53Constant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Nil => f.write_str("nil"),
-            Self::Boolean(b) => write!(f, "{}", b),
-            Self::Integer(n) => write!(f, "{}i", n),
-            Self::Float(n) => write!(f, "{}f", n),
-            Self::String(s) => write!(f, "{:?}", s),
+            Self::Boolean(b) => write!(f, "{b}"),
+            Self::Integer(n) => write!(f, "{n}i"),
+            Self::Float(n) => write!(f, "{n}f"),
+            Self::String(s) => write!(f, "{s:?}"),
         }
     }
 }
@@ -664,14 +664,14 @@ pub struct Lua53Proto {
     pub code: Vec<u32>,
     pub constants: Vec<Lua53Constant>,
     pub upvalues: Vec<(bool, u8)>,
-    pub protos: Vec<Lua53Proto>,
+    pub protos: Vec<Self>,
     pub source_lines: Vec<i32>,
     pub locals: Vec<(Option<String>, i32, i32)>,
     pub upvalue_names: Vec<Option<String>>,
 }
 
 impl Lua53Proto {
-    pub fn instr_count(&self) -> usize {
+    pub const fn instr_count(&self) -> usize {
         self.code.len()
     }
     pub fn integer_constants(&self) -> Vec<i64> {
@@ -711,71 +711,71 @@ fn read_i64_le(cur: &mut Cursor<&[u8]>) -> io::Result<i64> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub fn decode_lua53_proto(cur: &mut Cursor<&[u8]>) -> Result<Lua53Proto, String> {
-    let source_name = read_lua_string(cur).map_err(|e| format!("53 source: {}", e))?;
-    let line_defined = read_i32_le(cur).map_err(|e| format!("53 line_def: {}", e))?;
-    let last_line_defined = read_i32_le(cur).map_err(|e| format!("53 last_line: {}", e))?;
-    let num_params = read_u8(cur).map_err(|e| format!("53 params: {}", e))?;
-    let is_vararg = read_u8(cur).map_err(|e| format!("53 vararg: {}", e))?;
-    let max_stack_size = read_u8(cur).map_err(|e| format!("53 stack: {}", e))?;
+    let source_name = read_lua_string(cur).map_err(|e| format!("53 source: {e}"))?;
+    let line_defined = read_i32_le(cur).map_err(|e| format!("53 line_def: {e}"))?;
+    let last_line_defined = read_i32_le(cur).map_err(|e| format!("53 last_line: {e}"))?;
+    let num_params = read_u8(cur).map_err(|e| format!("53 params: {e}"))?;
+    let is_vararg = read_u8(cur).map_err(|e| format!("53 vararg: {e}"))?;
+    let max_stack_size = read_u8(cur).map_err(|e| format!("53 stack: {e}"))?;
 
-    let n_code = read_u32_le(cur).map_err(|e| format!("53 n_code: {}", e))?;
+    let n_code = read_u32_le(cur).map_err(|e| format!("53 n_code: {e}"))?;
     let mut code = Vec::with_capacity(n_code as usize);
     for _ in 0..n_code {
-        code.push(read_u32_le(cur).map_err(|e| format!("{}", e))?);
+        code.push(read_u32_le(cur).map_err(|e| format!("{e}"))?);
     }
 
-    let n_const = read_u32_le(cur).map_err(|e| format!("53 n_const: {}", e))?;
+    let n_const = read_u32_le(cur).map_err(|e| format!("53 n_const: {e}"))?;
     let mut constants = Vec::with_capacity(n_const as usize);
     for _ in 0..n_const {
-        let tag = read_u8(cur).map_err(|e| format!("{}", e))?;
+        let tag = read_u8(cur).map_err(|e| format!("{e}"))?;
         let c = match tag {
             0 => Lua53Constant::Nil,
-            1 => Lua53Constant::Boolean(read_u8(cur).map_err(|e| format!("{}", e))? != 0),
-            0x13 => Lua53Constant::Integer(read_i64_le(cur).map_err(|e| format!("{}", e))?),
-            0x03 => Lua53Constant::Float(read_f64_le(cur).map_err(|e| format!("{}", e))?),
+            1 => Lua53Constant::Boolean(read_u8(cur).map_err(|e| format!("{e}"))? != 0),
+            0x13 => Lua53Constant::Integer(read_i64_le(cur).map_err(|e| format!("{e}"))?),
+            0x03 => Lua53Constant::Float(read_f64_le(cur).map_err(|e| format!("{e}"))?),
             0x14 | 0x04 => Lua53Constant::String(
                 read_lua_string(cur)
-                    .map_err(|e| format!("{}", e))?
+                    .map_err(|e| format!("{e}"))?
                     .unwrap_or_default(),
             ),
-            _ => return Err(format!("53 unknown const tag {}", tag)),
+            _ => return Err(format!("53 unknown const tag {tag}")),
         };
         constants.push(c);
     }
 
-    let n_upvals = read_u32_le(cur).map_err(|e| format!("53 n_upvals: {}", e))?;
+    let n_upvals = read_u32_le(cur).map_err(|e| format!("53 n_upvals: {e}"))?;
     let mut upvalues = Vec::with_capacity(n_upvals as usize);
     for _ in 0..n_upvals {
-        let in_stack = read_u8(cur).map_err(|e| format!("{}", e))? != 0;
-        let idx = read_u8(cur).map_err(|e| format!("{}", e))?;
+        let in_stack = read_u8(cur).map_err(|e| format!("{e}"))? != 0;
+        let idx = read_u8(cur).map_err(|e| format!("{e}"))?;
         upvalues.push((in_stack, idx));
     }
 
-    let n_proto = read_u32_le(cur).map_err(|e| format!("53 n_proto: {}", e))?;
+    let n_proto = read_u32_le(cur).map_err(|e| format!("53 n_proto: {e}"))?;
     let mut protos = Vec::with_capacity(n_proto as usize);
     for _ in 0..n_proto {
         protos.push(decode_lua53_proto(cur)?);
     }
 
-    let n_lines = read_u32_le(cur).map_err(|e| format!("53 n_lines: {}", e))?;
+    let n_lines = read_u32_le(cur).map_err(|e| format!("53 n_lines: {e}"))?;
     let mut source_lines = Vec::with_capacity(n_lines as usize);
     for _ in 0..n_lines {
-        source_lines.push(read_i32_le(cur).map_err(|e| format!("{}", e))?);
+        source_lines.push(read_i32_le(cur).map_err(|e| format!("{e}"))?);
     }
 
-    let n_locals = read_u32_le(cur).map_err(|e| format!("53 n_locals: {}", e))?;
+    let n_locals = read_u32_le(cur).map_err(|e| format!("53 n_locals: {e}"))?;
     let mut locals = Vec::with_capacity(n_locals as usize);
     for _ in 0..n_locals {
-        let name = read_lua_string(cur).map_err(|e| format!("{}", e))?;
-        let start = read_i32_le(cur).map_err(|e| format!("{}", e))?;
-        let end = read_i32_le(cur).map_err(|e| format!("{}", e))?;
+        let name = read_lua_string(cur).map_err(|e| format!("{e}"))?;
+        let start = read_i32_le(cur).map_err(|e| format!("{e}"))?;
+        let end = read_i32_le(cur).map_err(|e| format!("{e}"))?;
         locals.push((name, start, end));
     }
 
-    let n_upval_names = read_u32_le(cur).map_err(|e| format!("53 n_upval_names: {}", e))?;
+    let n_upval_names = read_u32_le(cur).map_err(|e| format!("53 n_upval_names: {e}"))?;
     let mut upvalue_names = Vec::with_capacity(n_upval_names as usize);
     for _ in 0..n_upval_names {
-        upvalue_names.push(read_lua_string(cur).map_err(|e| format!("{}", e))?);
+        upvalue_names.push(read_lua_string(cur).map_err(|e| format!("{e}"))?);
     }
 
     Ok(Lua53Proto {

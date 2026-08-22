@@ -23,11 +23,11 @@ use rustre_loader_ole::{
 struct Lcg(u64);
 
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self(0xDEAD_BEEF_CAFE_BABE)
     }
 
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
@@ -456,7 +456,7 @@ fn error_debug_nonempty() {
         OleError::UnsupportedVersion(2),
     ];
     for e in v {
-        assert!(!format!("{:?}", e).is_empty());
+        assert!(!format!("{e:?}").is_empty());
     }
 }
 
@@ -624,7 +624,7 @@ fn macro_extractor_default_works() {
 #[test]
 fn ole_stream_debug() {
     let s = OleStream { name: "x".into(), size: 1, start_sector: 2 };
-    assert!(!format!("{:?}", s).is_empty());
+    assert!(!format!("{s:?}").is_empty());
     let c = s.clone();
     assert_eq!(c.name, "x");
 }
@@ -732,7 +732,7 @@ fn cfb_reader_read_zero_size_stream() {
 #[test]
 fn cfb_reader_debug_impl() {
     let r = CfbReader::parse(make_full_cfb()).unwrap();
-    let s = format!("{:?}", r);
+    let s = format!("{r:?}");
     assert!(s.contains("CfbReader"));
 }
 
@@ -791,7 +791,7 @@ fn cfb_dir_entry_display() {
 // Send / Sync — threaded
 // ════════════════════════════════════════════════════════════════════════════
 
-fn assert_send_sync<T: Send + Sync>() {}
+const fn assert_send_sync<T: Send + Sync>() {}
 
 #[test]
 fn send_sync_types() {

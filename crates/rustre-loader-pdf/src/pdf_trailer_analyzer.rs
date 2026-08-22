@@ -410,7 +410,7 @@ fn extract_int_from_slice(data: &[u8], key: &[u8]) -> Option<i64> {
     let skip = slice.iter().take_while(|&&b| matches!(b, b' ' | b'\t' | b'\n' | b'\r')).count();
     let num_slice = &slice[skip..];
     let neg = num_slice.first() == Some(&b'-');
-    let start_digit = if neg { 1 } else { 0 };
+    let start_digit = usize::from(neg);
     let digits: &[u8] = &num_slice[start_digit..];
     let len = digits.iter().take_while(|&&b| b.is_ascii_digit()).count();
     if len == 0 {

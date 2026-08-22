@@ -407,8 +407,8 @@ pub fn detect_obfuscation(source: &str) -> Vec<ObfuscationPattern> {
     }
 
     // Reversed string pattern
-    if source.contains("split(\"\").reverse().join(\"\")") {
-        if let Some(pos) = find_token(source, "reverse()") {
+    if source.contains("split(\"\").reverse().join(\"\")")
+        && let Some(pos) = find_token(source, "reverse()") {
             patterns.push(ObfuscationPattern::new(
                 ObfuscationKind::ReversedString,
                 pos,
@@ -416,7 +416,6 @@ pub fn detect_obfuscation(source: &str) -> Vec<ObfuscationPattern> {
                 6,
             ));
         }
-    }
 
     patterns
 }
@@ -515,11 +514,10 @@ fn find_large_number(source: &str) -> Option<usize> {
             while i < bytes.len() && bytes[i].is_ascii_digit() {
                 i += 1;
             }
-            if let Ok(n) = std::str::from_utf8(&bytes[start..i]).unwrap_or("0").parse::<usize>() {
-                if n >= 10_000 {
+            if let Ok(n) = std::str::from_utf8(&bytes[start..i]).unwrap_or("0").parse::<usize>()
+                && n >= 10_000 {
                     return Some(n);
                 }
-            }
         } else {
             i += 1;
         }

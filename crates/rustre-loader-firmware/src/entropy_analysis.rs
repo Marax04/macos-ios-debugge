@@ -138,7 +138,7 @@ impl EntropyRegion {
 
     /// Return `true` if this region overlaps with `[other_start, other_end)`.
     #[must_use]
-    pub fn overlaps(&self, other_start: usize, other_end: usize) -> bool {
+    pub const fn overlaps(&self, other_start: usize, other_end: usize) -> bool {
         self.offset < other_end && self.end_offset() > other_start
     }
 }
@@ -379,7 +379,7 @@ impl EntropyAnalyzer {
             }
         }
         // Close last segment
-        let last_off = windows.last().map(|(o, _)| *o).unwrap_or(0);
+        let last_off = windows.last().map_or(0, |(o, _)| *o);
         let size = (last_off + self.window_size).min(data.len()) - seg_start;
         if size >= self.min_region_bytes || raw.is_empty() {
             raw.push(make_region(seg_start, size, seg_class, &entropies));

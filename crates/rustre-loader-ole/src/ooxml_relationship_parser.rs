@@ -715,7 +715,7 @@ mod tests {
     #[test]
     fn test_parse_content_types_vba_detected() {
         let types = parse_content_types(sample_content_types_xml()).unwrap();
-        let has_vba = types.iter().any(|ct| ct.is_vba());
+        let has_vba = types.iter().any(super::ContentType::is_vba);
         assert!(has_vba);
     }
 
@@ -820,6 +820,6 @@ mod tests {
 
     #[test]
     fn test_ooxml_rel_parser_default_instance() {
-        let _ = OoxmlRelParser::default();
+        let _ = OoxmlRelParser;
     }
 }

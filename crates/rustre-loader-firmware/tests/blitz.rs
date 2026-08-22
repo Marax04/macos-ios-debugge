@@ -883,7 +883,7 @@ fn firmware_error_display_all_variants() {
     assert!(s.contains("0x12") && s.contains("0x34"));
     assert!(FirmwareError::UnknownRecord(0xFE).to_string().contains("0xfe"));
     assert!(FirmwareError::ParseError("oops".into()).to_string().contains("oops"));
-    assert!(FirmwareError::AddressOverflow(7).to_string().contains("7"));
+    assert!(FirmwareError::AddressOverflow(7).to_string().contains('7'));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -967,7 +967,7 @@ fn firmware_arch_no_branches_no_regs() {
 
 #[test]
 fn firmware_loader_name_and_default() {
-    let l = FirmwareLoader::default();
+    let l = FirmwareLoader;
     assert_eq!(l.name(), "firmware");
     let l2 = FirmwareLoader::new();
     assert_eq!(l2.name(), "firmware");
@@ -1075,7 +1075,7 @@ async fn all_loaders_find_nested_returns_empty() {
 // Send / Sync bounds (Loader objects must be usable cross-thread)
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn assert_send_sync<T: Send + Sync>() {}
+const fn assert_send_sync<T: Send + Sync>() {}
 
 #[test]
 fn loaders_are_send_sync() {

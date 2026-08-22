@@ -1499,7 +1499,7 @@ impl EfiMemoryDescriptor {
         self.number_of_pages * 4096
     }
     #[must_use]
-    pub fn end_address(&self) -> u64 {
+    pub const fn end_address(&self) -> u64 {
         self.physical_start + self.size_bytes()
     }
     #[must_use]
@@ -1658,8 +1658,7 @@ pub fn read_cstring(data: &[u8], offset: usize) -> Option<String> {
     let end = data[offset..]
         .iter()
         .position(|&b| b == 0)
-        .map(|p| offset + p)
-        .unwrap_or(data.len());
+        .map_or(data.len(), |p| offset + p);
     std::str::from_utf8(&data[offset..end])
         .ok()
         .map(std::borrow::ToOwned::to_owned)

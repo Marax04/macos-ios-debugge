@@ -685,7 +685,7 @@ mod tests {
     #[test]
     fn cfg_display_works() {
         let cfg = CfgBuilder::new(0, vec![insn(0x20), insn(OP_RET0)]).build().unwrap();
-        let s = format!("{}", cfg);
+        let s = format!("{cfg}");
         assert!(!s.is_empty());
     }
 
@@ -700,7 +700,7 @@ mod tests {
     #[test]
     fn insn_count_in_block() {
         let cfg = CfgBuilder::new(0, vec![insn(0x20), insn(0x21), insn(OP_RET0)]).build().unwrap();
-        let total: u32 = cfg.blocks.iter().map(|b| b.insn_count()).sum();
+        let total: u32 = cfg.blocks.iter().map(super::LjBlock::insn_count).sum();
         assert_eq!(total, 3);
     }
 

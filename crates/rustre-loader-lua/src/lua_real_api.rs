@@ -4,7 +4,7 @@
 //! only what the parser found in them. Nothing here invents a prototype, a
 //! constant, an instruction or a string: when the input cannot be parsed the
 //! function returns a [`LuaLoaderError`] naming precisely what is wrong
-//! (bad magic, LuaJIT container, unsupported version byte, truncation).
+//! (bad magic, `LuaJIT` container, unsupported version byte, truncation).
 //!
 //! These are the functions the MCP layer must call instead of the `*::mock`
 //! constructors, which exist only for unit tests.
@@ -14,7 +14,7 @@ use crate::{
     ModuleDisasm, ProtoStats, disassemble_proto,
 };
 
-/// LuaJIT container magic (`\x1bLJ`), which the Lua 5.x loader cannot parse.
+/// `LuaJIT` container magic (`\x1bLJ`), which the Lua 5.x loader cannot parse.
 pub const LUAJIT_MAGIC: &[u8; 3] = b"\x1bLJ";
 
 /// Lua versions whose prototype layout this crate implements.
@@ -28,8 +28,8 @@ pub const SUPPORTED_VERSION_BYTES: [u8; 4] = [0x51, 0x52, 0x53, 0x54];
 ///
 /// # Errors
 /// * [`LuaLoaderError::TruncatedData`] – fewer than 5 bytes, so the version byte is absent.
-/// * [`LuaLoaderError::ParseError`] – the data is a LuaJIT chunk (`\x1bLJ`); the message
-///   names the LuaJIT bytecode version and the crate that can read it.
+/// * [`LuaLoaderError::ParseError`] – the data is a `LuaJIT` chunk (`\x1bLJ`); the message
+///   names the `LuaJIT` bytecode version and the crate that can read it.
 /// * [`LuaLoaderError::InvalidMagic`] – the first four bytes are not `\x1bLua`.
 /// * [`LuaLoaderError::UnsupportedVersion`] – the version byte is not one of
 ///   [`SUPPORTED_VERSION_BYTES`] (this includes Lua 5.0, `0x50`, whose prototype

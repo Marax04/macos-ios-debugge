@@ -99,7 +99,7 @@ pub struct ExtractionResult {
     /// Whether the entropy suggests this region is compressed / encrypted.
     pub high_entropy: bool,
     /// Nested extractions (populated only when recursion is enabled).
-    pub nested: Vec<ExtractionResult>,
+    pub nested: Vec<Self>,
 }
 
 impl fmt::Display for ExtractionResult {

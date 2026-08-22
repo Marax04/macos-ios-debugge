@@ -816,7 +816,7 @@ mod tests {
         let mut current = id_table_start + id_table_size;
         for (_, data) in props {
             // align to 4 bytes
-            while current % 4 != 0 {
+            while !current.is_multiple_of(4) {
                 current += 1;
             }
             value_offsets.push(current);
@@ -1083,7 +1083,7 @@ mod tests {
 
     #[test]
     fn test_ole_property_reader_default() {
-        let _reader = OlePropertyReader::default();
+        let _reader = OlePropertyReader;
     }
 
     #[test]

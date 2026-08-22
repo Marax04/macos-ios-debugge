@@ -196,8 +196,7 @@ impl SrecRecord {
         let line = line
             .iter()
             .rposition(|&b| b != b'\r' && b != b'\n')
-            .map(|e| &line[..e + 1])
-            .unwrap_or(line);
+            .map_or(line, |e| &line[..=e]);
 
         if line.len() < 4 || line[0] != b'S' {
             return Err(FirmwareError::InvalidMagic(
@@ -686,7 +685,7 @@ mod tests {
             sum += b as u32;
         }
         let cs = (!(sum & 0xFF)) as u8;
-        let mut line = format!("S1{:02X}{:04X}", byte_count, addr);
+        let mut line = format!("S1{byte_count:02X}{addr:04X}");
         for b in data {
             line.push_str(&format!("{b:02X}"));
         }
@@ -711,7 +710,7 @@ mod tests {
             sum += b as u32;
         }
         let cs = (!(sum & 0xFF)) as u8;
-        let mut line = format!("S3{:02X}{:08X}", byte_count, addr);
+        let mut line = format!("S3{byte_count:02X}{addr:08X}");
         for b in data {
             line.push_str(&format!("{b:02X}"));
         }
@@ -724,7 +723,7 @@ mod tests {
         let mut sum: u32 = byte_count as u32;
         sum += (addr >> 8) as u32 + (addr & 0xFF) as u32;
         let cs = (!(sum & 0xFF)) as u8;
-        format!("S9{:02X}{:04X}{:02X}", byte_count, addr, cs).into_bytes()
+        format!("S9{byte_count:02X}{addr:04X}{cs:02X}").into_bytes()
     }
 
     // ── SrecType ──────────────────────────────────────────────────────────────

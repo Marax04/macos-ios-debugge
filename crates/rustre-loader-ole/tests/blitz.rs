@@ -320,7 +320,7 @@ fn error_is_error_trait() {
 fn dir_reader_new_default() {
     let _a = OleDirectoryReader::new();
     let _b = OleDirectoryReader;
-    let _c = OleDirectoryReader::default();
+    let _c = OleDirectoryReader;
 }
 
 #[test]
@@ -366,7 +366,7 @@ fn ole_stream_clone_fields() {
 #[test]
 fn macro_extractor_new_default() {
     let _a = OleMacroExtractor::new();
-    let _b = OleMacroExtractor::default();
+    let _b = OleMacroExtractor;
 }
 
 #[test]

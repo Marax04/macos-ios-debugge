@@ -1,6 +1,6 @@
 //! Hardening tests for `rustre-loader-luajit`.
 //!
-//! The fixed-length sections of a LuaJIT prototype (bytecode words, upvalue
+//! The fixed-length sections of a `LuaJIT` prototype (bytecode words, upvalue
 //! descriptors) were already validated with a total-size check before the
 //! allocation. The **variable-length** constant sections — `KGC` (GC objects)
 //! and `KNum` (numeric constants) — were not: with no total size to check
@@ -21,7 +21,7 @@ fn kgc_table_huge_count_does_not_allocate() {
     assert!(parse_kgc_table(&data, 0, usize::MAX / 64).is_err());
 }
 
-/// A KNum table claiming a huge entry count over a tiny buffer.
+/// A `KNum` table claiming a huge entry count over a tiny buffer.
 #[test]
 fn knum_table_huge_count_does_not_allocate() {
     let data = [0x00u8, 0x01, 0x02, 0x03];
@@ -46,7 +46,7 @@ fn offset_past_end_does_not_panic() {
     let _ = parse_knum_table(&data, 999, 1_000_000);
 }
 
-/// Build a stripped LuaJIT header (magic + version + flags=STRIP).
+/// Build a stripped `LuaJIT` header (magic + version + flags=STRIP).
 fn lj_header() -> Vec<u8> {
     let mut v = Vec::new();
     v.extend_from_slice(&LJ_MAGIC);
@@ -81,7 +81,7 @@ fn proto_huge_kgc_count_does_not_allocate() {
     let _ = LjBytecode::parse(&data);
 }
 
-/// Random noise behind a valid LuaJIT magic must never panic.
+/// Random noise behind a valid `LuaJIT` magic must never panic.
 #[test]
 fn random_noise_never_panics() {
     let mut state = 0x1234_5678_9ABC_DEF0u64;

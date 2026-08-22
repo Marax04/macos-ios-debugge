@@ -40,7 +40,7 @@ pub enum PdfObject {
     Real(f64),
     String(PdfString),
     Name(String),
-    Array(Vec<PdfObject>),
+    Array(Vec<Self>),
     Dictionary(PdfDictionary),
     Stream(PdfStream),
     Reference(u32, u16),  // obj, gen
@@ -248,7 +248,7 @@ impl PdfParser {
     fn skip_whitespace(&mut self) {
         while let Some(b) = self.peek() {
             if b == b'%' {
-                while self.peek().map(|c| c != b'\n' && c != b'\r').unwrap_or(false) {
+                while self.peek().is_some_and(|c| c != b'\n' && c != b'\r') {
                     self.advance();
                 }
             } else if matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0C | 0x00) {
@@ -279,8 +279,7 @@ impl PdfParser {
     pub fn get_version(&self) -> Option<String> {
         if !self.check_magic() { return None; }
         let end = self.data[5..].iter().position(|&b| b == b'\n' || b == b'\r')
-            .map(|i| i + 5)
-            .unwrap_or(9.min(self.data.len()));
+            .map_or(9.min(self.data.len()), |i| i + 5);
         String::from_utf8(self.data[5..end].to_vec()).ok()
     }
 
@@ -295,11 +294,10 @@ impl PdfParser {
                 let after_str = String::from_utf8_lossy(after);
                 for line in after_str.lines() {
                     let trimmed = line.trim();
-                    if !trimmed.is_empty() && trimmed != "%%EOF" {
-                        if let Ok(offset) = trimmed.parse::<u64>() {
+                    if !trimmed.is_empty() && trimmed != "%%EOF"
+                        && let Ok(offset) = trimmed.parse::<u64>() {
                             return Ok(offset);
                         }
-                    }
                 }
             }
         }
@@ -381,12 +379,10 @@ impl PdfParser {
                 let (w0, w1, w2) = (w[0] as usize, w[1] as usize, w[2] as usize);
                 let entry_size = w0 + w1 + w2;
                 let data = s.decoded_data.as_deref().unwrap_or(&s.raw_data);
-                let index: Vec<i64> = s.dict.get_array("Index")
-                    .map(|arr| arr.iter().filter_map(|o| if let PdfObject::Integer(n) = o { Some(*n) } else { None }).collect())
-                    .unwrap_or_else(|| {
+                let index: Vec<i64> = s.dict.get_array("Index").map_or_else(|| {
                         let size = s.dict.get_int("Size").unwrap_or(0);
                         vec![0, size]
-                    });
+                    }, |arr| arr.iter().filter_map(|o| if let PdfObject::Integer(n) = o { Some(*n) } else { None }).collect());
                 let mut offset = 0;
                 let mut idx_pos = 0;
                 while idx_pos + 1 < index.len() {
@@ -438,7 +434,7 @@ impl PdfParser {
             }
             Some(b'<') => { self.advance(); Ok(PdfObject::String(self.parse_hex_string()?)) }
             Some(b'[') => { self.advance(); Ok(PdfObject::Array(self.parse_array()?)) }
-            Some(b'+') | Some(b'-') | Some(b'0'..=b'9') | Some(b'.') => {
+            Some(b'+' | b'-' | b'0'..=b'9' | b'.') => {
                 self.parse_number()
             }
             Some(b) => bail!("Unexpected byte in object: {:#02x} at pos {}", b, self.pos),
@@ -455,13 +451,12 @@ impl PdfParser {
             }
             if b == b'#' && self.pos + 2 < self.data.len() {
                 let h = &self.data[self.pos + 1..self.pos + 3];
-                if let Ok(s) = std::str::from_utf8(h) {
-                    if let Ok(byte) = u8::from_str_radix(s, 16) {
+                if let Ok(s) = std::str::from_utf8(h)
+                    && let Ok(byte) = u8::from_str_radix(s, 16) {
                         name.push(byte);
                         self.pos += 3;
                         continue;
                     }
-                }
             }
             name.push(b);
             self.advance();
@@ -590,7 +585,7 @@ impl PdfParser {
     fn parse_number(&mut self) -> Result<PdfObject> {
         let start = self.pos;
         let mut is_real = false;
-        if matches!(self.peek(), Some(b'+') | Some(b'-')) { self.advance(); }
+        if matches!(self.peek(), Some(b'+' | b'-')) { self.advance(); }
         while matches!(self.peek(), Some(b'0'..=b'9')) { self.advance(); }
         if self.peek() == Some(b'.') { is_real = true; self.advance(); }
         while matches!(self.peek(), Some(b'0'..=b'9')) { self.advance(); }
@@ -804,7 +799,7 @@ impl PdfDocument {
         // Count streams (rough heuristic from xref)
         let stream_count = 0; // would need to load all objects
 
-        Ok(PdfDocument {
+        Ok(Self {
             version,
             is_encrypted,
             is_linearized: false,
