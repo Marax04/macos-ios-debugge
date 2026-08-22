@@ -23,12 +23,12 @@ fn truncation_sweep() {
 fn mutation_sweep() {
     let d = base();
     let mut st = 0x1234_5678u64;
-    for _ in 0..150000 {
+    for _ in 0..150_000 {
         let mut m = d.clone();
         for _ in 0..6 {
             st ^= st << 13; st ^= st >> 7; st ^= st << 17;
-            let i = (st as usize) % 600.min(m.len());
-            m[i] = (st >> 32) as u8;
+            let i = usize::try_from(st % 0xFFFF_FFFF).unwrap_or(0) % 600.min(m.len());
+            m[i] = u8::try_from((st >> 32) & 0xFF).unwrap_or(0);
         }
         if let Ok(mut pe) = PeFile::parse(&m) {
             let _ = pe.parse_imports(&m);

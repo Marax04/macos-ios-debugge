@@ -15,9 +15,9 @@ use rustre_forensics_fs::ntfs_reader::{parse_mbr_partitions, NtfsVbr};
 use rustre_forensics_fs::ext4_reader::Ext4Parser;
 use rustre_forensics_fs::fat32_reader::{parse_directory, Fat32Bpb, Fat32Reader};
 use rustre_forensics_fs::fat_analyzer::FatAnalyzer;
-use rustre_forensics_fs::ntfs_mft_full::NtfsMftFull;
+use rustre_forensics_fs::ntfs_mft_full::{MftConfig, NtfsMftFull};
 
-fn rng(st: &mut u64) -> u64 {
+const fn rng(st: &mut u64) -> u64 {
     *st ^= *st << 13;
     *st ^= *st >> 7;
     *st ^= *st << 17;
@@ -37,8 +37,8 @@ fn sweep(seed: &[u8], f: impl Fn(&[u8])) {
         }
         for _ in 0..6 {
             let r = rng(&mut st);
-            let i = (r as usize) % m.len().min(768);
-            m[i] = (r >> 32) as u8;
+            let i = usize::try_from(r % 0xFFFF_FFFF).unwrap_or(0) % m.len().min(768);
+            m[i] = u8::try_from((r >> 32) & 0xFF).unwrap_or(0);
         }
         f(&m);
     }
@@ -135,7 +135,7 @@ fn ext4_sweep() {
 #[test]
 fn mft_full_sweep() {
     sweep(&mft_seed(), |b| {
-        let mut p = NtfsMftFull::new(Default::default());
+        let mut p = NtfsMftFull::new(MftConfig::default());
         let _ = p.parse_image(b);
     });
 }

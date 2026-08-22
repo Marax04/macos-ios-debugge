@@ -27,8 +27,8 @@ fn sweep(seed: &[u8], f: impl Fn(&[u8])) {
             st ^= st << 13;
             st ^= st >> 7;
             st ^= st << 17;
-            let i = (st as usize) % m.len().min(768);
-            m[i] = (st >> 32) as u8;
+            let i = usize::try_from(st % 0xFFFF_FFFF).unwrap_or(0) % m.len().min(768);
+            m[i] = u8::try_from((st >> 32) & 0xFF).unwrap_or(0);
         }
         f(&m);
     }
