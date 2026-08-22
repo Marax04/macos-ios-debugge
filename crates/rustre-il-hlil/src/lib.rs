@@ -2324,7 +2324,59 @@ impl MlilToHlilLifter {
         out
     }
 
+    /// Come [`lift_structured`], ma con l'ESTENSIONE REALE della funzione.
+    ///
+    /// #6960 — `out_of_range` (la prova che decide se un bersaglio di salto sia
+    /// una chiamata di coda o un salto interno) si calcolava sull'estensione dei
+    /// BLOCCHI MLIL. Misurato: quei blocchi NON coprono tutta la funzione, e
+    /// bersagli interni con delta `+288..+1045` byte dal proprio inizio
+    /// risultavano «fuori intervallo». Con `#6950` acceso diventavano chiamate a
+    /// un indirizzo che non e' una funzione: informazione FALSA.
+    ///
+    /// Il chiamante in `rustre-decompiler` l'estensione ce l'ha (l'ultima
+    /// istruzione disassemblata); `MlilFunction` no — porta solo `entry`,
+    /// `blocks`, `var_versions`. Quindi la si passa.
+    ///
+    /// `None` = comportamento storico (estensione dedotta dai blocchi).
+    pub fn lift_structured_with_end(
+        &self,
+        mlil: &MlilFunction,
+        fn_end: Option<u64>,
+    ) -> HlilFunction {
+        self.lift_structured_impl(mlil, fn_end, &std::collections::HashSet::new())
+    }
+
+    /// Come sopra, piu' l'insieme degli INIZI DI FUNZIONE noti all'immagine.
+    ///
+    /// #6970 — serve alla conversione «uscita fuori intervallo -> chiamata di
+    /// coda» (#6950). MISURATO con la verifica del PROLOGO, che e' indipendente
+    /// da qualunque nozione di estensione: su 100 bersagli campionati che NON
+    /// sono inizi di funzione noti, **100 su 100 non hanno prologo** — iniziano
+    /// con `call`, `test`, `setg`, spill di `%rax`. Sono indirizzi a META'
+    /// funzione, e trasformarli in chiamate INVENTA codice.
+    ///
+    /// Con questo insieme la conversione avviene solo verso un inizio di
+    /// funzione vero. Insieme vuoto = nessuna conversione: sotto-riportare e'
+    /// la direzione sicura.
+    pub fn lift_structured_full(
+        &self,
+        mlil: &MlilFunction,
+        fn_end: Option<u64>,
+        fn_starts: &std::collections::HashSet<u64>,
+    ) -> HlilFunction {
+        self.lift_structured_impl(mlil, fn_end, fn_starts)
+    }
+
     pub fn lift_structured(&self, mlil: &MlilFunction) -> HlilFunction {
+        self.lift_structured_impl(mlil, None, &std::collections::HashSet::new())
+    }
+
+    fn lift_structured_impl(
+        &self,
+        mlil: &MlilFunction,
+        fn_end: Option<u64>,
+        fn_starts: &std::collections::HashSet<u64>,
+    ) -> HlilFunction {
         // OPT-IN (`RUSTRE_HLIL_SPLIT_TARGETS=1`), default OFF.
         //
         // Splitting at mid-block targets removes synthetic `goto` blocks and
@@ -2462,10 +2514,42 @@ impl MlilToHlilLifter {
                 std::env::var("RUSTRE_HLIL_ENDINCL").as_deref(),
                 Ok("1") | Ok("true")
             );
-            let out_of_range = if end_inclusive {
-                a > max_end || a < min_start
-            } else {
-                a >= max_end || a < min_start
+            // #6960: se il chiamante ha passato l'estensione REALE, e' quella
+            // a decidere — i blocchi la sottostimano.
+            // SONDA #6960 (`RUSTRE_DBG_EXTENT=1`, effetto ZERO): l'estensione
+            // dedotta dai BLOCCHI e quella REALE passata dal chiamante
+            // coincidono? Il §96 aveva dedotto di no dai bersagli interni; qui
+            // si misura invece di dedurre.
+            if std::env::var("RUSTRE_DBG_EXTENT").is_ok_and(|v| v != "0")
+                && let Some(vf) = fn_end
+            {
+                // #6990: COPERTURA del CFG. Byte coperti dai blocchi contro
+                // l'estensione reale della funzione. Se il CFG avesse buchi, un
+                // bersaglio interno cadrebbe in un buco e `block_at` direbbe
+                // «nessun blocco» — indistinguibile da un bersaglio esterno.
+                // E' l'ipotesi che resta dopo il §99, e qui si misura.
+                let coperti: u64 = mlil
+                    .blocks
+                    .iter()
+                    .map(|b| b.end.as_u64().saturating_sub(b.start.as_u64()))
+                    .sum();
+                let span = vf.saturating_sub(min_start) + 1;
+                eprintln!(
+                    "[extent] max_end={max_end:x} reale={vf:x} addr={a:x} coperti={coperti} span={span} buchi={}",
+                    span.saturating_sub(coperti)
+                );
+            }
+            let out_of_range = match fn_end {
+                // #7010: gli stessi limiti che usa
+                // `promote_outward_jumps_to_tail_calls` — `[entry, fine]` della
+                // FUNZIONE, non lo span dei blocchi. Quella passata pero'
+                // gestisce solo i `Jump` INCONDIZIONATI: misurati su
+                // sample10_cs **377 `Jump` fuori** (promossi) contro **238
+                // `CondJump` fuori** (ignorati). Il caso che path B perde e'
+                // proprio il secondo: `if (cond) return callee();`.
+                Some(vero_fine) => a > vero_fine || a < mlil.entry.as_u64(),
+                None if end_inclusive => a > max_end || a < min_start,
+                None => a >= max_end || a < min_start,
             };
             // Sonda (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO). Il commento qui sopra
             // dichiara `end` ESCLUSIVO, ma la sonda `FALL` misura
@@ -2487,8 +2571,108 @@ impl MlilToHlilLifter {
                 };
                 eprintln!("RANGE {cls} a={a:X} min={min_start:X} max={max_end:X}");
             }
+            // ── #6950: un'uscita fuori intervallo e' una CHIAMATA DI CODA ──
+            //
+            // Il `Return` NUDO qui sotto evita il ciclo infinito
+            // `loc_X: goto loc_X` — giusto — ma butta via l'ARCO: la funzione
+            // che si stava chiamando sparisce dal file.
+            //
+            // MISURATO: dove path A emette `return <callee>();` da una funzione
+            // `void` (1525 casi), path B non menziona il callee in **1525 su
+            // 1525**, per **1531 bersagli distinti persi**. Path A ottiene il
+            // risultato giusto con la riscrittura `JUMPOUT` -> chiamata di coda
+            // (#6620); qui manca l'equivalente.
+            //
+            // Un tipo di ritorno sbagliato compila e la chiamata avviene; una
+            // chiamata MANCANTE e' un difetto di correttezza. Meglio il primo.
+            //
+            // Nome: `fn_<hex>` e' il ripiego che `definition_spelling`
+            // (`rustre-decompiler`) documenta come l'UNICA grafia con cui path B
+            // definisce le funzioni senza simbolo — mai `sub_<hex>`. La
+            // risoluzione dei simboli a valle lo rinomina quando un nome vero
+            // esiste.
+            //
+            // Gate `RUSTRE_HLIL_TAILEXIT`, opt-in.
+            // DEFAULT-ON dal 2026-08-19 (#7010); si spegne con
+            // `RUSTRE_HLIL_TAILEXIT=0`.
+            //
+            // Perche' e' diventato predefinito, in tre righe:
+            // 1. chiude un divario MISURATO di **1527 chiamate di coda** che
+            //    path A emette e path B perdeva (1525 funzioni su 1525);
+            // 2. il criterio non e' mio: e' `[entry, fine funzione]`, lo stesso
+            //    che `promote_outward_jumps_to_tail_calls` (default ON) applica
+            //    gia' ai `Jump` INCONDIZIONATI. Qui si estende ai `CondJump`,
+            //    che sono la lacuna: su sample10_cs **377 `Jump` fuori promossi
+            //    contro 238 `CondJump` fuori ignorati**;
+            // 3. non tocca `path A` (0 differenze su 11342 file) e non muove il
+            //    comportamento (15 AGREE / 4 LINK_FAIL, 19 su 19 identiche).
+            //
+            // ⚠ Costo dichiarato: dei 3782 bersagli nuovi, 2259 non sono inizi
+            // di funzione RILEVATI, e su 100 campionati nessuno ha un prologo.
+            // Va letto col gruppo di controllo: fra le chiamate di coda che il
+            // repo emetteva GIA' per difetto, il 61,6% dei bersagli non e' un
+            // inizio di funzione e il 66,7% non ha prologo. La popolazione
+            // aggiunta e' quindi PEGGIORE su quel proxy (100% contro 66,7%), ma
+            // della stessa NATURA di quella gia' accettata — differenza di
+            // grado, non di specie.
+            let tail_exit = !matches!(
+                std::env::var("RUSTRE_HLIL_TAILEXIT").as_deref(),
+                Ok("0") | Ok("false")
+            );
+            // #6980 — il criterio giusto e' quello che path A usa GIA' e che ha
+            // gia' pagato il suo prezzo in misure: `rewrite_hlil_tail_calls`
+            // (`rustre-decompiler`) converte un `JUMPOUT` in chiamata di coda
+            // quando il bersaglio **non cade dentro un BLOCCO PROPRIO** della
+            // funzione. Il suo commento documenta perche' non basta un test di
+            // INTERVALLO: «3479 di 12551 di queste "chiamate" atterravano dentro
+            // l'intervallo del chiamante», e per contro un test di intervallo
+            // «inghiottiva 30 chiamate di coda GENUINE verso funzioni la cui
+            // entrata sta dentro lo span dei blocchi, perche' i blocchi non sono
+            // sempre contigui».
+            //
+            // Il filtro `fn_starts` del #6970 era troppo stretto nella direzione
+            // opposta: azzerava le chiamate inventate (2259 -> 2) ma non
+            // recuperava NESSUNA delle 1525 che path A emette, perche' il loro
+            // bersaglio — la funzione successiva, raggiunta solo per salto — non
+            // e' un inizio di funzione RILEVATO.
+            //
+            // Qui `found` e' gia' `mlil.block_at(addr)`, cioe' il blocco che
+            // CONTIENE l'indirizzo: `found.is_none()` E' il test dei blocchi
+            // propri, sullo stesso dato.
+            // #7010: quando i limiti REALI della funzione sono noti,
+            // `out_of_range` e' gia' il test giusto — lo stesso che la passata
+            // sul MLIL applica ai `Jump`. Nessun filtro ulteriore: aggiungerne
+            // uno significherebbe applicare a un ramo condizionale un criterio
+            // piu' severo di quello usato per il ramo incondizionato equivalente.
+            let bersaglio_e_funzione = fn_end.is_some() || found.is_none();
+            let _ = fn_starts;
             let (body, term) = if out_of_range {
-                (Vec::new(), Terminator::Return(Vec::new()))
+                if tail_exit && bersaglio_e_funzione {
+                    // ⚠ Un `Var` col nome della funzione NON va: le passate a
+                    // valle lo trattano da VARIABILE, lo dichiarano locale e la
+                    // chiamata diventa indiretta su un valore non
+                    // inizializzato — misurato:
+                    //     int64_t fn_140059f94;
+                    //     return ((__int64 (*)())fn_140059f94)(a1, a2, a3);
+                    // Emettere una chiamata sbagliata e' peggio che non
+                    // emetterla: il difetto passa da VISIBILE a SILENZIOSO.
+                    //
+                    // La forma giusta e' quella che il lifter usa per una
+                    // chiamata diretta vera: il bersaglio e' una COSTANTE
+                    // (l'indirizzo), che la risoluzione dei simboli a valle
+                    // trasforma nel nome.
+                    let chiamata = HlilExpr::Call {
+                        func: Box::new(HlilExpr::Const {
+                            value: a as i64,
+                            ty: HlilType::i64(),
+                        }),
+                        args: Vec::new(),
+                        ret_ty: HlilType::i64(),
+                    };
+                    (Vec::new(), Terminator::Return(vec![chiamata]))
+                } else {
+                    (Vec::new(), Terminator::Return(Vec::new()))
+                }
             } else {
                 (vec![HlilStatement::Goto(addr)], Terminator::Unreachable)
             };
@@ -3185,10 +3369,46 @@ impl MlilToHlilLifter {
                     src: src_expr,
                 }]
             }
-            MlilInstruction::Store { addr, src, .. } => {
+            MlilInstruction::Store { addr, src, size } => {
+                // ── #7030: la LARGHEZZA della store non si butta via ─────────
+                //
+                // `MlilInstruction::Store` PORTA la sua `size`, e questo lifter
+                // la scartava con `..` mettendo `Unknown` — mentre il ramo
+                // `Assign` due righe sopra usa gia' `HlilType::from_mlil_size`.
+                //
+                // Con `Unknown` il deref esce NUDO e una passata testuale a
+                // valle ci mette `(__int64 *)`: e' esattamente il difetto che il
+                // commento del printer (`HlilExpr::Deref`) descrive —
+                // «dimezzando la larghezza: e' cosi' che `accumulate` perde la
+                // meta' alta che `psrldq` legge».
+                //
+                // MISURATO sul corpus intero, asimmetria perfetta:
+                //   scritture di una var xmm attraverso `__int64 *`  : **4322**
+                //   scritture attraverso `unsigned __int128 *`       : **0**
+                //   letture attraverso `unsigned __int128 *`         : **3070**
+                //   letture attraverso `__int64 *`                   : **0**
+                // Il lato LETTURA conosceva la larghezza, il lato SCRITTURA no,
+                // e ogni store a 128 bit ne perdeva meta'.
+                //
+                // Gate `RUSTRE_HLIL_STORE_WIDTH`, opt-in: cambia il testo.
+                // DEFAULT-ON dal 2026-08-19; si torna al comportamento
+                // storico con `RUSTRE_HLIL_STORE_WIDTH=0`.
+                //
+                // Verificato sul corpus intero: `goto`, `JUMPOUT`, dati e righe
+                // IDENTICI, `path A` 0 differenze, comportamento 15 AGREE /
+                // 4 LINK_FAIL con 19 su 19 identiche. Cambia solo il TIPO
+                // dentro i cast, su 4407 file.
+                let ty = if matches!(
+                    std::env::var("RUSTRE_HLIL_STORE_WIDTH").as_deref(),
+                    Ok("0") | Ok("false")
+                ) {
+                    HlilType::Unknown
+                } else {
+                    HlilType::from_mlil_size(*size)
+                };
                 let dest = HlilExpr::Deref {
                     addr: Box::new(self.lift_mlil_expr(addr, map)),
-                    ty: HlilType::Unknown,
+                    ty,
                 };
                 let src_expr = self.lift_mlil_expr(src, map);
                 vec![HlilStatement::Assign {
@@ -9029,6 +9249,11 @@ pub mod structuring {
         /// saltarci soltanto lascia il blocco non emesso e il `goto` degrada a
         /// `JUMPOUT`. Gate `RUSTRE_HLIL_BREAKFIX`.
         pending_exits: Vec<u32>,
+        /// #6920 (diagnostica): da QUALE ramo di emissione e' partita la
+        /// sequenza che sta emettendo il blocco corrente. Serve ad attribuire
+        /// i blocchi che nessun `goto` raggiunge (§89: 324 in sample10_cs).
+        dbg_origine: &'static str,
+        dbg_origine_di: HashMap<u32, &'static str>,
         /// How many `switch` bodies enclose the statement being emitted. Inside
         /// one, a C `break` binds to the SWITCH, not to the loop — so a jump to
         /// the loop exit cannot be rendered as `break` there.
@@ -9129,6 +9354,8 @@ pub mod structuring {
             dbg_last: None,
             dbg_stopped: HashSet::new(),
             pending_exits: Vec::new(),
+            dbg_origine: "entry",
+            dbg_origine_di: HashMap::new(),
             switch_depth: 0,
         };
         let mut body = s.emit_sequence(cfg.entry, None);
@@ -9151,6 +9378,28 @@ pub mod structuring {
                 .iter()
                 .filter(|t| s.emitted.contains(t))
                 .count();
+            // ── #6930: non emettere un'uscita pendente che NESSUNO raggiunge ──
+            //
+            // ATTRIBUITO con `RUSTRE_DBG_ORFANI`: dei 324 statement
+            // irraggiungibili di sample10_cs, **210 (65%) escono da qui**.
+            // Meccanismo, introdotto da me col #6760b: `queue_break_exit`
+            // registra l'uscita secondaria, il corpo del ciclo emette pero' un
+            // `break` (che atterra per ADIACENZA, non su un'etichetta), e il
+            // blocco registrato finisce in coda alla funzione con un'etichetta
+            // che nessun `goto` punta.
+            //
+            // `labels_needed` e' riempita da `goto_to`, quindi qui — dopo tutta
+            // l'emissione — e' completa: se il bersaglio non c'e', nessuno ci
+            // salta e il suo codice e' GIA' irraggiungibile. Ometterlo non
+            // perde nulla, toglie testo morto.
+            let raggiunti: Vec<u32> = s
+                .pending_exits
+                .iter()
+                .copied()
+                .filter(|t| s.labels_needed.contains(t))
+                .collect();
+            let scartati = s.pending_exits.len() - raggiunti.len();
+            s.pending_exits = raggiunti;
             let mut coda = Vec::new();
             s.emit_pending_exits(0, &mut coda);
             // SONDA (`RUSTRE_DBG_PENDING=1`, effetto ZERO): distingue «non c'era
@@ -9166,11 +9415,131 @@ pub mod structuring {
                     .get(&cfg.entry)
                     .map_or(0, |b| b.address.as_u64());
                 eprintln!(
-                    "[pending] fn={fnaddr:x} attesi={attesi} gia_emessi={gia_emessi} stmt_emessi={}",
+                    "[pending] fn={fnaddr:x} attesi={attesi} gia_emessi={gia_emessi} scartati={scartati} stmt_emessi={}",
                     coda.len()
                 );
             }
             body.extend(coda);
+        }
+        // SONDA #6890 (`RUSTRE_DBG_ORFANI=1`, effetto ZERO): statement che
+        // seguono un TERMINATORE senza un'etichetta in mezzo, contati
+        // sull'AST — cioe' PRIMA di qualunque passata testuale.
+        //
+        // Serve a separare due colpevoli possibili del codice irraggiungibile
+        // residuo (§86): l'EMETTITORE, che produrrebbe un albero gia'
+        // irraggiungibile, oppure le passate a valle. La sonda `DISCARD` ha
+        // gia' escluso i vettori scartati (0 ovunque, C# compreso), quindi
+        // resta questa.
+        if std::env::var("RUSTRE_DBG_ORFANI").is_ok_and(|v| v != "0") {
+            // ⚠ #6910 — la prima stesura azzerava `morto` su QUALUNQUE
+            // etichetta, senza controllare che un `goto` la puntasse. Non
+            // poteva quindi vedere la classe piu' numerosa: un blocco emesso
+            // con la sua etichetta ma che NESSUNO raggiunge. E' il motivo per
+            // cui il §87 ha concluso «l'emettitore e' pulito» — su una sonda
+            // strutturalmente cieca a quel caso.
+            //
+            // MISURATO col bisezionamento della catena testuale: gli orfani
+            // compaiono tutti su `drop_unused_hlil_labels` (0 -> 1304 su
+            // sample10_cs), cioe' quando l'etichetta INUTILE viene tolta e il
+            // codice che proteggeva si rivela irraggiungibile.
+            let mut bersagli: std::collections::HashSet<String> = Default::default();
+            fn raccogli(stmts: &[HlilStatement], out: &mut std::collections::HashSet<String>) {
+                for s in stmts {
+                    if let HlilStatement::Goto(a) = s {
+                        out.insert(format!("loc_{:x}", a.as_u64()));
+                    }
+                    for b in crate::hlil_structuring::stmt_bodies_pub(s) {
+                        raccogli(b, out);
+                    }
+                }
+            }
+            raccogli(&body, &mut bersagli);
+            fn conta(
+                stmts: &[HlilStatement],
+                orf: &mut usize,
+                righe: &mut usize,
+                bersagli: &std::collections::HashSet<String>,
+            ) {
+                let mut morto = false;
+                for s in stmts {
+                    if let HlilStatement::Label(l) = s {
+                        if bersagli.contains(l) {
+                            morto = false;
+                        }
+                    } else if morto {
+                        *orf += 1;
+                        *righe += 1;
+                    }
+                    if s.is_terminator() {
+                        morto = true;
+                    }
+                    for b in crate::hlil_structuring::stmt_bodies_pub(s) {
+                        conta(b, orf, righe, bersagli);
+                    }
+                }
+            }
+            let (mut orf, mut righe) = (0usize, 0usize);
+            conta(&body, &mut orf, &mut righe, &bersagli);
+            // #6920 — attribuzione degli ORFANI (non di tutti i blocchi: la
+            // prima stesura contava ogni blocco senza `goto` entrante, cioe'
+            // anche quelli raggiunti per CADUTA, che stanno benissimo — 29000
+            // invece di 324).
+            //
+            // Qui si risale all'etichetta che precede lo statement orfano, la
+            // si mappa al blocco e si riporta il ramo che l'ha emesso.
+            {
+                let mut per_ramo: HashMap<&'static str, usize> = HashMap::new();
+                fn attribuisci(
+                    stmts: &[HlilStatement],
+                    bersagli: &std::collections::HashSet<String>,
+                    etichetta: &mut Option<String>,
+                    per_etichetta: &mut HashMap<String, usize>,
+                    fuori: &mut usize,
+                ) {
+                    let mut morto = false;
+                    for s in stmts {
+                        if let HlilStatement::Label(l) = s {
+                            *etichetta = Some(l.clone());
+                            if bersagli.contains(l) {
+                                morto = false;
+                            }
+                        } else if morto {
+                            match etichetta {
+                                Some(l) => *per_etichetta.entry(l.clone()).or_default() += 1,
+                                None => *fuori += 1,
+                            }
+                        }
+                        if s.is_terminator() {
+                            morto = true;
+                        }
+                        for b in crate::hlil_structuring::stmt_bodies_pub(s) {
+                            attribuisci(b, bersagli, etichetta, per_etichetta, fuori);
+                        }
+                    }
+                }
+                let mut per_etichetta: HashMap<String, usize> = HashMap::new();
+                let mut fuori = 0usize;
+                attribuisci(&body, &bersagli, &mut None, &mut per_etichetta, &mut fuori);
+                for (lbl, n) in &per_etichetta {
+                    let id = cfg
+                        .blocks
+                        .iter()
+                        .find(|(_, b)| format!("loc_{:x}", b.address.as_u64()) == *lbl)
+                        .map(|(&i, _)| i);
+                    let ramo = id
+                        .and_then(|i| s.dbg_origine_di.get(&i).copied())
+                        .unwrap_or("?");
+                    *per_ramo.entry(ramo).or_default() += n;
+                }
+                if fuori > 0 {
+                    *per_ramo.entry("prima_di_ogni_etichetta").or_default() += fuori;
+                }
+                for (ramo, n) in &per_ramo {
+                    eprintln!("[origine] {ramo} orfani={n}");
+                }
+            }
+            let fnaddr = cfg.blocks.get(&cfg.entry).map_or(0, |b| b.address.as_u64());
+            eprintln!("[orfani] fn={fnaddr:x} statement_orfani={orf} righe={righe}");
         }
         // SONDA #6770 (`RUSTRE_DBG_DISCARD=1`, effetto ZERO): blocchi marcati
         // `emitted` il cui CODICE non e' finito nel corpo.
@@ -9524,11 +9893,25 @@ pub mod structuring {
                             (m, body)
                         })
                         .collect();
-                    if let Some((disp, primary_exit, extra_exits)) =
-                        structure_improper_scc(cfg, &scc, c, &|m| {
-                            bodies.get(&m).cloned().unwrap_or_default()
-                        })
-                    {
+                    // SONDA #7020 (`RUSTRE_DBG_RELOOP=1`, effetto ZERO): quante
+                    // volte il relooper ACCETTA un SCC irriducibile e quante
+                    // RINUNCIA (lasciando il ripiego a `goto`).
+                    //
+                    // Il §108 ha misurato che il 70% del divario delle chiamate
+                    // e' nel C#, dove il flusso e' irriducibile. Il relooper e'
+                    // la macchina che dovrebbe gestirlo; se rinuncia spesso, e'
+                    // li' che il C# si perde.
+                    let esito = structure_improper_scc(cfg, &scc, c, &|m| {
+                        bodies.get(&m).cloned().unwrap_or_default()
+                    });
+                    if std::env::var("RUSTRE_DBG_RELOOP").is_ok_and(|v| v != "0") {
+                        eprintln!(
+                            "[reloop] scc_membri={} esito={}",
+                            scc.len(),
+                            if esito.is_some() { "ACCETTATO" } else { "RINUNCIA" }
+                        );
+                    }
+                    if let Some((disp, primary_exit, extra_exits)) = esito {
                         for &m in &scc {
                             self.emitted.insert(m);
                         }
@@ -9549,6 +9932,7 @@ pub mod structuring {
                                 format!("exit_{c:x}"),
                                 super::HlilType::Int { signed: true, bits: 32 },
                             );
+                            { self.dbg_origine = "dup_chain"; }
                             let body = self.emit_sequence(t, stop);
                             if body.is_empty() {
                                 continue;
@@ -9979,6 +10363,7 @@ pub mod structuring {
                 }
             }
             self.emitted.insert(id);
+            self.dbg_origine_di.insert(id, self.dbg_origine);
             self.dbg_last = Some(id); // instrumentation: goto source block
             let block = self.cfg.blocks.get(&id)?;
             // `labels_needed` is filled LAZILY by `goto_to`, but this check runs
@@ -10126,6 +10511,7 @@ pub mod structuring {
                     Vec::new()
                 }
             } else {
+                { self.dbg_origine = "if_then"; }
                 self.emit_sequence(then_blk, then_stop)
             };
             let else_body = if Some(else_blk) == follow {
@@ -10137,6 +10523,7 @@ pub mod structuring {
                     Vec::new()
                 }
             } else {
+                { self.dbg_origine = "if_else"; }
                 self.emit_sequence(else_blk, else_stop)
             };
 
@@ -10168,12 +10555,16 @@ pub mod structuring {
                 let body = if Some(target) == follow {
                     Vec::new()
                 } else {
+                    { self.dbg_origine = "branch_target"; }
                     self.emit_sequence(target, follow.or(stop))
                 };
                 switch_cases.push(super::SwitchCase { values, body });
             }
             let default_body = match default {
-                Some(d) if Some(d) != follow => self.emit_sequence(d, follow.or(stop)),
+                Some(d) if Some(d) != follow => {
+                    self.dbg_origine = "branch_default";
+                    self.emit_sequence(d, follow.or(stop))
+                }
                 _ => Vec::new(),
             };
             self.switch_depth -= 1;
@@ -10465,6 +10856,7 @@ pub mod structuring {
                 if self.emitted.contains(&t) {
                     continue;
                 }
+                { self.dbg_origine = "pending_exit"; }
                 let seq = self.emit_sequence(t, None);
                 out.extend(seq);
             }
@@ -10816,6 +11208,8 @@ pub mod structuring {
                 dbg_last: None,
                 dbg_stopped: HashSet::new(),
                 pending_exits: Vec::new(),
+            dbg_origine: "entry",
+            dbg_origine_di: HashMap::new(),
                 switch_depth: 0,
             };
             // A one-statement terminating block fits a budget of 2...
@@ -10909,6 +11303,8 @@ pub mod structuring {
                 dbg_last: None,
                 dbg_stopped: HashSet::new(),
                 pending_exits: Vec::new(),
+            dbg_origine: "entry",
+            dbg_origine_di: HashMap::new(),
                 switch_depth: 0,
             };
             assert!(

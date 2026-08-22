@@ -1033,6 +1033,12 @@ pub type ArityCache = (
     HashMap<u64, usize>,
     HashMap<u64, String>,
     HashMap<u64, (usize, usize, usize, usize, usize)>,
+    // #6970: gli INIZI DI FUNZIONE disassemblati. `callee_arities` non basta:
+    // e' indicizzata per bersaglio di CHIAMATA, e una funzione raggiunta solo
+    // per SALTO (il caso tipico della chiamata di coda verso la funzione
+    // successiva) non compare. Qui ci sono tutte quelle che
+    // `arities_from_seeds` ha disassemblato.
+    std::collections::HashSet<u64>,
 );
 
 /// Same as [`decompile_function_in_load_bounded`] but accepts the whole-image
@@ -1244,12 +1250,15 @@ pub fn decompile_function_in_load_cached(
             pipeline.set_callee_arities(c.0.clone());
             pipeline.set_callee_return_types(c.1.clone());
             pipeline.set_callsite_argc(c.2.clone());
+            pipeline.set_fn_starts(c.3.clone());
         }
         None => {
-            let (arities, ret_types, argc) = callee_arities_for(load, &instructions, bits);
+            let (arities, ret_types, argc, starts) =
+                callee_arities_for(load, &instructions, bits);
             pipeline.set_callee_arities(arities);
             pipeline.set_callee_return_types(ret_types);
             pipeline.set_callsite_argc(argc);
+            pipeline.set_fn_starts(starts);
         }
     }
     drop(perf_ar);
@@ -1676,7 +1685,7 @@ fn arities_from_seeds(
             argc.len()
         );
     }
-    (out, ret_types, argc)
+    (out, ret_types, argc, bodies.keys().copied().collect())
 }
 
 /// Scan a function's instructions for rip-relative data references whose
@@ -2976,7 +2985,7 @@ mod arity_memo_equivalence_tests {
         let load = load_binary(&path).expect("load");
         let bits = x86_bits_for(&load);
         let starts: Vec<u64> = detect_functions_in_load(&load).iter().map(|f| f.start.0).collect();
-        let (img_ar, img_rt, _img_argc) = image_callee_arities(&load, &starts, bits);
+        let (img_ar, img_rt, _img_argc, _img_starts) = image_callee_arities(&load, &starts, bits);
 
         // Sample real functions (cap the count so the test stays fast — the
         // per-function path is the slow one we are removing).
@@ -2987,7 +2996,7 @@ mod arity_memo_equivalence_tests {
             else {
                 continue;
             };
-            let (fn_ar, fn_rt, _fn_argc) = callee_arities_for(&load, &instrs, bits);
+            let (fn_ar, fn_rt, _fn_argc, _fn_starts) = callee_arities_for(&load, &instrs, bits);
             for (k, v) in &fn_ar {
                 assert_eq!(
                     img_ar.get(k),

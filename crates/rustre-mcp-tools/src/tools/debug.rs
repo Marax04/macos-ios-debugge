@@ -5264,19 +5264,22 @@ mod tests {
     /// `None` means both "the caller did not send this" and "the caller sent
     /// something I cannot read". A request carrying `len: "sixteen"` is answered
     /// as though it had said nothing, with 16 bytes of memory and no hint that
-    /// the argument was discarded.
+    /// the argument was discarded — the caller reads the reply as the answer to
+    /// the question they asked.
     ///
-    /// The truncation is silent in a second way: `debug.set_watchpoint` does
-    /// `u64_arg_aliased(&args, "size", 8) as u8`, so `size: 256` and
-    /// `size: 4096` both arrive as **0**. A zero-length watchpoint is not the
-    /// watchpoint anyone asked for, and nothing between the request and the
-    /// debug registers says the number changed.
+    /// The truncation is worse because it is silent in a second way:
+    /// `debug.set_watchpoint` does `u64_arg_aliased(&args, "size", 8) as u8`, so
+    /// `size: 256` and `size: 4096` both arrive as **0**. A zero-length
+    /// watchpoint is not the watchpoint anyone asked for, and nothing between
+    /// the request and the debug registers says the number changed.
     #[test]
     fn a_malformed_numeric_argument_is_not_silently_defaulted() {
+        // Sanity: the shapes clients really send still work.
         assert_eq!(u64_arg_checked(&json!({"len": 32}), "len", 16).unwrap(), 32);
         assert_eq!(u64_arg_checked(&json!({"len": "0x20"}), "len", 16).unwrap(), 32);
         assert_eq!(u64_arg_checked(&json!({}), "len", 16).unwrap(), 16, "absent means default");
 
+        // Present and unreadable is an ERROR, not a default.
         for bad in [json!({"len": "sixteen"}), json!({"len": -4}), json!({"len": null})] {
             let err = u64_arg_checked(&bad, "len", 16)
                 .expect_err("a value the tool cannot read must not be replaced by the default");
@@ -5287,6 +5290,8 @@ mod tests {
             );
         }
 
+        // And a value that does not fit the field it is going into is refused
+        // rather than wrapped: `4096 as u8` is 0, a watchpoint watching nothing.
         assert_eq!(u8_arg_checked(&json!({"size": 8}), "size", 8).unwrap(), 8);
         for wide in [json!({"size": 256}), json!({"size": 4096})] {
             let err = u8_arg_checked(&wide, "size", 8)

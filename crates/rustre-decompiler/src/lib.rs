@@ -642,6 +642,8 @@ pub struct DecompilerContext {
     /// evidenza che possa SMENTIRE un parametro dedotto dal corpo del callee.
     /// ⚠ Assenza = nessuna evidenza, non zero.
     pub callsite_argc: Arc<HashMap<u64, (usize, usize, usize, usize, usize)>>,
+    /// #6970: inizi di funzione noti (vedi `ArityCache`).
+    pub fn_starts: Arc<std::collections::HashSet<u64>>,
 }
 
 impl DecompilerContext {
@@ -662,6 +664,7 @@ impl DecompilerContext {
             jump_tables: Vec::new(),
             callee_arities: Arc::new(HashMap::new()),
             callsite_argc: Arc::new(HashMap::new()),
+            fn_starts: Arc::new(std::collections::HashSet::new()),
             published_arity: Arc::new(std::collections::HashSet::new()),
         }
     }
@@ -10457,6 +10460,24 @@ fn drop_numeric_lvalue_assignments(code: &str) -> String {
 /// emitted, **zero** match their target's definition and 7675 do not — a
 /// pre-existing defect this pass must not enlarge. Addresses with no recovered
 /// symbol keep `sub_HEX`, which is then the real definition spelling.
+/// Ultimo indirizzo appartenente alla funzione, dedotto dalle istruzioni
+/// DISASSEMBLATE invece che dai blocchi MLIL.
+///
+/// #6960 — serve al lifter per distinguere un salto INTERNO da una chiamata di
+/// coda. I blocchi MLIL sottostimano l'estensione: misurati bersagli interni
+/// con delta `+288..+1045` byte dall'inizio della loro stessa funzione,
+/// classificati «fuori intervallo». Questa e' l'informazione che il chiamante ha
+/// e il lifter no.
+///
+/// `None` quando non ci sono istruzioni: il lifter torna al comportamento
+/// storico invece di ricevere un limite inventato.
+fn fine_reale_funzione(instructions: &[Instruction]) -> Option<u64> {
+    instructions
+        .iter()
+        .map(|i| i.address.as_u64() + i.size as u64 - 1)
+        .max()
+}
+
 /// The spelling the function at `va` is DEFINED under.
 ///
 /// Two traps, both found by reading emitted C rather than by reasoning:
@@ -19244,6 +19265,7 @@ pub struct DecompilerPipeline {
     callee_arities_shared: Arc<HashMap<u64, usize>>,
     /// #6800: vedi `set_callsite_argc`.
     callsite_argc: Arc<HashMap<u64, (usize, usize, usize, usize, usize)>>,
+    fn_starts: Arc<std::collections::HashSet<u64>>,
     /// D18: VA → predicted return type of that callee, used to forward-declare
     /// a named callee with a prototype matching its definition.
     callee_return_types: HashMap<u64, String>,
@@ -19771,6 +19793,11 @@ impl DecompilerPipeline {
     /// callee. Assenza dalla mappa = NESSUNA EVIDENZA (funzione mai chiamata
     /// nell'immagine), non «zero argomenti»: chi la consuma deve lasciarla
     /// stare, non azzerare.
+    /// #6970: inizi di funzione noti all'immagine.
+    pub fn set_fn_starts(&mut self, m: std::collections::HashSet<u64>) {
+        self.fn_starts = Arc::new(m);
+    }
+
     pub fn set_callsite_argc(&mut self, m: HashMap<u64, (usize, usize, usize, usize, usize)>) {
         self.callsite_argc = Arc::new(m);
     }
@@ -19832,6 +19859,7 @@ impl DecompilerPipeline {
         ctx.data_oracle = self.data_oracle.clone();
         ctx.callee_arities = Arc::clone(&self.callee_arities_shared);
         ctx.callsite_argc = Arc::clone(&self.callsite_argc);
+        ctx.fn_starts = Arc::clone(&self.fn_starts);
         self.seed_crt_arities(&mut ctx, instructions);
         ctx.jump_tables = self.jump_tables.clone();
 
@@ -20049,6 +20077,7 @@ impl DecompilerPipeline {
         ctx.data_oracle = self.data_oracle.clone();
         ctx.callee_arities = Arc::clone(&self.callee_arities_shared);
         ctx.callsite_argc = Arc::clone(&self.callsite_argc);
+        ctx.fn_starts = Arc::clone(&self.fn_starts);
         self.seed_crt_arities(&mut ctx, instructions);
         ctx.jump_tables = self.jump_tables.clone();
         let perf_fn_start = crate::perf::enabled().then(Instant::now);
@@ -22773,6 +22802,129 @@ fn drop_unused_hlil_declarations(code: &str) -> String {
 /// every loop degrade into an opaque jump). Emitting unconditionally is
 /// correct but noisy: +322 lines on sample1. Now that the whole text is
 /// available, the unused ones can be removed exactly.
+/// Conta le CHIAMATE che seguono un terminatore senza un'etichetta in mezzo,
+/// sul TESTO. Sonda #6900: serve a bisezionare la catena di passate testuali
+/// per trovare quale crea il codice irraggiungibile (§88: 423 sul corpus,
+/// mentre l'AST ne ha 6 e dopo la pipeline HLIL 14).
+fn orfani_testo(code: &str) -> usize {
+    // ⚠ La prima stesura non tracciava la PROFONDITA' delle graffe: dopo un
+    // `return` dentro un `if` contava come morto anche tutto cio' che sta
+    // fuori, e dava 40874 dove la misura corretta ne conta ~150. Un contatore
+    // di raggiungibilita' su testo C senza le graffe non misura nulla.
+    let mut n = 0usize;
+    let mut depth: i32 = 0;
+    let mut morto: std::collections::HashSet<i32> = std::collections::HashSet::new();
+    for l in code.lines() {
+        let t = l.trim();
+        let apre = l.matches('{').count() as i32;
+        let chiude = l.matches('}').count() as i32;
+        if chiude > 0 {
+            morto.retain(|&d| d < depth);
+            depth -= chiude;
+        }
+        if t.is_empty() || t == "{" || t == "}" {
+            depth += apre;
+            continue;
+        }
+        let etichetta = (t.ends_with(':') && !t.contains(' ')) || t.starts_with("case ") || t == "default:";
+        if etichetta {
+            morto.clear();
+            depth += apre;
+            continue;
+        }
+        if morto.contains(&depth)
+            && t.contains('(')
+            && !t.starts_with("if")
+            && !t.starts_with("while")
+            && !t.starts_with("for")
+            && !t.starts_with("switch")
+            && !t.starts_with('}')
+        {
+            n += 1;
+        }
+        if !morto.contains(&depth)
+            && (t.starts_with("return") || t == "break;" || t == "continue;" || t.starts_with("goto "))
+        {
+            morto.insert(depth);
+        }
+        depth += apre;
+    }
+    n
+}
+
+/// Solleva le pseudo-funzioni SSE di path B alle INTRINSECHE vere (#7040).
+///
+/// Path B emette funzioni col nome del MNEMONICO (`pcmpeqb(a, b)`), path A le
+/// intrinseche (`_mm_cmpeq_epi8(a, b)`). Misurato sul corpus: **891 usi in 338
+/// file** non hanno nemmeno una dichiarazione — dichiarazioni implicite, che
+/// `check.sh` non vede perche' compila con `-w`. Le intrinseche vere sono invece
+/// dichiarate da `<emmintrin.h>`, gia' nel prologo di `ida_defs.h`.
+///
+/// La mappa e' confermata DUE VOLTE, non assunta:
+/// * **empiricamente**: per ogni pseudo-nome, quale `_mm_*` compare con
+///   cardinalita' IDENTICA nel file path A corrispondente — `pshufd` ->
+///   `_mm_shuffle_epi32` in 51 file su 53, `punpcklbw` -> `_mm_unpacklo_epi8`
+///   in 63 su 65, `psrld` -> `_mm_srli_epi32` in 12 su 12;
+/// * **dalla corrispondenza ISA**, che concorda con la misura in ogni caso.
+///
+/// L'ORDINE DEGLI OPERANDI e' verificato leggendo lo stesso file nei due
+/// percorsi — il rischio che questa sessione ha visto sbagliare tre volte:
+/// ```text
+/// path B:  var_xmm0 = pcmpeqb(var_xmm0, var_xmm1);
+/// path A:  xmm0     = _mm_cmpeq_epi8(xmm0, xmm1);
+/// ```
+/// Identico. Tutte le coppie hanno la stessa arieta', quindi la riscrittura e'
+/// una pura sostituzione di NOME.
+///
+/// ⚠ Le conversioni SCALARI (`cvtsi2sd`, `cvttsd2si`, `cvtsi2ss`) sono
+/// ESCLUSE: la misura non trova per loro nessun candidato con cardinalita'
+/// coerente, perche' path A le rende come cast e non come intrinseche. Mapparle
+/// sarebbe indovinare.
+fn raise_sse_pseudo_intrinsics(code: &str, enabled: bool) -> String {
+    if !enabled || !code.contains("xmm") {
+        return code.to_string();
+    }
+    const MAPPA: [(&str, &str); 10] = [
+        ("pcmpeqb", "_mm_cmpeq_epi8"),
+        ("pcmpeqw", "_mm_cmpeq_epi16"),
+        ("pcmpgtb", "_mm_cmpgt_epi8"),
+        ("pmovmskb", "_mm_movemask_epi8"),
+        ("pshufd", "_mm_shuffle_epi32"),
+        ("pshuflw", "_mm_shufflelo_epi16"),
+        ("punpcklbw", "_mm_unpacklo_epi8"),
+        ("punpcklwd", "_mm_unpacklo_epi16"),
+        ("psrld", "_mm_srli_epi32"),
+        ("pslld", "_mm_slli_epi32"),
+    ];
+    let mut out = code.to_string();
+    for (pseudo, vero) in MAPPA {
+        if !out.contains(pseudo) {
+            continue;
+        }
+        // Solo come CHIAMATA (`nome(`) e solo a inizio parola: un identificatore
+        // che contenga la stessa sequenza non va toccato.
+        let mut nuovo = String::with_capacity(out.len());
+        let b = out.as_bytes();
+        let mut i = 0usize;
+        while i < b.len() {
+            let resto = &out[i..];
+            if resto.starts_with(pseudo)
+                && (i == 0 || !is_word_char(b[i - 1]))
+                && b.get(i + pseudo.len()) == Some(&b'(')
+            {
+                nuovo.push_str(vero);
+                i += pseudo.len();
+                continue;
+            }
+            let ch = out[i..].chars().next().unwrap_or(' ');
+            nuovo.push(ch);
+            i += ch.len_utf8();
+        }
+        out = nuovo;
+    }
+    out
+}
+
 fn drop_unused_hlil_labels(code: &str) -> String {
     drop_unused_hlil_labels_keep(code, &std::collections::HashSet::new())
 }
@@ -26448,6 +26600,7 @@ impl PipelineBuilder {
             callee_arities: HashMap::new(),
             callee_arities_shared: Arc::new(HashMap::new()),
             callsite_argc: Arc::new(HashMap::new()),
+            fn_starts: Arc::new(std::collections::HashSet::new()),
             callee_return_types: HashMap::new(),
         }
     }
@@ -27459,6 +27612,28 @@ fn build_mlil_cfg(
         })
         .collect();
 
+    // SONDA #7000 (`RUSTRE_DBG_COPERTURA=1`, effetto ZERO): quante istruzioni
+    // ENTRANO nel costruttore e quante finiscono nei blocchi.
+    //
+    // Il §100 ha misurato che i blocchi coprono l'83,3% dello span della
+    // funzione e che ZERO funzioni su 230 hanno copertura piena. Quella misura
+    // e' indiretta (byte di span contro byte di blocchi); questa e' diretta e
+    // dice se le istruzioni si perdano QUI, in `analyze_cfg_stream`, oppure
+    // prima.
+    if std::env::var("RUSTRE_DBG_COPERTURA").is_ok_and(|v| v != "0") {
+        let entrate: std::collections::HashSet<u64> =
+            flat.iter().map(|(a, _)| a.as_u64()).collect();
+        let nei_blocchi: std::collections::HashSet<u64> = blocks
+            .iter()
+            .flat_map(|b| b.instrs.iter().map(|i| i.address.as_u64()))
+            .collect();
+        eprintln!(
+            "[copertura] fn={func_start:x}..{func_end:x} indirizzi_entrati={} nei_blocchi={} PERSI={}",
+            entrate.len(),
+            nei_blocchi.len(),
+            entrate.difference(&nei_blocchi).count()
+        );
+    }
     let blocks = eliminate_dead_flag_writes_cfg(blocks);
     promote_outward_jumps_to_tail_calls(blocks, func_start, func_end)
 }
@@ -27524,6 +27699,32 @@ fn promote_outward_jumps_to_tail_calls(
         // Per riprovare serve un predicato che distingua **jump table da tail
         // call** meglio dei successori (il CFG non li ha ancora risolti quando
         // questa passata gira). **Non riaggiungere senza quel predicato.**
+        // SONDA #7010 (`RUSTRE_DBG_OUTJUMP=1`, effetto ZERO): per ogni ultimo
+        // statement di blocco, che TIPO di trasferimento e' e se il bersaglio
+        // cade fuori dalla funzione. Questa passata promuove solo `Jump`
+        // incondizionati; il caso che path B perde (§94) e' pero'
+        // `if (cond) return callee();`, cioe' un salto CONDIZIONALE con un ramo
+        // fuori. La sonda dice se e' quella la lacuna.
+        if std::env::var("RUSTRE_DBG_OUTJUMP").is_ok_and(|v| v != "0")
+            && let Some(l) = b.instrs.last()
+        {
+            let fuori = |v: &u64| !(func_start..=func_end).contains(v);
+            let (kind, out) = match &l.instr {
+                MlilInstruction::Jump { dest } => match dest {
+                    MlilExpr::Const { value, .. } => ("Jump", fuori(value)),
+                    _ => ("Jump/indiretto", false),
+                },
+                MlilInstruction::CondJump { true_dest, false_dest, .. } => (
+                    "CondJump",
+                    fuori(&true_dest.as_u64()) || fuori(&false_dest.as_u64()),
+                ),
+                MlilInstruction::Ret { .. } => ("Ret", false),
+                MlilInstruction::Call { .. } => ("Call", false),
+                MlilInstruction::TailCall { .. } => ("TailCall", false),
+                _ => ("altro", false),
+            };
+            eprintln!("[outjump] {kind} fuori={out}");
+        }
         let Some(last) = b.instrs.last_mut() else { continue };
         let MlilInstruction::Jump { dest } = &last.instr else { continue };
         let MlilExpr::Const { value, .. } = dest else { continue };
@@ -29525,7 +29726,17 @@ impl DecompilerPass for IlAnalysisPass {
                 // funzionalita' vive spesso come gate spento dentro `lib.rs`, non
                 // come modulo separato.
                 let mut hlil_func =
-                    rustre_il_hlil::MlilToHlilLifter::default().lift_structured(&mlil_func);
+                    rustre_il_hlil::MlilToHlilLifter::default().lift_structured_full(
+                        &mlil_func,
+                        fine_reale_funzione(instructions),
+                        // #6970: gli INIZI DI FUNZIONE noti. `callee_arities` e'
+                        // indicizzata per VA di bersaglio di chiamata, quindi le
+                        // sue chiavi SONO inizi di funzione — l'unica fonte di
+                        // questo tipo disponibile qui. Una funzione mai chiamata
+                        // (solo saltata) non c'e', e allora non si converte:
+                        // sotto-riportare e' la direzione sicura.
+                        &ctx.fn_starts,
+                    );
 
                 // ── The crate's result leaves this block as DATA, not only text ──
                 // Read off the `HlilFunction` AST (`all_statements` /
@@ -29842,6 +30053,34 @@ impl DecompilerPass for IlAnalysisPass {
                 }
                 let _hlil_report = rustre_il_hlil::hlil_structuring::StructuringPipeline::new()
                     .run_with_params(&mut hlil_func, &cc_params);
+                // SONDA #6900 (`RUSTRE_DBG_ORFANI2=1`, effetto ZERO): stessa
+                // misura di `RUSTRE_DBG_ORFANI` ma DOPO la pipeline di
+                // strutturazione HLIL. E' il punto intermedio che mancava fra
+                // l'emettitore (6 orfani, §87) e il testo finale (423, §88):
+                // dice se a crearli sia la pipeline oppure le passate testuali
+                // piu' a valle in questo file.
+                if std::env::var("RUSTRE_DBG_ORFANI2").is_ok_and(|v| v != "0") {
+                    fn conta(stmts: &[rustre_il_hlil::HlilStatement], orf: &mut usize) {
+                        use rustre_il_hlil::HlilStatement as S;
+                        let mut morto = false;
+                        for s in stmts {
+                            if matches!(s, S::Label(_)) {
+                                morto = false;
+                            } else if morto {
+                                *orf += 1;
+                            }
+                            if s.is_terminator() {
+                                morto = true;
+                            }
+                            for b in rustre_il_hlil::hlil_structuring::stmt_bodies_pub(s) {
+                                conta(b, orf);
+                            }
+                        }
+                    }
+                    let mut orf = 0usize;
+                    conta(&hlil_func.body, &mut orf);
+                    eprintln!("[orfani2] fn={:x} orfani_dopo_pipeline={orf}", ctx.address);
+                }
 
                 // ── rustre-decompiler-cfs: structure the HLIL body via the CFS ──
                 // Build a minimal CFG from the HLIL body statements so the
@@ -30148,12 +30387,18 @@ impl DecompilerPass for IlAnalysisPass {
                     let hlil_pseudo_code = cast_hlil_bare_deref_calls(&hlil_pseudo_code);
                     let hlil_pseudo_code = cast_hlil_called_integers(&hlil_pseudo_code);
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 06 prima di drop_unused_hlil_labels: ret={}", hlil_pseudo_code.matches("return ").count()); }
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 01_dopo_drop_labels orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     let hlil_pseudo_code = drop_unused_hlil_labels(&hlil_pseudo_code);
                     // B declares 35 locals where A declares 26 for the same
                     // function and none of them is dead — B simply does not
                     // inline single-use temporaries. That is the whole of its
                     // remaining +40% line count, and A already has the pass.
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 07 prima di inline_hlil_single_use_temps: ret={}", hlil_pseudo_code.matches("return ").count()); }
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 01a_prima_inline_temps orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     let hlil_pseudo_code = inline_hlil_single_use_temps(&hlil_pseudo_code);
                     // Cosmetic: collapse redundant doubled parens `((X))` ->
                     // `(X)` (precedence-neutral, see fn doc).
@@ -30168,6 +30413,9 @@ impl DecompilerPass for IlAnalysisPass {
                     // and temp-inliner above can EMPTY a then-arm after the AST
                     // flip already ran; re-flip at text level (see fn doc).
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 09 prima di flip_empty_hlil_then_branches: ret={}", hlil_pseudo_code.matches("return ").count()); }
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 01b_prima_flip orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     let hlil_pseudo_code = flip_empty_hlil_then_branches(&hlil_pseudo_code);
                     // …and then the FULL empty-if cleanup path `A` already has.
                     // `flip_empty_hlil_then_branches` only covers shape 1
@@ -30186,6 +30434,9 @@ impl DecompilerPass for IlAnalysisPass {
                     // `JUMPOUT` (see the fn doc). Runs after the label-dropping
                     // and folding passes, so it sees the final label set.
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 11 prima di break_self_referential_gotos: ret={}", hlil_pseudo_code.matches("return ").count()); }
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 01c_prima_break_selfref orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     let hlil_pseudo_code = break_self_referential_gotos(&hlil_pseudo_code);
                     // LAST, after every producer: declaration-hygiene net
                     // (dedupe + synthesise missing `flag_*`). Running it before
@@ -30194,6 +30445,9 @@ impl DecompilerPass for IlAnalysisPass {
                     // came back — the same "repair pass must run last" rule the
                     // main path documents in CLAUDE.md.
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 12 prima di fix_hlil_local_decls: ret={}", hlil_pseudo_code.matches("return ").count()); }
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 01d_prima_fix_decls orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     let hlil_pseudo_code = fix_hlil_local_decls(&hlil_pseudo_code);
                     // …and fold empty ifs ONE more time. `fix_hlil_local_decls`
                     // drops duplicate declarations by line, and its scan covers
@@ -30218,6 +30472,9 @@ impl DecompilerPass for IlAnalysisPass {
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 14 prima di rewrite_hlil_intrinsic_calls: ret={}", hlil_pseudo_code.matches("return ").count()); }
                     let hlil_pseudo_code = rewrite_hlil_intrinsic_calls(&hlil_pseudo_code);
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 15 prima di hoist_late_hlil_decls: ret={}", hlil_pseudo_code.matches("return ").count()); }
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 01e_prima_hoist orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     let hlil_pseudo_code = hoist_late_hlil_decls(&hlil_pseudo_code);
                     // Truly last: drop duplicate `loc_X:` labels (two blocks at
                     // one address) so the file compiles. No-op on any file that
@@ -30236,6 +30493,9 @@ impl DecompilerPass for IlAnalysisPass {
                     let hlil_pseudo_code =
                         apply_recovered_hlil_name(&hlil_pseudo_code, ctx.address, &ctx.func_name);
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 17 prima di drop_unreachable_gotos_after_return: ret={}", hlil_pseudo_code.matches("return ").count()); }
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 02_prima_drop_unreach orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     let hlil_pseudo_code = drop_unreachable_gotos_after_return(&hlil_pseudo_code);
                     // Trailing jumps no path can reach (both if/else arms
                     // return). Needs real reachability, not adjacency.
@@ -30279,6 +30539,9 @@ impl DecompilerPass for IlAnalysisPass {
                     // goto rimosso** — coerente con il rapporto 3,1 documentato
                     // come il migliore su questo fronte. Dati, `JUMPOUT` e
                     // `var_sp` invariati; path A invariato.
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 03_prima_taildup orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     let hlil_pseudo_code = duplicate_return_tails(
                         &hlil_pseudo_code,
                         !matches!(
@@ -30294,7 +30557,40 @@ impl DecompilerPass for IlAnalysisPass {
                     // quella qui sotto. Per attaccare i corpi ai `case` serve
                     // agire a livello HLIL, dove le etichette esistono ancora.
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 22 prima di drop_unused_hlil_labels: ret={}", hlil_pseudo_code.matches("return ").count()); }
+                    // ⛔ RIPORTATO A OPT-IN il 2026-08-19 (#7050) dopo essere
+                    // stato acceso per default per un round. NON riaccenderlo
+                    // senza risolvere prima il difetto qui sotto.
+                    //
+                    // Il #7040 aveva verificato comportamento (19 su 19
+                    // identiche), `path A` (0 differenze), `goto`, `JUMPOUT` e
+                    // conteggi — e aveva concluso «ogni controllo passa». NON
+                    // aveva mai COMPILATO i file che modificava. Misurato poi:
+                    // su 120 file toccati, con il gate ACCESO ne compilano
+                    // **0**, con il gate spento **110**.
+                    //
+                    // Causa, letta dagli errori di gcc: le intrinseche vogliono
+                    // `__m128i`, mentre le variabili del modello sono
+                    // `uint64_t` («incompatible type for argument 1 of
+                    // `_mm_cmpeq_epi8`»), e `pshufd(dst,src,imm)` ha TRE
+                    // argomenti contro i DUE di `_mm_shuffle_epi32`. Prima la
+                    // pseudo-funzione passava come dichiarazione implicita, che
+                    // `-w` accetta; ora e' un errore DURO.
+                    //
+                    // E' lo stesso limite che fa escludere `punpckhqdq` e
+                    // `aesenc` da `define_simd_bodies`: il modello tiene i 64
+                    // bit BASSI, le intrinseche ne vogliono 128. Il nome giusto
+                    // non basta se il TIPO non lo e'.
+                    let hlil_pseudo_code = raise_sse_pseudo_intrinsics(
+                        &hlil_pseudo_code,
+                        matches!(
+                            std::env::var("RUSTRE_HLIL_SSE_INTRIN").as_deref(),
+                            Ok("1") | Ok("true")
+                        ),
+                    );
                     let hlil_pseudo_code = drop_unused_hlil_labels(&hlil_pseudo_code);
+                    if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
+                        eprintln!("[testo] 04_finale orfani={}", orfani_testo(&hlil_pseudo_code));
+                    }
                     // Both goto-dropping passes above can leave a branch whose
                     // ONLY statement was the jump, i.e. an empty `else { }`. The
                     // earlier `fold_empty_if_branches` ran before they did, so it

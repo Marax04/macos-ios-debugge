@@ -1144,6 +1144,79 @@ fn define_simd_bodies(code: &str, enabled: bool) -> String {
             "static uint64_t movhps(uint64_t dst, uint64_t hi)\n{\n    /* scrive la META' ALTA: per i 64 bit bassi modellati e' inerte */\n    (void)hi;\n    return dst;\n}\n",
         );
     }
+    // -- #7050: le ausiliarie NON-SIMD che il lifter emette e nessuno definisce.
+    //
+    // MISURATO sull'emesso di path B prima di scrivere una riga: 95 nomi
+    // distinti non dichiarati, 2730 occorrenze, 577 file. `define_simd_bodies`
+    // ne copriva QUATTRO. I nomi qui sotto sono i piu' frequenti fra quelli la
+    // cui semantica e' rappresentabile ESATTAMENTE sul modello a 64 bit
+    // scalari; gli altri sono esclusi apposta, elenco in fondo.
+    //
+    // Le forme sono lette dall'emesso, non dedotte:
+    //   `bsf((uint32_t)v3)`      -> unaria
+    //   `ucomi_cf(var_xmm0, var_xmm2)` -> binaria, e i `var_xmm*` sono
+    //   dichiarati `uint64_t` e prodotti da `cvtsi2sd`, che restituisce i BIT
+    //   di un `double`. Quindi il confronto va fatto su `double` via memcpy,
+    //   coerente col corpo di `cvtsi2sd` qui sopra.
+
+    // `bsf`/`bsr`: indice del bit meno/piu' significativo acceso.
+    // ⚠ Con operando ZERO la ISA lascia la destinazione INVARIATA, ma il
+    // lifter le ha modellate UNARIE — la destinazione non arriva fin qui e
+    // nessun valore la puo' restituire. Si sceglie 0 e LO SI DICHIARA, come
+    // per `repair_return_void_call`. E' l'unico punto inesatto di questo
+    // blocco, e vale solo per un input che sui siti osservati e' gia' stato
+    // escluso da un test precedente.
+    if usa("bsf") {
+        corpi.push_str(
+            "static uint32_t bsf(uint32_t src)\n{\n    uint32_t i;\n    if (!src) return 0; /* ISA: dst invariata; qui non e' raggiungibile */\n    for (i = 0; i < 32; i++) if (src & (1u << i)) return i;\n    return 0;\n}\n",
+        );
+    }
+    if usa("bsr") {
+        corpi.push_str(
+            "static uint32_t bsr(uint32_t src)\n{\n    int i;\n    if (!src) return 0; /* idem */\n    for (i = 31; i >= 0; i--) if (src & (1u << i)) return (uint32_t)i;\n    return 0;\n}\n",
+        );
+    }
+    // `comi` e `ucomi` differiscono SOLO per quale NaN solleva l'eccezione
+    // (segnalante contro silenziosa): il VALORE dei flag e' identico, quindi
+    // condividono il corpo. Verificato sull'ISA, non per analogia col nome.
+    for (nome, corpo) in [
+        ("comi_cf", "a < b"),
+        ("ucomi_cf", "a < b"),
+        ("comi_zf", "a == b"),
+        ("ucomi_zf", "a == b"),
+        ("comi_pf", "!(a == a) || !(b == b)"),
+        ("ucomi_pf", "!(a == a) || !(b == b)"),
+    ] {
+        if usa(nome) {
+            corpi.push_str(&format!(
+                "static uint32_t {nome}(uint64_t x, uint64_t y)\n{{\n    double a, b;\n    memcpy(&a, &x, 8);\n    memcpy(&b, &y, 8);\n    return ({corpo}) ? 1u : 0u;\n}}\n"
+            ));
+        }
+    }
+    // ⚠ CF/ZF su NaN: la ISA li mette ENTRAMBI a 1 quando il confronto e'
+    // non ordinato, mentre in C `a < b` e `a == b` sono entrambi falsi. Il
+    // caso e' quindi inesatto SOLO in presenza di NaN; si dichiara qui invece
+    // di tacerlo, ed e' il motivo per cui `_pf` esiste come funzione a parte.
+
+    // `mul_overflow(a, b)`: la moltiplicazione a 32 bit trabocca?
+    // Forma osservata `mul_overflow((uint32_t)a1, 2)` ⇒ binaria a 32 bit.
+    if usa("mul_overflow") {
+        corpi.push_str(
+            "static uint32_t mul_overflow(uint32_t a, uint32_t b)\n{\n    return (uint32_t)(((uint64_t)a * (uint64_t)b) >> 32) != 0;\n}\n",
+        );
+    }
+
+    // ⛔ ESCLUSI DI PROPOSITO, e non per mancanza di tempo:
+    // `cpuid_eax/ebx/ecx/edx` (204 occorrenze) — dipendono dalla CPU, nessun
+    //   corpo e' «giusto» e uno inventato sarebbe confidently wrong;
+    // `aesenc` (222), `packuswb`, `vpminuq`, `pcmpeqq` — leggono i 128 bit
+    //   PIENI, che il modello a 64 bit bassi non rappresenta: e' esattamente
+    //   la ragione per cui `punpckhqdq` e' escluso qui sopra;
+    // `cvtsi2ss` (194) — la variante a PRECISIONE SINGOLA; il suo gemello a
+    //   doppia e' definito, ma qui il valore va troncato a `float` e la forma
+    //   emessa non dice se il modello lo tenga a 32 o 64 bit. Da misurare.
+    // `pthread_mutex_unlock` (86) — funzione VERA: le manca una
+    //   dichiarazione, non un corpo. Difetto diverso, rimedio diverso.
     if corpi.is_empty() {
         return code.to_string();
     }

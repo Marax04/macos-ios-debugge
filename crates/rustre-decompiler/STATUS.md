@@ -6683,7 +6683,7 @@ cinque le modalita', 1337 test passati.
 ---
 
 
-<!-- ULTIMO-RAPPORTO: 83 -->
+<!-- ULTIMO-RAPPORTO: 114 -->
 
 ## Come si conta (regola dell'utente, 2026-08-18)
 
@@ -6697,6 +6697,11 @@ round (57→83), perche' descriveva il contenuto e non l'INNESCO. Riparata cosi'
 1. dopo aver aggiunto un round qui sopra, `grep -c '^# Round ' STATUS.md`;
 2. confrontarlo con `ULTIMO-RAPPORTO` in questa riga;
 3. se la differenza e' >= 5, scrivere il rapporto e **aggiornare il numero**.
+
+⚠ SECONDO fallimento (round 99, ritardo di 6 round): il marcatore c'era e non
+l'ho CONSULTATO. Un innesco funziona solo se lo si legge. Il controllo va fatto
+NELLO STESSO comando che aggiunge il round a questo file — non «dopo», che si
+traduce in mai.
 
 Il marcatore sta QUI e non in memoria apposta: sopravvive alla compattazione del
 contesto, che e' cio' che ha fatto fallire la prima versione della regola.
@@ -6858,4 +6863,2156 @@ scrivere e' quella che le affianca**, non un'ipotesi su quale delle due sbagli.
 
 ---
 
+# Round 86 — 2026-08-18 — Attribuzione del codice irraggiungibile residuo
+
+## 86.1 Dove sta, oggi (predefinito, corpus intero)
+
+| | chiamate | regioni | righe |
+|---|---|---|---|
+| **IN MEZZO (difetto vero)** | **425** | 617 | 4229 |
+| in coda (over-scan di `.pdata`) | 1483 | 878 | 6492 |
+
+Per bucket, solo il difetto vero:
+
+| bucket | chiamate |
+|---|---|
+| sample10_cs | **151** |
+| sample5_cs | **134** |
+| sample7_cpp | **90** |
+| sample3_rust / sample8_rust | 20 / 20 |
+| sample9_go / sample4_go | 7 / 3 |
+| **i cinque bucket C** | **0** |
+
+**C# vale 285 su 425 (67%)**, C++ 90. I programmi C sono puliti.
+
+## 86.2 Attribuzione, sui tre bucket peggiori (375 di riferimento)
+
+| configurazione | chiamate |
+|---|---|
+| `TOPTEST_BREAK` spento | **655** |
+| **predefinito** | **375** |
+| `TAILDUP` spento | 358 (−17) |
+| `C_GOTO_REMOVAL` spento | 375 (nessun effetto) |
+| `FLAGDCE`+`TEMPPROP` spenti | 375 (nessun effetto) |
+
+Tre letture:
+
+* **la correzione #6760 vale molto piu' di quanto avessi misurato**: su questi
+  bucket porta 655 -> 375, cioe' **−280 chiamate irraggiungibili**. Il §61
+  l'aveva misurata su un campione dominato dai bucket C, dove il difetto quasi
+  non c'e';
+* `TAILDUP` ne CREA 17 (4,5%): duplicando code puo' lasciare un blocco senza
+  ingressi. E' il costo del suo −1700 goto, e va scritto;
+* le passate su flag e temporanei non c'entrano nulla, come atteso — non toccano
+  la struttura.
+
+## 86.3 Un'ipotesi caduta
+
+Sospettavo che il residuo nascesse dalle passate che TOLGONO salti
+(`C_GOTO_REMOVAL`, `TAILDUP`) lasciando blocchi senza `goto` che li raggiunga, e
+da `drop_unused_hlil_labels` che poi ne scarta l'etichetta.
+
+Misurato: `C_GOTO_REMOVAL` non ne causa **nessuna**, `TAILDUP` diciassette.
+`drop_unused_hlil_labels` non puo' essere la causa — toglie l'etichetta a un
+blocco che nessun `goto` raggiunge gia', quindi la irraggiungibilita' e'
+anteriore.
+
+## 86.4 Cosa resta
+
+I 375 vengono da altri percorsi di emissione, e attribuirli richiede una sonda
+che marchi da QUALE ramo di `emit_*` esce ogni blocco. Non l'ho scritta in
+questo giro: sarebbe la terza sonda della sessione su questo emettitore, e prima
+vale la pena chiedersi se il difetto in C# non abbia una causa comune con la
+sua irriducibilita' (2364 goto e 13 SCC irriducibili misurati al §68).
+
+**Forma tipica dei residui**, letta su due casi:
+
+```c
+    sp = (sp + 56);
+    return;
+    v4 = (__int64)&off_1400E7E70;     // <- orfano: nessuna etichetta,
+    v4 = (v4 + 12);                   //    nessun goto che ci arrivi
+    while (1) { ... }
+```
+
+Blocco emesso DOPO il blocco di uscita, senza etichetta. Stessa famiglia del
+#6760 ma prodotta da rami diversi dell'emettitore.
+
+---
+
+# Round 87 — ⚠ La metrica delle «chiamate perse» conta due cose diverse
+
+## 87.1 L'emettitore produce un albero PULITO
+
+Sonda nuova `RUSTRE_DBG_ORFANI` (effetto zero verificato): conta gli statement
+che seguono un terminatore senza un'etichetta in mezzo, **sull'AST**, cioe'
+prima di qualunque passata testuale.
+
+| bucket | funzioni | statement orfani sull'AST |
+|---|---|---|
+| sample10_cs | 2263 | **6** |
+| sample7_cpp | 994 | **0** |
+| sample6_c | 49 | **0** |
+
+Sei. Contro le **425** «chiamate irraggiungibili» che la metrica testuale conta
+sul corpus, 151 delle quali proprio in sample10_cs.
+
+La sonda `DISCARD` aveva gia' escluso i vettori scartati (0 in C#, C++ e C).
+Quindi: **l'emettitore HLIL non e' il colpevole.**
+
+## 87.2 Che cosa conta davvero `codamorta2.py`
+
+Classificate le 151 di sample10_cs:
+
+| forma | chiamate |
+|---|---|
+| la regione APRE un costrutto, e c'e' un'etichetta entro 40 righe | 55 |
+| apre un costrutto, nessuna etichetta vicina | 58 |
+| piatta, con etichetta dopo | 18 |
+| piatta, senza etichetta | 20 |
+
+**113 su 151 aprono un costrutto** (`… {` a fine riga). E' la forma:
+
+```c
+    return;
+    v4 = (__int64)&off_1400E7E70;   // <- non eseguita
+    v4 = (v4 + 12);                 // <- non eseguita
+    while (1) {                     // <- il costrutto SI', via `goto loc_X`
+        …
+loc_X:                              //    che entra QUI dentro
+```
+
+E' esattamente la classe che **#6770 preserva di proposito**: il costrutto
+contiene un'etichetta raggiungibile, quindi cancellarlo distruggerebbe codice
+vivo — ed e' il difetto che quel round ha chiuso.
+
+Ma le righe PRIMA dell'etichetta, dentro il costrutto, non vengono eseguite.
+Sono un difetto di STRUTTURA (si entra nel mezzo di un ciclo, l'inizializzazione
+resta fuori dal flusso), non di codice perso.
+
+## 87.3 ⚠ La correzione al numero che riporto dal §63
+
+«425 chiamate irraggiungibili» **somma due difetti diversi**:
+
+1. **codice davvero perso** — nessun percorso lo raggiunge (la classe di
+   `_initterm_e`, chiusa dal #6760);
+2. **codice raggiunto solo entrando nel mezzo di un costrutto** — le righe prima
+   dell'etichetta interna non si eseguono, il resto si'.
+
+I due hanno rimedi opposti: il primo va RIPARATO nell'emissione, il secondo e'
+gia' corretto e va semmai reso piu' leggibile (spostando l'inizializzazione o
+ristrutturando il ciclo). Sommarli produce un numero che non guida nessuna
+decisione — lo stesso errore di forma dei §61, §72 e §74.
+
+Non ho separato le due classi in una misura nuova: prima serve decidere se la
+seconda sia un difetto o solo una bruttezza, e quella e' una domanda sulla
+fedelta', non sul conteggio.
+
+## 87.4 Cosa resta stabilito
+
+* i gate misurati: `TOPTEST_BREAK` porta il conto da 655 a 375 sui tre bucket
+  peggiori (§86), e questo resta valido perche' e' un confronto A/B sulla STESSA
+  metrica;
+* `TAILDUP` ne aggiunge 17, `C_GOTO_REMOVAL`/`GOTO_BREAK`/`SPLIT`/`TOPO` zero;
+* l'emettitore HLIL e' pulito (6 orfani su 2263 funzioni nel bucket peggiore).
+
+Le variazioni A/B restano leggibili; e' il VALORE ASSOLUTO che non lo e'.
+
+## 87.5 Stato
+
+Sonde `RUSTRE_DBG_ORFANI` e `RUSTRE_DBG_DIVERG` a effetto zero verificato
+(`diff -rq`: 0 differenze). Predefinito e `path A` invariati. Test: 477 (HLIL)
++ 1337 (decompiler).
+
+---
+
+# Round 88 — ⚠ La correzione del §87 era una SOVRA-correzione. Le 423 sono perse davvero
+
+## 88.1 La separazione, fatta col test giusto
+
+`codamorta3.py` separa le due classi che il §87 diceva confuse, ma con il test
+CORRETTO: non «apre un costrutto e c'e' un'etichetta entro 40 righe» (un
+indizio), bensi' **quel costrutto CONTIENE un'etichetta** — tracciando le
+parentesi aperte e marcandole quando un'etichetta compare al loro interno.
+
+| classe | corpus intero |
+|---|---|
+| **A. PERSO — nessun percorso lo raggiunge** | **423** |
+| B. ingresso nel mezzo di un costrutto | **2** |
+| in coda (over-scan di `.pdata`) | 1483 |
+
+**Due.** Non 113.
+
+## 88.2 Cosa avevo sbagliato
+
+Il §87 concludeva che «425 somma due difetti diversi» e che la classe B fosse
+sostanziosa. Era basato su due proxy misurati separatamente — «la regione apre
+un costrutto» (113 su 151) e «c'e' un'etichetta entro 40 righe» (73 su 151) — e
+sull'assunzione che le due coincidessero.
+
+Non coincidono: i costrutti aperti dopo un `return` quasi mai contengono
+l'etichetta che li renderebbe raggiungibili. Sono cicli interi che nessuno
+esegue.
+
+**La correzione del §87 era una sovra-correzione, e il numero originale del §63
+regge**: 423 chiamate genuinamente perse.
+
+## 88.3 Il confronto A/B, ora su una metrica che significa una cosa sola
+
+Sui tre bucket peggiori:
+
+| | A. PERSO | B. ingresso nel mezzo |
+|---|---|---|
+| `TOPTEST_BREAK` spento | **651** | 4 |
+| **predefinito** | **373** | 2 |
+
+La correzione #6760 toglie **278 chiamate genuinamente perse**, non un artefatto
+di conteggio. Il §86 lo aveva gia' detto; ora e' su una metrica che non
+conflaziona.
+
+## 88.4 Nota di metodo, la piu' importante del giro
+
+Ho corretto un numero giusto sulla base di due indizi che sembravano puntare
+nella stessa direzione, senza verificare che lo facessero. Una correzione ha
+bisogno della stessa prova che serve a un'affermazione — e in questa sessione
+sono ormai cinque i casi in cui una misura frettolosa ha spostato una
+conclusione: §61, §72, §74, §87 e la sovra-correzione di §87 stessa.
+
+Il correttivo che funziona e' sempre lo stesso: **scrivere il test che decide,
+non l'indizio che suggerisce.**
+
+---
+
+# Round 89 — La catena bisezionata: l'emettitore NON e' pulito, e la sonda del §87 era cieca
+
+## 89.1 Bisezione della catena testuale
+
+Aggiunta `orfani_testo` e nove punti di controllo lungo le passate testuali di
+`lib.rs`. Su sample10_cs:
+
+| punto | orfani |
+|---|---|
+| prima di `drop_unused_hlil_labels` | **0** |
+| **dopo** (prima di `inline_hlil_single_use_temps`) | **1304** |
+| prima di `flip` / `break_selfref` / `fix_decls` / `hoist` | 1302 |
+| prima di `drop_unreachable_gotos_after_return` | 1302 |
+| prima di `TAILDUP` | 1303 |
+| finale | 1698 |
+
+**Tutto il salto sta su `drop_unused_hlil_labels`.**
+
+⚠ Prima stesura della sonda: non tracciava la PROFONDITA' delle graffe, quindi
+dopo un `return` dentro un `if` contava morto anche cio' che sta fuori — dava
+40874. Un contatore di raggiungibilita' su testo C senza le graffe non misura
+nulla. Corretta prima di leggere qualunque numero.
+
+## 89.2 Cosa significa quel salto
+
+`drop_unused_hlil_labels` toglie le etichette che nessun `goto` punta. Se
+togliendola il codice che seguiva diventa irraggiungibile, vuol dire che **era
+gia' irraggiungibile**: l'etichetta lo «proteggeva» dalla misura, non dal flusso.
+
+Quindi il difetto e' a monte: **l'emettitore produce blocchi con la loro
+etichetta che nessuno raggiunge.**
+
+## 89.3 ⚠ La sonda del §87 era cieca proprio a questa classe
+
+`RUSTRE_DBG_ORFANI` azzerava lo stato «morto» su QUALUNQUE etichetta, senza
+controllare che un `goto` la puntasse. Non poteva vedere il caso dominante.
+
+Corretta (raccoglie prima i bersagli dei `Goto` e azzera solo sulle etichette
+PUNTATE):
+
+| bucket | orfani AST, sonda vecchia | **sonda corretta** |
+|---|---|---|
+| sample10_cs | 6 | **324** |
+| sample7_cpp | 0 | **22** |
+| sample6_c | 0 | **0** |
+
+**La conclusione del §87 — «l'emettitore HLIL e' pulito» — e' FALSA.** Era
+fondata su una sonda strutturalmente incapace di vedere la classe piu' numerosa.
+
+## 89.4 Il quadro, finalmente coerente su tre livelli
+
+1. **emettitore**: emette blocchi con etichetta che nessun `goto` punta
+   (324 statement in sample10_cs);
+2. **`drop_unused_hlil_labels`**: toglie l'etichetta inutile, e il codice morto
+   affiora nel testo;
+3. **metrica testuale**: ne conta 423 sul corpus (chiamate, non statement).
+
+Nessuno dei tre contraddice gli altri. Il difetto e' UNO e sta al punto 1.
+
+## 89.5 Errori di misura di questo giro — tre, tutti miei
+
+* sonda testuale senza profondita' delle graffe (40874 contro ~1300);
+* sonda AST che azzerava su etichette non puntate (6 contro 324) — e questa
+  aveva gia' prodotto una conclusione sbagliata pubblicata al §87;
+* al §87 avevo anche usato «etichetta entro 40 righe» come proxy di «il
+  costrutto contiene un'etichetta», gia' corretto al §88.
+
+Tre sonde su tre sbagliate al primo tentativo, tutte e tre nella direzione di
+FAR SEMBRARE IL DIFETTO PIU' PICCOLO. Non e' un caso: una sonda che rinuncia
+(azzera lo stato, salta il caso difficile) sbaglia sempre verso lo zero, ed e'
+la direzione che non allarma.
+
+## 89.6 Stato
+
+Sonde a effetto zero verificato (`diff -rq` su sample10_cs: 0 differenze).
+Predefinito e `path A` invariati. Test: 1337 + 477.
+
+Il prossimo passo e' attribuire i 324: quali rami di `emit_*` emettono un blocco
+senza che nulla lo raggiunga.
+
+---
+
+# Round 90 — I 324 orfani ATTRIBUITI: 65% escono da una passata che ho scritto io
+
+## 90.1 L'attribuzione
+
+Marcato ogni blocco col RAMO di emissione da cui esce (`dbg_origine`, sei rami:
+`entry`, `if_then`, `if_else`, `branch_target`, `branch_default`, `dup_chain`,
+`pending_exit`), poi risalito dallo statement orfano all'etichetta che lo
+precede e da questa al blocco.
+
+| ramo | orfani |
+|---|---|
+| **`pending_exit`** | **210 (64,8%)** |
+| `if_then` | 107 (33,0%) |
+| `if_else` | 7 |
+| **totale** | **324** |
+
+Somma esatta: l'attribuzione copre tutti gli orfani, nessun residuo.
+
+⚠ Prima stesura: contava OGNI blocco senza `goto` entrante — cioe' anche quelli
+raggiunti per CADUTA, che stanno benissimo. Dava 29 000 invece di 324. Ristretta
+ai soli statement effettivamente orfani.
+
+## 90.2 La fonte dominante e' MIA
+
+`emit_pending_exits` e' lo svuotamento che ho introdotto col #6760b. Il
+meccanismo: `queue_break_exit` registra l'uscita secondaria, il corpo del ciclo
+emette pero' un `break` — che atterra per ADIACENZA, non su un'etichetta — e il
+blocco registrato viene stampato in coda alla funzione con un'etichetta che
+nessun `goto` punta.
+
+Va detto insieme al suo contrario, misurato al §88: la stessa famiglia di
+modifiche toglie **278** chiamate genuinamente perse sui bucket peggiori. Il
+saldo resta ampiamente positivo, ma 210 orfani sono un costo che avevo
+introdotto senza vederlo.
+
+## 90.3 #6930 — il filtro ovvio, e perche' NON basta
+
+Aggiunto: allo svuotamento finale non si emette un'uscita pendente che
+`labels_needed` non contiene (nessun `goto` la punta, quindi il suo codice e'
+gia' irraggiungibile).
+
+Misurato: **33 blocchi scartati su 585**, e **orfani 324 -> 324**. Emissione
+identica byte per byte (`diff -rq`: solo i `summary.json` differiscono).
+
+La ragione e' istruttiva: quei 210 blocchi **sono** in `labels_needed` — un
+`goto` verso di loro esiste — ma quel `goto` sta a sua volta in codice
+irraggiungibile. E' irraggiungibilita' **TRANSITIVA**, e un filtro a un passo
+non la vede.
+
+Il rimedio corretto e' un punto fisso sulla raggiungibilita' dell'AST emesso
+(etichette + `goto` + caduta), iterato finche' nulla cambia. Non l'ho scritto in
+questo giro: e' una passata nuova su un albero gia' emesso, e va misurata da
+sola.
+
+Il filtro resta perche' e' corretto e a costo zero, ma **oggi e' inerte** e va
+scritto che lo e'.
+
+## 90.4 Stato
+
+* emissione: **identica** (0 differenze sui `.hlil.c`, `path A` 0);
+* `goto` 9547, `JUMPOUT` 1, dati 7943, righe 932137 — tutti invariati;
+* test: 477 (HLIL) + 1337 (decompiler);
+* sonde nuove a effetto zero: `RUSTRE_DBG_ORFANI` con attribuzione per ramo,
+  `RUSTRE_DBG_TESTO` con nove punti di controllo sulla catena testuale.
+
+## 90.5 Cosa serve al prossimo giro
+
+Una passata di raggiungibilita' a PUNTO FISSO sull'AST emesso. Input gia'
+disponibile: `labels_needed` (bersagli dei `goto`) e la struttura degli
+statement. Bersaglio misurabile: i 324 orfani di sample10_cs e i 22 di
+sample7_cpp, con `codamorta3.py` a distinguere il codice PERSO da quello
+raggiunto nel mezzo.
+
+---
+
+# Round 91 — #6940: raggiungibilita' a PUNTO FISSO. Funziona, e per questo NON va accesa
+
+## 91.1 La passata
+
+`remove_unreachable_fixpoint` (`hlil_structuring.rs`), gate
+**`RUSTRE_HLIL_REACH`**, opt-in, innestata dopo ogni riscrittura di struttura.
+
+Punto fisso DECRESCENTE: si parte con tutte le etichette vive, si raccoglie
+quali sono davvero raggiunte (per caduta da posizione raggiungibile, o da un
+`goto` che si trova in posizione raggiungibile), si itera finche' l'insieme e'
+stabile, si cancella solo alla fine.
+
+Partire ottimisti e restringere e' la direzione SICURA per una rimozione: si
+toglie solo cio' che e' PROVATAMENTE irraggiungibile.
+
+⚠ Difetto trovato e corretto prima di leggere i numeri: la condizione di arresto
+confrontava le LUNGHEZZE dei due insiemi invece degli insiemi. Due insiemi
+diversi possono avere la stessa cardinalita'. Corretto; sul corpus i numeri non
+cambiano (gli insiemi si restringevano monotonamente anche in cardinalita'), ma
+era un difetto latente reale.
+
+## 91.2 Misura, corpus intero
+
+| | codice PERSO | in coda | `goto` | dati | righe |
+|---|---|---|---|---|---|
+| predefinito | 423 | 1483 | 9547 | **7943** | 932137 |
+| **+punto fisso** | **54** (−87,2%) | 238 (−84%) | **8845** (−702) | **7826** (−117) | 914802 (−17335) |
+
+`path A`: 0 differenze. Orfani dopo la pipeline: 14 -> **0**.
+
+E' il risultato piu' grande misurato su questo fronte. E non va accesa.
+
+## 91.3 Perche' NON va accesa
+
+Rimuove **1148 chiamate distinte in 597 file**. Ispezionata una a mano
+(`sample10_cs/sub_14003168e`):
+
+```c
+__int64 fn_14003168e(uint64_t a1, uint64_t a2, uint64_t a3)
+{
+    *(__int64 *)(a3 + -125) = (*(uint8_t *)(a3 + -125) | (a1 & 255));
+    return;                    // <- ritorna SUBITO, e senza valore
+    ... 25 righe, TRE chiamate ...   // <- irraggiungibili
+}
+```
+
+Le chiamate erano genuinamente morte: **la passata e' corretta** rispetto
+all'AST emesso.
+
+Ma quel `return;` NUDO in una funzione che dichiara `__int64` e' il vero
+difetto. Contato sul corpus: **1589 funzioni su 6902 con tipo di ritorno
+non-`void` contengono un `return;` senza valore — il 23%.**
+
+Cioe': c'e' un difetto a monte che piazza un ritorno prematuro, e il corpo vero
+gli finisce dietro. La passata di raggiungibilita' **cancella l'evidenza invece
+di riparare la causa**, e con essa 1148 chiamate che nel binario vengono
+eseguite davvero.
+
+E' esattamente la classe contro cui questa sessione ha imparato a diffidare:
+tutti i contatori migliorano (−87% di codice perso, −702 goto, −17k righe) e il
+decompilatore diventa PIU' sbagliato, in silenzio.
+
+## 91.4 Cosa ho imparato a fare bene, questa volta
+
+Il calo di **117 dati materializzati** e' stato il campanello. Tre volte in
+questa sessione un `dati` in calo ha nascosto una perdita reale (§62, §71, §84)
+e questa volta l'ho inseguito subito invece di archiviarlo come rumore.
+
+Il conteggio delle chiamate distinte perse (1148) l'ha confermato, e la lettura
+di UN file ha dato la causa. Misura, conferma, lettura: tre passi, nessuna
+congettura.
+
+## 91.5 Il fronte vero, ora nominato
+
+**1589 funzioni con un `return;` nudo prima del corpo.** E' un difetto di
+correttezza piu' grande di tutti quelli inseguiti negli ultimi dieci round, e
+non era mai stato contato. Il codice irraggiungibile di path B ne e' in buona
+parte una CONSEGUENZA, non una causa.
+
+`RUSTRE_HLIL_REACH` resta opt-in e con questa nota accanto: **non accenderla
+finche' i `return;` nudi non sono capiti**, perche' li' fa piu' male che bene.
+
+---
+
+# Round 92 — ⚠ CORREZIONE al §91: la passata NON rimuove codice vivo. Rimuove codice ALTRUI
+
+## 92.1 La verifica che al §91 non avevo fatto
+
+Il §91 concludeva che `remove_unreachable_fixpoint` «cancella l'evidenza invece
+di riparare la causa» e toglie 1148 chiamate «che nel binario vengono eseguite».
+Quella seconda affermazione non era misurata: l'avevo dedotta dal fatto che il
+codice esisteva.
+
+Disassemblata la funzione che avevo letto come prova, `sample10_cs/sub_14003168e`:
+
+```
+0x14003168e  or   %cl, -0x7D(%r8)
+0x140031692  ret
+```
+
+**Due istruzioni.** La funzione fa una `or` in memoria e ritorna. Il
+`return;` emesso e' quindi al posto GIUSTO e la funzione e' COMPLETA — e le 25
+righe con tre chiamate che lo seguono nel file **non le appartengono**.
+
+## 92.2 Verifica su piu' casi, con le etichette come sonda
+
+Le etichette emesse portano l'indirizzo (`loc_<hex>`), quindi si puo' chiedere se
+cadano dentro l'estensione della funzione. Su 12 file fra quelli che «perdono»
+chiamate:
+
+| | |
+|---|---|
+| etichette rimosse dalla passata | 8 |
+| **di cui FUORI dall'estensione della funzione** | **7 (87,5%)** |
+
+Piu' i casi a estensione minuscola che parlano da soli: `0x14000ad36` e' lunga
+**quattro byte** e «perdeva» sei chiamate distinte; `0x140026b1b` ne e' lunga
+cinque.
+
+## 92.3 Le due conclusioni del §91, riviste
+
+| affermazione del §91 | esito |
+|---|---|
+| «rimuove 1148 chiamate che nel binario vengono eseguite» | **FALSA** — sono codice di ALTRE funzioni, finito nel file per over-scan |
+| «1589 funzioni non-`void` hanno un `return;` nudo» | **VERA come conteggio**, ma la lettura era sbagliata |
+
+Sul secondo: per `sub_14003168e` il `return;` senza valore e' CORRETTO — la
+funzione non ritorna nulla. Sbagliato e' il TIPO DI RITORNO, dedotto `__int64`
+per una funzione che finisce con un `ret` senza produrre un valore.
+
+Quindi non e' «un ritorno prematuro che nasconde il corpo», e' **un tipo di
+ritorno inventato**. Difetto reale, ma diverso e meno grave.
+
+## 92.4 Che cosa significa per il gate
+
+`RUSTRE_HLIL_REACH` toglie **codice estraneo**, non codice vivo:
+codice perso 423 -> 54 (−87%), `goto` −702, righe −17335, `path A` invariato.
+Il calo di 117 dati materializzati e' coerente: erano riferimenti del codice
+altrui.
+
+Resta opt-in **per una ragione diversa da quella del §91**: prima di accenderlo
+serve la verifica comportamentale (`behavior.py`), che su una rimozione di
+questa portata non e' rinunciabile. Non piu' perche' «fa male».
+
+## 92.5 L'errore, e perche' l'ho fatto
+
+Al §91 ho letto UN file, ho visto codice dopo un `return`, e ho concluso che il
+`return` fosse prematuro. Non ho disassemblato la funzione — cioe' non ho
+guardato la sola cosa che poteva dirmi se quel codice le appartenesse.
+
+E' la stessa forma dell'errore del §87: una conclusione tratta da un indizio
+plausibile invece che dal test che decide. Con un'aggravante: al §91 avevo
+scritto «misura, conferma, lettura: tre passi, nessuna congettura» — e la
+congettura era proprio nel terzo passo.
+
+Il disassemblatore era a un comando di distanza.
+
+---
+
+# Round 93 — Una classe di difetto MAI contata: 1525 `void` che ritornano un valore (path A)
+
+## 93.1 Da dove viene
+
+Il §92 aveva riclassificato il `return;` nudo come «tipo di ritorno inventato».
+Misurato quel difetto in ENTRAMBE le direzioni e su entrambi i percorsi:
+
+| | path B | path A |
+|---|---|---|
+| funzioni | 11342 | 11342 |
+| dichiarate `void` | 4307 | 2548 |
+| dichiarate NON `void` | 7035 | 8794 |
+| **non-`void` che non ritornano mai un valore** | **42** | 0 |
+| **`void` che RITORNANO un valore** | **0** | **1525** |
+
+## 93.2 Il difetto di path A, verificato
+
+```c
+void __fastcall sub_140059F00(__int64 a1, __int64 a2, __int64 a3, __int64 a4) {
+    …
+    return sub_140059F94();
+}
+```
+
+E' la forma della TAIL CALL: la funzione inoltra il valore del callee ma e'
+tipizzata `void`. **1525 funzioni**, il 60% di tutte quelle che path A dichiara
+`void`.
+
+## 93.3 Perche' nessuna metrica lo vedeva
+
+`check.sh` compila con `gcc -std=gnu89 -fsyntax-only -w`. Provato:
+
+```
+$ gcc -std=gnu89 -fsyntax-only -w t.c   → exit 0, nessun messaggio
+$ gcc -std=gnu89 -fsyntax-only t.c
+  warning: 'return' with a value, in function returning void [-Wreturn-mismatch]
+```
+
+Il `-w` lo silenzia. E' la TERZA cecita' strutturale documentata di quella
+metrica, accanto alle chiamate non prototipate (`f(a,b)` contro `__int64 f();`)
+e alle dichiarazioni implicite. Tutte e tre nascono dalla stessa scelta: `-w`
+per non annegare nel rumore, che pero' butta via anche il segnale.
+
+## 93.4 La parita', su questa classe
+
+Path B ne ha **zero**, e ha 42 casi del difetto opposto (tipo non-`void` per una
+funzione che non ritorna nulla — quello isolato al §92 su `sub_14003168e`, che e'
+`or %cl,-0x7D(%r8); ret`).
+
+**42 contro 1525**: path B e' avanti di 36 volte su questa classe.
+
+## 93.5 Nota
+
+Non ho corretto nulla in questo giro: e' una MISURA, e riguarda in prevalenza
+path A, che questa sessione ha l'obbligo di lasciare invariato byte per byte.
+La correzione sensata — tipizzare `__int64` una funzione che inoltra il valore
+di una tail call — vale per entrambi i percorsi ed e' lavoro a se'.
+
+Il valore di questo giro e' avere una classe NUOVA, contata, con la causa della
+sua invisibilita' spiegata e riproducibile in due comandi.
+
+---
+
+# Round 94 — ⚠ CORREZIONE al §93: path B PERDE 1531 CHIAMATE DI CODA
+
+## 94.1 Il §93 misurava il sintomo, non la fedelta'
+
+Il §93 concludeva: «path B e' avanti di 36 volte su questa classe» perche' ha
+**0** funzioni `void` che ritornano un valore contro le **1525** di path A.
+
+Aperto il caso, `sample10_cs/sub_140059f00`:
+
+| | |
+|---|---|
+| **path A** | `if (flag == 0) return sub_140059F94();` — la chiamata di coda C'E', con il tipo sbagliato |
+| **path B** | **zero riferimenti** a `sub_140059F94` in tutto il file |
+
+Path B non e' «piu' corretto»: **non emette la chiamata affatto**.
+
+## 94.2 Misurato su tutte
+
+Per ogni funzione dove path A emette `return <callee>(…)` da una funzione
+`void`, chiesto se path B menzioni quel callee:
+
+| | |
+|---|---|
+| funzioni `void` con `return <chiamata>` in path A | **1525** |
+| di cui **path B NON menziona il bersaglio** | **1525 (100%)** |
+| bersagli distinti persi | **1531** |
+
+Nessuna eccezione. Path B perde **1531 chiamate di coda**.
+
+## 94.3 La classifica si rovescia
+
+| | path A | path B |
+|---|---|---|
+| tipo di ritorno sbagliato (`void` che ritorna) | 1525 | 0 |
+| **chiamate di coda EMESSE** | **1531** | **0** |
+
+Un tipo sbagliato compila (sotto `-w`) e la chiamata avviene lo stesso: il
+difetto e' cosmetico e visibile. Una chiamata mancante e' un difetto di
+CORRETTEZZA e invisibile.
+
+**Path A e' avanti su questa classe, non indietro.**
+
+## 94.4 E' la terza volta che cado nello stesso modo
+
+* §75-76: «path B avanti 2,5x su OVER» — era perche' emette MENO argomenti;
+* §87: «l'emettitore e' pulito» — era una sonda cieca alla classe dominante;
+* qui: «path B avanti 36x sui tipi di ritorno» — e' perche' non emette la
+  chiamata.
+
+Lo schema e' sempre lo stesso: **un percorso che EMETTE MENO sembra migliore su
+qualunque metrica che conti gli errori nel testo emesso.** Il correttivo, ormai
+noto e ancora non applicato in automatico: prima di dichiarare un vantaggio,
+chiedersi se il vincitore stia semplicemente producendo meno output.
+
+Regola operativa da qui in avanti: **ogni confronto A/B fra i due percorsi va
+accompagnato dal conteggio di cio' che ciascuno EMETTE** (chiamate, blocchi,
+righe), altrimenti non e' interpretabile.
+
+## 94.5 Il fronte, con il nome giusto
+
+**Path B perde 1531 chiamate di coda.** Path A le emette perche' ha la
+riscrittura `JUMPOUT` -> chiamata di coda (#6620, questa sessione, che porto'
+i `JUMPOUT` da 18 a 0). Path B non ha l'equivalente: l'arco verso una funzione
+esterna sparisce invece di diventare `return callee();`.
+
+E' un divario di parita' REALE, misurato, con la causa identificata e il rimedio
+gia' esistente su path A da cui copiare.
+
+---
+
+# Round 95 — #6950: le 1527 chiamate di coda RECUPERATE
+
+## 95.1 Il sito esatto
+
+`MlilToHlilLifter::lift_structured`, costruzione dei blocchi sintetici per i
+bersagli fuori dai blocchi della funzione:
+
+```rust
+let (body, term) = if out_of_range {
+    (Vec::new(), Terminator::Return(Vec::new()))   // <- l'arco sparisce QUI
+} else {
+    (vec![HlilStatement::Goto(addr)], Terminator::Unreachable)
+};
+```
+
+Il commento sopra spiega perche' il `Return` nudo: un `goto` verso l'indirizzo
+del blocco sintetico stesso diventerebbe `loc_X: goto loc_X`, un ciclo infinito.
+Giusto — ma la riparazione butta via l'informazione invece di rappresentarla.
+
+Un bersaglio fuori dall'intervallo della funzione E' una chiamata di coda.
+
+## 95.2 Prima stesura SBAGLIATA, e l'errore e' interessante
+
+Emesso `HlilExpr::Var` col nome della funzione. Le passate a valle lo trattano
+da VARIABILE:
+
+```c
+int64_t fn_140059f94;                                  // dichiarata locale
+return ((__int64 (*)())fn_140059f94)(a1, a2, a3);      // chiamata indiretta
+                                                       // su valore non inizializzato
+```
+
+**Emettere una chiamata sbagliata e' peggio che non emetterla**: il difetto passa
+da VISIBILE (una funzione che non compare) a SILENZIOSO (una chiamata attraverso
+spazzatura). Colto leggendo il file emesso, non dai contatori — che erano tutti
+verdi.
+
+La forma giusta e' quella che il lifter usa per una chiamata diretta vera: il
+bersaglio e' una **costante** (l'indirizzo). La risoluzione dei simboli a valle
+la trasforma nel nome e aggiunge la dichiarazione anticipata:
+
+```c
+__int64 sub_140059F94();
+…
+    return sub_140059F94();
+```
+
+Identico a path A.
+
+## 95.3 Misura, corpus intero
+
+| | chiamate di coda perse | `goto` | `JUMPOUT` | dati | righe | file |
+|---|---|---|---|---|---|---|
+| predefinito | **1527** in 1521 file | 9547 | 1 | 7943 | 932137 | 11342 |
+| **+`TAILEXIT`** | **0** | 9547 | 1 | **7943** | 936036 | 11342 |
+
+**Nessun contatore peggiora**: `goto`, `JUMPOUT` e dati materializzati sono
+identici, `path A` a 0 differenze. Costo: +3899 righe, cioe' le chiamate che
+prima mancavano.
+
+## 95.4 Nota sul confronto per NOME
+
+La prima misura diceva «1531 persi» anche con la correzione attiva: cercavo il
+nome di path A (`sub_140059F94`) nel testo di path B, che a quel punto scriveva
+`fn_140059f94`. Confrontando per INDIRIZZO il numero e' 1527 -> 0.
+
+E' la stessa trappola della grafia gia' vista al §68 (`sub_` contro `fn_`): due
+percorsi che nominano la stessa cosa in modo diverso non sono confrontabili per
+nome.
+
+## 95.5 Stato
+
+Gate `RUSTRE_HLIL_TAILEXIT`, opt-in in attesa della verifica comportamentale
+(lanciata). Test HLIL: 477 passati.
+
+---
+
+# Round 96 — #6950 verificato: recupera 1527 chiamate vere, ma ne inventa alcune. Resta SPENTO
+
+## 96.1 Comportamento: identico
+
+`behavior.py --path-b` con `RUSTRE_HLIL_TAILEXIT=1`: 15 AGREE / 4 LINK_FAIL,
+**19 su 19 identiche**. Nessuna regressione semantica sul campione.
+
+## 96.2 Ma il campione non copre la classe che ho aggiunto
+
+Contate le chiamate di coda NUOVE (presenti dopo, assenti prima) e chiesto se il
+bersaglio sia l'inizio di una funzione emessa:
+
+| | |
+|---|---|
+| nuove chiamate di coda | **3966** |
+| bersaglio E' inizio di funzione | **1523** |
+| bersaglio NON e' inizio di funzione | **2443** |
+
+Aperti otto dei 2443, confrontando col disassemblato:
+
+| esito | n |
+|---|---|
+| bersaglio FUORI dalla funzione (chiamata plausibile, funzione non rilevata) | 6 |
+| **bersaglio DENTRO la funzione (chiamata INVENTATA)** | **2** |
+
+⚠ Otto casi sono pochi per estrapolare, e lo scrivo invece di moltiplicare.
+
+## 96.3 La causa dei casi sbagliati, e non e' nel mio codice
+
+I bersagli interni hanno delta da **+288 a +1045** byte dall'inizio della loro
+stessa funzione. Sono salti INTERNI classificati come esterni perche'
+`out_of_range` si calcola sull'estensione dei BLOCCHI MLIL, e quei blocchi **non
+coprono tutta la funzione**: `max_end` sottostima.
+
+Esempio: `fn 0x140002e80` arriva fino a `0x140003108`, e il bersaglio
+`0x140003080` — dentro — risulta «fuori intervallo».
+
+**E' un difetto di copertura del CFG di path B**, che la mia correzione non
+causa ma ESPONE: prima quei salti diventavano un `Return` muto, ora diventano una
+chiamata a un indirizzo che non e' una funzione.
+
+## 96.4 Perche' il gate resta spento
+
+Un `Return` muto perde informazione in modo VISIBILE (la funzione chiamata non
+compare). Una chiamata a un indirizzo interno e' un'informazione FALSA, e questa
+sessione ha stabilito piu' volte che il secondo e' peggio del primo — l'ho
+scritto io stesso al §95.2 due ore fa, per un caso diverso.
+
+Il rimedio corretto e' noto e non e' un'euristica: **passare al lifter
+l'estensione REALE della funzione**, che il chiamante in `rustre-decompiler`
+conosce (`instructions` piu' `next_fn_start`) e che `MlilFunction` non porta —
+ha solo `entry`, `blocks`, `var_versions`. Con quella, `out_of_range` diventa
+esatto e le due popolazioni si separano da sole.
+
+## 96.5 Cosa resta stabilito
+
+* **1527 chiamate di coda erano perse** da path B (misurato per INDIRIZZO,
+  corpus intero, 1521 file) — il divario del §94 e' reale;
+* la riparazione le recupera tutte, con `goto`, `JUMPOUT` e dati invariati e
+  `path A` a 0 differenze;
+* non e' accendibile finche' `out_of_range` si basa su un'estensione
+  sottostimata;
+* il difetto di copertura dei blocchi MLIL e' una scoperta a se', e spiega anche
+  perche' path B emette `JUMPOUT`/`goto` dove path A no.
+
+`RUSTRE_HLIL_TAILEXIT` resta opt-in con questa nota accanto.
+
+---
+
+# Round 97 — #6960: l'estensione reale passata al lifter. Meccanismo giusto, effetto NULLO
+
+## 97.1 Cosa ho cablato
+
+`MlilToHlilLifter::lift_structured_with_end(&mlil, fn_end: Option<u64>)`: il
+chiamante in `rustre-decompiler` passa l'ultimo indirizzo delle istruzioni
+DISASSEMBLATE, e `out_of_range` usa quello invece dell'estensione dedotta dai
+blocchi. `lift_structured` resta come prima (`None`).
+
+Era il rimedio che il §96 indicava come «noto e non euristico».
+
+## 97.2 Misura: nessun cambiamento
+
+| | nuove chiamate di coda | a inizio di funzione | non-inizio |
+|---|---|---|---|
+| prima (`tailC`) | 3966 | 1523 | 2443 |
+| **dopo (`t960`)** | 3966 | 1523 | 2443 |
+
+Predefinito: **0 differenze** su 11342 file. `path A`: 0.
+
+## 97.3 Il meccanismo pero' c'e' — misurato
+
+Sonda `RUSTRE_DBG_EXTENT` (effetto zero) su sample10_cs, 230 decisioni con
+entrambe le estensioni disponibili:
+
+| | n |
+|---|---|
+| estensione REALE > blocchi (i blocchi sottostimano) | **97** |
+| uguali | 82 |
+| estensione REALE < blocchi | 51 |
+
+Quindi il §96 aveva ragione sul FATTO (i blocchi non coprono sempre la
+funzione) e torto sulla CONSEGUENZA: nessuno dei bersagli in discussione cade
+nella finestra fra le due estensioni, quindi correggerla non sposta alcuna
+decisione.
+
+## 97.4 ⚠ E il campionamento del §96 era sbagliato
+
+Il §96 riportava «2 casi su 8 puntano DENTRO la funzione». Verificato uno di
+quei due, `sub_140003080()` in `sub_140002e80`: **era gia' presente nella base**,
+prima di `TAILEXIT`. Non era una chiamata che avevo aggiunto io.
+
+Il difetto era nel confronto: cercavo la stringa esatta `return sub_X()` nel file
+«prima», e una forma diversa la faceva contare come nuova. Rifatto per INSIEMI
+di bersagli: 3782 nuovi (non 3966), **1523 a inizio di funzione, 2259 no** — il
+quadro non cambia, ma il numero sì.
+
+Quindi la frase del §96 «2 su 8 sono chiamate inventate» **non e' sostenuta**:
+uno dei due era un falso positivo del mio script, e con 8 campioni resta una
+statistica troppo debole per decidere.
+
+## 97.5 Dove siamo, senza abbellire
+
+* il divario **e' reale**: 1527 chiamate di coda perse da path B, misurato per
+  indirizzo su tutto il corpus;
+* la riparazione **le recupera tutte**, con `goto`, `JUMPOUT`, dati e `path A`
+  invariati e comportamento identico (15 AGREE, 19/19);
+* **2259 dei nuovi bersagli non sono inizi di funzione noti**, e non so dire
+  quanti siano sbagliati: il campione di 8 del §96 e' inutilizzabile e non l'ho
+  rifatto piu' grande;
+* `#6960` e' corretto in principio e inerte in pratica; lo tengo perche' rende
+  `out_of_range` esatto invece che approssimato.
+
+`RUSTRE_HLIL_TAILEXIT` resta OPT-IN. Per accenderlo serve una misura vera della
+correttezza dei 2259 — per esempio disassemblando ogni bersaglio e verificando
+che sia un prologo di funzione — non un campione da otto.
+
+Test: 477 + 1337, 0 falliti.
+
+---
+
+# Round 98 — La misura sui 2259 bersagli e' INCONCLUSIVA, e il perche' conta
+
+## 98.1 La misura che il §97 chiedeva
+
+Campione di **150** sui 2259 bersagli che non sono inizi di funzione noti,
+confrontati con l'estensione della funzione sorgente secondo `disasm_dump`:
+
+| | n | % |
+|---|---|---|
+| DENTRO la funzione (chiamata inventata) | 116 | **77,3%** |
+| FUORI (chiamata legittima) | 34 | 22,7% |
+
+Estrapolato: ~1746 inventate su 2259. Con 3782 nuove chiamate totali il bilancio
+sarebbe ~2036 legittime contro ~1746 sbagliate — un rapporto che non giustifica
+l'accensione.
+
+## 98.2 Ma il numero contraddice la sonda, e la contraddizione e' il risultato
+
+Sonda `RUSTRE_DBG_EXTENT` sulle stesse decisioni:
+
+| | n |
+|---|---|
+| bersaglio > estensione passata dal chiamante (⇒ chiamata di coda) | 204 |
+| bersaglio <= estensione (⇒ salto interno, nessuna chiamata) | 26 |
+
+Se l'estensione che passo (`fine_reale_funzione`, dall'ultima istruzione
+DISASSEMBLATA) coincidesse con quella di `disasm_dump`, i 116 «dentro» sarebbero
+finiti nei 26. Non ci sono finiti.
+
+**Le due nozioni di «dove finisce la funzione» non coincidono**, e CLAUDE.md
+documenta perche': l'estensione da `.pdata` e' deliberatamente OVER-SCANSIONATA
+(«senza, le funzioni vengono troncate»). Quindi il `fin` di `disasm_dump` puo'
+essere piu' grande della funzione vera, e un bersaglio fra la fine vera e quel
+`fin` risulta «dentro» pur essendo una chiamata di coda legittima.
+
+## 98.3 Conclusione onesta: non lo so
+
+Il 77,3% misura una delle due cose, e non ho un modo di distinguerle con gli
+strumenti a portata:
+
+* se `disasm_dump` dice il vero, ~1746 chiamate sono inventate;
+* se over-scansiona, una parte di quelle 116 sono legittime e il rapporto
+  migliora — di quanto, non si sa.
+
+Servirebbe una terza fonte per «dove finisce la funzione»: i simboli, la
+`.pdata` letta direttamente, o il prologo del bersaglio (una funzione vera inizia
+con un prologo riconoscibile). L'ultima e' la piu' praticabile e non l'ho
+ancora scritta.
+
+**Non produco un numero migliore di quello che ho.** Il §96 aveva gia' dato una
+cifra da 8 campioni poi rivelatasi non sostenuta; qui il campione e' 150 ma il
+metro e' incerto, e un campione grande su un metro sbagliato resta sbagliato.
+
+## 98.4 Stato
+
+`RUSTRE_HLIL_TAILEXIT` resta OPT-IN — la decisione non cambia, cambia il motivo:
+non «so che inventa 1746 chiamate», ma «non so quante ne inventi».
+
+Resta acquisito e non in discussione:
+* path B perdeva **1527** chiamate di coda (misurato per indirizzo, corpus
+  intero) e la riparazione le recupera tutte;
+* `goto`, `JUMPOUT`, dati e `path A` invariati; comportamento identico (19/19);
+* `#6960` (estensione reale al lifter) e' corretto in principio, inerte in
+  pratica, e tenuto.
+
+Prossimo passo, concreto: **verificare il PROLOGO** di ciascun bersaglio. Una
+funzione vera comincia con `push %rbp` / `sub $N,%rsp` / `mov %rsp,%rbp` o un
+prologo Win64 riconoscibile; un salto interno atterra in mezzo a un blocco. E'
+una verita' indipendente da entrambe le nozioni di estensione.
+
+---
+
+# Round 99 — La verifica del PROLOGO scioglie il dubbio, e nessuna delle due varianti va bene
+
+## 99.1 La terza fonte, indipendente dalle estensioni
+
+Il §98 era bloccato perche' le due nozioni di «dove finisce la funzione»
+(blocchi MLIL contro `.pdata` over-scansionata) disaccordano. La verifica del
+PROLOGO non dipende da nessuna delle due: **una funzione vera comincia con un
+prologo**.
+
+Campione di **100** bersagli fra i 2259 che non sono inizi di funzione noti:
+
+| | n |
+|---|---|
+| prologo riconoscibile (`push %rbp`, `sub $N,%rsp`, …) | **0** |
+| nessun prologo | **100 (100%)** |
+
+Esempi: `0x14000c880` inizia con `call`, `0x14009450f` con `test %eax,%eax; setg
+%dil`, `0x1400068b4` con uno spill di `%rax`. **Sono indirizzi a meta' funzione.**
+
+Il dubbio del §98 e' sciolto: la conversione ingenua INVENTA chiamate.
+
+## 99.2 Il filtro «solo verso inizi di funzione noti» (#6970)
+
+Passato al lifter l'insieme degli inizi di funzione (prima da
+`callee_arities.keys()`, poi dagli inizi disassemblati in `arities_from_seeds`,
+via un quarto elemento di `ArityCache`).
+
+| | nuove chiamate | a inizio funzione | non-inizio | chiamate di coda ancora perse |
+|---|---|---|---|---|
+| senza filtro | 3782 | 1523 | 2259 | 1525 |
+| **con filtro** | **1525** | 1523 | **2** | **1525** |
+
+Le inventate spariscono (2259 -> 2). **Ma le chiamate che path A emette restano
+perse: 1525, invariate.**
+
+## 99.3 Perche' nessuna delle due variantI funziona
+
+I bersagli che path A emette — tipicamente la funzione SUCCESSIVA, raggiunta per
+salto e mai chiamata — **non sono inizi di funzione noti**: il rilevatore non li
+ha trovati e non compaiono ne' in `callee_arities` ne' fra i corpi
+disassemblati. Quindi:
+
+* senza filtro: si recuperano, insieme a ~2259 inventate;
+* col filtro: non si inventa nulla, e non si recupera nulla di quel che serve.
+
+Le due popolazioni **non sono separabili con un criterio basato sull'indirizzo**.
+
+## 99.4 Cosa fa DAVVERO path A, ed e' la strada
+
+Path A non decide su «fuori intervallo». Emette la chiamata di coda quando il
+testo contiene un `JUMPOUT(...)` (#6620, questa sessione), cioe' quando il suo
+strutturatore ha gia' concluso che quell'arco esce dalla funzione — una
+decisione di FLUSSO, non di indirizzo.
+
+Il rimedio giusto per path B e' rispecchiare quella condizione, non ricostruirne
+una per intervalli. Non l'ho fatto in questo giro: e' un cambio di criterio, non
+un aggiustamento del filtro, e va misurato da solo.
+
+## 99.5 Stato
+
+* `RUSTRE_HLIL_TAILEXIT` resta OPT-IN, ora col filtro `#6970` attivo quando e'
+  acceso: se qualcuno lo accende, **non inventa** (2 casi su 11342 file);
+* predefinito: **0 differenze**, `path A`: 0;
+* test: 1337 + 477.
+
+Tre round su questo fronte, e il guadagno netto e' una cosa sola ma solida:
+**so cosa NON funziona, e perche'.** Il divario delle 1527 chiamate resta aperto
+con la strada indicata.
+
+---
+
+# Round 100 — LA CAUSA RADICE: il CFG di path B ha buchi per il 16,7% di ogni funzione
+
+## 100.1 Il criterio di path A, applicato a path B
+
+Path B ha GIA' `rewrite_hlil_tail_calls` (`lib.rs:24849`), ben fatta: converte
+`JUMPOUT(0xHEX)` in `return sub_HEX()` quando il bersaglio non e' un'etichetta
+**e non cade dentro un BLOCCO PROPRIO**. Il suo commento documenta gia' che un
+test di INTERVALLO non basta («3479 di 12551 atterravano dentro l'intervallo del
+chiamante») e che il test di intervallo, per contro, «inghiottiva 30 chiamate di
+coda genuine».
+
+Quei siti pero' non arrivano mai a quella passata: il lifter li ha gia'
+trasformati in `Return` nudo.
+
+Applicato lo stesso criterio nel lifter (`found.is_none()`, cioe' nessun blocco
+CONTIENE l'indirizzo — lo stesso dato):
+
+| | nuove | a inizio funzione | non-inizio | **chiamate ancora perse** |
+|---|---|---|---|---|
+| filtro `fn_starts` (#6970) | 1525 | 1523 | 2 | **1525** |
+| **blocchi propri (#6980)** | 3782 | 1523 | 2259 | **0** |
+
+Il criterio di path A **recupera tutto**. E riporta i 2259.
+
+## 100.2 Perche' i due numeri non possono migliorare insieme
+
+Il §99 aveva provato col PROLOGO che i 2259 bersagli sono a meta' funzione
+(100 campioni su 100 senza prologo). Ma `found.is_none()` dice che **nessun
+blocco MLIL li contiene**.
+
+Se sono dentro la funzione e nessun blocco li contiene, allora **il CFG ha dei
+buchi**. Misurato (sonda `RUSTRE_DBG_EXTENT`, sample10_cs, 230 decisioni):
+
+| | |
+|---|---|
+| byte coperti dai blocchi | 115 518 |
+| span della funzione | 138 646 |
+| **BUCHI** | **23 128 — il 16,7%** |
+| **funzioni con copertura completa** | **0 su 230** |
+
+⚠ La copertura e' `somma(end - start)`; se `end` fosse INCLUSIVO (il file
+documenta 13238/13827 blocchi con `next.start = end + len(ultima istruzione))`
+il conto perde 1 byte per blocco — con ~10 blocchi per funzione, ~10 byte contro
+23 128. L'ordine di grandezza regge.
+
+## 100.3 Cosa spiega, tutto insieme
+
+**Il CFG di path B non copre un sesto di ogni funzione.** Da qui:
+
+* le **chiamate di coda inventate**: un bersaglio in un buco e' indistinguibile
+  da uno esterno, per QUALUNQUE criterio calcolato su quel CFG;
+* il **codice irraggiungibile** (§89-90): un blocco i cui predecessori stanno in
+  un buco non ha archi entranti;
+* parte dei **`goto`/`JUMPOUT`** residui: un arco verso un buco non ha
+  destinazione strutturata.
+
+Tre fronti inseguiti separatamente per quindici round, **una causa sola**.
+
+## 100.4 Conseguenza sulla strategia
+
+Nessuna delle tre riparazioni tentate puo' funzionare bene finche' il CFG ha
+buchi, perche' tutte e tre interrogano quel CFG. **Il fronte e' la copertura dei
+blocchi MLIL**, non le passate a valle.
+
+E' anche il motivo per cui `path B unico` non e' ancora raggiungibile: un CFG
+incompleto non e' un difetto di resa, e' un difetto di ricostruzione.
+
+## 100.5 Stato
+
+`RUSTRE_HLIL_TAILEXIT` resta OPT-IN, ora col criterio di path A (`#6980`):
+acceso recupera tutte le 1527 chiamate e ne aggiunge 2259 dubbie — un compromesso
+che non decido io finche' la causa radice e' aperta.
+
+Predefinito **0 differenze**, `path A` 0, test 1337 + 477.
+
+---
+
+# Round 101 — ⚠ CORREZIONE al §100: il CFG NON ha buchi. Zero istruzioni perse
+
+## 101.1 La misura diretta
+
+Il §100 affermava che i blocchi MLIL coprono l'83,3% dello span e che «zero
+funzioni su 230 hanno copertura completa», concludendo che il CFG ha buchi per
+un sesto di ogni funzione. Era una misura INDIRETTA: byte di span contro somma
+di `end - start`.
+
+Sonda diretta `RUSTRE_DBG_COPERTURA` in `build_mlil_cfg`: quanti indirizzi di
+istruzione ENTRANO e quanti finiscono nei blocchi.
+
+| bucket | funzioni | indirizzi entrati | nei blocchi | **PERSI** |
+|---|---|---|---|---|
+| sample10_cs | 2263 | 149 253 | 149 253 | **0** |
+| sample6_c | 49 | 1 491 | 1 491 | **0** |
+
+**Zero.** `analyze_cfg_stream` copre ogni istruzione che riceve, in ogni
+funzione dei due bucket.
+
+## 101.2 Cosa misurava davvero il 16,7%
+
+Due cose, nessuna delle quali e' un buco del CFG:
+
+* **`end` inclusivo**: il file documenta gia' che 13 238 blocchi su 13 827 hanno
+  `next.start = end + lunghezza(ultima istruzione)`, cioe' `end` E' l'ultima
+  istruzione. `somma(end - start)` perde quindi la lunghezza dell'ultima
+  istruzione di OGNI blocco;
+* **riempimento fra blocchi**: allineamento e `int3` fra funzioni contano nello
+  span e non sono istruzioni.
+
+Il §100 non ha sbagliato il calcolo, ha sbagliato a chiamarlo «buchi».
+
+## 101.3 Cosa sono davvero i bersagli non risolti
+
+Sonda `RUSTRE_HLIL_DEBUG` su sample10_cs: **315 `why=noblock`** contro **1
+`why=midblock`**, tutti «nessun_blocco_inizia_qui». Coerente con «zero istruzioni
+perse»: quegli indirizzi non mancano dai blocchi, **non appartengono al flusso di
+istruzioni della funzione**.
+
+Il che e' compatibile anche con la verifica del prologo del §99 (100 su 100
+senza prologo): sono indirizzi che stanno FUORI dalla funzione come la vede il
+decompilatore e DENTRO l'estensione over-scansionata di `disasm_dump`, e non
+iniziano una funzione. Zona grigia fra due funzioni, o funzione vicina non
+separata correttamente.
+
+## 101.4 Le due scoperte utili del giro, che restano
+
+* **`rustre_analysis_cfg` E' CABLATA**: `build_mlil_cfg` delega a
+  `analyze_cfg_stream` la costruzione di blocchi e archi. Un pezzo della catena
+  che credevo spento e' invece il motore del CFG di path B;
+* **`promote_outward_jumps_to_tail_calls` ESISTE GIA'** (`lib.rs:27568`, gate
+  `RUSTRE_MLIL_TAILCALL`, default ON) e promuove i salti verso l'esterno a
+  chiamate di coda sul MLIL. Ha gia' la sua storia di misure, compresa una
+  ritirata sui salti INDIRETTI. Stavo riscrivendo, ai §95-100, una cosa che il
+  repo ha in due posti.
+
+## 101.5 Stato, e una nota su di me
+
+Terza conclusione ritirata su questo fronte in cinque round (§91, §96, §100).
+Tutte e tre avevano la stessa forma: una misura indiretta letta come diretta.
+
+La regola che applico da qui: **prima di dichiarare una causa radice, chiedersi
+quale misura DIRETTA la confermerebbe, e farla.** Il §100 avrebbe richiesto
+dieci minuti di sonda in `build_mlil_cfg` — gli stessi dieci che sono serviti
+oggi per smentirlo.
+
+Emissione: **0 differenze**. `path A`: 0. Test: 1337.
+
+---
+
+# Round 102 — La lacuna e' il salto CONDIZIONALE. E il mio criterio era piu' severo del repo
+
+## 102.1 La lacuna, misurata
+
+`promote_outward_jumps_to_tail_calls` (`lib.rs:27568`, default ON) promuove a
+chiamata di coda solo un **`Jump` INCONDIZIONATO** che sia l'ultima istruzione
+del blocco e il cui bersaglio cada fuori da `[func_start, func_end]`.
+
+Sonda `RUSTRE_DBG_OUTJUMP` su sample10_cs, per tipo di terminatore di blocco:
+
+| terminatore | bersaglio fuori |
+|---|---|
+| `Jump` | **377** (promossi) |
+| **`CondJump`** | **238** (IGNORATI) |
+| `Jump` indiretto | 0 (esclusi apposta) |
+
+Il caso che path B perde e' proprio il secondo: path A emette
+`if (flag == 0) return sub_140059F94();`, cioe' un ramo condizionale che esce.
+
+Allineato il lifter allo STESSO criterio (`[entry, fine reale]`, #7010): il
+divario si chiude — **0 chiamate di coda ancora perse** — con 3782 nuove, di cui
+1523 verso inizi di funzione noti e 2259 no.
+
+## 102.2 ⚠ Il gruppo di controllo che non avevo fatto
+
+Ai §99-101 ho giudicato «inventate» le 2259 perche' i loro bersagli non hanno
+prologo (100 campioni su 100). Non avevo mai applicato lo stesso test a cio' che
+il repo emette GIA' per difetto.
+
+Chiamate di coda presenti nella BASE (prodotte da
+`promote_outward_jumps_to_tail_calls`), sample10_cs:
+
+| | |
+|---|---|
+| bersagli distinti | 258 |
+| **di cui NON inizi di funzione** | **159 (61,6%)** |
+| su 60 campionati, **SENZA prologo** | **40 (66,7%)** |
+
+**Il comportamento predefinito del repo produce gia' chiamate di coda verso
+indirizzi senza prologo, due volte su tre.** Stavo applicando alla mia modifica
+un criterio piu' severo di quello che il repo applica a se stesso.
+
+Le 2259 sono quindi legittime **secondo il criterio del repo** (fuori dai limiti
+della funzione), e sospette solo secondo un proxy che il repo non usa.
+
+## 102.3 Cosa resta vero, e cosa cambia
+
+Resta vero che la mia popolazione e' PEGGIORE su quel proxy: **100% senza
+prologo contro il 66,7% dell'esistente**. Non e' la stessa qualita', e non lo
+scrivo come se lo fosse.
+
+Cambia la lettura: non «invento chiamate mentre il repo no», ma «ne aggiungo di
+una qualita' inferiore a quella gia' accettata». E' una differenza di grado, non
+di natura.
+
+## 102.4 Decisione
+
+`RUSTRE_HLIL_TAILEXIT` resta OPT-IN, ma per la prima volta senza un motivo
+tecnico dirimente: chiude un divario di **1527 chiamate**, non tocca `path A`
+(0 differenze), non muove il comportamento (15 AGREE, 19/19), e il suo output e'
+della stessa natura di quello gia' predefinito.
+
+Quello che manca per decidere non e' un'altra misura mia: e' sapere se il 33%
+con prologo dell'esistente sia considerato accettabile o gia' un difetto noto.
+Il commento di `promote_outward_jumps_to_tail_calls` documenta ritirate su altri
+fronti ma non su questo — quindi, per quanto posso stabilire, e' accettato.
+
+**Se e' accettato li', e' accettabile qui.** Non lo accendo io in questo giro
+solo perche' e' il quarto round di fila su questo fronte e la decisione merita di
+essere presa a mente fresca, con i due numeri (1527 recuperate, 2259 di qualita'
+inferiore) messi davanti a chi conosce l'intenzione del progetto.
+
+## 102.5 Stato
+
+Predefinito: **0 differenze**. `path A`: 0. Test: 1337.
+Sonde nuove a effetto zero: `RUSTRE_DBG_OUTJUMP`, `RUSTRE_DBG_COPERTURA`.
+
+---
+
+# Round 103 — `TAILEXIT` diventa PREDEFINITO: chiuse 1527 chiamate di coda
+
+## 103.1 La decisione, e su cosa si regge
+
+Il §102 lasciava la scelta aperta. Presa, con tre ragioni misurate:
+
+1. **il divario e' reale e grande**: path B perdeva **1527 chiamate di coda**
+   che path A emette — 1525 funzioni su 1525, nessuna eccezione (§94);
+2. **il criterio non e' mio**: `[entry, fine funzione]` e' lo stesso che
+   `promote_outward_jumps_to_tail_calls` (default ON) applica gia' ai `Jump`
+   INCONDIZIONATI. Io lo estendo ai `CondJump`, che sono la lacuna misurata —
+   su sample10_cs **377 `Jump` fuori promossi contro 238 `CondJump` fuori
+   ignorati** (§102);
+3. **non costa niente di misurabile**: `path A` 0 differenze, `goto` 9547,
+   `JUMPOUT` 1, dati 7943 — tutti identici al predefinito precedente. Solo
+   +3899 righe, che sono le chiamate che prima mancavano.
+
+## 103.2 Il costo, dichiarato per intero
+
+Dei 3782 bersagli nuovi, **2259 non sono inizi di funzione RILEVATI**, e su 100
+campionati **nessuno ha un prologo**.
+
+Va letto col gruppo di controllo del §102.2, che e' la parte che mancava per tre
+round: fra le chiamate di coda che il repo emetteva GIA' per difetto, **il 61,6%
+dei bersagli non e' un inizio di funzione e il 66,7% non ha prologo**.
+
+La popolazione aggiunta e' quindi **peggiore su quel proxy** (100% contro 66,7%)
+ma **della stessa natura** di quella gia' accettata. Differenza di grado, non di
+specie — e non la scrivo come se fosse un guadagno puro.
+
+## 103.3 Verifiche
+
+* `diff -rq` predefinito contro gate esplicito: **0 differenze** su 11342 file;
+* `diff -rq` **path A: 0 differenze**;
+* test: 477 (HLIL) + 1337 (decompiler);
+* **comportamento sul nuovo predefinito: 15 AGREE / 4 LINK_FAIL, 19 su 19
+  identiche.** Nessuna regressione semantica — verificato, non assunto.
+
+## 103.4 Undici gate predefiniti
+
+`FLAGDCE`, `TEMPPROP`, `TOPTEST_BREAK`, `NOPROLOGUE`, `ZFTEMP`, `CMOVFOLD`,
+`C_GOTO_REMOVAL`, `TAILDUP`, `LOOPS_DELEGATE`, `ARGC_CLAMP`, **`TAILEXIT`**.
+
+Sei sono passate scritte in questa sessione, cinque erano capacita' gia'
+presenti e spente.
+
+## 103.5 Nota su come ci sono arrivato
+
+Nove round su questo fronte (§94-103), con **tre conclusioni ritirate** (§91,
+§96, §100-101). Il pezzo che ha sbloccato tutto non e' stata una misura nuova
+sul mio codice, ma **la stessa misura applicata al comportamento gia'
+predefinito**: senza quel gruppo di controllo stavo per scartare una riparazione
+buona perche' la giudicavo con un metro che il repo non usa.
+
+E' la lezione da tenere: **quando una misura condanna una modifica, applicarla
+anche a cio' che c'e' gia'.** Se condanna pure quello, il metro e' sbagliato o il
+difetto e' preesistente — in entrambi i casi la modifica non e' il colpevole.
+
+---
+
+# Round 104 — `REACH` rivalutato sul nuovo predefinito: non tocca la parita'
+
+## 104.1 La domanda nuova
+
+Con `TAILEXIT` predefinito (§103), path B emette **5138** chiamate di coda. La
+passata di raggiungibilita' a punto fisso (`RUSTRE_HLIL_REACH`, §91) rimuove
+codice irraggiungibile: **rimuove anche quelle?**
+
+| | chiamate di coda emesse | chiamate di path A ancora perse |
+|---|---|---|
+| predefinito | 5138 | **0** |
+| + `REACH` | 4944 (−194) | **0** |
+
+Ne toglie 194, ma **nessuna di quelle che path A emette**. Le 194 stanno in
+regioni irraggiungibili — coerente col §92, che aveva stabilito leggendo il
+disassemblato che quel codice appartiene ad ALTRE funzioni.
+
+**La parita' conquistata al §103 non viene intaccata.**
+
+## 104.2 Il quadro completo di `REACH` sul predefinito attuale
+
+| | codice PERSO | in coda | `goto` | `JUMPOUT` | dati | righe |
+|---|---|---|---|---|---|---|
+| predefinito | 423 | 1489 | 9547 | 1 | **7943** | 936036 |
+| **+`REACH`** | **54** (−87,2%) | 240 (−84%) | **8845** (−702) | 1 | **7826** (−117) | 918600 (−17436) |
+
+`path A`: 0 differenze.
+
+Resta l'unico contatore in calo: **117 dati materializzati**. Il §92 lo ha
+spiegato — sono riferimenti del codice estraneo che la passata toglie — ma e' la
+classe che in questa sessione ha nascosto una perdita reale tre volte, e non la
+archivio come rumore.
+
+## 104.3 Stato
+
+Comportamento sul nuovo abbinamento: misura lanciata. `REACH` resta OPT-IN
+finche' non torna.
+
+Undici gate predefiniti; `REACH` sarebbe il dodicesimo e porterebbe da solo
+−702 `goto` (il calo piu' grande dopo `TAILDUP`) e −87% di codice perso.
+
+---
+
+# Round 105 — I 117 dati di `REACH` sono coerenti; e il prossimo fronte ha un nome
+
+## 105.1 L'ultimo dubbio su `REACH`, sciolto
+
+`RUSTRE_HLIL_REACH` fa calare i dati materializzati da 7943 a 7826 (−117). E' la
+classe che in questa sessione ha nascosto una perdita reale tre volte (§62, §71,
+§84), quindi non l'ho archiviata come rumore.
+
+Verifica: per ogni definizione persa, il simbolo e' ancora USATO nel file?
+
+| | |
+|---|---|
+| file che perdono una definizione | 28 |
+| definizioni perse | 117 |
+| **ancora usate ma non piu' definite (rottura)** | **0** |
+| non piu' usate (rimozione coerente) | **117** |
+
+**Nessun riferimento pendente.** I dati rimossi erano riferiti solo dal codice
+estraneo che la passata toglie — coerente col §92, che l'aveva stabilito
+leggendo il disassemblato.
+
+Con questo, `REACH` non ha piu' contatori in rosso:
+
+| | codice perso | `goto` | `JUMPOUT` | dati | chiamate di coda perse |
+|---|---|---|---|---|---|
+| predefinito | 423 | 9547 | 1 | 7943 | 0 |
+| **+`REACH`** | **54** | **8845** (−702) | 1 | 7826 (coerenti) | **0** |
+
+Manca solo il comportamento, in corso.
+
+## 105.2 Il prossimo fronte, misurato
+
+Chiamate INDIRETTE (`((__int64 (*)())x)(…)`), corpus intero:
+
+| | indirette | `JUMPOUT` | `vN;` nudi |
+|---|---|---|---|
+| path B | **1454** | 1 | 0 |
+| path A | **855** | 0 | 0 |
+
+Path B ne emette **599 in piu'**. Non e' automaticamente peggio — la lezione del
+§102 vale anche al contrario — ma l'ipotesi naturale e' che path A ne RISOLVA di
+piu' a chiamate dirette. Coerente col §68: path A referenzia 8798 bersagli HEX
+distinti contro i 6718 di path B.
+
+E' esattamente il lavoro di `IndirectCallResolver`, dentro `MlilCallAnalysis`:
+947 righe, 17 test, **zero chiamanti** (§70). L'ultima voce della lista utente
+che non ha ancora una diagnosi propria.
+
+⚠ Prima di cablarla serve il controllo che il §102 mi ha insegnato: verificare
+che le 855 di path A non siano semplicemente MENO perche' path A emette meno
+codice in quei punti. Non l'ho ancora fatto.
+
+## 105.3 Stato
+
+Predefinito invariato, `path A` 0 differenze, test 1337 + 477.
+
+---
+
+# Round 106 — `REACH` PREDEFINITO: −702 `goto`, codice perso −87%
+
+## 106.1 Tutti i controlli passati
+
+| controllo | esito |
+|---|---|
+| codice perso | 423 -> **54** (−87,2%) |
+| **`goto`** | 9547 -> **8845** (−702) |
+| righe | 936036 -> 918600 (−17436) |
+| `JUMPOUT` | 1 -> 1 |
+| dati materializzati | 7943 -> 7826, **117 verificati coerenti** (0 riferimenti pendenti su 28 file) |
+| chiamate di coda perse | 0 -> **0** (parita' del §103 intatta) |
+| `path A` | **0 differenze** |
+| **comportamento** | 15 AGREE / 4 LINK_FAIL, **19 su 19 identiche** |
+| equivalenza predefinito/gate | **0 differenze** su 11342 file |
+| test | 477 + 1337 |
+
+Nessun contatore in rosso dopo la verifica dei dati.
+
+## 106.2 Il calo dei `goto` piu' grande dopo `TAILDUP`
+
+−702 su 9547 (−7,4%). E non e' una soppressione cosmetica: sono salti verso
+codice che nessun percorso raggiunge, tolti insieme al codice stesso.
+
+Il debito verso l'obiettivo «zero goto» scende: dai 8913 di partenza (§62) ai
+**8845** attuali, con in mezzo `TAILDUP` che ne ha tolti 1700 e le correzioni
+strutturali che ne hanno aggiunti.
+
+## 106.3 Dodici gate predefiniti
+
+`FLAGDCE`, `TEMPPROP`, `TOPTEST_BREAK`, `NOPROLOGUE`, `ZFTEMP`, `CMOVFOLD`,
+`C_GOTO_REMOVAL`, `TAILDUP`, `LOOPS_DELEGATE`, `ARGC_CLAMP`, `TAILEXIT`,
+**`REACH`**.
+
+Sette sono passate scritte in questa sessione, cinque erano capacita' gia'
+presenti e spente.
+
+## 106.4 Come c'e' arrivato
+
+`REACH` e' stato scritto al §91, e in quello stesso round l'avevo dichiarato
+inaccendibile perche' «rimuove 1148 chiamate che nel binario vengono eseguite».
+Era falso (§92: sono di ALTRE funzioni). Poi e' rimasto opt-in per quattro round
+in attesa di due verifiche che ho fatto solo ora:
+
+* i **117 dati** — la classe che mi aveva ingannato tre volte, controllata uno
+  per uno: zero rotture;
+* le **chiamate di coda**, che esistono solo dal §103: ne toglie 194 su 5138,
+  nessuna di quelle che path A emette.
+
+Nessuna delle due sarebbe stata possibile al §91: la prima l'avevo saltata, la
+seconda non aveva ancora oggetto.
+
+---
+
+# Round 107 — ⚠ CORREZIONE al §105: le chiamate indirette NON sono un divario
+
+## 107.1 Il controllo che il §102 mi ha insegnato
+
+Il §105 riportava «path B emette 599 chiamate indirette in piu' (1454 contro
+855)» e indicava `IndirectCallResolver` come il fronte da cablare.
+
+Rifatta la misura con un riconoscitore che accetta ANCHE la forma con lista
+parametri (`(__int64 (*)(…))`), non solo quella vuota:
+
+| | path A | path B |
+|---|---|---|
+| chiamate indirette | **1379** | **1510** |
+| chiamate totali | 131 273 | 114 474 |
+| quota indirette sul totale | **1,05%** | **1,32%** |
+| file dove ne ha di piu' | **152** | **152** |
+
+Il divario non e' 599 ma **131** (+9,5%), e la distribuzione per file e'
+**perfettamente simmetrica**: 152 file per parte.
+
+## 107.2 Perche' il numero di ieri era sbagliato
+
+Il regex del §105 era `\(\(__int64 \(\*\)\(\)\)` — cioe' solo il cast a
+puntatore a funzione con **lista parametri VUOTA**. Path A emette piu' spesso la
+forma con parametri, quindi veniva contato meno.
+
+Non e' un errore di misura sul campione o sulla popolazione (i tre delle scorse
+settimane): e' un riconoscitore che non copriva tutte le forme della cosa che
+cercava — **la stessa famiglia dell'errore sui `case N:` del §61**.
+
+## 107.3 Conseguenza
+
+**Le chiamate indirette non sono un divario di parita'.** Cablare
+`IndirectCallResolver` non chiuderebbe niente di misurato: i due percorsi le
+risolvono in proporzione simile, e nessuno dei due domina.
+
+Resta vero che `MlilCallAnalysis` ha 947 righe, 17 test e zero chiamanti (§70).
+Ma dopo tre tentativi di trovargli un bersaglio — argomenti (§76: gia' fatto da
+`fill_mlil_call_args_with`), firme (§74: il difetto e' condiviso), chiamate
+indirette (qui: nessun divario) — **la conclusione onesta e' che quella crate non
+ha, oggi, un difetto misurato da chiudere.**
+
+## 107.4 Un divario nuovo, e questo e' reale
+
+| | chiamate totali emesse |
+|---|---|
+| path A | **131 273** |
+| path B | **114 474** |
+
+**16 799 chiamate in meno (−12,8%)**, dopo aver chiuso le 1527 di coda al §103.
+
+Non lo interpreto ancora: puo' essere codice che path B non emette, chiamate che
+non riconosce, o una differenza nella popolazione di funzioni emesse (path A
+referenzia 8798 bersagli HEX distinti contro 6718, §68). E' un numero da
+spiegare, non una conclusione.
+
+---
+
+# Round 108 — Il divario delle chiamate: decomposto, e concentrato al 70% nel C#
+
+## 108.1 Da dove viene, passo per passo
+
+| stato di path B | chiamate emesse | scarto da path A (131 273) |
+|---|---|---|
+| prima di `TAILEXIT` e `REACH` | 110 082 | **−21 191** |
+| + `TAILEXIT` (§103) | 118 002 | −13 271 |
+| + `REACH` (§106) | 114 474 | **−16 799** |
+
+`TAILEXIT` ne recupera **7920**; `REACH` ne toglie **3528**, tutte in codice
+irraggiungibile (verificato al §104: nessuna di quelle che path A emette).
+
+Le due modifiche insieme portano il divario da −21 191 a −16 799: **circa un
+quinto chiuso**.
+
+⚠ Il conteggio include le dichiarazioni anticipate (`__int64 sub_X();` contiene
+`sub_X(`), quindi il numero assoluto sovrastima le chiamate vere. Come confronto
+A/B sulla STESSA metrica resta valido.
+
+## 108.2 Dove sta il resto
+
+| bucket | scarto B−A |
+|---|---|
+| **sample10_cs** | **−5856** |
+| **sample5_cs** | **−5846** |
+| sample4_go / sample9_go | −1939 / −1920 |
+| sample7_cpp | −327 |
+| sample3_rust / sample8_rust | −316 / −313 |
+| i cinque bucket C | −282 in TUTTO |
+
+**Il C# vale 11 702 su 16 799 — il 70%.** Go 3859. I programmi C, insieme, meno
+di 300.
+
+## 108.3 Non e' un troncamento uniforme
+
+| | file |
+|---|---|
+| B ne ha MENO | 4656 |
+| pari | 3523 |
+| **B ne ha DI PIU'** | **3163** |
+
+In 3163 file su 11 342 path B emette PIU' chiamate di path A. Quindi non e' che
+path B «tronchi»: e' che perde molto in una popolazione specifica e guadagna
+altrove.
+
+## 108.4 Coerente con tutto il resto della sessione
+
+Il C# e' dove path B ha gia' mostrato ogni sua debolezza:
+* **285 delle 425 chiamate irraggiungibili** (§86, 67%);
+* **515 dei 555 `goto` aggiunti** da `TAILDUP` (§68);
+* **324 dei 346 blocchi orfani** (§89);
+* 13 SCC irriducibili e 2364 `goto` (§68).
+
+Quattro fronti misurati separatamente, **la stessa concentrazione**. Il C# emesso
+da Roslyn/CoreRT ha flusso irriducibile (macchine a stati async, dispatch di
+interfacce), e il percorso B lo struttura peggio del monolite.
+
+**Questa e' la diagnosi da portare avanti**, e non e' una passata mancante: e'
+una debolezza dello strutturatore su una classe di flusso.
+
+---
+
+# Round 109 — ⚠ CORREZIONE al §108: non e' il C#, e non e' l'irriducibilita'
+
+## 109.1 Il relooper non rinuncia MAI
+
+Il §108 concludeva: «il C# ha flusso irriducibile e path B lo struttura peggio».
+Sonda `RUSTRE_DBG_RELOOP` (effetto zero) su `structure_improper_scc`, che e' la
+macchina che gestisce gli SCC irriducibili:
+
+| bucket | SCC irriducibili | accettati | **rinunce** |
+|---|---|---|---|
+| sample10_cs | 27 | 27 | **0** |
+| sample7_cpp | **157** | 157 | **0** |
+| sample6_c | 4 | 4 | **0** |
+
+**Zero rinunce**, e il C++ ha **sei volte** gli SCC irriducibili del C#.
+L'irriducibilita' non e' la spiegazione.
+
+## 109.2 E normalizzato, il C# non e' un caso speciale
+
+Il §108 diceva «il 70% del divario e' nel C#». Vero in ASSOLUTO. Ma il C# e' il
+bucket piu' grande. Rapporto `chiamate B / chiamate A`:
+
+| bucket | file | A | B | **B/A** |
+|---|---|---|---|---|
+| sample1 | 43 | 283 | 218 | **77,0%** |
+| sample5_cs | 2253 | 26 768 | 20 922 | 78,2% |
+| sample10_cs | 2263 | 26 925 | 21 069 | 78,3% |
+| sample11_c / sample6_c | 51 / 49 | — | — | 80,0% / 80,7% |
+| sample1_c / sample2_cpp | 43 / 43 | — | — | 81,3% / 81,3% |
+| sample3_rust / sample8_rust | 312 | — | — | 90,3% / 90,4% |
+| sample4_go / sample9_go | ~2500 | — | — | 93,8% / 93,9% |
+| **sample7_cpp** | 994 | 6540 | 6213 | **95,0%** |
+| **TOTALE** | 11 342 | 131 273 | 114 474 | **87,2%** |
+
+**Il peggiore e' `sample1`, un programma C** (77,0%), e i quattro bucket C stanno
+all'80-81% — praticamente come il C#. Il migliore e' il C++ (95%), che pero'
+e' anche quello con piu' SCC irriducibili.
+
+## 109.3 La lettura giusta
+
+Il divario e' **LARGO, non concentrato**: path B emette dal 77% al 95% delle
+chiamate di path A a seconda del bucket, e la variabile non e' il linguaggio ne'
+l'irriducibilita'.
+
+Il C# pesa il 70% del totale assoluto **solo perche' e' il bucket piu' grande**
+(4516 file su 11 342, il 40%).
+
+## 109.4 Il mio errore, il quinto della stessa famiglia
+
+Assoluto contro normalizzato. Gli altri quattro: i `case` dello switch (§61), i
+siti duplicati da `TAILDUP` (§72), gli stub Go ripetuti (§74), le occorrenze
+invece delle funzioni distinte (§74).
+
+Questa volta la trappola era piu' sottile: non stavo confrontando popolazioni di
+dimensione diversa fra loro, ma **attribuendo una causa (l'irriducibilita' del
+C#) a un numero che dipendeva solo dalla TAGLIA del bucket**.
+
+La regola aggiornata: **prima di attribuire una causa a un bucket, normalizzare
+per la sua dimensione e verificare che la causa proposta sia MISURABILE** — qui
+bastava contare gli SCC irriducibili, e il C++ ne aveva sei volte tanti.
+
+## 109.5 Cosa resta
+
+Il divario del 12,8% sulle chiamate e' reale e generale. Non ha ancora una causa
+misurata; le due proposte (irriducibilita', concentrazione nel C#) sono cadute
+entrambe in questo round.
+
+---
+
+# Round 110 — Il divario delle chiamate NON esiste. Esiste quello delle INTRINSECHE SSE
+
+## 110.1 La misura diretta che chiude tre round di ipotesi
+
+Invece di cercare una causa, ho aperto il file col divario piu' grande
+(`sample1/sub_140001730`, −44) e guardato QUALI nomi mancano. Poi ho
+classificato tutto il corpus:
+
+| categoria | path A | path B | scarto |
+|---|---|---|---|
+| **chiamate VERE** | 93 039 | **108 981** | **+15 942** |
+| **intrinseche SSE (`_mm_*`)** | **13 126** | **0** | **−13 126** |
+| builtin `__*` | 6 760 | 5 481 | −1 279 |
+| falsi positivi del riconoscitore | 18 348 | 12 | −18 336 |
+
+**Sulle chiamate vere path B ne emette il 17% IN PIU'** (117,1%).
+
+Il «divario del 12,8%» dei §107-109 era composto da:
+* **18 336 falsi positivi**: `__attribute__(`, `aligned(`, `DCE(` contati come
+  chiamate dal mio regex. Path A emette attributi di allineamento, path B quasi
+  no (`NOPROLOGUE` li ha tolti);
+* **13 126 intrinseche SSE** che path A emette e path B **non emette affatto**.
+
+## 110.2 Il divario vero, e non e' cosmetico
+
+```c
+// path A
+__m128i xmm6;
+_mm_storeu_si128((__m128i *)&v_40, xmm6);
+
+// path B
+unsigned __int128 var_xmm6;
+*(__int64 *)(sp + 64) = var_xmm6;
+```
+
+Path B rappresenta i registri SSE come `unsigned __int128` e li assegna con
+store normali. **Assegnare un valore a 128 bit attraverso un puntatore a
+`__int64` TRONCA meta' del registro**: e' un difetto di correttezza, non di
+leggibilita'.
+
+Riferimenti xmm grezzi in path B: **31 058**.
+
+CLAUDE.md elenca la gestione SSE fra le capacita' del percorso principale
+(«SSE/x87: scalar float compare -> cmp fusion; scalar-only `__m128i` xmm ->
+`__int64`»). Path B non ne ha nulla.
+
+## 110.3 Bilancio delle ipotesi su questo fronte
+
+| round | ipotesi | esito |
+|---|---|---|
+| §107 | le chiamate indirette sono il divario | falsa (regex stretto) |
+| §108 | il divario e' concentrato nel C# | vero in assoluto, fuorviante normalizzato |
+| §108 | e' l'irriducibilita' del C# | falsa (0 rinunce, C++ ha 6x gli SCC) |
+| §109 | il divario e' largo e senza causa | **il divario non esisteva** |
+| **§110** | **sono le intrinseche SSE** | **misurato: 13 126 contro 0** |
+
+Quattro ipotesi in tre round, tutte cadute, e la risposta e' arrivata da
+**dieci minuti di lettura di un file** invece che da una quinta ipotesi.
+
+## 110.4 Il fronte, con il nome giusto
+
+**Path B non solleva le operazioni SSE a intrinseche.** E' il divario di parita'
+piu' grande rimasto, vale 13 126 costrutti su 31 058 riferimenti xmm grezzi, ed
+e' di CORRETTEZZA per via del troncamento a 64 bit.
+
+E' anche l'unica voce della lista utente che nessuno aveva ancora nominata: non
+e' `analysis-fn`, non e' `il-passes`, non e' `MlilCallAnalysis` — e' la catena
+SSE.
+
+---
+
+# Round 111 — #7030: 25 233 store con la LARGHEZZA SBAGLIATA
+
+## 111.1 Il sito, e la `size` buttata via
+
+`MlilToHlilLifter`, lift di `MlilInstruction::Store`:
+
+```rust
+MlilInstruction::Store { addr, src, .. } => {     // <- `size` SCARTATA
+    let dest = HlilExpr::Deref { addr: …, ty: HlilType::Unknown };
+```
+
+Il ramo `Assign`, DUE RIGHE SOPRA, usa gia' `HlilType::from_mlil_size(*size)`.
+La `Store` MLIL porta la stessa informazione e il lifter la buttava via.
+
+Con `Unknown` il deref esce nudo e una passata testuale a valle ci mette
+`(__int64 *)` — comportamento che il commento del printer descriveva gia' come
+difetto («dimezzando la larghezza: e' cosi' che `accumulate` perde la meta' alta
+che `psrldq` legge»), senza che nessuno avesse chiuso la causa.
+
+## 111.2 L'asimmetria che ha fatto trovare il difetto
+
+| | attraverso `__int64 *` | attraverso `unsigned __int128 *` |
+|---|---|---|
+| **scritture** di una var xmm | **4322** | **0** |
+| **letture** di una var xmm | **0** | **3070** |
+
+Perfetta. Il lato lettura conosceva la larghezza, il lato scrittura no.
+
+## 111.3 La riparazione e' molto piu' ampia del bersaglio
+
+Distribuzione dei cast di deref sul corpus intero:
+
+| larghezza | prima | dopo | |
+|---|---|---|---|
+| `__int64` | 161 925 | **136 692** | **−25 233** |
+| `unsigned __int128` | 3 330 | 7 888 | +4 558 |
+| `uint32_t` | 26 815 | 39 829 | +13 014 |
+| `uint16_t` | 2 618 | 4 012 | +1 394 |
+| `uint8_t` | 11 335 | 17 602 | +6 267 |
+| **TOTALE** | **206 023** | **206 023** | **0** |
+
+Il totale non cambia: ogni deref conserva un cast, ma **25 233 lo avevano
+SBAGLIATO**. La somma degli aumenti e' esattamente pari al calo.
+
+Due difetti distinti, non uno:
+* **4 558 TRONCATE** — un valore a 128 bit scritto attraverso un puntatore a 64:
+  perde meta' del registro (il bersaglio che cercavo);
+* **20 675 ALLARGATE** — una store a 8/16/32 bit resa come `__int64`: scrive
+  **piu' byte di quanti il programma ne scriva**, corrompendo la memoria
+  adiacente. Non l'avevo previsto, ed e' la meta' piu' grande.
+
+Esempio: `*(__int64 *)fp = 1;` -> `*(uint32_t *)fp = 1;` (un `mov dword`).
+
+## 111.4 Costo
+
+| | goto | `JUMPOUT` | dati | righe | `path A` |
+|---|---|---|---|---|---|
+| predefinito | 8845 | 1 | 7826 | 918 600 | — |
+| **+#7030** | **8845** | **1** | **7826** | **918 600** | **0 differenze** |
+
+**Nessun contatore si muove**: cambia solo il tipo dentro i cast, su 4407 file.
+
+Gate `RUSTRE_HLIL_STORE_WIDTH`, opt-in in attesa del comportamento (lanciato).
+
+## 111.5 Come ci sono arrivato
+
+Dal §110 (path B non emette intrinseche SSE) guardando le FORME che emette al
+loro posto. La forma piu' comune era `*(__int64 *)(sp + H) = XMM`, e il confronto
+con la forma di lettura ha reso l'asimmetria evidente.
+
+Non cercavo questo difetto: cercavo le intrinseche. **Le 20 675 store allargate
+non le stava misurando nessuna metrica di questo repo.**
+
+---
+
+# Round 112 — `STORE_WIDTH` PREDEFINITO: 25 233 store con la larghezza corretta
+
+## 112.1 Verifiche complete
+
+| | esito |
+|---|---|
+| store con larghezza sbagliata | 25 233 -> **0** |
+| ↳ troncate (128 -> 64 bit) | **4 558** riparate |
+| ↳ allargate (8/16/32 -> 64 bit) | **20 675** riparate |
+| `goto` / `JUMPOUT` / dati / righe | **tutti identici** |
+| `path A` | **0 differenze** |
+| **comportamento** | 15 AGREE / 4 LINK_FAIL, **19 su 19 identiche** |
+| equivalenza predefinito/gate | **0 differenze** su 11 342 file |
+| test | 477 (HLIL) + 1337 (decompiler) |
+
+Nessun contatore in rosso.
+
+## 112.2 Perche' era invisibile
+
+Le due meta' del difetto sfuggono a tutte le metriche esistenti:
+
+* **`check.sh`**: `*(__int64 *)p = 1` compila perfettamente. Scrivere 8 byte
+  dove il programma ne scrive 4 e' C valido;
+* **`behavior.py`**: il campione di 63 funzioni non contiene nessuna delle 4407
+  toccate — infatti il comportamento e' identico prima e dopo;
+* **`fidelity`/arieta'/`cross_build`**: guardano le FIRME, non i corpi.
+
+E' la classe «sicuro di se' e sbagliato» nella sua forma piu' pura: **25 233
+istruzioni emesse con la semantica sbagliata, in un corpus che ogni metrica
+dichiarava sano.**
+
+## 112.3 Tredici gate predefiniti
+
+`FLAGDCE`, `TEMPPROP`, `TOPTEST_BREAK`, `NOPROLOGUE`, `ZFTEMP`, `CMOVFOLD`,
+`C_GOTO_REMOVAL`, `TAILDUP`, `LOOPS_DELEGATE`, `ARGC_CLAMP`, `TAILEXIT`,
+`REACH`, **`STORE_WIDTH`**.
+
+Otto sono passate scritte in questa sessione, cinque erano capacita' gia'
+presenti e spente.
+
+## 112.4 Il fronte SSE resta aperto
+
+Il difetto delle store e' stato trovato CERCANDO le intrinseche SSE (§110), e le
+intrinseche restano assenti: **13 126 `_mm_*` in path A contro 0 in path B**, con
+31 058 riferimenti xmm grezzi.
+
+La riparazione di oggi toglie la parte pericolosa (il troncamento a 64 bit) ma
+non solleva le operazioni: `var_xmm6 = (var_xmm6 ^ var_xmm6)` resta tale invece
+di diventare `_mm_setzero_si128()`. E' leggibilita' e fedelta', non piu'
+correttezza.
+
+---
+
+# Round 113 — Le intrinseche SSE: cosa manca davvero, e cosa no
+
+## 113.1 I due percorsi rappresentano la stessa cosa in modo diverso
+
+| operazione | path A | path B |
+|---|---|---|
+| store 128 bit | `_mm_storeu_si128((__m128i *)p, v)` — 2777 + 1462 | `*(unsigned __int128 *)p = v` — 4322 |
+| load 128 bit | `_mm_loadu_si128` — 1762 + 1030 | `*(unsigned __int128 *)p` — 3070 |
+| azzeramento | `_mm_setzero_si128()` — 1201 | `XMM = 0` — 1454 |
+| maschera bit | `_mm_movemask_epi8` — 347 | `pmovmskb(…)` — 399 |
+
+Le popolazioni sono **comparabili** (path B ne ha anzi qualcuna in piu'). Non e'
+che path B perda le operazioni: le scrive in un'altra forma.
+
+Dopo il #7030 (§111) quella forma non e' piu' nemmeno sbagliata: il deref porta
+la larghezza giusta. Resta una differenza di FEDELTA' — `_mm_storeu_si128` e'
+esplicitamente non allineato, `*(unsigned __int128 *)p` presume l'allineamento —
+e di leggibilita'.
+
+## 113.2 Il difetto vero: 891 pseudo-intrinseche NON DICHIARATE
+
+Path B emette pseudo-funzioni col nome del MNEMONICO:
+
+| nome | usi |
+|---|---|
+| `cvtsi2sd` | 625 |
+| `pmovmskb` | 399 |
+| `pcmpeqb` | 256 |
+| `pshufd` / `cvttsd2si` | 213 / 213 |
+| `cvtsi2ss` / `pcmpeqw` / `punpcklbw` | 194 / 170 / 159 |
+
+**891 usi in 338 file non hanno una dichiarazione nel proprio file.** Sono
+dichiarazioni implicite: la classe che `check.sh` non vede (usa `-w`) e che
+CLAUDE.md documenta gia' per altri nomi.
+
+Causa: `emit_callee_forward_decls` (`lib.rs:12661`) cerca **solo** `sub_HEX` e
+`off_HEX`. Un callee con un nome qualunque non viene mai dichiarato.
+
+## 113.3 Perche' NON l'ho riparato in questo giro
+
+Due strade, entrambe con un rischio che non ho ancora misurato:
+
+* **dichiararle** (`unsigned __int128 pcmpeqb();`) chiude le implicite, ma il
+  TIPO DI RITORNO non e' uniforme: `pmovmskb` e `cvttsd2si` restituiscono un
+  intero, `pcmpeqb` un vettore. Un tipo sbagliato in una dichiarazione non
+  prototipata produce errori di tipo ai siti d'uso — cioe' scambierei un difetto
+  invisibile con uno visibile, che a volte va bene e a volte no;
+* **mapparle sulle intrinseche vere** (`pcmpeqb` -> `_mm_cmpeq_epi8`) chiude
+  implicite E fedelta' in un colpo, ma dipende dall'ORDINE DEGLI OPERANDI, che
+  nel lifting da AT&T e' esattamente il tipo di cosa che questa sessione ha visto
+  sbagliare tre volte.
+
+Serve una misura prima: compilare un campione con
+`-Werror=implicit-function-declaration` per contare il difetto reale, e
+confrontare i siti `pcmpeqb` di path B con gli `_mm_cmpeq_epi8` di path A sulla
+STESSA funzione per stabilire l'ordine. Nessuna delle due l'ho fatta.
+
+**Preferisco lasciarlo aperto con il piano scritto che chiuderlo indovinando.**
+
+---
+
+# Round 114 — #7040: 1598 intrinseche SSE vere, e la mappa confermata due volte
+
+## 114.1 Le due misure che il §113 chiedeva
+
+**Ordine degli operandi** — il rischio che questa sessione ha visto sbagliare tre
+volte. Letto lo STESSO file nei due percorsi:
+
+```text
+path B:  var_xmm0 = pcmpeqb(var_xmm0, var_xmm1);
+path A:  xmm0     = _mm_cmpeq_epi8(xmm0, xmm1);
+```
+
+**Identico.** Nessuna inversione.
+
+**La mappa nome per nome**, misurata: per ogni pseudo-nome, quale `_mm_*`
+compare con cardinalita' IDENTICA nel file path A corrispondente.
+
+| pseudo | intrinseca | file concordi |
+|---|---|---|
+| `psrld` / `pslld` | `_mm_srli_epi32` / `_mm_slli_epi32` | 12/12, 2/2 |
+| `punpcklbw` | `_mm_unpacklo_epi8` | 63/65 |
+| `pshufd` | `_mm_shuffle_epi32` | 51/53 |
+| `pshuflw` | `_mm_shufflelo_epi16` | 39/41 |
+| `pcmpeqb` | `_mm_cmpeq_epi8` | 67/79 |
+| `pmovmskb` | `_mm_movemask_epi8` | 82/116 |
+| `pcmpgtb` / `pcmpeqw` | `_mm_cmpgt_epi8` / `_mm_cmpeq_epi16` | 10/14, 20/30 |
+
+La misura concorda con la corrispondenza ISA nota **in ogni caso**. Due prove
+indipendenti.
+
+⚠ Trovato e corretto un difetto nel mio script: `fb.name[:-8]` toglieva 8
+caratteri da `.hlil.c`, che ne ha 7 — e il risultato era «nessun candidato» per
+TUTTI i nomi. L'ho sospettato perche' sapevo, per lettura diretta, che almeno un
+caso esisteva. **Uno zero uniforme e' sempre un sospetto di misura**, non un
+risultato.
+
+## 114.2 Il risultato
+
+| | prima | dopo |
+|---|---|---|
+| intrinseche `_mm_*` in path B | **0** | **1598** |
+| pseudo-funzioni vettoriali | 1600 | **2** |
+| pseudo-SSE non dichiarate | 891 | **447** (−50%) |
+| `goto` / `JUMPOUT` / dati / righe | — | **tutti identici** |
+| `path A` | — | **0 differenze** |
+
+Le intrinseche vere sono dichiarate da `<emmintrin.h>`, gia' nel prologo di
+`ida_defs.h`: la riscrittura chiude 444 dichiarazioni implicite **come effetto
+collaterale**, senza aggiungere una riga.
+
+## 114.3 Cosa ho lasciato fuori, e perche'
+
+Le conversioni SCALARI — `cvtsi2sd` (625 usi), `cvttsd2si` (213), `cvtsi2ss`
+(194) — sono **escluse**. La misura non trova per loro nessun candidato con
+cardinalita' coerente, perche' path A le rende come CAST e non come intrinseche.
+Mapparle sarebbe indovinare, e sono le 447 non dichiarate che restano.
+
+Gate `RUSTRE_HLIL_SSE_INTRIN`, opt-in in attesa del comportamento (lanciato).
+
+---
+
 <!-- I round successivi si aggiungono qui sotto. Non rimuovere nulla di sopra. -->
+
+# Round 115 — nove corpi ausiliari, e una regressione MIA del round 114
+
+## 1. La regressione: `RUSTRE_HLIL_SSE_INTRIN` riportato a OPT-IN
+
+Il round 114 ha concluso «ogni controllo per la promozione passa». Era falso, e
+il modo in cui era falso e' istruttivo: avevo verificato comportamento (19 su 19
+identiche), `path A` (0 differenze), `goto`, `JUMPOUT`, righe e conteggi — e
+**non avevo mai compilato i file che la passata modificava**.
+
+Misurato al round 115, sugli stessi 120 file toccati:
+
+| gate | compilano | falliscono |
+|---|---|---|
+| `SSE_INTRIN` ACCESO | **0** | 120 |
+| `SSE_INTRIN` spento | **110** | 0 |
+
+Causa, letta dagli errori di gcc e non dedotta: le intrinseche vogliono
+`__m128i`, le variabili del modello sono `uint64_t` — «incompatible type for
+argument 1 of `_mm_cmpeq_epi8`» — e `pshufd(dst,src,imm)` ha TRE argomenti
+contro i DUE di `_mm_shuffle_epi32`. Prima la pseudo-funzione passava come
+dichiarazione implicita, che `-w` accetta; dopo e' un errore DURO.
+
+E' lo stesso limite per cui `punpckhqdq` e `aesenc` sono esclusi da
+`define_simd_bodies`: **il nome giusto non basta se il tipo non lo e'.** Il
+gate e' tornato opt-in; verificato `0 differenze` contro il giro con SSE spento.
+
+⚠ Lezione, e vale oltre questo caso: una batteria di controlli puo' essere
+ampia e **non contenere quello pertinente**. Le intrinseche cambiano TIPI, e
+nessuno dei sei controlli guardava i tipi. La domanda da farsi non e' «quanti
+controlli passano» ma «quale controllo vedrebbe questo difetto».
+
+## 2. La correzione vera: `define_simd_bodies` da 4 nomi a 13
+
+Misurato prima di scrivere: **95 nomi distinti non dichiarati, 2730 occorrenze,
+577 file**; la passata ne copriva QUATTRO.
+
+Aggiunti i nove la cui semantica e' rappresentabile ESATTAMENTE sul modello a 64
+bit scalari: `bsf`, `bsr`, `comi_cf`/`zf`/`pf`, `ucomi_cf`/`zf`/`pf`,
+`mul_overflow`. Le forme sono lette dall'emesso (`bsf` unaria,
+`ucomi_cf(var_xmm0, var_xmm2)` binaria sui BIT di un `double`, coerente con
+`cvtsi2sd`), non dedotte dal nome.
+
+| | prima | dopo |
+|---|---|---|
+| occorrenze non dichiarate | 2730 | **1679** (−38,5%) |
+| file interessati | 577 | **274** (−52,5%) |
+| occorrenze dei 9 nomi ora definite | 0 | **1051**, zero rimaste nude |
+| compilazione dei file coi corpi nuovi | — | **60 su 60** |
+| `path A` | — | **0 differenze** |
+
+Esclusi di proposito e con la ragione scritta nel codice: `cpuid_*` (204 —
+dipende dalla CPU, nessun corpo e' giusto), `aesenc`/`packuswb`/`vpminuq`/
+`pcmpeqq` (leggono i 128 bit pieni), `cvtsi2ss` (precisione singola, da
+misurare), `pthread_mutex_unlock` (funzione vera: le manca una dichiarazione,
+non un corpo — difetto diverso, rimedio diverso).
+
+⚠ Due inesattezze DICHIARATE invece che taciute: `bsf`/`bsr` con operando zero
+lasciano la destinazione invariata nella ISA, ma il lifter le ha modellate
+unarie e la destinazione non arriva alla funzione; e su NaN la ISA mette CF e ZF
+entrambi a 1, mentre in C `a < b` e `a == b` sono entrambi falsi — motivo per
+cui `_pf` esiste come funzione a parte.
+
+Comportamento rimisurato dopo i corpi: **15 AGREE / 4 LINK_FAIL su 63**,
+identico — i corpi non spostano nulla in peggio.
+
+## 3. ⚠ Precisazione sui numeri del §2: sono di DUE configurazioni diverse
+
+Il confronto 2730 -> 1679 e' un A/B corretto (entrambi i lati con `SSE_INTRIN`
+ACCESO, l'unica differenza sono i corpi). Ma la configurazione che si SPEDISCE
+ha `SSE_INTRIN` spento, e li' i nomi pseudo-SIMD tornano tutti: misurato su
+`fix115`, **3277 occorrenze su 96 nomi**.
+
+Non e' una contraddizione, sono due mondi: acceso, le pseudo-SIMD spariscono ma
+i file non compilano; spento, i file compilano e le pseudo-SIMD restano nude. Il
+numero da citare come stato attuale e' **3277**, non 1679.
+
+La misura non contaminata dell'effetto dei corpi e' quella per-nome, che vale in
+entrambi i mondi: **1051 occorrenze passate da nude a definite, zero rimaste
+nude** fra i nove nomi trattati.
+
+Cosa resta in testa alla lista: `pmovmskb` 399, `pcmpeqb` 256, `aesenc` 222,
+`pshufd` 213, `cvtsi2ss` 194 — tutte vettoriali a 128 bit, cioe' **la stessa
+causa unica** che ha fatto fallire il #7040. Non e' un difetto di dichiarazione:
+finche' il modello tiene i 64 bit bassi, ne' un corpo ne' un'intrinseca possono
+essere corretti. La strada vera e' rappresentare i 128 bit, ed e' un lavoro di
+MODELLO, non di emissione.
+
+## 4. Verifica retroattiva degli ALTRI tredici gate
+
+La lezione del §1 applicata a cio' che gia' spedisce: campione 1 file su 40
+(284 file), tutti i gate predefiniti ACCESI contro tutti SPENTI.
+
+**284 su 284 compilano in entrambi i casi.** I tredici gate sono neutri sulla
+compilazione; la regressione era unica di `SSE_INTRIN`.
+
+1337 test verdi.
+
+<!-- ULTIMO-RAPPORTO: 114 -->
+
+# Round 116 — ⚠ IL PUNTO DA CUI RIPARTIRE: le mie verifiche comportamentali misuravano 19 funzioni su 63
+
+Round interrotto a meta' su richiesta. Nessuna modifica ai sorgenti: questo
+round e' **solo misura**, ed e' la scoperta piu' importante delle ultime
+sessioni. Da leggere PER PRIMA alla ripresa.
+
+## Il fatto
+
+`behavior_spec.json` ha 28 bucket. Nove leggono lo snapshot che si passa da
+riga di comando; **diciannove hanno `"out_dir": "behav/out"`**, un albero
+SEPARATO sotto `tests/decompiler_corpus/behav/out`, che l'argomento da riga di
+comando NON tocca.
+
+Misurato oggi su quell'albero:
+
+| | |
+|---|---|
+| bucket | 28 dir, 68590 file `.c` |
+| file `.hlil.c` (path B) | **0** |
+| data dei file | **2026-08-15** (driver: 2026-08-19) |
+| file piu' recenti del driver | 0 |
+
+## Cosa significa, senza attenuanti
+
+Ogni volta che negli ultimi round ho scritto «comportamento invariato,
+15 AGREE / 4 LINK_FAIL», stavo misurando **19 funzioni**: 15 + 4 = 19, e le
+altre 44 uscivano NOT_EMITTED perche' `behav/out` non contiene NESSUN file di
+path B. Non erano funzioni che path B non emette — erano funzioni che il mio
+comando non ha mai guardato.
+
+⚠ Il NOT_EMITTED quindi NON e' un difetto di emissione, come avevo cominciato a
+indagare oggi credendo fosse il fronte dei NOMI. Verificato per contrasto: sia
+path A sia path B **definiscono** `main_accumulate` (in
+`sample4_go/sub_140086660`), e il regex di `find_definition` lo trova.
+
+## Il fronte dei nomi NON esiste (misurato, e chiude un'indagine)
+
+Nato come sospetto oggi, chiuso oggi:
+
+| | path A | path B |
+|---|---|---|
+| funzioni con nome VERO (non `sub_`/`fn_`/`loc_`) | 4086 | **5091** |
+
+Path B ne nomina **di piu'**. Per bucket: C/C++ 93-96%, Rust 88%, Go 70%,
+**C# 8%** (`sample5_cs` 207 su 2460, `sample10_cs` 210 su 2473). Il C# e'
+l'unico buco reale, ed e' l'unico posto dove `flirt-apply` avrebbe un bersaglio
+misurato.
+
+## Da fare alla ripresa, in quest'ordine
+
+1. **Rigenerare `behav/out` col driver attuale, con e senza `RUSTRE_HLIL=1`**,
+   in modo che i 19 bucket contengano anche i `.hlil.c`. Finche' non e' fatto,
+   nessun numero comportamentale di path B su 63 e' interpretabile — inclusi
+   quelli che ho pubblicato io.
+2. **Ri-verificare i round 111-115 con la scala piena.** Le conclusioni
+   «comportamento invariato» valgono su 19 funzioni e vanno riconfermate su 63.
+   ⚠ Non e' detto che reggano.
+3. Solo dopo, riprendere i fronti aperti: C# non nominato (8%), le vettoriali a
+   128 bit (3277 occorrenze, causa unica: il modello tiene i 64 bit bassi), i
+   346 blocchi orfani, gli 8845 `goto`.
+
+## Nota di metodo, la seconda in due round
+
+E' la stessa forma dell'errore del §115.1: li' sei controlli verdi non
+guardavano i tipi; qui una metrica verde non guardava due terzi del campione.
+In entrambi i casi la domanda mancante era **«questo controllo vede davvero
+cio' che ho cambiato?»**, e in entrambi i casi la risposta e' arrivata da una
+misura sulla MISURA, non sul codice.
+
+<!-- ULTIMO-RAPPORTO: 114 -->

@@ -184,7 +184,9 @@ fn stmt_exprs(stmt: &HlilStatement) -> Vec<&HlilExpr> {
 /// All nested statement bodies of a statement.
 /// Come [`stmt_bodies`], ma visibile al modulo del CFG: serve a
 /// `cfg_from_hlil`, che deve percorrere i corpi annidati.
-pub(crate) fn stmt_bodies_pub(stmt: &HlilStatement) -> Vec<&Vec<HlilStatement>> {
+/// Accessore ai corpi annidati di uno statement, per i consumatori fuori dal
+/// crate (sonde di `rustre-decompiler`).
+pub fn stmt_bodies_pub(stmt: &HlilStatement) -> Vec<&Vec<HlilStatement>> {
     stmt_bodies(stmt)
 }
 
@@ -2380,6 +2382,163 @@ fn all_flags_live(live: &mut std::collections::BTreeSet<String>) {
     }
 }
 
+// -- Raggiungibilita' a PUNTO FISSO sull'AST emesso (#6940) ------------------
+//
+// `remove_unreachable_after_terminator` guarda UN passo: cancella cio' che
+// segue un terminatore fino alla prossima etichetta, e si ferma li'. Non vede
+// il caso transitivo, che il §90 ha misurato essere quello dominante: un blocco
+// E' bersaglio di un `goto`, quindi sembra vivo, ma quel `goto` sta a sua volta
+// in codice irraggiungibile.
+//
+// Misurato: dei 324 statement orfani di sample10_cs, **210 (65%) escono da
+// `emit_pending_exits`** e hanno tutti questa forma. Il filtro a un passo del
+// #6930 ne ha scartati 33 su 585 e ha lasciato gli orfani a 324.
+//
+// Qui il calcolo e' un punto fisso DECRESCENTE:
+// * si parte OTTIMISTI, con tutte le etichette considerate vive;
+// * si percorre l'albero e si raccoglie quali etichette sono davvero
+//   raggiunte — per CADUTA da uno statement raggiungibile, oppure da un `goto`
+//   che si trova in posizione raggiungibile;
+// * l'insieme puo' solo restringersi, quindi termina;
+// * si cancella solo alla fine, quando l'insieme e' stabile.
+//
+// Partire ottimisti e restringere e' la direzione SICURA per una rimozione: si
+// toglie solo cio' che e' PROVATAMENTE irraggiungibile. La direzione opposta
+// (partire da niente e crescere) toglierebbe codice per mancanza di prove.
+
+/// DEFAULT-ON dal 2026-08-19 (#6940); si spegne con `RUSTRE_HLIL_REACH=0`.
+///
+/// Misurato sul corpus intero (11342 file per lato), contro il predefinito:
+///   codice PERSO        423 -> **54**   (−87,2%)
+///   `goto`             9547 -> **8845** (−702, il calo piu' grande dopo TAILDUP)
+///   righe            936036 -> 918600   (−17436)
+///   `JUMPOUT`             1 -> 1        (invariato)
+///   dati               7943 -> 7826     (−117, VERIFICATI coerenti)
+///   chiamate di coda perse  0 -> **0**  (la parita' del §103 non si tocca)
+///   `path A`                            0 differenze
+///   comportamento      15 AGREE / 4 LINK_FAIL, **19 su 19 identiche**
+///
+/// I 117 dati in meno sono l'unico contatore in calo, ed e' la classe che in
+/// questa sessione ha nascosto una perdita reale tre volte. Verificato uno per
+/// uno: su 117 definizioni rimosse in 28 file, **ZERO sono ancora usate** —
+/// erano riferite solo dal codice estraneo che questa passata toglie (§92 ha
+/// stabilito leggendo il disassemblato che quel codice appartiene ad ALTRE
+/// funzioni).
+///
+/// Toglie anche 194 chiamate di coda su 5138, tutte in regioni irraggiungibili:
+/// nessuna di quelle che path A emette.
+fn reach_fixpoint_enabled() -> bool {
+    !matches!(
+        std::env::var("RUSTRE_HLIL_REACH").as_deref(),
+        Ok("0") | Ok("false")
+    )
+}
+
+fn tutte_le_etichette(stmts: &[HlilStatement], out: &mut std::collections::HashSet<String>) {
+    for s in stmts {
+        if let HlilStatement::Label(l) = s {
+            out.insert(l.clone());
+        }
+        for b in stmt_bodies(s) {
+            tutte_le_etichette(b, out);
+        }
+    }
+}
+
+/// Percorre marcando la raggiungibilita'; raccoglie le etichette RAGGIUNTE
+/// (per caduta) e i bersagli dei `goto` in posizione raggiungibile.
+fn scandisci(
+    stmts: &[HlilStatement],
+    mut raggiungibile: bool,
+    vive: &std::collections::HashSet<String>,
+    bersagli: &mut std::collections::HashSet<String>,
+    raggiunte: &mut std::collections::HashSet<String>,
+) {
+    for s in stmts {
+        if let HlilStatement::Label(l) = s {
+            if raggiungibile {
+                raggiunte.insert(l.clone());
+            }
+            if vive.contains(l) {
+                raggiungibile = true;
+            }
+        }
+        if raggiungibile {
+            if let HlilStatement::Goto(a) = s {
+                bersagli.insert(format!("loc_{:x}", a.as_u64()));
+            }
+            for b in stmt_bodies(s) {
+                scandisci(b, true, vive, bersagli, raggiunte);
+            }
+        }
+        if raggiungibile && s.is_terminator() {
+            raggiungibile = false;
+        }
+    }
+}
+
+fn conta_profondo(s: &HlilStatement) -> usize {
+    1 + stmt_bodies(s)
+        .iter()
+        .map(|b| b.iter().map(conta_profondo).sum::<usize>())
+        .sum::<usize>()
+}
+
+fn rimuovi_irraggiungibili(
+    stmts: &mut Vec<HlilStatement>,
+    mut raggiungibile: bool,
+    vive: &std::collections::HashSet<String>,
+) -> usize {
+    let mut tolti = 0usize;
+    let mut out: Vec<HlilStatement> = Vec::with_capacity(stmts.len());
+    for mut s in std::mem::take(stmts) {
+        if let HlilStatement::Label(l) = &s
+            && vive.contains(l)
+        {
+            raggiungibile = true;
+        }
+        if !raggiungibile {
+            tolti += conta_profondo(&s);
+            continue;
+        }
+        for b in stmt_bodies_mut(&mut s) {
+            tolti += rimuovi_irraggiungibili(b, true, vive);
+        }
+        let termina = s.is_terminator();
+        out.push(s);
+        if termina {
+            raggiungibile = false;
+        }
+    }
+    *stmts = out;
+    tolti
+}
+
+/// Cancella gli statement provatamente irraggiungibili, con la
+/// raggiungibilita' calcolata a punto fisso. Ritorna quanti ne ha tolti.
+pub fn remove_unreachable_fixpoint(func: &mut HlilFunction) -> usize {
+    if !reach_fixpoint_enabled() {
+        return 0;
+    }
+    let mut vive = std::collections::HashSet::new();
+    tutte_le_etichette(&func.body, &mut vive);
+    for _ in 0..32 {
+        let mut bersagli = std::collections::HashSet::new();
+        let mut raggiunte = std::collections::HashSet::new();
+        scandisci(&func.body, true, &vive, &mut bersagli, &mut raggiunte);
+        let nuove: std::collections::HashSet<String> =
+            bersagli.union(&raggiunte).cloned().collect();
+        // ⚠ Confrontare le LUNGHEZZE non basta: due insiemi diversi possono
+        // avere la stessa cardinalita', e il punto fisso si fermerebbe su un
+        // insieme sbagliato. Si confrontano gli INSIEMI.
+        if nuove == vive {
+            break;
+        }
+        vive = nuove;
+    }
+    rimuovi_irraggiungibili(&mut func.body, true, &vive)
+}
+
 /// Un `Goto` o una `Label` in qualunque punto sospende la passata.
 fn has_goto_or_label(stmts: &[HlilStatement]) -> bool {
     stmts.iter().any(|s| {
@@ -3317,6 +3476,10 @@ impl StructuringPipeline {
         // commento su `eliminate_dead_flag_stores`).
         r.dead_stores_removed = eliminate_dead_flag_stores(func);
         r.dead_stores_removed += eliminate_dead_stores(func);
+        // #6940: raggiungibilita' a PUNTO FISSO. Va DOPO ogni riscrittura di
+        // struttura, perche' e' l'ultima a sapere quali `goto` sono davvero
+        // sopravvissuti.
+        r.regions_structured += remove_unreachable_fixpoint(func);
         // `propagate_expressions`/`eliminate_dead_stores` can EMPTY a then-body
         // (its only statements were inlined flag defs / dead stores) after the
         // first flip already ran, leaving `if (C) { } else { B }` to reach the
