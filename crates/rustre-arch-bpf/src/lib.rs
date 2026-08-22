@@ -1805,6 +1805,54 @@ pub enum SkFilterAction {
 
 #[cfg(test)]
 mod tests {
+
+    /// Build a minimal ELF64 LE BPF object header of `len` bytes with one
+    /// section header table at offset 64.
+    fn elf_skeleton(len: usize, e_shoff: u64, e_shnum: u16, e_shstrndx: u16) -> Vec<u8> {
+        let mut d = vec![0u8; len];
+        d[0..4].copy_from_slice(b"ELF");
+        d[4] = 2; // EI_CLASS = ELF64
+        d[5] = 1; // EI_DATA  = little-endian
+        d[16..18].copy_from_slice(&1u16.to_le_bytes()); // e_type = ET_REL
+        d[18..20].copy_from_slice(&247u16.to_le_bytes()); // e_machine = EM_BPF
+        d[40..48].copy_from_slice(&e_shoff.to_le_bytes());
+        d[58..60].copy_from_slice(&64u16.to_le_bytes()); // e_shentsize
+        d[60..62].copy_from_slice(&e_shnum.to_le_bytes());
+        d[62..64].copy_from_slice(&e_shstrndx.to_le_bytes());
+        d
+    }
+
+    /// A section header whose `sh_offset + sh_size` wraps `usize` must not pass
+    /// the string-table bound check and then be sliced with `start > end`.
+    ///
+    /// Verified to reproduce: with the previous `if off + sz <= data.len()`
+    /// this panics with "slice index starts at 18446744073709551360 but ends
+    /// at 256". The file must be at least as long as the wrapped sum (0x100)
+    /// for the unchecked guard to accept it, which is why it is 512 bytes.
+    #[test]
+    fn elf_strtab_offset_size_overflow_is_rejected() {
+        let mut d = elf_skeleton(512, 64, 1, 0);
+        // Section 0: sh_offset + sh_size wraps to 0x100, which is <= 512.
+        d[64 + 24..64 + 32].copy_from_slice(&0xFFFF_FFFF_FFFF_FF00u64.to_le_bytes());
+        d[64 + 32..64 + 40].copy_from_slice(&0x200u64.to_le_bytes());
+
+        let obj = BpfObjectParser::parse_elf(&d).expect("wrapped strtab must not abort the parse");
+        assert!(obj.programs.is_empty());
+    }
+
+    /// `e_shoff` at the top of the address space must not wrap when the
+    /// per-section header offset is computed. Unfixed, `sh_off + 64` wrapped
+    /// to 63, the `> data.len()` guard passed, and the parse read from a bogus
+    /// offset and failed; fixed, the loop stops and yields an empty object.
+    #[test]
+    fn elf_shoff_overflow_stops_the_section_loop() {
+        let d = elf_skeleton(512, u64::MAX, 4, 0);
+
+        let obj = BpfObjectParser::parse_elf(&d)
+            .expect("an out-of-range e_shoff should yield no sections, not an error");
+        assert!(obj.programs.is_empty());
+        assert!(obj.maps.is_empty());
+    }
     use super::*;
 
     fn ebpf() -> BpfArch {
@@ -3438,8 +3486,11 @@ impl BpfObjectParser {
         // Collect section headers.
         let mut sections: Vec<(String, u32, usize, usize)> = Vec::new(); // (name, sh_type, offset, size)
         for i in 0..e_shnum {
-            let sh_off = e_shoff + i * e_shentsize;
-            if sh_off + 64 > data.len() {
+            let Some(sh_off) = i.checked_mul(e_shentsize).and_then(|d| e_shoff.checked_add(d))
+            else {
+                break;
+            };
+            if sh_off.checked_add(64).is_none_or(|end| end > data.len()) {
                 break;
             }
             let sh_name = Self::read_u32(data, sh_off)? as usize;
@@ -3453,10 +3504,12 @@ impl BpfObjectParser {
         // Resolve section names from the string table section.
         let strtab_data = if e_shstrndx < sections.len() {
             let (_, _, off, sz) = sections[e_shstrndx];
-            if off + sz <= data.len() {
-                &data[off..off + sz]
-            } else {
-                &[]
+            // `off + sz` must not wrap: both come straight from attacker-controlled
+            // ELF64 sh_offset / sh_size, so an unchecked add can pass this bound
+            // check with a wrapped total and then slice with start > end.
+            match off.checked_add(sz) {
+                Some(end) if end <= data.len() => &data[off..end],
+                _ => &[],
             }
         } else {
             &[]
@@ -3465,8 +3518,11 @@ impl BpfObjectParser {
         // Re-parse section names.
         let mut named: Vec<(String, u32, usize, usize)> = Vec::new();
         for i in 0..e_shnum {
-            let sh_off = e_shoff + i * e_shentsize;
-            if sh_off + 64 > data.len() {
+            let Some(sh_off) = i.checked_mul(e_shentsize).and_then(|d| e_shoff.checked_add(d))
+            else {
+                break;
+            };
+            if sh_off.checked_add(64).is_none_or(|end| end > data.len()) {
                 break;
             }
             let sh_name_off = Self::read_u32(data, sh_off)? as usize;
