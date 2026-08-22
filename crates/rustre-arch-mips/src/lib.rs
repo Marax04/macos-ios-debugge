@@ -2031,8 +2031,8 @@ pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
                 }];
             }
         }
-        "sltu" => {
-            if parts.len() >= 3 {
+        "sltu"
+            if parts.len() >= 3 => {
                 return vec![LlilOp::Arith {
                     dest: parts[0].into(),
                     lhs: parts[1].into(),
@@ -2040,7 +2040,6 @@ pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
                     rhs: parts[2].into(),
                 }];
             }
-        }
 
         // ── Immediate ALU ──────────────────────────────────────────────
         _ => {}
@@ -2130,8 +2129,8 @@ fn lift_immediate_alu(instr: &Instruction, m: &str, ops: &str, parts: &[&str]) -
                 }
             }
         }
-        "sltiu" => {
-            if parts.len() >= 2 {
+        "sltiu"
+            if parts.len() >= 2 => {
                 let sub_joined = parts[1..].join(",");
                 let sub: Vec<&str> = sub_joined.split(',').map(str::trim).collect::<Vec<_>>();
                 if sub.len() >= 2 {
@@ -2144,7 +2143,6 @@ fn lift_immediate_alu(instr: &Instruction, m: &str, ops: &str, parts: &[&str]) -
                     }];
                 }
             }
-        }
         _ => {}
     }
 
@@ -2189,15 +2187,14 @@ fn lift_shifts(instr: &Instruction, m: &str, ops: &str, parts: &[&str]) -> Vec<L
                 }];
             }
         }
-        "lui" => {
-            if parts.len() >= 2 {
+        "lui"
+            if parts.len() >= 2 => {
                 let imm = parse_imm(parts[1]);
                 return vec![LlilOp::SetRegConst {
                     dest: parts[0].into(),
                     value: imm << 16,
                 }];
             }
-        }
 
         _ => {}
     }
@@ -2249,14 +2246,13 @@ fn lift_mem_and_control(instr: &Instruction, m: &str, ops: &str, parts: &[&str])
         }
 
         // ── Moves (pseudo-instructions) ────────────────────────────────
-        "movz" | "movn" => {
-            if parts.len() >= 2 {
+        "movz" | "movn"
+            if parts.len() >= 2 => {
                 return vec![LlilOp::SetRegReg {
                     dest: parts[0].into(),
                     src: parts[1].into(),
                 }];
             }
-        }
 
         // ── Control flow ───────────────────────────────────────────────
         _ => {}
@@ -7170,6 +7166,16 @@ impl MipsClass {
             return Self::Store;
         }
 
+        Self::from_float_or_system_mnemonic(m)
+    }
+
+    /// The float, COP0, trap and miscellaneous half of [`Self::from_mnemonic`].
+    ///
+    /// Split out for length only: `from_mnemonic` classifies the integer
+    /// mnemonics and hands anything it does not recognise to this function,
+    /// which ends at the same `Self::Unknown`.
+    #[must_use]
+    pub fn from_float_or_system_mnemonic(m: &str) -> Self {
         if m == "lwc1" || m == "ldc1" {
             return Self::FloatLoad;
         }
