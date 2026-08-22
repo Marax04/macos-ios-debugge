@@ -223,13 +223,16 @@ impl SystemInfoStream {
     }
 
     /// Returns the Windows version string (e.g. "10.0.19041").
-    #[must_use] 
+    #[must_use]
     pub fn windows_version(&self) -> String {
-        format!("{}.{}.{}", self.major_version, self.minor_version, self.build_number)
+        format!(
+            "{}.{}.{}",
+            self.major_version, self.minor_version, self.build_number
+        )
     }
 
     /// Returns the processor architecture name.
-    #[must_use] 
+    #[must_use]
     pub const fn arch_name(&self) -> &'static str {
         match self.processor_architecture {
             0 => "x86",
@@ -309,7 +312,7 @@ impl ExceptionStream {
     }
 
     /// Translates the exception code to a human-readable name.
-    #[must_use] 
+    #[must_use]
     pub const fn exception_name(&self) -> &'static str {
         match self.exception_code {
             0xC000_0005 => "ACCESS_VIOLATION",
@@ -562,7 +565,9 @@ impl Memory64ListStream {
             });
         }
         // read_u64 can produce a value far larger than available memory; cap it.
-        let count = usize::try_from(read_u64(data, offset)).unwrap_or(1_000_000).min(1_000_000);
+        let count = usize::try_from(read_u64(data, offset))
+            .unwrap_or(1_000_000)
+            .min(1_000_000);
         let base_rva = read_u64(data, offset + 8);
         let mut descriptors = Vec::with_capacity(count);
         for i in 0..count {
@@ -575,7 +580,10 @@ impl Memory64ListStream {
                 data_size: read_u64(data, base + 8),
             });
         }
-        Ok(Self { base_rva, descriptors })
+        Ok(Self {
+            base_rva,
+            descriptors,
+        })
     }
 }
 
@@ -595,7 +603,7 @@ pub struct ParsedMinidump {
 
 impl ParsedMinidump {
     /// Returns the `SystemInfo` stream if present.
-    #[must_use] 
+    #[must_use]
     pub fn system_info(&self) -> Option<&SystemInfoStream> {
         self.streams.iter().find_map(|s| {
             if let MinidumpStream::SystemInfo(si) = s {
@@ -607,7 +615,7 @@ impl ParsedMinidump {
     }
 
     /// Returns the `ExceptionStream` if present.
-    #[must_use] 
+    #[must_use]
     pub fn exception(&self) -> Option<&ExceptionStream> {
         self.streams.iter().find_map(|s| {
             if let MinidumpStream::Exception(e) = s {
@@ -619,7 +627,7 @@ impl ParsedMinidump {
     }
 
     /// Returns the `ModuleList` stream if present.
-    #[must_use] 
+    #[must_use]
     pub fn module_list(&self) -> Option<&ModuleListStream> {
         self.streams.iter().find_map(|s| {
             if let MinidumpStream::ModuleList(m) = s {
@@ -631,7 +639,7 @@ impl ParsedMinidump {
     }
 
     /// Returns the `ThreadList` stream if present.
-    #[must_use] 
+    #[must_use]
     pub fn thread_list(&self) -> Option<&ThreadListStream> {
         self.streams.iter().find_map(|s| {
             if let MinidumpStream::ThreadList(t) = s {
@@ -643,37 +651,100 @@ impl ParsedMinidump {
     }
 
     /// Extract memory bytes at a given virtual address using the memory list.
-    #[must_use] 
+    #[must_use]
     pub fn read_memory<'a>(&self, data: &'a [u8], va: u64, size: usize) -> Option<&'a [u8]> {
         // Try MemoryList first.
         if let Some(s) = self.streams.iter().find_map(|s| {
-            if let MinidumpStream::MemoryList(ml) = s { Some(ml) } else { None }
+            if let MinidumpStream::MemoryList(ml) = s {
+                Some(ml)
+            } else {
+                None
+            }
         }) {
+            // Every field below is unvalidated attacker data from MINIDUMP_MEMORY_LIST
+            // (only the descriptor *count* is clamped at parse time). In release each
+            // `+` wraps silently: a `start_of_memory_range` near u64::MAX wraps `end`
+            // down so the containment test succeeds, and `rva + size` then wraps below
+            // `data.len()`, reaching `data[rva..rva + size]` with start > end -> panic.
+            // Doing the whole chain with checked arithmetic makes a bad descriptor be
+            // skipped instead.
+            let Ok(size_u64) = u64::try_from(size) else {
+                return None;
+            };
             for desc in &s.descriptors {
-                let end = desc.start_of_memory_range + u64::from(desc.data_size);
-                if va >= desc.start_of_memory_range && va + u64::try_from(size).unwrap_or(u64::MAX) <= end {
-                    let rva = desc.rva as usize + usize::try_from(va - desc.start_of_memory_range).unwrap_or(usize::MAX);
-                    if rva + size <= data.len() {
-                        return Some(&data[rva..rva + size]);
-                    }
+                let Some(end) = desc
+                    .start_of_memory_range
+                    .checked_add(u64::from(desc.data_size))
+                else {
+                    continue;
+                };
+                let Some(va_end) = va.checked_add(size_u64) else {
+                    continue;
+                };
+                if va < desc.start_of_memory_range || va_end > end {
+                    continue;
+                }
+                let Ok(inner) = usize::try_from(va - desc.start_of_memory_range) else {
+                    continue;
+                };
+                let Ok(base) = usize::try_from(desc.rva) else {
+                    continue;
+                };
+                let Some(rva) = base.checked_add(inner) else {
+                    continue;
+                };
+                let Some(rva_end) = rva.checked_add(size) else {
+                    continue;
+                };
+                if let Some(slice) = data.get(rva..rva_end) {
+                    return Some(slice);
                 }
             }
         }
         // Try Memory64List.
         if let Some(s) = self.streams.iter().find_map(|s| {
-            if let MinidumpStream::Memory64List(ml) = s { Some(ml) } else { None }
+            if let MinidumpStream::Memory64List(ml) = s {
+                Some(ml)
+            } else {
+                None
+            }
         }) {
-            let mut running_rva = usize::try_from(s.base_rva).unwrap_or(usize::MAX);
+            // Same unvalidated-descriptor problem as the MemoryList branch above, plus
+            // `running_rva` accumulating attacker-controlled `data_size` across
+            // descriptors: saturating on overflow there would silently alias a later
+            // descriptor onto a valid offset, so stop walking instead.
+            let Ok(size_u64) = u64::try_from(size) else {
+                return None;
+            };
+            let Ok(mut running_rva) = usize::try_from(s.base_rva) else {
+                return None;
+            };
             for desc in &s.descriptors {
-                let end = desc.start_of_memory_range + desc.data_size;
-                if va >= desc.start_of_memory_range && va + u64::try_from(size).unwrap_or(u64::MAX) <= end {
-                    let inner = usize::try_from(va - desc.start_of_memory_range).unwrap_or(usize::MAX);
-                    let rva = running_rva + inner;
-                    if rva + size <= data.len() {
-                        return Some(&data[rva..rva + size]);
+                // NB: no early `continue` here -- the cursor update at the bottom of
+                // the loop must run for every descriptor, or a rejected descriptor
+                // silently aliases the next one onto its offset.
+                let end = desc.start_of_memory_range.checked_add(desc.data_size);
+                let va_end = va.checked_add(size_u64);
+                if let (Some(end), Some(va_end)) = (end, va_end) {
+                    if va >= desc.start_of_memory_range && va_end <= end {
+                        if let Ok(inner) = usize::try_from(va - desc.start_of_memory_range) {
+                            if let Some(rva) = running_rva.checked_add(inner) {
+                                if let Some(rva_end) = rva.checked_add(size) {
+                                    if let Some(slice) = data.get(rva..rva_end) {
+                                        return Some(slice);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                running_rva += usize::try_from(desc.data_size).unwrap_or(usize::MAX);
+                let Ok(step) = usize::try_from(desc.data_size) else {
+                    break;
+                };
+                let Some(next) = running_rva.checked_add(step) else {
+                    break;
+                };
+                running_rva = next;
             }
         }
         None
@@ -701,15 +772,19 @@ pub struct MinidumpSummary {
 // ---------------------------------------------------------------------------
 
 fn read_u16(data: &[u8], offset: usize) -> u16 {
-    data.get(offset..offset + 2).map_or(0, |b| u16::from_le_bytes([b[0], b[1]]))
+    data.get(offset..offset + 2)
+        .map_or(0, |b| u16::from_le_bytes([b[0], b[1]]))
 }
 
 fn read_u32(data: &[u8], offset: usize) -> u32 {
-    data.get(offset..offset + 4).map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    data.get(offset..offset + 4)
+        .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
 fn read_u64(data: &[u8], offset: usize) -> u64 {
-    data.get(offset..offset + 8).map_or(0, |b| u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+    data.get(offset..offset + 8).map_or(0, |b| {
+        u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -721,7 +796,7 @@ pub struct MinidumpLoader;
 
 impl MinidumpLoader {
     /// Returns `true` if `data` starts with the MDMP signature.
-    #[must_use] 
+    #[must_use]
     pub fn is_minidump(data: &[u8]) -> bool {
         data.len() >= 4 && &data[0..4] == MDMP_SIGNATURE
     }
@@ -737,11 +812,13 @@ impl MinidumpLoader {
         let dir_offset = header.stream_directory_rva as usize;
         // Guard against integer overflow: number_of_streams * DIRECTORY_ENTRY_SIZE can
         // overflow usize on malformed input (e.g. number_of_streams = u32::MAX).
-        let dir_end = dir_offset.checked_add(
-            (header.number_of_streams as usize)
-                .checked_mul(DIRECTORY_ENTRY_SIZE)
-                .ok_or(MinidumpError::TruncatedDirectory)?,
-        ).ok_or(MinidumpError::TruncatedDirectory)?;
+        let dir_end = dir_offset
+            .checked_add(
+                (header.number_of_streams as usize)
+                    .checked_mul(DIRECTORY_ENTRY_SIZE)
+                    .ok_or(MinidumpError::TruncatedDirectory)?,
+            )
+            .ok_or(MinidumpError::TruncatedDirectory)?;
         if dir_end > data.len() {
             return Err(MinidumpError::TruncatedDirectory);
         }
@@ -848,7 +925,7 @@ impl MinidumpLoader {
 // ---------------------------------------------------------------------------
 
 /// Returns the stream directory as a map from stream-type to (size, rva).
-#[must_use] 
+#[must_use]
 pub fn stream_map(dump: &ParsedMinidump) -> HashMap<u32, (u32, u32)> {
     dump.directory
         .iter()
@@ -857,7 +934,7 @@ pub fn stream_map(dump: &ParsedMinidump) -> HashMap<u32, (u32, u32)> {
 }
 
 /// Converts a MINIDUMP timestamp to a naive date/time string.
-#[must_use] 
+#[must_use]
 pub fn format_timestamp(ts: u32) -> String {
     // Simple conversion: seconds since 1970.  No external dep needed.
     let days = ts / 86400;
@@ -875,6 +952,139 @@ pub fn format_timestamp(ts: u32) -> String {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod overflow_regression_tests {
+    use super::*;
+
+    fn empty_parsed(streams: Vec<MinidumpStream>) -> ParsedMinidump {
+        ParsedMinidump {
+            header: MinidumpHeader {
+                signature: *b"MDMP",
+                version: 0,
+                number_of_streams: 0,
+                stream_directory_rva: 0,
+                check_sum: 0,
+                time_date_stamp: 0,
+                flags: 0,
+            },
+            directory: Vec::new(),
+            summary: MinidumpSummary {
+                total_streams: 0,
+                num_threads: 0,
+                num_modules: 0,
+                num_memory_regions: 0,
+                has_exception: false,
+                windows_version: None,
+                architecture: None,
+                crash_address: None,
+                exception_code: None,
+                exception_name: None,
+                module_names: Vec::new(),
+            },
+            streams,
+        }
+    }
+
+    /// The MemoryList branch caps out at a u32 `data_size`, so on a 64-bit target the
+    /// wrapping additions cannot in fact drive `rva` past usize -- measured, not
+    /// assumed: this test passes against the pre-fix code too. It guards the
+    /// hardening against regression, and covers the 32-bit target where
+    /// `usize::try_from(..).unwrap_or(usize::MAX)` did make `rva` wrap.
+    #[test]
+    fn memory_list_wrapping_descriptor_does_not_panic() {
+        let md = empty_parsed(vec![MinidumpStream::MemoryList(MemoryListStream {
+            descriptors: vec![MemoryDescriptor {
+                start_of_memory_range: u64::MAX - 4,
+                data_size: u32::MAX,
+                rva: u32::MAX,
+            }],
+        })]);
+        let data = vec![0u8; 64];
+        assert_eq!(md.read_memory(&data, 0, 16), None);
+        assert_eq!(md.read_memory(&data, u64::MAX - 4, 16), None);
+    }
+
+    /// The Memory64 branch is the genuinely exploitable one: `data_size` is a full
+    /// u64 there, so one descriptor covering the whole address space makes `inner`
+    /// (and hence `rva`) enormous, `rva + size` wraps back under `data.len()`, and
+    /// the old code evaluated `&data[rva..rva + size]` with start > end -> slice
+    /// index panic. Confirmed to panic against the pre-fix code.
+    #[test]
+    fn memory64_list_wrapping_rva_does_not_panic() {
+        let md = empty_parsed(vec![MinidumpStream::Memory64List(Memory64ListStream {
+            base_rva: 0,
+            descriptors: vec![MemoryDescriptor64 {
+                start_of_memory_range: 0,
+                data_size: u64::MAX,
+            }],
+        })]);
+        let data = vec![0u8; 64];
+        // va + size wraps to 7, which passes `<= end`; rva + size then wraps to 7 too.
+        assert_eq!(md.read_memory(&data, u64::MAX - 8, 16), None);
+    }
+
+    /// `running_rva += data_size` was unchecked, so a first descriptor with a huge
+    /// `data_size` wrapped the cursor and aliased the second descriptor onto a low,
+    /// in-bounds offset -- silently returning the wrong bytes rather than nothing.
+    #[test]
+    fn memory64_list_running_rva_overflow_does_not_alias() {
+        let md = empty_parsed(vec![MinidumpStream::Memory64List(Memory64ListStream {
+            base_rva: 16,
+            descriptors: vec![
+                MemoryDescriptor64 {
+                    start_of_memory_range: 0x1000,
+                    data_size: u64::MAX,
+                },
+                MemoryDescriptor64 {
+                    start_of_memory_range: 0x2000,
+                    data_size: 8,
+                },
+            ],
+        })]);
+        let data = vec![0u8; 64];
+        assert_eq!(md.read_memory(&data, 0x2000, 8), None);
+    }
+
+    /// A well-formed Memory64 descriptor must still resolve after the hardening.
+    #[test]
+    fn memory64_list_valid_descriptor_still_reads() {
+        let md = empty_parsed(vec![MinidumpStream::Memory64List(Memory64ListStream {
+            base_rva: 4,
+            descriptors: vec![
+                MemoryDescriptor64 {
+                    start_of_memory_range: 0x1000,
+                    data_size: 8,
+                },
+                MemoryDescriptor64 {
+                    start_of_memory_range: 0x2000,
+                    data_size: 8,
+                },
+            ],
+        })]);
+        let mut data = vec![0u8; 32];
+        data[4..20].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+        assert_eq!(md.read_memory(&data, 0x1000, 8), Some(&data[4..12]));
+        // second descriptor lives at base_rva + first data_size = 12
+        assert_eq!(md.read_memory(&data, 0x2000, 8), Some(&data[12..20]));
+    }
+
+    /// A well-formed descriptor must still resolve after the hardening.
+    #[test]
+    fn memory_list_valid_descriptor_still_reads() {
+        let md = empty_parsed(vec![MinidumpStream::MemoryList(MemoryListStream {
+            descriptors: vec![MemoryDescriptor {
+                start_of_memory_range: 0x1000,
+                data_size: 8,
+                rva: 4,
+            }],
+        })]);
+        let mut data = vec![0u8; 32];
+        data[4..12].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(md.read_memory(&data, 0x1000, 8), Some(&data[4..12]));
+        assert_eq!(md.read_memory(&data, 0x1002, 4), Some(&data[6..10]));
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -941,7 +1151,13 @@ mod tests {
         let buf = make_minimal_minidump(&[(99, &stream_data)]);
         let dump = MinidumpLoader::load(&buf).unwrap();
         assert_eq!(dump.directory.len(), 1);
-        assert!(matches!(&dump.streams[0], MinidumpStream::Unknown { stream_type: 99, .. }));
+        assert!(matches!(
+            &dump.streams[0],
+            MinidumpStream::Unknown {
+                stream_type: 99,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -963,7 +1179,10 @@ mod tests {
     #[test]
     fn test_invalid_signature() {
         let result = MinidumpLoader::load(b"NOTMDMP");
-        assert!(matches!(result, Err(MinidumpError::InvalidSignature { .. })));
+        assert!(matches!(
+            result,
+            Err(MinidumpError::InvalidSignature { .. })
+        ));
     }
 
     #[test]

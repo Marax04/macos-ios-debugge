@@ -79,7 +79,10 @@ fn parse_central_directory(data: &[u8]) -> Result<Vec<CentralDirEntry>, JarError
     // Check for ZIP64 locator just before EOCD
     if eocd_off >= 20 && le_u32(data, eocd_off - 20) == 0x0706_4B50 {
         let z64_off = le_u64(data, eocd_off - 12) as usize;
-        if z64_off + 56 <= data.len() && le_u32(data, z64_off) == ZIP_EOCD64_MAGIC {
+        // `z64_off` is an unvalidated u64 from the attacker's ZIP64 locator. A plain
+        // `z64_off + 56` wraps for values near usize::MAX, letting the guard pass and
+        // making the raw indexing in `le_u32` panic. Subtract instead of add.
+        if z64_off <= data.len() && data.len() - z64_off >= 56 && le_u32(data, z64_off) == ZIP_EOCD64_MAGIC {
             cd_count  = le_u64(data, z64_off + 32);
             cd_offset = le_u64(data, z64_off + 48);
         }
@@ -93,7 +96,9 @@ fn parse_central_directory(data: &[u8]) -> Result<Vec<CentralDirEntry>, JarError
     let mut pos = cd_offset as usize;
 
     for _ in 0..cd_count {
-        if pos + 46 > data.len() { break; }
+        // `pos` starts at the unvalidated ZIP64 `cd_offset`; `pos + 46` would wrap
+        // near usize::MAX and skip the break, panicking in `le_u32` below.
+        if pos > data.len() || data.len() - pos < 46 { break; }
         if le_u32(data, pos) != ZIP_CD_MAGIC {
             return Err(JarError::MalformedZip(format!("bad CD magic at {pos}")));
         }
@@ -651,6 +656,48 @@ impl JarFile {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod zip64_overflow_regression_tests {
+    use super::*;
+
+    /// Minimal EOCD (22 bytes) preceded by a ZIP64 locator whose `z64_off` is a raw
+    /// u64 near usize::MAX. `z64_off + 56` used to wrap, passing the `<= data.len()`
+    /// guard, after which `le_u32` indexed the slice raw and panicked.
+    #[test]
+    fn zip64_locator_offset_overflow_does_not_panic() {
+        let mut d = Vec::new();
+        d.extend_from_slice(&0x0706_4B50u32.to_le_bytes()); // ZIP64 locator magic
+        d.extend_from_slice(&0u32.to_le_bytes()); // disk
+        // Must wrap INTO range: z64_off + 56 has to land in 0..=data.len() (42), so
+        // u64::MAX gives 55 and is rejected -- use MAX-40, which gives 15.
+        d.extend_from_slice(&(u64::MAX - 40).to_le_bytes()); // z64_off -> wraps on +56
+        d.extend_from_slice(&0u32.to_le_bytes()); // total disks
+        // EOCD
+        d.extend_from_slice(&ZIP_EOCD_MAGIC.to_le_bytes());
+        d.extend_from_slice(&[0u8; 18]);
+        assert_eq!(d.len(), 20 + 22);
+        let _ = parse_central_directory(&d);
+    }
+
+    /// A ZIP64 EOCD record supplying a `cd_offset` near usize::MAX: `pos + 46` wrapped,
+    /// the `break` was skipped and `le_u32(data, pos)` panicked on the raw index.
+    #[test]
+    fn zip64_cd_offset_overflow_does_not_panic() {
+        // Layout: [ZIP64 EOCD @0][locator][EOCD]
+        let mut d = vec![0u8; 56];
+        d[0..4].copy_from_slice(&ZIP_EOCD64_MAGIC.to_le_bytes());
+        d[32..40].copy_from_slice(&4u64.to_le_bytes()); // cd_count
+        d[48..56].copy_from_slice(&u64::MAX.to_le_bytes()); // cd_offset -> wraps
+        d.extend_from_slice(&0x0706_4B50u32.to_le_bytes());
+        d.extend_from_slice(&0u32.to_le_bytes());
+        d.extend_from_slice(&0u64.to_le_bytes()); // z64_off = 0
+        d.extend_from_slice(&0u32.to_le_bytes());
+        d.extend_from_slice(&ZIP_EOCD_MAGIC.to_le_bytes());
+        d.extend_from_slice(&[0u8; 18]);
+        let _ = parse_central_directory(&d);
+    }
+}
 
 #[cfg(test)]
 mod tests {

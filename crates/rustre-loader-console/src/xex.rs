@@ -430,7 +430,12 @@ pub fn parse_import_libraries(
             .to_string();
 
         let thunk_start = name_off + name_size;
-        let mut thunks = Vec::with_capacity(thunk_count);
+        // `thunk_count` is a raw big-endian u32 from the import-library record, so an
+        // unclamped `with_capacity` reserves up to 16 GiB from a ~50-byte crafted XEX
+        // (the per-iteration bounds check below only runs after the allocation). Each
+        // thunk is 4 bytes, so the block cannot hold more than block.len() / 4 of them.
+        let thunk_capacity = thunk_count.min(block.len().saturating_sub(thunk_start) / 4);
+        let mut thunks = Vec::with_capacity(thunk_capacity);
         for t in 0..thunk_count {
             let toff = thunk_start + t * 4;
             if toff + 4 > block.len() {
@@ -750,6 +755,40 @@ pub fn is_xex2(data: &[u8]) -> bool {
 }
 
 // ─── tests ────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod alloc_regression_tests {
+    use super::*;
+
+    /// `thunk_count` is a raw big-endian u32 from the import-library record. Before the
+    /// clamp, `Vec::with_capacity(thunk_count)` reserved 4 * thunk_count bytes -- up to
+    /// 16 GiB -- from this ~0x94-byte input, because the per-thunk bounds check only
+    /// runs after the allocation. The result must stay bounded by the block.
+    #[test]
+    fn thunk_count_is_clamped_to_block_size() {
+        let lib = XexImportLibrary::MIN_SIZE;
+        let mut block = vec![0u8; 8 + lib];
+        let total = block.len() as u32;
+        block[0..4].copy_from_slice(&total.to_be_bytes()); // block_size
+        block[4..8].copy_from_slice(&1u32.to_be_bytes()); // lib_count = 1
+        let e = 8;
+        block[e..e + 4].copy_from_slice(&(lib as u32).to_be_bytes()); // entry_size
+        block[e + 4..e + 8].copy_from_slice(&4u32.to_be_bytes()); // name_size
+        block[e + 8..e + 12].copy_from_slice(&u32::MAX.to_be_bytes()); // thunk_count
+
+        let libs = parse_import_libraries(&block, 0).expect("should parse");
+        assert_eq!(libs.len(), 1);
+        // Assert on CAPACITY, not len: the loop's per-thunk `break` already bounded
+        // `len`, so a len-only assertion would pass against the unfixed code. It is
+        // the reservation that was unbounded.
+        assert!(
+            libs[0].thunks.capacity() <= block.len() / 4,
+            "reserved capacity {} exceeded block bound {}",
+            libs[0].thunks.capacity(),
+            block.len() / 4
+        );
+    }
+}
 
 #[cfg(test)]
 mod tests {
