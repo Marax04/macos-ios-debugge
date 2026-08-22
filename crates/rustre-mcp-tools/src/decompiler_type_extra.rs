@@ -215,7 +215,7 @@ impl ToolHandler for DecompilerTypeEnvSetGetTool {
         let ty = dt_parse_type(args.get("type").ok_or_else(|| McpError::InvalidParams("missing 'type'".into()))?)
             .ok_or_else(|| McpError::InvalidParams("invalid type".into()))?;
         let mut env = rustre_decompiler_type::TypeEnvironment::new();
-        env.set(&var, ty.clone());
+        env.set(&var, ty);
         let got = env.get(&var).cloned();
         Ok(ToolResult::text(json!({"stored": got.map(|t| t.c_name()),"source":"rustre_decompiler_type::TypeEnvironment"}).to_string()))
     }

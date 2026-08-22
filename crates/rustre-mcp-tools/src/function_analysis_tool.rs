@@ -246,18 +246,16 @@ pub fn analyse_function(
             }
             FlowControl::ConditionalBranch => {
                 work_queue.push_back(next_ip);
-                if let Some(target) = near_branch_target(&insn) {
-                    if target >= base_address && target.saturating_sub(base_address) < data.len() as u64 {
+                if let Some(target) = near_branch_target(&insn)
+                    && target >= base_address && target.saturating_sub(base_address) < data.len() as u64 {
                         work_queue.push_back(target);
                     }
-                }
             }
             FlowControl::UnconditionalBranch => {
-                if let Some(target) = near_branch_target(&insn) {
-                    if target >= base_address && target.saturating_sub(base_address) < data.len() as u64 {
+                if let Some(target) = near_branch_target(&insn)
+                    && target >= base_address && target.saturating_sub(base_address) < data.len() as u64 {
                         work_queue.push_back(target);
                     }
-                }
             }
             FlowControl::Call => {
                 work_queue.push_back(next_ip);
@@ -386,11 +384,10 @@ pub fn analyse_function(
         .flat_map(|b| b.successors.iter().map(move |&s| (b.start, s)))
         .collect();
     for (from, to) in &edges {
-        if let Some(&to_idx) = block_map.get(to) {
-            if !blocks[to_idx].predecessors.contains(from) {
+        if let Some(&to_idx) = block_map.get(to)
+            && !blocks[to_idx].predecessors.contains(from) {
                 blocks[to_idx].predecessors.push(*from);
             }
-        }
     }
 
     // ── Call site extraction ───────────────────────────────────────────────────

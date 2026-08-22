@@ -23,9 +23,8 @@ use rustre_debug::semantic_run_diff::{address_timeline, diff_runs};
 
 fn coerce_u64(v: &Value) -> Option<u64> {
     if let Some(n) = v.as_u64() { return Some(n); }
-    if let Some(f) = v.as_f64() {
-        if f >= 0.0 && f.fract() == 0.0 { return Some(f as u64); }
-    }
+    if let Some(f) = v.as_f64()
+        && f >= 0.0 && f.fract() == 0.0 { return Some(f as u64); }
     let s = v.as_str()?.trim();
     if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
         return u64::from_str_radix(hex, 16).ok();
@@ -118,12 +117,12 @@ pub fn handlers_semantic_run_diff() -> Vec<(ToolDefinition, Box<dyn ToolHandler>
                     "trace_a": {
                         "type": "array",
                         "description": "Write log from the reference (good/baseline) run.",
-                        "items": write_schema.clone()
+                        "items": write_schema
                     },
                     "trace_b": {
                         "type": "array",
                         "description": "Write log from the second run to compare.",
-                        "items": write_schema.clone()
+                        "items": write_schema
                     }
                 },
                 "required": ["trace_a","trace_b"]
@@ -162,7 +161,7 @@ pub fn handlers_semantic_run_diff() -> Vec<(ToolDefinition, Box<dyn ToolHandler>
                     "trace_a": {
                         "type": "array",
                         "description": "Write log from the reference run.",
-                        "items": write_schema.clone()
+                        "items": write_schema
                     },
                     "trace_b": {
                         "type": "array",

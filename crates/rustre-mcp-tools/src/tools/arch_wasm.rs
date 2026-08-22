@@ -692,7 +692,7 @@ impl ToolHandler for ArchWasmExternalKindProbeTool { async fn call(&self, _args:
 
 pub struct ArchWasmValueAsV128Tool;
 impl ArchWasmValueAsV128Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "arch_wasm_value_as_v128".to_string(), description: "Unwrap WasmValue::V128 via as_v128.".to_string(), input_schema: json!({"type":"object"}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for ArchWasmValueAsV128Tool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let v = rustre_arch_wasm::WasmValue::V128([0xAB; 16]); let out = v.as_v128().map(|b| b.to_vec()).unwrap_or_default(); let hex: String = out.iter().map(|b| format!("{:02x}", b)).collect(); Ok(ToolResult::text(json!({"hex":hex,"len":out.len(),"is_some":!out.is_empty(),"source":"rustre_arch_wasm::WasmValue::as_v128"}).to_string())) } }
+#[async_trait] impl ToolHandler for ArchWasmValueAsV128Tool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let v = rustre_arch_wasm::WasmValue::V128([0xAB; 16]); let out = v.as_v128().map(|b| b.to_vec()).unwrap_or_default(); let hex: String = out.iter().map(|b| format!("{b:02x}")).collect(); Ok(ToolResult::text(json!({"hex":hex,"len":out.len(),"is_some":!out.is_empty(),"source":"rustre_arch_wasm::WasmValue::as_v128"}).to_string())) } }
 
 pub struct ArchWasmStackNewEmptyTool;
 impl ArchWasmStackNewEmptyTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "arch_wasm_stack_new_empty".to_string(), description: "Construct empty WasmStack and check is_empty/depth.".to_string(), input_schema: json!({"type":"object"}), parameters: Value::Null } } }

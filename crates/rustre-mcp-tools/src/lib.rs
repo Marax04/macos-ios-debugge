@@ -6455,8 +6455,8 @@ impl McpToolRegistry {
 
                 // Real-decode mode when a binary path is supplied — falls back to
                 // the canned stub when no file is available (keeps legacy contract).
-                if let Some(path) = args.get("binary_path").and_then(serde_json::Value::as_str) {
-                    if let Ok(load) = rustre_decompiler::load_binary(std::path::Path::new(path)) {
+                if let Some(path) = args.get("binary_path").and_then(serde_json::Value::as_str)
+                    && let Ok(load) = rustre_decompiler::load_binary(std::path::Path::new(path)) {
                         let resolved_bits = if bits == 16 || bits == 32 || bits == 64 { bits }
                             else { match load.bits { 16 => 16, 32 => 32, _ => 64 } };
                         if let Some((_, slice)) = rustre_decompiler::slice_at_va(&load, addr) {
@@ -6474,7 +6474,6 @@ impl McpToolRegistry {
                             }));
                         }
                     }
-                }
                 // Stub fallback (legacy contract).
                 let insns = vec![
                     serde_json::json!({ "addr": addr,       "bytes_hex": "55",               "text": "push rbp" }),
@@ -6526,8 +6525,8 @@ impl McpToolRegistry {
                 let arch = args.get("arch").and_then(serde_json::Value::as_str).unwrap_or("x86_64").to_string();
                 let max_insns = opt_u64(&args, "max_instructions", 1024).min(8192) as usize;
 
-                if let Some(path) = args.get("binary_path").and_then(serde_json::Value::as_str) {
-                    if let Ok(load) = rustre_decompiler::load_binary(std::path::Path::new(path)) {
+                if let Some(path) = args.get("binary_path").and_then(serde_json::Value::as_str)
+                    && let Ok(load) = rustre_decompiler::load_binary(std::path::Path::new(path)) {
                         let bits = args.get("bits").and_then(serde_json::Value::as_u64).map(|v| v as u32)
                             .unwrap_or_else(|| match load.bits { 16 => 16, 32 => 32, _ => 64 });
                         // Try the function table first; on miss, scan prologue
@@ -6551,7 +6550,6 @@ impl McpToolRegistry {
                             }));
                         }
                     }
-                }
 
                 // Stub fallback (legacy contract).
                 let insns = serde_json::json!([
@@ -6654,14 +6652,13 @@ impl McpToolRegistry {
                     }
                     if j > i + 4 {
                         let hex = &source[i + 4..j];
-                        if let Ok(va) = u64::from_str_radix(hex, 16) {
-                            if let Some(n) = names.get(&va) {
+                        if let Ok(va) = u64::from_str_radix(hex, 16)
+                            && let Some(n) = names.get(&va) {
                                 out.push_str(n);
                                 subs += 1;
                                 i = j;
                                 continue;
                             }
-                        }
                     }
                 }
                 out.push(bytes[i] as char);

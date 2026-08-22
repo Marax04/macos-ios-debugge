@@ -98,7 +98,7 @@ pub struct SchemaProperty {
     #[serde(rename = "enum", default, skip_serializing_if = "Vec::is_empty")]
     pub enum_values: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub items: Option<Box<SchemaProperty>>,
+    pub items: Option<Box<Self>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -145,7 +145,7 @@ impl SchemaProperty {
 
     /// Create an array property.
     #[must_use]
-    pub fn array(description: impl Into<String>, items: SchemaProperty) -> Self {
+    pub fn array(description: impl Into<String>, items: Self) -> Self {
         Self {
             schema_type: SchemaType::Array,
             description: description.into(),
@@ -425,47 +425,43 @@ fn validate_property(
 
     // Numeric bounds
     if let Some(n) = value.as_f64() {
-        if let Some(min) = prop.minimum {
-            if n < min {
+        if let Some(min) = prop.minimum
+            && n < min {
                 errors.push(SchemaValidationError::BelowMinimum {
                     field: name.to_string(),
                     value: n,
                     min,
                 });
             }
-        }
-        if let Some(max) = prop.maximum {
-            if n > max {
+        if let Some(max) = prop.maximum
+            && n > max {
                 errors.push(SchemaValidationError::ExceedsMaximum {
                     field: name.to_string(),
                     value: n,
                     max,
                 });
             }
-        }
     }
 
     // String length
     if let Some(s) = value.as_str() {
         let len = s.len();
-        if let Some(min_len) = prop.min_length {
-            if (len as u64) < min_len {
+        if let Some(min_len) = prop.min_length
+            && (len as u64) < min_len {
                 errors.push(SchemaValidationError::TooShort {
                     field: name.to_string(),
                     len,
                     min_len,
                 });
             }
-        }
-        if let Some(max_len) = prop.max_length {
-            if (len as u64) > max_len {
+        if let Some(max_len) = prop.max_length
+            && (len as u64) > max_len {
                 errors.push(SchemaValidationError::TooLong {
                     field: name.to_string(),
                     len,
                     max_len,
                 });
             }
-        }
     }
 
     // Enum check

@@ -59,12 +59,12 @@ impl ToolHandler for NetRulesAhoCorasickContainsAnyTool { async fn call(&self, a
 pub struct NetRulesIpSpecMatchesTool;
 impl NetRulesIpSpecMatchesTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "net_rules_ip_spec_matches".to_string(), description: "Parse a Snort IP spec and match an address.".to_string(), input_schema: json!({"type":"object","required":["spec","addr"],"properties":{"spec":{"type":"string"},"addr":{"type":"string"}}}), parameters: Value::Null } } }
 #[async_trait]
-impl ToolHandler for NetRulesIpSpecMatchesTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let spec = args.get("spec").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("spec".into()))?; let addr_s = args.get("addr").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("addr".into()))?; let dsl = format!("alert tcp {} any -> any any (msg:\"p\"; sid:1;)", spec); let r = rustre_net_rules::RuleParser::parse(&dsl).map_err(|e| McpError::InvalidParams(e.to_string()))?; let addr: std::net::IpAddr = addr_s.parse().map_err(|_| McpError::InvalidParams("bad addr".into()))?; Ok(ToolResult::text(json!({"matches":r.src.addr.matches(addr),"source":"rustre_net_rules::IpSpec::matches"}).to_string())) } }
+impl ToolHandler for NetRulesIpSpecMatchesTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let spec = args.get("spec").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("spec".into()))?; let addr_s = args.get("addr").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("addr".into()))?; let dsl = format!("alert tcp {spec} any -> any any (msg:\"p\"; sid:1;)"); let r = rustre_net_rules::RuleParser::parse(&dsl).map_err(|e| McpError::InvalidParams(e.to_string()))?; let addr: std::net::IpAddr = addr_s.parse().map_err(|_| McpError::InvalidParams("bad addr".into()))?; Ok(ToolResult::text(json!({"matches":r.src.addr.matches(addr),"source":"rustre_net_rules::IpSpec::matches"}).to_string())) } }
 
 pub struct NetRulesPortSpecMatchesTool;
 impl NetRulesPortSpecMatchesTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "net_rules_port_spec_matches".to_string(), description: "Parse a Snort port spec and match a port.".to_string(), input_schema: json!({"type":"object","required":["spec","port"],"properties":{"spec":{"type":"string"},"port":{"type":"integer"}}}), parameters: Value::Null } } }
 #[async_trait]
-impl ToolHandler for NetRulesPortSpecMatchesTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let spec = args.get("spec").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("spec".into()))?; let port = args.get("port").and_then(Value::as_u64).unwrap_or(0) as u16; let dsl = format!("alert tcp any {} -> any any (msg:\"p\"; sid:1;)", spec); let r = rustre_net_rules::RuleParser::parse(&dsl).map_err(|e| McpError::InvalidParams(e.to_string()))?; Ok(ToolResult::text(json!({"matches":r.src.port.matches(port),"source":"rustre_net_rules::PortSpec::matches"}).to_string())) } }
+impl ToolHandler for NetRulesPortSpecMatchesTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let spec = args.get("spec").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("spec".into()))?; let port = args.get("port").and_then(Value::as_u64).unwrap_or(0) as u16; let dsl = format!("alert tcp any {spec} -> any any (msg:\"p\"; sid:1;)"); let r = rustre_net_rules::RuleParser::parse(&dsl).map_err(|e| McpError::InvalidParams(e.to_string()))?; Ok(ToolResult::text(json!({"matches":r.src.port.matches(port),"source":"rustre_net_rules::PortSpec::matches"}).to_string())) } }
 
 pub struct NetRulesRuleStoreRoundtripTool;
 impl NetRulesRuleStoreRoundtripTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "net_rules_rule_store_roundtrip".to_string(), description: "In-memory SQLite RuleStore roundtrip.".to_string(), input_schema: json!({"type":"object","properties":{"rules_text":{"type":"string"}}}), parameters: Value::Null } } }
@@ -270,7 +270,7 @@ impl ToolHandler for NetRulesSpecRuleSidMsgTool {
             src: "any".into(), src_port: "any".into(),
             dir: rustre_net_rules::RuleDir::Unidirectional,
             dst: "any".into(), dst_port: "any".into(),
-            options: vec![rustre_net_rules::RuleOption::Sid(sid), rustre_net_rules::RuleOption::Msg(msg.clone())],
+            options: vec![rustre_net_rules::RuleOption::Sid(sid), rustre_net_rules::RuleOption::Msg(msg)],
         };
         Ok(ToolResult::text(json!({
             "sid": r.sid(), "msg": r.msg(),

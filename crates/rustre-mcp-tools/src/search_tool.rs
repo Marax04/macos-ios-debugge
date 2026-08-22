@@ -373,20 +373,17 @@ fn search_pattern(
             break;
         }
         // Quick pre-check on first exact byte.
-        if let Some(fe) = first_exact {
-            if let PatternByte::Exact(expected) = pattern[fe] {
-                if data[start + fe] != expected {
+        if let Some(fe) = first_exact
+            && let PatternByte::Exact(expected) = pattern[fe]
+                && data[start + fe] != expected {
                     continue;
                 }
-            }
-        }
         // Full match check.
         for (i, pb) in pattern.iter().enumerate() {
-            if let PatternByte::Exact(expected) = pb {
-                if data[start + i] != *expected {
+            if let PatternByte::Exact(expected) = pb
+                && data[start + i] != *expected {
                     continue 'outer;
                 }
-            }
         }
 
         // Matched.
@@ -429,8 +426,8 @@ fn extract_printable_strings(
             (true, Some(_)) => {}
             (false, Some(s)) => {
                 let len = i - s;
-                if len >= min_len {
-                    if let Ok(val) = std::str::from_utf8(&data[s..i]) {
+                if len >= min_len
+                    && let Ok(val) = std::str::from_utf8(&data[s..i]) {
                         results.push(StringMatch {
                             offset: s,
                             virtual_address: base.saturating_add(s as u64),
@@ -442,7 +439,6 @@ fn extract_printable_strings(
                             return results;
                         }
                     }
-                }
                 start = None;
             }
             (false, None) => {}
@@ -451,8 +447,8 @@ fn extract_printable_strings(
     // Flush trailing string.
     if let Some(s) = start {
         let len = data.len() - s;
-        if len >= min_len {
-            if let Ok(val) = std::str::from_utf8(&data[s..]) {
+        if len >= min_len
+            && let Ok(val) = std::str::from_utf8(&data[s..]) {
                 results.push(StringMatch {
                     offset: s,
                     virtual_address: base.saturating_add(s as u64),
@@ -461,7 +457,6 @@ fn extract_printable_strings(
                     byte_length: len,
                 });
             }
-        }
     }
     results
 }

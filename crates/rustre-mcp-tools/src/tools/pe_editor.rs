@@ -261,7 +261,7 @@ impl ToolHandler for PeEditorSectionEditSetCharsTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
         let name = args.get("name").and_then(Value::as_str).unwrap_or("").to_string();
         let chars = args.get("characteristics").and_then(Value::as_u64).unwrap_or(0) as u32;
-        let se = rustre_pe_editor::SectionEdit::set_chars(name.clone(), chars);
+        let se = rustre_pe_editor::SectionEdit::set_chars(name, chars);
         Ok(ToolResult::text(json!({"name":se.name,"new_characteristics":se.new_characteristics,"zero_out":se.zero_out,"source":"rustre_pe_editor::SectionEdit::set_chars"}).to_string()))
     }
 }

@@ -459,7 +459,7 @@ impl ToolHandler for AdbMessageNewTool {
         } else { Vec::new() };
         let msg = rustre_adb::AdbMessage::new(command, arg0, arg1, data);
         let encoded = msg.encode();
-        let hex_out: String = encoded.iter().map(|b| format!("{:02x}", b)).collect();
+        let hex_out: String = encoded.iter().map(|b| format!("{b:02x}")).collect();
         Ok(ToolResult::text(json!({
             "command": msg.command,
             "command_name": msg.command_name(),
@@ -949,7 +949,7 @@ pub struct AdbSyncCmdTagsTool;
 impl AdbSyncCmdTagsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_sync_cmd_tags".to_string(), description: "Return the 4-byte sync command tags exposed by rustre_adb::sync_cmd.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait]
 impl ToolHandler for AdbSyncCmdTagsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-    use rustre_adb::sync_cmd::*;
+    use rustre_adb::sync_cmd::{DENT, RECV, SEND, STAT, DATA, DONE, FAIL, OKAY, QUIT, LIST};
     let f = |t: &[u8; 4]| String::from_utf8_lossy(t).into_owned();
     Ok(ToolResult::text(json!({
         "DENT": f(DENT), "RECV": f(RECV), "SEND": f(SEND), "STAT": f(STAT),
@@ -1021,7 +1021,7 @@ impl AdbSyncEncodeQuitTool { #[must_use] pub fn definition() -> ToolDefinition {
 
 pub struct AdbServiceConstantsTool;
 impl AdbServiceConstantsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_service_constants".to_string(), description: "Return string constants from rustre_adb::adb_protocol::services.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for AdbServiceConstantsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_adb::adb_protocol::services::*; Ok(ToolResult::text(json!({"shell":SHELL,"sync":SYNC,"logcat":LOGCAT,"remount":REMOUNT,"reboot":REBOOT,"track_devices":TRACK_DEVICES,"version":VERSION,"devices":DEVICES,"devices_long":DEVICES_LONG,"transport_any":TRANSPORT_ANY,"source":"rustre_adb::adb_protocol::services"}).to_string())) } }
+#[async_trait] impl ToolHandler for AdbServiceConstantsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_adb::adb_protocol::services::{SHELL, SYNC, LOGCAT, REMOUNT, REBOOT, TRACK_DEVICES, VERSION, DEVICES, DEVICES_LONG, TRANSPORT_ANY}; Ok(ToolResult::text(json!({"shell":SHELL,"sync":SYNC,"logcat":LOGCAT,"remount":REMOUNT,"reboot":REBOOT,"track_devices":TRACK_DEVICES,"version":VERSION,"devices":DEVICES,"devices_long":DEVICES_LONG,"transport_any":TRANSPORT_ANY,"source":"rustre_adb::adb_protocol::services"}).to_string())) } }
 
 pub struct AdbProtocolStateMachineNewTool;
 impl AdbProtocolStateMachineNewTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_protocol_state_machine_new".to_string(), description: "Instantiate ProtocolStateMachine via rustre_adb::adb_protocol::ProtocolStateMachine::new.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
@@ -1045,7 +1045,7 @@ impl AdbProtocolAuthConstantsTool { #[must_use] pub fn definition() -> ToolDefin
 
 pub struct AdbProtocolCmdConstantsTool;
 impl AdbProtocolCmdConstantsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_protocol_cmd_constants".to_string(), description: "Return CMD_SYNC/CNXN/AUTH/OPEN/OKAY/CLSE/WRTE/STAT constants from rustre_adb::adb_protocol.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for AdbProtocolCmdConstantsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_adb::adb_protocol::*; Ok(ToolResult::text(json!({"cmd_sync":CMD_SYNC,"cmd_cnxn":CMD_CNXN,"cmd_auth":CMD_AUTH,"cmd_open":CMD_OPEN,"cmd_okay":CMD_OKAY,"cmd_clse":CMD_CLSE,"cmd_wrte":CMD_WRTE,"cmd_stat":CMD_STAT,"source":"rustre_adb::adb_protocol"}).to_string())) } }
+#[async_trait] impl ToolHandler for AdbProtocolCmdConstantsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_adb::adb_protocol::{CMD_SYNC, CMD_CNXN, CMD_AUTH, CMD_OPEN, CMD_OKAY, CMD_CLSE, CMD_WRTE, CMD_STAT}; Ok(ToolResult::text(json!({"cmd_sync":CMD_SYNC,"cmd_cnxn":CMD_CNXN,"cmd_auth":CMD_AUTH,"cmd_open":CMD_OPEN,"cmd_okay":CMD_OKAY,"cmd_clse":CMD_CLSE,"cmd_wrte":CMD_WRTE,"cmd_stat":CMD_STAT,"source":"rustre_adb::adb_protocol"}).to_string())) } }
 
 pub struct AdbLogLevelDisplayTool;
 impl AdbLogLevelDisplayTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_log_level_display".to_string(), description: "Parse brief logcat line and report LogLevel Display/char/severity via rustre_adb::LogEntry::parse_brief.".to_string(), input_schema: json!({"type":"object","required":["line"],"properties":{"line":{"type":"string"}}}), parameters: Value::Null } } }
@@ -1053,11 +1053,11 @@ impl AdbLogLevelDisplayTool { #[must_use] pub fn definition() -> ToolDefinition 
 
 pub struct AdbRebootServiceConstantsTool;
 impl AdbRebootServiceConstantsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_reboot_service_constants".to_string(), description: "Return REBOOT/REBOOT_BOOTLOADER/REBOOT_RECOVERY service string constants from rustre_adb::adb_protocol::services.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for AdbRebootServiceConstantsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_adb::adb_protocol::services::*; Ok(ToolResult::text(json!({"reboot":REBOOT,"reboot_bootloader":REBOOT_BOOTLOADER,"reboot_recovery":REBOOT_RECOVERY,"source":"rustre_adb::adb_protocol::services"}).to_string())) } }
+#[async_trait] impl ToolHandler for AdbRebootServiceConstantsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_adb::adb_protocol::services::{REBOOT, REBOOT_BOOTLOADER, REBOOT_RECOVERY}; Ok(ToolResult::text(json!({"reboot":REBOOT,"reboot_bootloader":REBOOT_BOOTLOADER,"reboot_recovery":REBOOT_RECOVERY,"source":"rustre_adb::adb_protocol::services"}).to_string())) } }
 
 pub struct AdbMsgNoDataEncodedTool;
 impl AdbMsgNoDataEncodedTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_msg_no_data_encoded".to_string(), description: "Build AdbMessage::no_data + encode via rustre_adb::adb_protocol::AdbMessage::no_data.".to_string(), input_schema: json!({"type":"object","required":["command","arg0","arg1"],"properties":{"command":{"type":"integer"},"arg0":{"type":"integer"},"arg1":{"type":"integer"}}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for AdbMsgNoDataEncodedTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let cmd = args.get("command").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'command'".into()))? as u32; let a0 = args.get("arg0").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'arg0'".into()))? as u32; let a1 = args.get("arg1").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'arg1'".into()))? as u32; let m = rustre_adb::adb_protocol::AdbMessage::no_data(cmd, a0, a1); let enc = m.encode(); let hex: String = enc.iter().map(|b| format!("{:02x}", b)).collect(); Ok(ToolResult::text(json!({"hex": hex, "len": enc.len(), "source":"rustre_adb::adb_protocol::AdbMessage::no_data"}).to_string())) } }
+#[async_trait] impl ToolHandler for AdbMsgNoDataEncodedTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let cmd = args.get("command").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'command'".into()))? as u32; let a0 = args.get("arg0").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'arg0'".into()))? as u32; let a1 = args.get("arg1").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'arg1'".into()))? as u32; let m = rustre_adb::adb_protocol::AdbMessage::no_data(cmd, a0, a1); let enc = m.encode(); let hex: String = enc.iter().map(|b| format!("{b:02x}")).collect(); Ok(ToolResult::text(json!({"hex": hex, "len": enc.len(), "source":"rustre_adb::adb_protocol::AdbMessage::no_data"}).to_string())) } }
 
 pub struct AdbClientNewWithTimeoutTool;
 impl AdbClientNewWithTimeoutTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_client_new_with_timeout".to_string(), description: "Build AdbClient::new + with_timeout via rustre_adb::AdbClient.".to_string(), input_schema: json!({"type":"object","properties":{"host":{"type":"string"},"port":{"type":"integer"},"timeout_secs":{"type":"integer"}}}), parameters: Value::Null } } }
@@ -1065,7 +1065,7 @@ impl AdbClientNewWithTimeoutTool { #[must_use] pub fn definition() -> ToolDefini
 
 pub struct AdbCmdAllConstantsTool;
 impl AdbCmdAllConstantsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_cmd_all_constants".to_string(), description: "Return all wire-protocol command constants from rustre_adb::cmd.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for AdbCmdAllConstantsTool { async fn call(&self, _a: Value) -> Result<ToolResult, McpError> { use rustre_adb::cmd::*; Ok(ToolResult::text(json!({"CNXN":CNXN,"AUTH":AUTH,"OPEN":OPEN,"OKAY":OKAY,"CLSE":CLSE,"WRTE":WRTE,"SYNC":SYNC,"source":"rustre_adb::cmd"}).to_string())) } }
+#[async_trait] impl ToolHandler for AdbCmdAllConstantsTool { async fn call(&self, _a: Value) -> Result<ToolResult, McpError> { use rustre_adb::cmd::{CNXN, AUTH, OPEN, OKAY, CLSE, WRTE, SYNC}; Ok(ToolResult::text(json!({"CNXN":CNXN,"AUTH":AUTH,"OPEN":OPEN,"OKAY":OKAY,"CLSE":CLSE,"WRTE":WRTE,"SYNC":SYNC,"source":"rustre_adb::cmd"}).to_string())) } }
 
 pub struct AdbMessageMagicFieldTool;
 impl AdbMessageMagicFieldTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_message_magic_field".to_string(), description: "Construct AdbMessage::new and return its magic field.".to_string(), input_schema: json!({"type":"object","required":["command"],"properties":{"command":{"type":"integer","minimum":0},"arg0":{"type":"integer","minimum":0},"arg1":{"type":"integer","minimum":0},"data_hex":{"type":"string"}}}), parameters: Value::Null } } }
@@ -1266,7 +1266,7 @@ impl rustre_mcp_server::ToolHandler for AdbMakeOkayTool {
             .ok_or_else(|| rustre_mcp_server::McpError::InvalidParams("missing remote_id".into()))? as u32;
         let msg = rustre_adb::make_okay(rustre_adb::LocalId(local_id), rustre_adb::RemoteId(remote_id));
         let encoded = msg.encode();
-        let hex_out: String = encoded.iter().map(|b| format!("{:02x}", b)).collect();
+        let hex_out: String = encoded.iter().map(|b| format!("{b:02x}")).collect();
         Ok(rustre_mcp_server::ToolResult::text(serde_json::json!({
             "command": msg.command,
             "hex": hex_out,

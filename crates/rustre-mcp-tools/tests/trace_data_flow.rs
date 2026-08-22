@@ -38,7 +38,7 @@ async fn trace_forward_from_entry_point_emits_something() {
         .map(|b| b.start.as_u64())
         .find(|&v| v != 0)
         .unwrap_or(entry);
-    eprintln!("pick_va={:#x}", pick_va);
+    eprintln!("pick_va={pick_va:#x}");
 
     let tool = AnalysisTraceDataFlowPathTool;
     let result = tool
@@ -50,7 +50,7 @@ async fn trace_forward_from_entry_point_emits_something() {
         }))
         .await
         .expect("call ok");
-    let dbg = format!("{:?}", result);
+    let dbg = format!("{result:?}");
     eprintln!("RESULT: {}", &dbg.chars().take(400).collect::<String>());
     // Extract count from the JSON-as-text payload.
     let n = dbg
@@ -59,6 +59,6 @@ async fn trace_forward_from_entry_point_emits_something() {
         .and_then(|s| s.split(',').next())
         .and_then(|s| s.trim().parse::<usize>().ok())
         .unwrap_or(0);
-    eprintln!("TRACE_COUNT={}", n);
+    eprintln!("TRACE_COUNT={n}");
     assert!(n > 0, "expected at least one trace entry");
 }

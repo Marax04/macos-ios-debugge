@@ -56,7 +56,7 @@ fn open_image_arg(args: &Value) -> Result<Box<dyn rustre_forensics::MemoryImage>
     }
 
     let arch = match args.get("arch").and_then(Value::as_str) {
-        Some("32") | Some("x86") => rustre_forensics::ArchBits::Bits32,
+        Some("32" | "x86") => rustre_forensics::ArchBits::Bits32,
         _ => rustre_forensics::ArchBits::Bits64,
     };
     let os = match args.get("os").and_then(Value::as_str) {

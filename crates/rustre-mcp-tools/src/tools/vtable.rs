@@ -115,9 +115,9 @@ impl ToolHandler for VtableExtendsTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
         fn build_vt(args: &Value, base_key: &str, entries_key: &str) -> Result<rustre_analysis_vtable::Vtable, McpError> {
             let base = args.get(base_key).and_then(Value::as_u64)
-                .ok_or_else(|| McpError::InvalidParams(format!("missing '{}'", base_key)))?;
+                .ok_or_else(|| McpError::InvalidParams(format!("missing '{base_key}'")))?;
             let ents: Vec<u64> = args.get(entries_key).and_then(Value::as_array)
-                .ok_or_else(|| McpError::InvalidParams(format!("missing '{}'", entries_key)))?
+                .ok_or_else(|| McpError::InvalidParams(format!("missing '{entries_key}'")))?
                 .iter().filter_map(Value::as_u64).collect();
             let mut vt = rustre_analysis_vtable::Vtable::new(base);
             for (i, addr) in ents.iter().enumerate() {

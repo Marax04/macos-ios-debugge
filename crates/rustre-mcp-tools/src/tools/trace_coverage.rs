@@ -673,7 +673,7 @@ impl ToolHandler for TraceCoverageDrcovResolveTool {
             .ok_or_else(|| McpError::InvalidParams("missing 'input'".into()))?;
         let d = rustre_trace_coverage::DrcovData::parse(s);
         let addrs = d.resolve_addresses();
-        let preview: Vec<String> = addrs.iter().take(16).map(|a| format!("0x{:x}", a)).collect();
+        let preview: Vec<String> = addrs.iter().take(16).map(|a| format!("0x{a:x}")).collect();
         Ok(ToolResult::text(json!({
             "modules": d.modules.len(),
             "basic_blocks": d.basic_blocks.len(),

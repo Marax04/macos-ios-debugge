@@ -408,7 +408,7 @@ impl ToolHandler for DisasmTool {
 
         Ok(ToolResult {
             content: vec![rustre_mcp_server::ContentBlock::Text {
-                text: output.listing.clone(),
+                text: output.listing,
             }],
             is_error: false,
         })
@@ -629,11 +629,10 @@ pub fn resolve_function_start(load: &rustre_loader::RichLoadResult, addr: u64) -
         for back in 1..=probe {
             if back as u64 > addr { break; }
             let probe_va = addr - back as u64;
-            if let Some((_, s2)) = rustre_decompiler::slice_at_va(load, probe_va) {
-                if looks_like_x86_prologue(s2) {
+            if let Some((_, s2)) = rustre_decompiler::slice_at_va(load, probe_va)
+                && looks_like_x86_prologue(s2) {
                     return probe_va;
                 }
-            }
         }
     }
     addr
@@ -895,7 +894,7 @@ fn disasm_capstone(arch: &str, bits: u32, slice: &[u8], start_va: u64, count: us
     for i in insns.iter() {
         let mnemonic = i.mnemonic().unwrap_or("").to_string();
         let op_str   = i.op_str().unwrap_or("").to_string();
-        let text     = if op_str.is_empty() { mnemonic.clone() } else { format!("{} {}", mnemonic, op_str) };
+        let text     = if op_str.is_empty() { mnemonic.clone() } else { format!("{mnemonic} {op_str}") };
         let bytes_hex = bytes_to_hex(i.bytes());
 
         // Semantic info if details enabled.
@@ -953,7 +952,7 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
         use std::fmt::Write as _;
-        let _ = write!(s, "{:02X}", b);
+        let _ = write!(s, "{b:02X}");
     }
     s
 }

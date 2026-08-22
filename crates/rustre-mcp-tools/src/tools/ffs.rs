@@ -23,7 +23,7 @@ impl ToolHandler for FfsNodeV2NewFileTool {
         let name = args.get("name").and_then(Value::as_str).unwrap_or("f.bin").to_string();
         let inode = args.get("inode").and_then(Value::as_u64).unwrap_or(2);
         let len = args.get("len").and_then(Value::as_u64).unwrap_or(4) as usize;
-        let n = rustre_forensics_fs::MemFsNodeV2::new_file(name.clone(), vec![0u8; len], inode);
+        let n = rustre_forensics_fs::MemFsNodeV2::new_file(name, vec![0u8; len], inode);
         Ok(ToolResult::text(json!({"name":n.name,"inode":n.inode,"size":n.size(),"is_file":n.is_file(),"source":"MemFsNodeV2::new_file"}).to_string()))
     }
 }

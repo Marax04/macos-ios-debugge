@@ -97,11 +97,10 @@ fn coerce_u64(v: &Value) -> Option<u64> {
     if let Some(n) = v.as_u64() {
         return Some(n);
     }
-    if let Some(f) = v.as_f64() {
-        if f >= 0.0 && f.fract() == 0.0 {
+    if let Some(f) = v.as_f64()
+        && f >= 0.0 && f.fract() == 0.0 {
             return Some(f as u64);
         }
-    }
     let s = v.as_str()?.trim();
     if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
         return u64::from_str_radix(hex, 16).ok();
@@ -147,11 +146,10 @@ fn normalize_exe_path(raw: &str) -> Option<String> {
 
     // Step 4: probe candidates; return the first that is an existing file.
     // Prefer the canonicalized (absolute, verbatim) form when it resolves.
-    if let Ok(canon) = std::fs::canonicalize(&cleaned) {
-        if canon.is_file() {
+    if let Ok(canon) = std::fs::canonicalize(&cleaned)
+        && canon.is_file() {
             return Some(canon.to_string_lossy().into_owned());
         }
-    }
     for candidate in [
         cleaned.clone(),
         cleaned.replace('/', "\\"),
@@ -1502,8 +1500,8 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                             // frame could NEVER acquire an offset — the field
                             // was permanently null on the live path. Look up
                             // when either is missing, and fill only what is.
-                            if name.is_none() || offset.is_none() {
-                                if let Some(s) = p.lookup_nearest(pc) {
+                            if (name.is_none() || offset.is_none())
+                                && let Some(s) = p.lookup_nearest(pc) {
                                     if offset.is_none() {
                                         offset = Some(pc.saturating_sub(s.address));
                                     }
@@ -1511,13 +1509,11 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                                         name = Some(s.name);
                                     }
                                 }
-                            }
-                            if source_file.is_none() {
-                                if let Some(loc) = p.source_line_for_address(pc) {
+                            if source_file.is_none()
+                                && let Some(loc) = p.source_line_for_address(pc) {
                                     source_file = Some(loc.file);
                                     source_line = Some(loc.line);
                                 }
-                            }
                         }
                         json!({
                             "frame": f.index,
@@ -1682,8 +1678,8 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     let guard = sess.lock().map_err(|_| anyhow!("session poisoned"))?;
                     match block_on(guard.dbg.kill()) {
                         Ok(()) => {}
-                        Err(rustre_debug::DebugError::NotAttached)
-                        | Err(rustre_debug::DebugError::ProcessNotFound(_)) => {}
+                        Err(rustre_debug::DebugError::NotAttached |
+rustre_debug::DebugError::ProcessNotFound(_)) => {}
                         Err(e) => return Err(anyhow!("{e}")),
                     }
                     return Ok(json!({
@@ -2425,7 +2421,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 use rustre_debug::memory_search::{MemorySearch, SearchOptions, SearchPattern};
                 let pattern = match kind.as_str() {
                     "hex"  => SearchPattern::hex(&pattern_str).map_err(|e| anyhow!("{e}"))?,
-                    "utf8" => SearchPattern::string(pattern_str.clone()).map_err(|e| anyhow!("{e}"))?,
+                    "utf8" => SearchPattern::string(pattern_str).map_err(|e| anyhow!("{e}"))?,
                     _ => {
                         let clean2 = pattern_str.replace(' ', "");
                         let pdata: Vec<u8> = (0..clean2.len() / 2)

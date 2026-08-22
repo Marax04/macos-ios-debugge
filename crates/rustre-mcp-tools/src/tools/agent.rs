@@ -1193,7 +1193,7 @@ impl ToolHandler for AgentPromptsV2SpecTemplateVarKindsTool {
         let n = args.get("name").and_then(Value::as_str).unwrap_or("x").to_string();
         let d = args.get("default").and_then(Value::as_str).unwrap_or("v").to_string();
         let req = rustre_agent_prompts::TemplateVar::required(n.clone());
-        let opt = rustre_agent_prompts::TemplateVar::optional(n.clone(), d);
+        let opt = rustre_agent_prompts::TemplateVar::optional(n, d);
         Ok(ToolResult::text(json!({
             "required":{"name":req.name,"required":req.required,"has_default":req.default.is_some()},
             "optional":{"name":opt.name,"required":opt.required,"default":opt.default},

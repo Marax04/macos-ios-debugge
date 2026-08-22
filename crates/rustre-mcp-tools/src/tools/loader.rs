@@ -515,7 +515,7 @@ impl LoaderPipelineNewTool {
 impl ToolHandler for LoaderPipelineNewTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
         let name = args.get("name").and_then(Value::as_str).unwrap_or("default").to_string();
-        let p = rustre_loader::LoaderPipeline::new(name.clone());
+        let p = rustre_loader::LoaderPipeline::new(name);
         Ok(ToolResult::text(json!({"name": p.name(),"loader_count": p.loader_count(),"source":"rustre_loader::LoaderPipeline::new"}).to_string()))
     }
 }
@@ -638,7 +638,7 @@ impl LoaderRichLoadResultNewTool {
 impl ToolHandler for LoaderRichLoadResultNewTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
         let data = args_to_bytes(&args)?;
-        let r = rustre_loader::RichLoadResult::new(data.clone());
+        let r = rustre_loader::RichLoadResult::new(data);
         Ok(ToolResult::text(json!({
             "sha256": r.sha256(),
             "md5": r.md5(),

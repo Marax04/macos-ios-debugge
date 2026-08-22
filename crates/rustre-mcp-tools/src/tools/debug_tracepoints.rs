@@ -40,11 +40,10 @@ fn coerce_u64(v: &Value) -> Option<u64> {
     if let Some(n) = v.as_u64() {
         return Some(n);
     }
-    if let Some(f) = v.as_f64() {
-        if f >= 0.0 && f.fract() == 0.0 {
+    if let Some(f) = v.as_f64()
+        && f >= 0.0 && f.fract() == 0.0 {
             return Some(f as u64);
         }
-    }
     let s = v.as_str()?.trim();
     if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
         return u64::from_str_radix(hex, 16).ok();

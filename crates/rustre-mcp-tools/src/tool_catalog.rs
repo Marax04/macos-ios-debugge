@@ -720,7 +720,7 @@ fn builtin_core_entries() -> Vec<ToolEntry> {
             "List Functions",
             "List all functions in the binary",
             ToolCategory::Analysis,
-            v1.clone(),
+            v1,
         )
         .with_tag("functions"),
     ]
@@ -777,7 +777,7 @@ fn builtin_analysis_entries() -> Vec<ToolEntry> {
             "Apply FLIRT Signatures",
             "Scan a loaded binary with FLIRT signature packs and rename sub_* functions",
             ToolCategory::Signature,
-            v1.clone(),
+            v1,
         )
         .with_tag("flirt")
         .with_tag("autoname"),

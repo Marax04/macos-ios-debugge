@@ -8,26 +8,26 @@ use crate::{args_to_bytes, hex_encode};
 
 // Import all split tool modules so their struct types are in scope for impl blocks and
 // for registration functions like rs_sym_core_extra_handlers().
-use crate::tools::adb::*;
-use crate::tools::agent::*;
-use crate::tools::analysis::*;
-use crate::tools::analysis_cfg::*;
-use crate::tools::arch6502::*;
-use crate::tools::arch68k::*;
-use crate::tools::arch_cil::*;
-use crate::tools::arch_dex::*;
-use crate::tools::arch_jvm::*;
-use crate::tools::arch_lua::*;
-use crate::tools::arch_wasm::*;
-use crate::tools::arch_x86::*;
-use crate::tools::arm::*;
-use crate::tools::arm64::*;
-use crate::tools::avr::*;
-use crate::tools::bpf::*;
-use crate::tools::callconv::*;
-use crate::tools::codeview::*;
-use crate::tools::crypto::*;
-use crate::tools::db_base_migrations::*;
+use crate::tools::adb::{AdbComputeCrc32Tool, AdbParseLogcatTool, AdbEncodeMessageTool, AdbDecodeMessageTool, AdbParseLogcatLineTool, AdbFilterByLevelTool, AdbFilterByTagTool, AdbGroupByTagTool, AdbParseDevicesOutputTool, AdbParseBriefLineTool, AdbParseThreadtimeLineTool, AdbShellEscapeTool, AdbInstallSucceededTool, AdbUninstallSucceededTool, AdbMakeCloseTool, AdbParseFeaturesTool};
+use crate::tools::agent::{AgentShannonEntropyTool, AgentBumpPriorityTool, AgentLlmCountTokensTool, AgentLlmTrimToBudgetTool, AgentCastU64ToF64Tool, AgentCastUsizeToF64Tool, AgentCastI64ToF64Tool, AgentParseConfidenceTool, AgentParseVulnerabilitiesTool, AgentBuiltinWorkflowsTool, AgentLlmMessageSystemTool, AgentLlmMessageUserTool, AgentPromptsTemplateNewTool, AgentPromptsErrorDisplayTool, AgentIdNewWireTool, AgentMessageRoleAsStrWireTool, AgentPromptsBuiltinTemplatesCountTool, AgentPromptsRegistryCountTool, AgentLlmMessageUserWireTool, AgentLlmMessageAssistantWireTool, AgentWorkflowBuiltinListTool, AgentWorkflowTemplatesListTool};
+use crate::tools::analysis::{AnalysisDataflowComputeLivenessTool, AnalysisDataflowComputeReachingDefsTool, AnalysisXrefCallGraphTool, AnalysisXrefGetXrefsToTool, AnalysisXrefGetXrefsFromTool, AnalysisXrefCallGraphRootFunctionsTool, AnalysisXrefStringRefCountsTool, AnalysisFnDetectExtraTool, AnalysisVsaResolveJumpTableTool, AnalysisVsaResolveIndirectCallsTool, AnalysisVsaDetectBufferOverflowsTool, AnalysisTypeListBuiltinTypesTool, AnalysisTypeLookupBuiltinTypeTool, AnalysisTypeWinapiLookupTool, AnalysisXrefGlobalToTool, AnalysisXrefGlobalFromTool, AnalysisResultZeroTotalItemsTool, AnalysisScanCallTargetsTool, AnalysisStringDetectXorKeyWire2Tool, AnalysisStringShannonEntropyWire2Tool, AnalysisFnDetectFunctionsPathTool, AnalysisStringScanPathTool, AnalysisCryptoScanPathTool};
+use crate::tools::analysis_cfg::{AnalysisCfgFlowEdgeKindIsIntraproceduralTool, AnalysisCfgFlowEdgeKindIsConditionalTool};
+use crate::tools::arch6502::{Arch6502CyclesTool, Arch6502BranchTargetTool};
+use crate::tools::arch68k::{Arch68kSizeBytesTool, Arch68kCondCodeMnemonicTool};
+use crate::tools::arch_cil::{ArchCilDecodeCompressedUintTool, ArchCilMaxLocalSlotTool};
+use crate::tools::arch_dex::{ArchDexVregTool, ArchDexPregTool};
+use crate::tools::arch_jvm::{ArchJvmDecodeTool, ArchJvmDecodeAtTool};
+use crate::tools::arch_lua::{ArchLuaGetBx54Tool, ArchLuaGetAx54Tool};
+use crate::tools::arch_wasm::{ArchWasmValueTypeFromByteTool, ArchWasmSectionIdFromByteTool, ArchWasmExternalKindFromByteTool, ArchWasmMutabilityFromByteTool};
+use crate::tools::arch_x86::{ArchX86DisassembleAndLiftTool, ArchX86LiftToLlilTool};
+use crate::tools::arm::{ArmSregNameTool, ArmDregNameTool};
+use crate::tools::arm64::{Arm64AlignUpTool, Arm64AlignDownTool};
+use crate::tools::avr::{AvrEncodeNopTool, AvrEncodeRetTool};
+use crate::tools::bpf::{BpfLookupHelperTool, BpfLookupHelperByNameTool};
+use crate::tools::callconv::{CallconvSysvX64NameTool, CallconvMsvcX64NameTool};
+use crate::tools::codeview::{CodeviewParseSymbolsTool, CodeviewParseTypeRecordsTool, CodeviewSignatureFromBytesTool, CodeviewSignatureAsStrTool, CodeviewPrimitiveTypeTool, CodeviewBuildTestPub32Tool, CodeviewParseCv8LinesTool, CodeviewSymbolFilterCountTool};
+use crate::tools::crypto::{CryptoIdScanBinaryConstantsTool, CryptoIdScanAndSummarizeTool, CryptoIdScanDesSboxTool, CryptoIdScanAesSboxTool, CryptoIdScanSha256ConstantsTool, CryptoIdScanCrc32TableTool, CryptoIdScanChachaMagicTool, CryptoIdScanTeaDeltaTool, CryptoIdScanBlowfishPTool, CryptoIdShannonEntropyTool, CryptoIdIdentifyInBinaryTool, CryptoIdAesRconTool, CryptoIdCrc32PolyTool};
+use crate::tools::db_base_migrations::{DbBaseMigrationsCountTool, DbBaseMigrationsListTool, DbBaseMigrationsMaxVersionTool, DbBaseMigrationsNamesTool, DbBaseMigrationsFindByVersionTool, DbBaseMigrationsVersionsTool, DbBaseMigrationsMinVersionTool, DbBaseMigrationsIsContiguousTool, DbBaseMigrationsFirstVersionTool, DbBaseMigrationsSummaryTool, DbBaseMigrationsWithDownSqlTool, DbBaseMigrationsUniqueVersionsTool, DbBaseMigrationsTotalSqlBytesTool, DbBaseMigrationsAvgSqlBytesTool, DbBaseMigrationsLargestUpSqlTool, DbBaseMigrationsHasVersionTool};
 // [DISABLED 2026-07-12] rustre-debug-macos disabled
 // use crate::tools::debug_macos::*;
 // [DISABLED 2026-07-12] rustre-debug-unicorn disabled
@@ -36,38 +36,38 @@ use crate::tools::db_base_migrations::*;
 // use crate::tools::debug_windbg::*;
 // [DISABLED 2026-07-12] rustre-debug-windows disabled
 // use crate::tools::debug_windows::*;
-use crate::tools::decomp::*;
-use crate::tools::decompiler::*;
-use crate::tools::decompiler_type::*;
-use crate::tools::demangle::*;
-use crate::tools::deobf::*;
-use crate::tools::diff::*;
-use crate::tools::dotnet::*;
-use crate::tools::dotnet_edit::*;
-use crate::tools::dotnet_metadata::*;
-use crate::tools::dwarf::*;
-use crate::tools::emu::*;
+use crate::tools::decomp::{DecompRegisterCanonicalTool, DecompRegisterWidthBytesTool, DecompIsCKeywordTool};
+use crate::tools::decompiler::{DecompilerCoreBatchDecompileTool, DecompilerLoadBinaryInfoTool, DecompilerDetectFunctionsTool, DecompilerDisassembleFunctionX86Tool, DecompilerArchFromStrTool, DecompilerOsFromPeFlagTool, DecompilerCBraceStyleDefaultTool, DecompilerCIndentMakeTool, DecompilerCfsBlockIdDisplayTool, DecompilerCfsAlgorithmDisplayTool, DecompilerExprIntWidthBitsTool, DecompilerExprIntWidthBytesTool};
+use crate::tools::decompiler_type::{DecompilerTypeIntByteSizeTool, DecompilerTypeIntCNameTool};
+use crate::tools::demangle::{DemangleIsConstructorTool, DemangleIsDestructorTool, DemangleIsVtableTool, DemangleIsTypeinfoTool, DemangleStandardSubstitutionTool, DemangleAutoTool, DemangleNormalizeTypeTool, DemangleBatchTool, DemangleMsvcRttiTool, DemangleBatchParallelTool, DemangleResultDisplayTool, DemangleDispatchTool, DemangleClassifyTool, DemangleItaniumNativeTool, DemangleAutoWireTool, DemangleAutoDemanglerWireTool, DemangleItaniumDetectWireTool, DemangleMsvcDetectWireTool};
+use crate::tools::deobf::{DeobfStringXorBruteforceTop3Tool, DeobfStringComputeConfidenceTool, DeobfStringCaesarBruteforceTool, DeobfStringDetectBase64VariantTool, DeobfStringDetectXorKeyLengthIcTool, DeobfVmReadU64LeTool, DeobfVmReadU32LeTool, DeobfVmReadU16LeTool, DeobfXorEntropyTool, DeobfAdler32Tool, DeobfCrc32Tool, DeobfSmcShannonEntropyTool, DeobfSmcLooksLikeCodeTool, DeobfSmcDetectTool};
+use crate::tools::diff::{DiffBindiffCfgHashLinearTool, DiffBindiffWlHashTool, DiffBindiffSimilarityScoreTool, DiffBindiffCfgHashTool, DiffBindiffJaccardBbScoreTool, DiffBindiffCfgSimilarityTool, DiffSemanticMinhashSignatureTool, DiffSemanticMinhashEstimateJaccardTool, DiffSemanticSignatureComputeTool, DiffSimpleHashTool, DiffLcsSimilarityTool, DiffByteHistogramSimilarityTool, DiffSemanticMatcherSimilarityTool, DiffSemanticMatcherAreEquivalentTool, DiffSemanticDifferDiffFunctionPairTool, DiffNgramJaccardSimilarityTool, DiffCombinedByteSimilarityTool, DiffExportsTool};
+use crate::tools::dotnet::{DotnetDecompileCilOpcodesTool, DotnetDecompileDefaultOptionsTool, DotnetMethodFlagsDecodeTool, DotnetCilSimpleInstrTool, DotnetDecompileSimplifyExprTool, DotnetDecompileStackEffectTool, DotnetEncodeTokenTool, DotnetTokenTableNameTool};
+use crate::tools::dotnet_edit::{DotnetEditOpcodeByteSizeTool, DotnetEditRecomputeOffsetsTool, DotnetEditRenumberOffsetsTool, DotnetEditEncodeInstructionsTool, DotnetEditNopFillRangeTool, DotnetEditNewMethodEncodeSigTool, DotnetEditManagedResourceIsPublicTool, DotnetEditManagedResourceIsPublicWireTool, DotnetEditNewMethodEncodeSigWireTool, DotnetEditNewFieldPublicFieldWireTool, DotnetEditNewFieldPublicStaticWireTool};
+use crate::tools::dotnet_metadata::{DotnetMetadataParseFieldSigBlobTool, DotnetMetadataParseLocalVarSigTool, DotnetMetadataParseMethodSigBlobTool, DotnetMetadataPrettyPrintTypeSigTool};
+use crate::tools::dwarf::{DwarfFunctionsPathTool, DwarfTypesPathTool, DwarfLineInfoPathTool, DwarfFunctionsCountPathTool, DwarfTypesCountPathTool, DwarfVariablesPathTool, DwarfSymbolSetSummaryPathTool, DwarfUnwinderAtPathTool};
+use crate::tools::emu::{EmuLibraryStubIsStubbedTool, EmuLibraryStubModuleTool, EmuBackendsRegistryFindTool, EmuMemProviderFindTool, EmuOsLinuxSyscallGroupTool, EmuArchPointerSizeTool, EmuArchNameTool, EmuArchPointerSizeWireTool, EmuArchNameWireTool};
 // [DISABLED 2026-07-12] rustre-emu-unicorn dep disabled.
 // #[allow(unused_imports)]
 // use crate::tools::emu_unicorn::*;
-use crate::tools::events::*;
-use crate::tools::firmware::*;
-use crate::tools::flirt::*;
-use crate::tools::flirt_apply::*;
-use crate::tools::flirt_gen::*;
-use crate::tools::forensics::*;
-use crate::tools::forensics_fs::*;
-use crate::tools::forensics_mem::*;
+use crate::tools::events::{EventsBusNewDefaultTool, EventsLoggerNewTool, EventsBusPublishCustomTool, EventsClassifyVariantTool, EventsViewSubscriptionTool, EventsKindSubscriptionTool, EventsBusSendViewClosedTool, EventsBusSendPluginLoadedTool, EventsSpecCoreEventVariantNameTool, EventsSpecCoreEventViewIdDebuggerTool};
+use crate::tools::firmware::{FirmwareDetectKindV2Tool, FirmwareScanEmbeddedSignaturesTool};
+use crate::tools::flirt::{FlirtCrc16Tool, FlirtDemoSigCountTool, FlirtParsePatternTool, FlirtCrc16IbmTool, FlirtParseSigHeaderTool, FlirtArchFromU8Tool, FlirtCrc16FlirtTool, FlirtBuiltinCrtLibraryX64Tool, FlirtBuiltinMatcherTool, FlirtPatternWildcardRatioWireTool, FlirtFileTypeContainsWireTool};
+use crate::tools::flirt_apply::{FlirtApplyAutoTool, FlirtApplyCrc16Tool, FlirtApplyLibraryMarksFromMatchesTool, FlirtApplyCrc16FlirtWireTool, FlirtApplyDemoSigsCountWireTool};
+use crate::tools::flirt_gen::{FlirtGenScanX86MasksTool, FlirtGenCrc16SigHeaderTool, FlirtGenElfParseTool, FlirtGenPatternGeneratorNewTool, FlirtGenPatternGenerateTool, FlirtGenPatternWithQualityTool, FlirtGenLibraryBuilderDemoTool};
+use crate::tools::forensics::{ForensicsComputeMd5Tool, ForensicsComputeSha1Tool, ForensicsComputeSha256Tool, ForensicsComputeSha512Tool};
+use crate::tools::forensics_fs::{ForensicsFsPrefetchParseTool, ForensicsFsPrefetchSummaryTool, ForensicsFsLnkParseTool, ForensicsFsMemFsNodeV2FileSizeTool, ForensicsFsMemoryFsNewRootTool};
+use crate::tools::forensics_mem::{ForensicsMemThreadStateFromU8Tool, ForensicsMemConnectionStateFromU8Tool};
 // [DISABLED 2026-07-12] rustre-debug-frida dep disabled.
 // #[allow(unused_imports)]
 // use crate::tools::frida::*;
-use crate::tools::function::*;
-use crate::tools::fuzz::*;
-use crate::tools::fuzz_afl::*;
-use crate::tools::fuzz_cov::*;
-use crate::tools::fuzz_libfuzzer::*;
-use crate::tools::fuzz_net::*;
-use crate::tools::fuzz_san::*;
+use crate::tools::function::FunctionListByKindTool;
+use crate::tools::fuzz::{FuzzFnv1aTool, FuzzRankSeedsByPriorityTool, FuzzComputePriorityTool, FuzzXorshift64Tool, FuzzGenerateCorpusTool};
+use crate::tools::fuzz_afl::{FuzzAflDictLoadTool, FuzzAflStatsParseTool};
+use crate::tools::fuzz_cov::{FuzzCovRleEncodeTool, FuzzCovCoverageFractionTool, FuzzCovRleIsBeneficialTool};
+use crate::tools::fuzz_libfuzzer::{FuzzLibfuzzerBucketBitmapTool, FuzzLibfuzzerCountNewBitsBucketedTool, FuzzLibfuzzerParseSanitizerOutputTool};
+use crate::tools::fuzz_net::{FuzzNetXorChecksumTool, FuzzNetAddChecksumTool};
+use crate::tools::fuzz_san::{FuzzSanParseHexU64Tool, FuzzSanClassifySeverityTool, FuzzSanParseAsanOutputTool, FuzzSanParseUbsanOutputTool, FuzzSanStackEditDistanceTool};
 // [DISABLED 2026-07-12] rustre-debug-gdb disabled
 // use crate::tools::gdb::*;
 // [DISABLED 2026-07-12] rustre-decompiler-ghidra dep disabled.
@@ -77,96 +77,96 @@ use crate::tools::fuzz_san::*;
 // use crate::tools::ghidra_backend::*;
 // #[allow(unused_imports)]
 // use crate::tools::ghidra_pcode::*;
-use crate::tools::hex_pattern::*;
-use crate::tools::hex_template::*;
-use crate::tools::hex_view::*;
-use crate::tools::iadl::*;
-use crate::tools::il_lift::*;
-use crate::tools::il_passes::*;
-use crate::tools::ios::*;
+use crate::tools::hex_pattern::{HexPatternCrc16IbmTool, HexPatternParseTool, HexPatternAlternationParseTool, HexPatternMaskedFromStrTool, HexPatternAlternationMatchesTool, HexPatternMaskedSearchTool};
+use crate::tools::hex_template::{HexTemplateWavTool, HexTemplateRiffChunkTool, HexTemplateBuiltinTemplatesTool, HexTemplateBuiltinNamesTool, HexTemplateBitfieldExtractTool, HexTemplateElf32PhdrTool, HexTemplateElf64PhdrTool, HexTemplateRiffChunkWireTool, HexTemplateWavWireTool};
+use crate::tools::hex_view::{HexViewFormatHexDumpTool, HexViewFormatHexDumpAnsiTool};
+use crate::tools::iadl::{IadlConvergenceMovingAverageTool, IadlConvergenceEmaTool, IadlConvergenceTrendSlopeTool, IadlAnalyzeBinaryForProtectionsTool, IadlComputeHashTool};
+use crate::tools::il_lift::{IlLiftSupportedArchesTool, IlLiftArchCountTool, IlLiftSupportsTool, IlLiftIsEmptyTool, IlLiftArchDescriptionTool, IlLiftRegistryNewLenTool, IlLiftCacheDefaultCapacityLenTool, IlLiftRegisterAllCountTool, IlLiftRegisterAllLiftersTool, IlLiftDiffAddressMapsTool};
+use crate::tools::il_passes::{IlPassesCountInstrsTool, IlPassesCountConstantsTool, IlPassesCollectCallSitesTool, IlPassesDetectLoopsTool, IlPassesInliningScoreTool, IlPassesRunGvnPassTool, IlPassesIntegerRangeAnalysisTool, IlPassesLoopBoundAnalysisTool, IlPassesPassStatsNewTool, IlPassesPassContextNewTool};
+use crate::tools::ios::{IosScanObjcSelectorsPathTool, IosScanObjcClassesPathTool};
 // [DISABLED 2026-07-12] rustre-debug-kgdb disabled
 // use crate::tools::kgdb::*;
-use crate::tools::llm::*;
-use crate::tools::loader::*;
-use crate::tools::lua::*;
-use crate::tools::luajit::*;
-use crate::tools::m68k::*;
-use crate::tools::malpedia::*;
-use crate::tools::mem::*;
-use crate::tools::mem_diff::*;
-use crate::tools::mhcde::*;
-use crate::tools::mips::*;
-use crate::tools::mobile::*;
-use crate::tools::mobile_apktool::*;
-use crate::tools::mobile_dyld::*;
-use crate::tools::mobile_ios::*;
-use crate::tools::mobile_ipa::*;
-use crate::tools::mobile_jadx::*;
-use crate::tools::mobile_smali::*;
-use crate::tools::msp430::*;
-use crate::tools::net::*;
-use crate::tools::net_dissect::*;
-use crate::tools::net_pcap::*;
-use crate::tools::net_proxy::*;
-use crate::tools::net_rules::*;
-use crate::tools::noreturn::*;
-use crate::tools::patch::*;
-use crate::tools::pe::*;
-use crate::tools::pe_editor::*;
-use crate::tools::plugin::*;
-use crate::tools::ppc::*;
-use crate::tools::python::*;
-use crate::tools::recover::*;
-use crate::tools::rhai::*;
-use crate::tools::rs_sym::*;
-use crate::tools::rv::*;
-use crate::tools::sandbox::*;
-use crate::tools::sandbox_report::*;
-use crate::tools::script::*;
-use crate::tools::script_lua::*;
-use crate::tools::script_python::*;
-use crate::tools::script_rhai::*;
-use crate::tools::smali::*;
-use crate::tools::sparc::*;
-use crate::tools::stabs::*;
-use crate::tools::stack::*;
-use crate::tools::survey::*;
-use crate::tools::symb::*;
+use crate::tools::llm::{LlmTokenCountEstimateTool, LlmCompressMessageTool, LlmTrimToBudgetTool};
+use crate::tools::loader::{LoaderCoreMd5Tool, LoaderFormatDetectorTool, LoaderAutoLoaderDetectTool, LoaderCoreSha256Tool, LoaderLuaIsBytecodeTool, LoaderLuaOpcodeNameTool, LoaderLuaReadStringTool, LoaderFirmwareDetectKindTool, LoaderFirmwareDetectBinaryArchTool, LoaderFirmwareDetectRtosTool, LoaderPdfVersionTool, LoaderPdfHasJavascriptTool, LoaderPdfHasEmbeddedFilesTool, LoaderAndroidIsApkTool, LoaderAndroidIsVdexTool, LoaderAndroidAdler32Tool, LoaderLuajitIsLuajitTool, LoaderLuajitReadUleb128Tool, LoaderLuajitReadSleb128Tool, LoaderConsoleDetectFormatTool, LoaderConsoleXorChecksumTool, LoaderConsoleIsNesTool, LoaderDotnetHasClrHeaderTool, LoaderDotnetIsDotnetTool, LoaderDotnetReadCompressedUintTool, LoaderPeIsSignedTool, LoaderPePdbPathTool, LoaderPeEntryPointsTool, LoaderElfGnuHashStrTool, LoaderElfGnuHashBytesTool, LoaderElfInfoSummaryTool, LoaderMachoArchFromCputypeTool, LoaderMachoSubtypeNameTool, LoaderMachoParseSummaryTool, LoaderCoordinatorNewTool, LoaderCoordinatorNewWithRegistryTool, LoaderDotnetHasClrHeaderWireTool, LoaderDotnetIsDotnetWireTool, LoaderAndroidIsDexTool, LoaderAndroidVerifyDexChecksumTool, LoaderElfParseInfoTool, LoaderElfPltEntriesTool, LoaderMachoParseTool, LoaderMachoParseFatTool, LoaderPeParseInfoTool, LoaderPeImportsFromDllTool};
+use crate::tools::lua::{LuaLoaderIsBytecodeTool, LuaLoaderOpcodeNameTool};
+use crate::tools::luajit::{LuajitInstrOpTool, LuajitInstrATool};
+use crate::tools::m68k::{M68kDecodeInstrTool, M68kVariantInfoTool};
+use crate::tools::malpedia::{MalpediaTlshDistanceTool, MalpediaBatchLookupTool, MalpediaCheckRulesetQualityTool};
+use crate::tools::mem::{MemShannonEntropyTool, MemPageIndexTool, MemPageAlignUpTool, MemPageAlignDownTool, MemPageContainingTool, MemHighEntropySpansTool, MemShannonEntropyWireTool, MemPageAlignUpWireTool, MemPageRangeIndicesTool, MemEntropyClassifyTool};
+use crate::tools::mem_diff::MemDiffBytesTool;
+use crate::tools::mhcde::{MhcdeOpaquePredicateDetectTool, MhcdeJunkCodeDetectTool, MhcdeOrchestratorAnalyzeTool};
+use crate::tools::mips::{MipsEncodeNopTool, MipsGprNameTool};
+use crate::tools::mobile::{MobileRegistryAllTool, MobileRegistryCountTool};
+use crate::tools::mobile_apktool::{MobileApktoolFindTool, MobileApktoolConfigNewTool, MobileApktoolErrorDisplayTool, MobileApktoolMockSuccessTool};
+use crate::tools::mobile_dyld::{MobileDyldHeaderParseTool, MobileDyldMockImageCountTool};
+use crate::tools::mobile_ios::{MobileIosSwiftMangledTool, MobileIosDecodeTypeEncodingTool};
+use crate::tools::mobile_ipa::{MobileIpaIsBinaryPlistTool, MobileIpaMockPackageTool, MobileIpaPlistIsBinaryTool, MobileIpaMockSummaryTool};
+use crate::tools::mobile_jadx::{MobileJadxFindTool, MobileJadxDescriptorToTypeTool, MobileJadxConfigNewTool, MobileJadxJavaMethodIsConstructorTool};
+use crate::tools::mobile_smali::{MobileSmaliParseTypeDescriptorTool, MobileSmaliParseMethodDescriptorTool};
+use crate::tools::msp430::{Msp430RegNameTool, Msp430BwSuffixTool};
+use crate::tools::net::{NetIpChecksumTool, NetIsPrivateAddrTool, NetParseEthernetExtTool, NetParseIcmpEchoTool, NetParseIpv6FullTool};
+use crate::tools::net_dissect::{NetDissectByteEntropyTool, NetDissectSmb2SensitiveShareTool, NetDissectScanHttpAttacksDecodedTool, NetDissectDnp3AppFcNameTool, NetDissectIcmpStreamTunnelHeuristicTool};
+use crate::tools::net_pcap::{NetPcapLinkTypeFromU16Tool, NetPcapFileParseInfoTool, NetPcapMergeFilesTool, NetPcapSplitByCountTool, NetPcapSplitByTimeTool};
+use crate::tools::net_proxy::{NetProxyHexEncodeTool, NetProxyHexDecodeTool, NetProxyBase64DecodeTool, NetProxyGlobMatchWireTool, NetProxySimpleRegexMatchTool};
+use crate::tools::net_rules::{NetRulesFindBytesNocaseTool, NetRulesExportRulesJsonTool, NetRulesImportRulesJsonTool, NetRulesExportRulesSnortTool, NetRulesDiffRulesTool};
+use crate::tools::noreturn::NoreturnInferTool;
+use crate::tools::patch::{PatchPeSecuritySummaryTool, PatchFindCodeCavesTool, PatchParseHexBytesTool, PatchAssembleSimpleTool, PatchComputePeChecksumTool, PatchPeSecuritySetTool, PatchBinaryDiffTool, PatchBinaryPatchTool, PatchBytesAtVaTool, PatchNopRangeAtVaTool, PatchAsmAtVaTool, PatchPeVaToFileOffsetTool, PatchPatchXorRegionAtVaTool, PatchBuildDeltaTool};
+use crate::tools::pe::{PeXorSectionTool, PeCertHeaderBytesTool, PeRc4ProcessTool, PeImportEntryDisplayTool, PePatchDisplayTool, PeToolsComputeEntropyTool, PeToolsComputePeChecksumTool, PeToolsRichHeaderParseTool, PeRebuildIsMemoryPeTool, PeRebuildComputeEntropyTool, PeRebuildCrc16CcittTool, PeRebuildFindPeCandidatesTool, PeRebuildCalculatePeChecksumTool, PeRebuildInferCharacteristicsTool, PeRebuildIsMemoryPeWireTool, PeRebuildComputeEntropyWireTool};
+use crate::tools::pe_editor::{PeEditorCertificateHeaderTool, PeEditorPatchSetNewTool, PeEditorExportAddTool, PeEditorExportRemoveTool};
+use crate::tools::plugin::{PluginLuaLoaderDefaultCountTool, PluginLuaLoadInlineTool, PluginPythonStubSignatureTool, PluginPythonModuleCountsTool, PluginNativeLoaderCountTool, PluginNativeLoaderIdsTool, PluginPythonGenerateStubTool, PluginPythonClassMethodsTaggedTool, PluginPythonFormatErrorTool};
+use crate::tools::ppc::{PpcEncodeBlTool, PpcEncodeLisTool};
+use crate::tools::python::{PythonScriptPyValueNoneTypeNameTool, PythonScriptEngineInitialStepCountTool};
+use crate::tools::recover::RecoverStructsTool;
+use crate::tools::rhai::{RhaiEntropyBytesTool, RhaiHexEncodeBytesTool};
+use crate::tools::rs_sym::{RsSymCoreBackendsRegistryTool, RsSymCoreSymbolSourcePriorityTool, RsSymCoreSyntheticNamesTool, RsSymCoreFunctionBoundaryTool, RsSymCoreStoreRoundtripTool, RsSymCoreCacheLruTool, RsSymCoreTryDemangleTool, RsSymCorePdbUrlBuildTool, RsSymCoreXrefIndexTool, RsSymCoreExporterAllTool, RsSymCoreStatsTool, RsSymCoreSymbolFilterTool, RsSymCoreAddrMapTool, RsSymCoreImportTableTool, RsSymCoreExportTableTool, RsSymCoreConflictResolveTool, RsSymCoreDebugMergerTool, RsSymCoreUnifiedTableTool, RsSymCoreDemanglerPipelineTool, RsSymCoreSymbolStoreExportTool, RsSymCoreInMemoryProviderTool};
+use crate::tools::rv::{RvBrev8_32Tool, RvCClassifyTool};
+use crate::tools::sandbox::{SandboxVmMemoryMapMockTool, SandboxVmQemuBuildArgsTool};
+use crate::tools::sandbox_report::{SandboxReportSeverityScoreTool, SandboxReportIocIsConfidentTool};
+use crate::tools::script::{ScriptBuiltinHexToBytesTool, ScriptBuiltinBytesToHexTool, ScriptHexToBytesTool, ScriptBytesToHexTool, ScriptXorBytesTool, ScriptBytesConcatTool, ScriptBytesSliceTool, ScriptBytesFindTool, ScriptErrorIsRecoverableTool, ScriptErrorRuntimeTool, ScriptReadU32Tool, ScriptBytesFillTool};
+use crate::tools::script_lua::{ScriptLuaCastsU64ToI64Tool, ScriptLuaCastsUsizeToI64Tool, ScriptLuaCalculateEntropyTool, ScriptLuaNopSledTool};
+use crate::tools::script_python::{ScriptPythonMarshalToAddressTool, ScriptPythonMarshalToBytesTool, ScriptPythonStubsStandardNamesTool, ScriptPythonStubsGenerateStandardTool};
+use crate::tools::script_rhai::{ScriptRhaiEntropyClassifyTool, ScriptRhaiHexEncodeTool};
+use crate::tools::smali::{SmaliRegDisplayTool, SmaliOpcodeToMnemonicTool};
+use crate::tools::sparc::{SparcEncodeNopTool, SparcEncodeCallTool};
+use crate::tools::stabs::{StabsTypeNameForTool, StabsTypeCodeFromCharTool, StabsIsSymbolTool, StabsCategoryTool, StabsIsSourceFileTool, StabsIsLineNumberTool};
+use crate::tools::stack::StackFrameReportAsyncTool;
+use crate::tools::survey::SurveyBinaryTool;
+use crate::tools::symb::{SymbEngineWidenSequenceCheckTool, SymbEngineWidenSequenceExprTool, SymbSymAddConstTool, SymbSymXorConstTool, SymbEngineDefaultSolverTool, SymbEngineDefaultStrategyTool, SymbBitvecWidthTool, SymbUnsatMessageTool, SymbEngineStateManagerNewLenTool, SymbEngineFunctionSummaryNewTool, SymbEngineExecutorConfigDefaultsTool, SymbEngineStateManagerNewTool, SymbSymTypeBitVecWidthTool, SymbPathConstraintNewIsTriviallyFalseTool};
 // [DISABLED 2026-07-12] rustre-symb-z3 dep disabled.
 // #[allow(unused_imports)]
 // use crate::tools::symb_z3::*;
-use crate::tools::symbols::*;
-use crate::tools::symbols_pdb::*;
-use crate::tools::syscalls::*;
-use crate::tools::syscalls_linux::*;
-use crate::tools::syscalls_windows::*;
-use crate::tools::sysinternals::*;
-use crate::tools::threatintel::*;
-use crate::tools::threatintel_group::*;
-use crate::tools::threatintel_indicator::*;
-use crate::tools::ti_malpedia::*;
-use crate::tools::ti_misp::*;
-use crate::tools::ti_opencti::*;
-use crate::tools::ti_otx::*;
-use crate::tools::trace::*;
-use crate::tools::trace_cov::*;
-use crate::tools::trace_coverage::*;
-use crate::tools::trace_navigate::*;
-use crate::tools::trace_pt::*;
-use crate::tools::triage_die::*;
-use crate::tools::triage_entropy::*;
-use crate::tools::ttd::*;
-use crate::tools::ttd_query::*;
-use crate::tools::ttd_recorder::*;
-use crate::tools::ttd_replay::*;
-use crate::tools::ttd_replayer::*;
-use crate::tools::vsa::*;
-use crate::tools::vtable::*;
+use crate::tools::symbols::{SymbolsDiscoverPdbForBinaryTool, SymbolsBackendsRegistryTool, SymbolsExporterToCsvTool, SymbolsFunctionBoundaryOverlapsTool, SymbolsSymbolSourcePriorityTool, SymbolsDiscoverPdbV2Tool, SymbolsBackendsRegistryV2Tool, SymbolsTryDemangleTool, SymbolsSymbolContainsTool, SymbolsFunctionBoundarySizeTool, SymbolsFunctionBoundaryContainsTool};
+use crate::tools::symbols_pdb::{SymbolsPdbParseInfoTool, SymbolsPdbFromBytesTool, SymbolsPdbSymbolsListTool, SymbolsPdbSymbolsCountByKindTool, SymbolsPdbModuleProcSymbolsTool, SymbolsPdbSymbolsWithSegmentTool};
+use crate::tools::syscalls::{SyscallsCategorizeByNameTool, SyscallsEstimateRiskTool, SyscallsSignalNameTool, SyscallsErrnoNameTool, SyscallsSignalNameLookupTool, SyscallsErrnoNameLookupTool, SyscallsSignalNameLookupWireTool, SyscallsErrnoNameLookupWireTool};
+use crate::tools::syscalls_linux::{SyscallsLinuxX8664NameTool, SyscallsLinuxX8664NrTool, SyscallsLinuxSecuritySeverityTool, SyscallsLinuxCategoryTool, SyscallsLinuxErrorNotFoundDisplayTool, SyscallsLinuxParamNewTool};
+use crate::tools::syscalls_windows::{SyscallsWindowsFormatNtstatusWireV2Tool, SyscallsWindowsNtToWin32PathTool, SyscallsWindowsLookupWin32ApiTool, SyscallsWindowsApisByModuleTool, SyscallsWindowsIsSystemPathTool, SyscallsWindowsDecodeFileAccessTool, SyscallsWindowsDecodeAllocTypeTool, SyscallsWindowsIsCleanX64StubTool, SyscallsWindowsIsCleanX86StubTool, SyscallsWindowsDetectHookTypeTool, SyscallsWindowsIsDangerousPrivilegeTool, SyscallsWindowsNtToWin32RegPathTool, SyscallsWindowsIsPersistenceRegistryKeyTool, SyscallsWindowsBuildVersionSsnTableTool, SyscallsWindowsIsCleanStubDualTool, SyscallsWindowsArchListTool, SyscallsWindowsVersionListTool, SyscallsWindowsFormatNtstatusWireV3Tool, SyscallsWindowsIsSystemPathWireV2Tool};
+use crate::tools::sysinternals::{SysinternalsPeHasSignatureTool, SysinternalsAutorunsScanAllTool, SysinternalsNetworkSnapshotTool, SysinternalsListeningPortsTool, SysinternalsProcessScanTool, SysinternalsHasPeSignatureTool, SysinternalsEmptySnapshotTool, SysinternalsSignatureUnsignedTool, SysinternalsMemoryInfoRatioTool, SysinternalsProcessInTempDirTool, SysinternalsAutorunSuspiciousPathTool};
+use crate::tools::threatintel::ThreatintelThreatIocNewTool;
+use crate::tools::threatintel_group::{ThreatintelGroupSearchTool, ThreatintelGroupAliasesTool, ThreatintelGroupListKnownTool, ThreatintelGroupLinkIocTool, ThreatintelGroupTrackerKnownCountTool, ThreatintelGroupTrackerSearchTool};
+use crate::tools::threatintel_indicator::{ThreatintelIndicatorLookupTool, ThreatintelIndicatorExportStixTool, ThreatintelIndicatorDbIsEmptyTool, ThreatintelIndicatorGetByIdTool, ThreatintelIndicatorDbLookupTool};
+use crate::tools::ti_malpedia::{TiMalpediaNormalizeFamilyNameTool, TiMalpediaFamilyToMalwareTypeTool};
+use crate::tools::ti_misp::{TiMispParseAttributeTypeTool, TiMispAttributeTypeRoundtripTool, TiMispDistributionLevelFromValueTool, TiMispThreatLevelFromValueTool, TiMispWarningListMatchesTool, TiMispTagSpecNewTool, TiMispEventIocCountTool, TiMispSharingGroupNewTool, TiMispSightingIsFalsePositiveTool, TiMispEventSpecHasIdsAttributesTool};
+use crate::tools::ti_opencti::{TiOpenctiGraphqlUrlTool, TiOpenctiConfidenceClampTool, TiOpenctiConfidenceIsHighTool};
+use crate::tools::ti_otx::{TiOtxPulseUrlTool, TiOtxSamplePulseTool, TiOtxThreatLevelTool};
+use crate::tools::trace::{TraceMergeEmptySessionsTool, TraceCoresightEtmDecodeStreamTool, TraceCoresightTpiuDemuxTool, TraceCoresightStmDecodeStreamTool, TraceOpenTraceFileTool, TraceMergeSessionsTool, TraceFilterInstructionsOnlyWireTool, TraceCompressorCompressionRatioWireTool, TraceCoresightIsValidStreamTool, TraceCoresightFindSyncOffsetsTool};
+use crate::tools::trace_cov::{TraceCovParseLcovTool, TraceCovBitmapNewTool};
+use crate::tools::trace_coverage::{TraceCoveragePercentTool, TraceCoverageComputeFunctionStatsTool, TraceCoverageParseLcovTool, TraceCoverageToCustomBinaryTool, TraceCoverageMergeRunsTool};
+use crate::tools::trace_navigate::{TraceNavigateBytesToU64Tool, TraceNavigateInsnEntryTool, TraceNavigateBytesToU64V2Tool, TraceNavigateExecutionTraceNewV2Tool, TraceNavigateBookmarkNewTool, TraceNavigateStackFrameNewTool};
+use crate::tools::trace_pt::{TracePtDecodeBufferTool, TracePtCoverageTool, TracePtDrcovTool};
+use crate::tools::triage_die::{TriageDieComputeEntropyWireTool, TriageDieFindBytesWireTool};
+use crate::tools::triage_entropy::{TriageEntropyPackingIndicatorsTool, TriageEntropyShannonPathTool, TriageEntropyShannonF32PathTool, TriageEntropyAnalyzeBlocksPathTool, TriageEntropyReportPathTool, TriageEntropyHistogramPathTool, TriageEntropySurveyBinaryPathTool, TriageEntropyClassifyTool, TriageEntropyColorRgbTool, TriageEntropyShannonBytesTool, TriageEntropyShannonBytesF32Tool};
+use crate::tools::ttd::{TtdBuildTestTraceTool, TtdBuildMultiThreadTraceTool, TtdPositionMinTool, TtdPositionMaxTool, TtdPositionEarliestTool};
+use crate::tools::ttd_query::{TtdQueryParseTool, TtdQueryCallTreeTool, TtdQueryMemoryReportTool};
+use crate::tools::ttd_recorder::{TtdRecorderPositionStartTool, TtdRecorderValidExtensionTool, TtdRecorderCheckPlatformSupportTool, TtdRecorderValidateTraceTool, TtdRecorderIsValidExtensionTool};
+use crate::tools::ttd_replay::{TtdReplayBuildCallGraphTool, TtdReplaySplitByThreadTool, TtdReplayComputeMemoryAccessStatsTool};
+use crate::tools::ttd_replayer::{TtdReplayerHexDumpTool, TtdReplayerFormatTickTool, TtdReplayerParseHexTool, TtdReplayerBuildSyscallSummariesTool, TtdReplayerScanForWritesTool};
+use crate::tools::vsa::{VsaValueSetSingletonTool, VsaStridedIntervalNewTool};
+use crate::tools::vtable::{VtableParseMsvcRttiTool, VtableParseItaniumRttiTool, VtableScanBinaryTool, VtableIsItaniumMangledTool, VtableIsMsvcMangledTool};
 // [DISABLED 2026-07-12] rustre-debug-windbg disabled
 // use crate::tools::windbg::*;
-use crate::tools::wire::*;
-use crate::tools::yara::*;
-use crate::tools::z80::*;
+use crate::tools::wire::{WireBytesLenTool, WireBytesHexEncodeTool, WireEchoStringTool, WireStringLenTool};
+use crate::tools::yara::{YaraEngineScanBytesTool, YaraEngineParseRuleTool, YaraRuleNewTool, YaraRuleGetMetaTool, YaraErrorDisplayTool, YaraRuleNewEmptyTool, YaraEngineParseNameFromSourceTool, YaraEngineRuleSetAddRuleTool, YaraEngineRuleNewSummaryTool, YaraEngineScannerNewCountTool, YaraMatchMaskedByteTool, YaraCheckFullwordTool, YaraRuleDefinitionParseNameTool, YaraRuleSetAddRuleTool, YaraParserParseWireTool, YaraRuleSetRuleCountWireTool};
+use crate::tools::z80::{Z80EncodeNopTool, Z80EncodeHaltTool, Z80EncodeRetTool, Z80EncodeEiTool};
 
 
 // ── rustre-net-proxy additional wrappers ────────────────────────────────────
@@ -2030,7 +2030,7 @@ impl ToolHandler for AdbEncodeMessageTool {
                 .map_err(|e| McpError::InvalidParams(format!("bad hex: {e}")))?);
         }
         let encoded = rustre_adb::encode_message(command, arg0, arg1, &data);
-        let hex_out: String = encoded.iter().map(|b| format!("{:02x}", b)).collect();
+        let hex_out: String = encoded.iter().map(|b| format!("{b:02x}")).collect();
         Ok(ToolResult::text(
             json!({ "len": encoded.len(), "hex": hex_out }).to_string(),
         ))
@@ -2075,7 +2075,7 @@ impl ToolHandler for AdbDecodeMessageTool {
         }
         let msg = rustre_adb::decode_message(&raw)
             .map_err(|e| McpError::InvalidParams(format!("decode failed: {e}")))?;
-        let data_hex: String = msg.data.iter().map(|b| format!("{:02x}", b)).collect();
+        let data_hex: String = msg.data.iter().map(|b| format!("{b:02x}")).collect();
         Ok(ToolResult::text(json!({
             "command": msg.command,
             "command_name": msg.command_name(),
@@ -2519,8 +2519,7 @@ impl ToolHandler for ArchX86LiftToLlilTool {
         let instr = decoder.decode();
         if instr.is_invalid() {
             return Err(McpError::InvalidParams(format!(
-                "iced-x86 could not decode bytes at {:#x}",
-                ip
+                "iced-x86 could not decode bytes at {ip:#x}"
             )));
         }
         let ops = rustre_arch_x86::lift_to_llil(&instr);
@@ -7109,7 +7108,7 @@ impl ToolHandler for SymbEngineWidenSequenceExprTool {
         Ok(ToolResult::text(
             json!({
                 "widenable": expr.is_some(),
-                "expr_debug": expr.map(|e| format!("{:?}", e)),
+                "expr_debug": expr.map(|e| format!("{e:?}")),
                 "source": "rustre_symb_engine::loop_summarizer::widen_sequence",
             })
             .to_string(),
@@ -13347,7 +13346,7 @@ mhcde_bytes_tool!(MhcdeOpaqueCountByTypeTool, "mhcde_opaque_count_by_type",
         let d = rustre_deobf_mhcde::OpaquePredicateDetector::new();
         let map = d.count_by_type(data);
         let counts: std::collections::BTreeMap<String, usize> =
-            map.into_iter().map(|(k, v)| (format!("{:?}", k), v)).collect();
+            map.into_iter().map(|(k, v)| (format!("{k:?}"), v)).collect();
         json!({ "counts": counts, "source": "rustre_deobf_mhcde::OpaquePredicateDetector::count_by_type" })
     });
 
@@ -21976,7 +21975,7 @@ impl ToolHandler for TraceNavigateExecutionTraceNewV2Tool {
                 "binary_name": binary_name,
                 "len": trace.len(),
                 "is_empty": trace.is_empty(),
-                "arch": trace.arch.clone(),
+                "arch": trace.arch,
                 "source": "rustre_trace_navigate::ExecutionTrace::new",
             }).to_string(),
         ))
@@ -29639,18 +29638,18 @@ impl ToolHandler for SparcEncodeCallWireTool {
 
 fn sparc_arg_u32(args: &Value, key: &str) -> Result<u32, McpError> {
     let v = args.get(key).and_then(Value::as_u64)
-        .ok_or_else(|| McpError::InvalidParams(format!("missing {}", key)))?;
-    u32::try_from(v).map_err(|_| McpError::InvalidParams(format!("{} out of u32 range", key)))
+        .ok_or_else(|| McpError::InvalidParams(format!("missing {key}")))?;
+    u32::try_from(v).map_err(|_| McpError::InvalidParams(format!("{key} out of u32 range")))
 }
 fn sparc_arg_i32(args: &Value, key: &str) -> Result<i32, McpError> {
     let v = args.get(key).and_then(Value::as_i64)
-        .ok_or_else(|| McpError::InvalidParams(format!("missing {}", key)))?;
-    i32::try_from(v).map_err(|_| McpError::InvalidParams(format!("{} out of i32 range", key)))
+        .ok_or_else(|| McpError::InvalidParams(format!("missing {key}")))?;
+    i32::try_from(v).map_err(|_| McpError::InvalidParams(format!("{key} out of i32 range")))
 }
 fn sparc_arg_u8(args: &Value, key: &str) -> Result<u8, McpError> {
     let v = args.get(key).and_then(Value::as_u64)
-        .ok_or_else(|| McpError::InvalidParams(format!("missing {}", key)))?;
-    u8::try_from(v).map_err(|_| McpError::InvalidParams(format!("{} out of u8 range", key)))
+        .ok_or_else(|| McpError::InvalidParams(format!("missing {key}")))?;
+    u8::try_from(v).map_err(|_| McpError::InvalidParams(format!("{key} out of u8 range")))
 }
 
 macro_rules! sparc_wire_word_tool {
@@ -29882,7 +29881,7 @@ impl ToolHandler for SparcExtractBranchTargetsWireTool {
         let mut bytes = Vec::with_capacity(clean.len() / 2);
         for i in (0..clean.len()).step_by(2) {
             bytes.push(u8::from_str_radix(&clean[i..i+2], 16)
-                .map_err(|e| McpError::InvalidParams(format!("bad hex: {}", e)))?);
+                .map_err(|e| McpError::InvalidParams(format!("bad hex: {e}")))?);
         }
         let targets = rustre_arch_sparc::extract_branch_targets(&bytes, base);
         Ok(ToolResult::text(json!({
@@ -29945,7 +29944,7 @@ impl ToolHandler for SparcSynthSetWireTool {
         let val = sparc_arg_u32(&args, "val")?;
         let rd = sparc_arg_u32(&args, "rd")?;
         let words = rustre_arch_sparc::synth_set(val, rd);
-        let hexes: Vec<String> = words.iter().map(|w| format!("{:08X}", w)).collect();
+        let hexes: Vec<String> = words.iter().map(|w| format!("{w:08X}")).collect();
         Ok(ToolResult::text(json!({
             "count": words.len(),
             "words": words,
@@ -31770,7 +31769,7 @@ impl ToolHandler for AdbMakeCloseTool {
             .ok_or_else(|| McpError::InvalidParams("missing 'remote_id'".into()))? as u32;
         let msg = rustre_adb::make_close(rustre_adb::LocalId(local_id), rustre_adb::RemoteId(remote_id));
         let encoded = msg.encode();
-        let hex_out: String = encoded.iter().map(|b| format!("{:02x}", b)).collect();
+        let hex_out: String = encoded.iter().map(|b| format!("{b:02x}")).collect();
         Ok(ToolResult::text(json!({
             "command": msg.command,
             "command_name": msg.command_name(),
@@ -31806,7 +31805,7 @@ impl ToolHandler for AdbParseFeaturesTool {
         let banner = args.get("banner").and_then(Value::as_str)
             .ok_or_else(|| McpError::InvalidParams("missing 'banner'".into()))?;
         let features = rustre_adb::parse_features(banner);
-        let names: Vec<String> = features.iter().map(|f| format!("{:?}", f)).collect();
+        let names: Vec<String> = features.iter().map(|f| format!("{f:?}")).collect();
         Ok(ToolResult::text(json!({
             "count": names.len(),
             "features": names,
@@ -32115,7 +32114,7 @@ impl ToolHandler for TraceCoverageToCustomBinaryTool {
         let run: rustre_trace_coverage::CoverageRun = serde_json::from_str(run_json)
             .map_err(|e| McpError::InvalidParams(format!("run_json: {e}")))?;
         let bytes = rustre_trace_coverage::to_custom_binary(&run);
-        let hex_out: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+        let hex_out: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
         Ok(ToolResult::text(
             json!({
                 "len": bytes.len(),
@@ -35139,7 +35138,7 @@ impl ToolHandler for SurveyBinaryTool {
                 // `list` is the name the survey specification uses; `sections`
                 // is kept so existing readers of this tool keep working. Both
                 // are the same array, built once.
-                "list": sections.clone(),
+                "list": sections,
                 "sections": sections,
             })
         })();
@@ -35182,7 +35181,7 @@ impl ToolHandler for SurveyBinaryTool {
                 // `strings_top20` are kept for existing readers; all four are
                 // views of one extraction, so they cannot drift.
                 "count": all.len(),
-                "top20": top.clone(),
+                "top20": top,
                 "strings_top20": top,
             })
         })();
@@ -35663,7 +35662,7 @@ impl ToolHandler for SurveyBinaryTool {
             "loader": loader_val,
             "imports": imports_val,
             "sections": sections_val,
-            "strings_top20": strings_val.clone(),
+            "strings_top20": strings_val,
             "strings": strings_val,
             "function_count": function_count_val,
             "entropy_top": entropy_val,
@@ -36727,7 +36726,7 @@ impl ToolHandler for ForensicsMemConnectionStateFromU8Tool {
 // --- rustre-adb round-N extra wrappers (stateless) ---
 
 pub(crate) fn __adb_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 // ── rustre-deobf-string v3 extra wrappers ────────────────────────────────────
 // --- rustre_hex_pattern V3 wrappers ---
@@ -37235,11 +37234,10 @@ impl ToolHandler for AnalysisBasicBlocksPathTool {
         let mut leaders: BTreeSet<u64> = BTreeSet::new();
         leaders.insert(entry);
         for &(_, next, target, is_cond, ends) in &instrs {
-            if let Some(t) = target {
-                if in_range(t) {
+            if let Some(t) = target
+                && in_range(t) {
                     leaders.insert(t);
                 }
-            }
             if (is_cond || ends) && in_range(next) {
                 leaders.insert(next);
             }
@@ -37263,18 +37261,16 @@ impl ToolHandler for AnalysisBasicBlocksPathTool {
             let Some(b) = block_of(ip) else { continue };
             block_end.insert(b, next);
             let mut add = |from: usize, to: u64| {
-                if let Some(t) = block_of(to) {
-                    if to == leader_vec[t] {
+                if let Some(t) = block_of(to)
+                    && to == leader_vec[t] {
                         succs.entry(from).or_default().insert(t);
                         preds.entry(t).or_default().insert(from);
                     }
-                }
             };
-            if let Some(t) = target {
-                if in_range(t) {
+            if let Some(t) = target
+                && in_range(t) {
                     add(b, t);
                 }
-            }
             // Fall-through: conditional branches keep it, unconditional ones
             // and returns do not.
             if !ends && in_range(next) {

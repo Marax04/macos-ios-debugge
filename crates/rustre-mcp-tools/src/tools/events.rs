@@ -230,7 +230,7 @@ impl ToolHandler for EventsBusSendCustomTool {
             .ok_or_else(|| McpError::InvalidParams("missing 'event_type'".into()))?.to_string();
         let bus = rustre_events::EventBus::new_default();
         let _rx = bus.subscribe();
-        bus.send_custom(event_type.clone(), json!({}));
+        bus.send_custom(event_type, json!({}));
         Ok(ToolResult::text(json!({
             "total_sent": bus.total_sent(),
             "custom_count": bus.event_count("Custom"),

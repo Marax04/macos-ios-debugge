@@ -53,7 +53,7 @@ fn section_spec_construct_and_clone() {
         size: 0x200,
         flags: 0x60_00_00_20,
     };
-    let c = s.clone();
+    let c = s;
     assert_eq!(c.name, ".text");
     assert_eq!(c.offset, 0x1000);
     assert_eq!(c.size, 0x200);
@@ -65,7 +65,7 @@ fn tool_input_new_constructor() {
     let ti = ToolInput::new("hexdump", json!({"bytes": [0u8]}));
     assert_eq!(ti.name, "hexdump");
     assert!(ti.params.get("bytes").is_some());
-    let cloned = ti.clone();
+    let cloned = ti;
     assert_eq!(cloned.name, "hexdump");
 }
 
