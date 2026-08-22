@@ -220,10 +220,16 @@ pub fn harvest_object_bytes(
                 continue;
             }
             let off = addr.saturating_sub(sec_addr);
-            if off + size > sec_data.len() {
+            // `size` comes from a COFF symbol (a 64-bit file field), so a plain
+            // `off + size` WRAPS in release (overflow-checks off): the guard then
+            // passes while `off + size < off`, and the slice below panics.
+            let Some(end) = off.checked_add(size) else {
+                continue;
+            };
+            if end > sec_data.len() {
                 continue;
             }
-            let body = &sec_data[off..off + size];
+            let body = &sec_data[off..end];
 
             // Masked ranges: relocation targets, function-relative.
             let mut ranges: Vec<(u16, u8)> = Vec::new();
@@ -232,7 +238,7 @@ pub fn harvest_object_bytes(
                     continue;
                 }
                 let r = usize::try_from(rel_off).unwrap_or(usize::MAX);
-                if r < off || r >= off + size {
+                if r < off || r >= end {
                     continue;
                 }
                 let local = r - off;

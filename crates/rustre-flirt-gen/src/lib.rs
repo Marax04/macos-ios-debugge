@@ -549,7 +549,9 @@ impl PatternGenerator {
 pub struct ElfObjectParser;
 
 fn elf_read_u16(data: &[u8], o: usize, le: bool) -> Result<u16, FlirtError> {
-    if o + 2 > data.len() {
+    // `o` comes from a file field; release builds have overflow-checks OFF,
+    // so a plain `o + 2` can WRAP and pass this check. Use checked_add.
+    if o.checked_add(2).is_none_or(|end| end > data.len()) {
         return Err(FlirtError::ParseError(format!("read_u16 oob @ {o:#x}")));
     }
     let arr: [u8; 2] = data[o..o + 2].try_into().unwrap();
@@ -561,7 +563,9 @@ fn elf_read_u16(data: &[u8], o: usize, le: bool) -> Result<u16, FlirtError> {
 }
 
 fn elf_read_u32(data: &[u8], o: usize, le: bool) -> Result<u32, FlirtError> {
-    if o + 4 > data.len() {
+    // `o` comes from a file field; release builds have overflow-checks OFF,
+    // so a plain `o + 4` can WRAP and pass this check. Use checked_add.
+    if o.checked_add(4).is_none_or(|end| end > data.len()) {
         return Err(FlirtError::ParseError(format!("read_u32 oob @ {o:#x}")));
     }
     let arr: [u8; 4] = data[o..o + 4].try_into().unwrap();
@@ -573,7 +577,9 @@ fn elf_read_u32(data: &[u8], o: usize, le: bool) -> Result<u32, FlirtError> {
 }
 
 fn elf_read_u64(data: &[u8], o: usize, le: bool) -> Result<u64, FlirtError> {
-    if o + 8 > data.len() {
+    // `o` comes from a file field; release builds have overflow-checks OFF,
+    // so a plain `o + 8` can WRAP and pass this check. Use checked_add.
+    if o.checked_add(8).is_none_or(|end| end > data.len()) {
         return Err(FlirtError::ParseError(format!("read_u64 oob @ {o:#x}")));
     }
     let arr: [u8; 8] = data[o..o + 8].try_into().unwrap();
@@ -678,16 +684,27 @@ impl ElfObjectParser {
 
         let shstr_offset = sh32(e_shstrndx, 0x10)? as usize;
         let shstr_size = sh32(e_shstrndx, 0x14)? as usize;
-        if shstr_offset + shstr_size > elf_bytes.len() {
+        let shstr_end = shstr_offset
+            .checked_add(shstr_size)
+            .ok_or_else(|| FlirtError::ParseError("shstrtab end overflow (elf32)".to_string()))?;
+        if shstr_end > elf_bytes.len() {
             return Err(FlirtError::ParseError("shstrtab oob (elf32)".to_string()));
         }
-        let shstr = &elf_bytes[shstr_offset..shstr_offset + shstr_size];
+        let shstr = &elf_bytes[shstr_offset..shstr_end];
 
         let (symtab_idx, strtab_idx) =
             Self::find_symtab_strtab_32(elf_bytes, e_shnum, &sh32, shstr)?;
 
         let symtab_off = sh32(symtab_idx, 0x10)? as usize;
         let symtab_size = sh32(symtab_idx, 0x14)? as usize;
+        // Without this the symbol COUNT (`symtab_size / entsize`) is unbounded by
+        // the file, so a forged size spins the extraction loop for ~forever.
+        if symtab_off
+            .checked_add(symtab_size)
+            .is_none_or(|end| end > elf_bytes.len())
+        {
+            return Err(FlirtError::ParseError("symtab oob (elf32)".to_string()));
+        }
         let strtab_off = sh32(strtab_idx, 0x10)? as usize;
         let strtab_size = sh32(strtab_idx, 0x14)? as usize;
         let strtab_end = strtab_off
@@ -917,10 +934,16 @@ impl ElfObjectParser {
             .map_err(|_| FlirtError::ParseError("shstr offset overflow".to_string()))?;
         let shstr_size = usize::try_from(sh64_u64(e_shstrndx, 0x20)?)
             .map_err(|_| FlirtError::ParseError("shstr size overflow".to_string()))?;
-        if shstr_offset + shstr_size > elf_bytes.len() {
+        // Both operands are 64-bit file fields, so `shstr_offset + shstr_size`
+        // WRAPS in release (overflow-checks off) and the comparison then passes
+        // with `shstr_offset` still far past the end -- the slice below panics.
+        let shstr_end = shstr_offset
+            .checked_add(shstr_size)
+            .ok_or_else(|| FlirtError::ParseError("shstrtab end overflow (elf64)".to_string()))?;
+        if shstr_end > elf_bytes.len() {
             return Err(FlirtError::ParseError("shstrtab oob (elf64)".to_string()));
         }
-        let shstr = &elf_bytes[shstr_offset..shstr_offset + shstr_size];
+        let shstr = &elf_bytes[shstr_offset..shstr_end];
 
         let (symtab_idx, strtab_idx) =
             Self::find_symtab_strtab_64(e_shnum, &sh64_u32, &sh64_u64, shstr)?;
@@ -929,14 +952,24 @@ impl ElfObjectParser {
             .map_err(|_| FlirtError::ParseError("symtab off overflow".to_string()))?;
         let symtab_size = usize::try_from(sh64_u64(symtab_idx, 0x20)?)
             .map_err(|_| FlirtError::ParseError("symtab size overflow".to_string()))?;
+        // Same reasoning as the elf32 path: bound the table by the file itself.
+        if symtab_off
+            .checked_add(symtab_size)
+            .is_none_or(|end| end > elf_bytes.len())
+        {
+            return Err(FlirtError::ParseError("symtab oob (elf64)".to_string()));
+        }
         let strtab_off = usize::try_from(sh64_u64(strtab_idx, 0x18)?)
             .map_err(|_| FlirtError::ParseError("strtab off overflow".to_string()))?;
         let strtab_size = usize::try_from(sh64_u64(strtab_idx, 0x20)?)
             .map_err(|_| FlirtError::ParseError("strtab size overflow".to_string()))?;
-        if strtab_off + strtab_size > elf_bytes.len() {
+        let strtab_end = strtab_off
+            .checked_add(strtab_size)
+            .ok_or_else(|| FlirtError::ParseError("strtab end overflow (elf64)".to_string()))?;
+        if strtab_end > elf_bytes.len() {
             return Err(FlirtError::ParseError("strtab oob (elf64)".to_string()));
         }
-        let strtab = &elf_bytes[strtab_off..strtab_off + strtab_size];
+        let strtab = &elf_bytes[strtab_off..strtab_end];
 
         let rela_map = Self::build_rela_map_64(elf_bytes, e_shnum, &sh64_u64, &sh64_u32, le)?;
 
@@ -1812,6 +1845,51 @@ mod tests {
     fn test_elf_parser_rejects_too_short() {
         let result = ElfObjectParser::parse(b"short");
         assert!(matches!(result, Err(FlirtError::ParseError(_))));
+    }
+
+
+    // ── Adversarial ELF parsing (attacker-controlled .o input) ───────────────
+
+    /// Build a minimal little-endian ELF64 whose section-header table is valid
+    /// but whose `shstrtab` section claims an offset/size pair that OVERFLOWS
+    /// when added: `0x100 + (u64::MAX - 0x80)` wraps to `0x80`, which is inside
+    /// the file, so a plain `offset + size > len` guard passes and the slice
+    /// `&bytes[0x100..0x80]` panics.
+    fn forged_elf64_with_wrapping_shstrtab() -> Vec<u8> {
+        let mut b = vec![0u8; 0x200];
+        b[0..4].copy_from_slice(&[0x7f, b'E', b'L', b'F']);
+        b[4] = 2; // EI_CLASS = 64-bit
+        b[5] = 1; // EI_DATA  = little-endian
+        b[0x28..0x30].copy_from_slice(&0x40u64.to_le_bytes()); // e_shoff
+        b[0x3A..0x3C].copy_from_slice(&64u16.to_le_bytes()); // e_shentsize
+        b[0x3C..0x3E].copy_from_slice(&2u16.to_le_bytes()); // e_shnum
+        b[0x3E..0x40].copy_from_slice(&1u16.to_le_bytes()); // e_shstrndx
+        let sh1 = 0x40 + 64; // second section header
+        b[sh1 + 0x18..sh1 + 0x20].copy_from_slice(&0x100u64.to_le_bytes()); // sh_offset
+        b[sh1 + 0x20..sh1 + 0x28].copy_from_slice(&(u64::MAX - 0x80).to_le_bytes()); // sh_size
+        b
+    }
+
+    #[test]
+    fn test_elf64_shstrtab_offset_size_overflow_is_rejected_not_panic() {
+        let bytes = forged_elf64_with_wrapping_shstrtab();
+        // Pre-condition of the attack: the wrapped sum really does look in-range.
+        assert!(0x100usize.wrapping_add(usize::MAX - 0x80) < bytes.len());
+        let result = ElfObjectParser::parse(&bytes);
+        assert!(
+            matches!(result, Err(FlirtError::ParseError(_))),
+            "forged shstrtab must be rejected, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_elf_readers_reject_offsets_that_wrap_the_bound_check() {
+        let data = [0u8; 16];
+        // `o + 4` and `o + 8` wrap to a small value at these offsets; without a
+        // checked_add the guard passes and the slice below it panics.
+        assert!(elf_read_u16(&data, usize::MAX - 1, true).is_err());
+        assert!(elf_read_u32(&data, usize::MAX - 3, true).is_err());
+        assert!(elf_read_u64(&data, usize::MAX - 7, true).is_err());
     }
 
     // ── Additional tests to reach 25+ ──────────────────────────────────────
