@@ -11506,7 +11506,7 @@ fn decode_compressed_q0_rest(hw: u16, xlen: u32, addr: Address) -> Result<Instru
                 bytes,
             ))
         }
-        _ => decode_compressed_q0_tail2(hw, xlen, addr),
+        _ => decode_compressed_q0_fsd(hw, xlen, addr),
     }
 }
 
@@ -11714,7 +11714,11 @@ fn decode_compressed_q2_rest(hw: u16, xlen: u32, addr: Address) -> Result<Instru
     }
 }
 
-fn decode_compressed_q0_tail(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
+/// Quadrant-0 integer stores: `funct3` 6 (`c.sw`) and 7 (`c.sd`, RV64+).
+///
+/// Last link of the quadrant-0 fall-through chain
+/// (`_rest` -> `_fsd` -> `_stores`); an unmatched `funct3` is reserved.
+fn decode_compressed_q0_stores(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
     let bytes = hw.to_le_bytes().to_vec();
     let funct3 = (hw >> 13) & 0x7;
 
@@ -11803,7 +11807,10 @@ fn decode_compressed_q1_tail(hw: u16, addr: Address) -> Result<Instruction, Core
     }
 }
 
-fn decode_compressed_q0_tail2(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
+/// Quadrant-0 `funct3` 5: the double-precision float store `c.fsd`.
+///
+/// Anything else falls through to [`decode_compressed_q0_stores`].
+fn decode_compressed_q0_fsd(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
     let bytes = hw.to_le_bytes().to_vec();
     let funct3 = (hw >> 13) & 0x7;
 
@@ -11821,7 +11828,7 @@ fn decode_compressed_q0_tail2(hw: u16, xlen: u32, addr: Address) -> Result<Instr
                 bytes,
             ))
         }
-        _ => decode_compressed_q0_tail(hw, xlen, addr),
+        _ => decode_compressed_q0_stores(hw, xlen, addr),
     }
 }
 
