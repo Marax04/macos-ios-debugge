@@ -481,11 +481,9 @@ impl FunctionSplitter {
                 // in between: the returned list stayed overlapping, which is
                 // precisely what this pass exists to prevent.
                 if let Some(outer_fb) = result.iter_mut().find(|fb| fb.start == overlap.outer_start)
-                {
-                    if outer_fb.end.is_none_or(|e| overlap.inner_start < e) {
+                    && outer_fb.end.is_none_or(|e| overlap.inner_start < e) {
                         outer_fb.end = Some(overlap.inner_start);
                     }
-                }
 
                 // Insert the inner function if not already present.
                 if !result.iter().any(|fb| fb.start == overlap.inner_start) {

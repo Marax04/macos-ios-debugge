@@ -1177,9 +1177,9 @@ mod tests {
         assert!(hits.iter().any(|h| h.addr == 0x2000 && h.reason == "calls_abort"));
     }
 
-    /// The "calls_abort" heuristic (last call in the function body targets a
+    /// The "`calls_abort`" heuristic (last call in the function body targets a
     /// noreturn symbol) must NOT depend on the order the xrefs happen to be
-    /// passed in. A function that calls abort() and then a normal function has
+    /// passed in. A function that calls `abort()` and then a normal function has
     /// its *last* call to the normal function, so it returns — it must be
     /// classified identically regardless of xref input order.
     #[test]

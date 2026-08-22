@@ -611,7 +611,7 @@ mod tests {
 
     /// Guards the fuzzy-hash + edit-distance siblings of the minhash (found
     /// buggy above): identical input ⇒ similarity 100 and deterministic hashes;
-    /// edit_distance is a metric (identity of indiscernibles + symmetry).
+    /// `edit_distance` is a metric (identity of indiscernibles + symmetry).
     #[test]
     fn prop_fuzzy_hash_and_edit_distance_properties() {
         use crate::test_prng::xs;
@@ -735,7 +735,7 @@ mod tests {
     /// (16 bands x 8 rows: p(candidate) = 1-(1-j^8)^16), so we do NOT assert
     /// strict superset over a 0.8 threshold. Instead assert: (a) exact
     /// duplicates are always returned with similarity 1.0, (b) every returned
-    /// pair truly satisfies min_similarity (no false positives past the
+    /// pair truly satisfies `min_similarity` (no false positives past the
     /// verification step), (c) results sorted descending, (d) query never
     /// returns self, (e) determinism.
     #[test]

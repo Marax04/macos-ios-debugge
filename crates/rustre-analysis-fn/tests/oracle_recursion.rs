@@ -33,10 +33,10 @@ fn corrupt(kind: &str) -> bool {
 
 struct Rng(u64);
 impl Rng {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self(seed ^ 0x9E37_79B9_7F4A_7C15)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;
@@ -44,7 +44,7 @@ impl Rng {
         self.0 = x;
         x
     }
-    fn below(&mut self, n: usize) -> usize {
+    const fn below(&mut self, n: usize) -> usize {
         if n == 0 { 0 } else { (self.next() % n as u64) as usize }
     }
 }

@@ -175,7 +175,7 @@ fn a_longer_array_is_detected_in_full() {
 use rustre_analysis_fn::function_splitting::{FunctionSplitter, SplitterConfig};
 use rustre_analysis_fn::{Confidence, DetectionSource, FunctionBoundary};
 
-fn fb(start: u64, end: u64) -> FunctionBoundary {
+const fn fb(start: u64, end: u64) -> FunctionBoundary {
     let mut b = FunctionBoundary::new(
         Address::new(start),
         Confidence::High,

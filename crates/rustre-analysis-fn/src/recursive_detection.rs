@@ -453,11 +453,11 @@ mod tests {
         Address::new(v)
     }
 
-    /// Differential soundness: `tarjan_sccs` (petgraph, via the CallGraph →
-    /// DiGraph translation) must partition nodes such that two nodes share an
+    /// Differential soundness: `tarjan_sccs` (petgraph, via the `CallGraph` →
+    /// `DiGraph` translation) must partition nodes such that two nodes share an
     /// SCC iff they are mutually reachable. Cross-checked against a brute-force
     /// reachability oracle on random graphs — catches any edge-translation bug
-    /// (dropped/duplicated/mis-mapped edges) between CallGraph and petgraph.
+    /// (dropped/duplicated/mis-mapped edges) between `CallGraph` and petgraph.
     #[test]
     fn tarjan_sccs_matches_mutual_reachability_oracle() {
         use crate::test_prng::xs;

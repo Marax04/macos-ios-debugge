@@ -16,17 +16,17 @@ use std::thread;
 
 struct Lcg(u64);
 impl Lcg {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self(seed)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
         self.0
     }
-    fn next_u8(&mut self) -> u8 {
+    const fn next_u8(&mut self) -> u8 {
         (self.next() >> 24) as u8
     }
     fn bytes(&mut self, n: usize) -> Vec<u8> {

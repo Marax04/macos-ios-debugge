@@ -37,10 +37,10 @@ fn corrupt(kind: &str) -> bool {
 
 struct Rng(u64);
 impl Rng {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self(seed ^ 0xA076_1D64_78BD_642F)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;
@@ -48,7 +48,7 @@ impl Rng {
         self.0 = x;
         x
     }
-    fn below(&mut self, n: u64) -> u64 {
+    const fn below(&mut self, n: u64) -> u64 {
         if n == 0 { 0 } else { self.next() % n }
     }
     fn pick<'a, T>(&mut self, xs: &'a [T]) -> &'a T {
@@ -96,7 +96,7 @@ fn gen_sample(rng: &mut Rng) -> Sample {
 
     // Half the samples start a function at offset 0 (boundary case), the other
     // half begin with leading padding (misaligned first function).
-    if rng.next() % 2 == 0 {
+    if rng.next().is_multiple_of(2) {
         tags.push("starts_at_base");
     } else {
         let lead = 1 + rng.below(7) as usize;

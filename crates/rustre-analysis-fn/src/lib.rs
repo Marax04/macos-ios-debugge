@@ -38,8 +38,8 @@ pub mod callgraph;
 /// Shared test-only PRNG step for randomized property tests.
 ///
 /// One definition instead of the nine byte-identical nested `fn xs` copies the
-/// crate's test modules used to carry (function_similarity ×4, callgraph,
-/// function_fingerprint ×2, recursive_detection ×2). Same algorithm, so no
+/// crate's test modules used to carry (`function_similarity` ×4, callgraph,
+/// `function_fingerprint` ×2, `recursive_detection` ×2). Same algorithm, so no
 /// test's random sequence changes.
 #[cfg(test)]
 pub(crate) mod test_prng {
@@ -1338,7 +1338,7 @@ impl FunctionBoundarySet {
     /// Remove any [`Confidence::Low`] entry whose address range fully contains
     /// at least one [`Confidence::Medium`] (or higher) entry.
     ///
-    /// This eliminates the "HeuristicGap over-approximation" pattern where a
+    /// This eliminates the "`HeuristicGap` over-approximation" pattern where a
     /// large gap candidate at Low confidence subsumes a more precise prologue
     /// match at Medium or above.  The pass is O(n log n) via sorted lookup.
     pub fn remove_low_containing_higher(&mut self) {

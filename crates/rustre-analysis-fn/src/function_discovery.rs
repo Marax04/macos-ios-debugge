@@ -262,7 +262,7 @@ impl LinearSweeper {
                 }
             }
         }
-        candidates.sort_unstable_by(|a, b| a.addr.cmp(&b.addr));
+        candidates.sort_unstable_by_key(|a| a.addr);
         candidates
     }
 }

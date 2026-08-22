@@ -927,5 +927,5 @@ mod tests {
 // Extra helper for test
 impl HashFunc {
     #[cfg(test)]
-    fn known_const_hit(&self) -> bool { self.large_const_count > 0 || self.confidence > 25 }
+    const fn known_const_hit(&self) -> bool { self.large_const_count > 0 || self.confidence > 25 }
 }
