@@ -141,6 +141,14 @@ fn i32be(bytes: &[u8], off: usize) -> i32 {
         .map_or(0, |s| i32::from_be_bytes([s[0], s[1], s[2], s[3]]))
 }
 
+// clippy::unnecessary_wraps fires here and is left OPEN deliberately.
+//
+// `ok` does always return `Ok`, but its entire purpose is to be the success
+// tail of the ~200 decoder arms that return `Result<(JvmInstr, usize),
+// JvmDecodeError>`; they are written `return ok(...)`. Unwrapping it to
+// return the bare tuple would turn all 204 call sites into `Ok(ok(...))`,
+// which is noisier than the lint it silences. Revisit only if the decode
+// arms stop being fallible.
 fn ok(
     mne: &str,
     ops: impl Into<String>,

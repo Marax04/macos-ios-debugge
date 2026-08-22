@@ -419,21 +419,27 @@ impl StringConcatFactory {
 
     fn parse_arg_types(descriptor: &str) -> Vec<String> {
         let inner = descriptor.trim_start_matches('(');
-        if let Some(end) = inner.find(')') {
+        let Some(end) = inner.find(')') else {
+            return Vec::new();
+        };
+        {
             let params = &inner[..end];
             // Simplified: split on known primitive types
             let mut types = Vec::new();
-            let mut chars = params.chars().peekable();
+            let mut chars = params.chars();
+            // A run of '[' is a PREFIX on the type that follows, not a
+            // parameter of its own: "[I" is one argument (int[]), not two.
+            let mut array_depth = 0usize;
             while let Some(c) = chars.next() {
-                match c {
-                    'I' => types.push("int".to_string()),
-                    'J' => types.push("long".to_string()),
-                    'D' => types.push("double".to_string()),
-                    'F' => types.push("float".to_string()),
-                    'Z' => types.push("boolean".to_string()),
-                    'B' => types.push("byte".to_string()),
-                    'C' => types.push("char".to_string()),
-                    'S' => types.push("short".to_string()),
+                let base = match c {
+                    'I' => "int".to_string(),
+                    'J' => "long".to_string(),
+                    'D' => "double".to_string(),
+                    'F' => "float".to_string(),
+                    'Z' => "boolean".to_string(),
+                    'B' => "byte".to_string(),
+                    'C' => "char".to_string(),
+                    'S' => "short".to_string(),
                     'L' => {
                         let mut cls = String::new();
                         for c2 in chars.by_ref() {
@@ -442,15 +448,22 @@ impl StringConcatFactory {
                             }
                             cls.push(c2);
                         }
-                        types.push(cls);
+                        cls
                     }
-                    '[' => types.push("array".to_string()),
-                    _ => {}
+                    '[' => {
+                        array_depth += 1;
+                        continue;
+                    }
+                    _ => continue,
+                };
+                let mut ty = base;
+                for _ in 0..array_depth {
+                    ty.push_str("[]");
                 }
+                array_depth = 0;
+                types.push(ty);
             }
             types
-        } else {
-            Vec::new()
         }
     }
 
@@ -508,19 +521,19 @@ impl JvmInvokeDynamic {
         descriptor: &str,
     ) -> InvokeDynamicResult {
         if bootstrap.is_lambda_metafactory() {
-            match LambdaMetafactory::from_bootstrap(bootstrap, name, descriptor) {
-                Some(lm) => InvokeDynamicResult::Lambda(lm),
-                None => InvokeDynamicResult::Failed {
+            LambdaMetafactory::from_bootstrap(bootstrap, name, descriptor).map_or_else(
+                || InvokeDynamicResult::Failed {
                     reason: "LambdaMetafactory parse error".to_string(),
                 },
-            }
+                InvokeDynamicResult::Lambda,
+            )
         } else if bootstrap.is_string_concat() {
-            match StringConcatFactory::from_bootstrap(bootstrap, descriptor) {
-                Some(sc) => InvokeDynamicResult::StringConcat(sc),
-                None => InvokeDynamicResult::Failed {
+            StringConcatFactory::from_bootstrap(bootstrap, descriptor).map_or_else(
+                || InvokeDynamicResult::Failed {
                     reason: "StringConcatFactory parse error".to_string(),
                 },
-            }
+                InvokeDynamicResult::StringConcat,
+            )
         } else {
             InvokeDynamicResult::Custom {
                 bootstrap_owner: bootstrap.method_ref.owner.clone(),
@@ -918,6 +931,26 @@ mod tests {
         assert!(sc.is_some());
         let sc = sc.unwrap();
         assert!(sc.has_recipe);
+    }
+
+    /// A '[' in a descriptor is an array PREFIX on the type that follows,
+    /// not an argument of its own. Before this was fixed, "([I)V" parsed as
+    /// two arguments ["array", "int"] instead of one ["int[]"], inflating the
+    /// arity of every method taking an array.
+    #[test]
+    fn array_descriptors_are_one_argument_with_a_suffix() {
+        let bsm = concat_bsm();
+        let cases: [(&str, &[&str]); 5] = [
+            ("([I)Ljava/lang/String;", &["int[]"]),
+            ("([[I)Ljava/lang/String;", &["int[][]"]),
+            ("([Ljava/lang/String;)Ljava/lang/String;", &["java/lang/String[]"]),
+            ("(I[JLjava/lang/String;)Ljava/lang/String;", &["int", "long[]", "java/lang/String"]),
+            ("(II)Ljava/lang/String;", &["int", "int"]),
+        ];
+        for (desc, want) in cases {
+            let sc = StringConcatFactory::from_bootstrap(&bsm, desc).unwrap();
+            assert_eq!(sc.arg_types, want, "descriptor {desc}");
+        }
     }
 
     #[test]

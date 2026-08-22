@@ -1928,6 +1928,9 @@ const fn need(bytes: &[u8], n: usize) -> Result<(), JvmDecodeError> {
     }
 }
 
+// clippy::unnecessary_wraps is left OPEN here for the same reason as `ok` in
+// lib.rs: `ok_wide` is the success tail of the wide-prefix decoder arms, and
+// is kept symmetrical with `ok` on purpose. See the note there.
 fn ok_wide(
     mne: &str,
     ops: String,
