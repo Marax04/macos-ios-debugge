@@ -241,13 +241,13 @@ fn wildcard_ratio_calc() {
 #[test]
 fn wildcard_ratio_empty_zero() {
     let p = FlirtPattern::new(vec![]);
-    assert_eq!(p.wildcard_ratio(), 0.0);
+    assert!((p.wildcard_ratio() - 0.0).abs() < f32::EPSILON);
 }
 
 #[test]
 fn wildcard_ratio_all_wildcards() {
     let p = FlirtPattern::new(vec![PatternByte::Wildcard, PatternByte::Wildcard]);
-    assert_eq!(p.wildcard_ratio(), 1.0);
+    assert!((p.wildcard_ratio() - 1.0).abs() < f32::EPSILON);
 }
 
 // ── FlirtArch round trip ─────────────────────────────────────────────────────

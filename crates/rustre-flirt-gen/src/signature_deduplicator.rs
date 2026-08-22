@@ -762,6 +762,6 @@ mod tests {
     #[test]
     fn dedup_stats_reduction_zero_empty() {
         let stats = DeduplicationStats::default();
-        assert_eq!(stats.reduction_ratio(), 0.0);
+        assert!((stats.reduction_ratio() - 0.0).abs() < f64::EPSILON);
     }
 }

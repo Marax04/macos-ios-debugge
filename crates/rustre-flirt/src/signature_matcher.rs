@@ -495,7 +495,7 @@ mod tests {
             library_version: "1.0".to_owned(),
             alt_names: vec![],
         };
-        assert_eq!(mc.score(), 100.0);
+        assert!((mc.score() - 100.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn test_match_stats_acceptance_rate_zero() {
         let stats = MatchStats::default();
-        assert_eq!(stats.acceptance_rate(), 0.0);
+        assert!((stats.acceptance_rate() - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]

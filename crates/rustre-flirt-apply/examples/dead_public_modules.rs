@@ -78,7 +78,11 @@ fn production_sources() -> Vec<(PathBuf, String)> {
         .collect()
 }
 
-fn main() {
+/// Collect every `pub mod` and decide which are referenced nowhere.
+///
+/// Split out of `main` so the gathering pass and the reporting pass are
+/// each readable on their own.
+fn collect_dead_modules() -> (Vec<(String, String, usize)>, Vec<String>) {
     let sources = production_sources();
 
     // Every `pub mod NAME;` and the file that declares it.
@@ -174,6 +178,17 @@ fn main() {
             }
         }
     }
+    (
+        dead.into_iter()
+            .map(|(n, f, c)| (n.clone(), f.clone(), c))
+            .collect(),
+        aux_files,
+    )
+}
+
+fn main() {
+    let (dead, aux_files) = collect_dead_modules();
+
     let used_by_tests = |name: &str| -> bool {
         let needle = format!("{name}::");
         aux_files.iter().any(|t| t.contains(&needle))

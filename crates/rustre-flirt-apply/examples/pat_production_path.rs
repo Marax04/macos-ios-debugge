@@ -54,7 +54,8 @@ fn main() {
         Ok(sigs) => {
             println!("load_pat_file: {} firme recuperate", sigs.len());
             for s in &sigs {
-                let wc = s.mask.iter().filter(|m| **m == 0).count(); // wildcard bytes
+                // A mask byte of 0 marks a wildcard; count them without the naive filter.
+                let wc = s.mask.len() - s.mask.iter().filter(|m| **m != 0).count();
                 println!(
                     "   {:<14} {} byte, {} wildcard, crc_len={} crc={:04X}",
                     s.name,

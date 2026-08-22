@@ -5,6 +5,7 @@
 //! `FlirtScanner`, `crc16_flirt`, `load_sig_file`{,_v9}, `inspect_sig_header`,
 //! `load_pat_file`, `load_auto`, `build_ac_index`, `scan_with_ac`.
 
+use std::fmt::Write as _;
 use std::io::Write;
 use std::sync::Arc;
 use std::thread;
@@ -158,7 +159,6 @@ fn pattern_round_trip_str_to_struct_50_inputs() {
                 expected.push(None);
             } else {
                 let b = g.next_u8();
-                use std::fmt::Write as _;
                 write!(s, "{b:02X}").unwrap();
                 expected.push(Some(b));
             }
@@ -697,7 +697,6 @@ fn fuzz_pattern_from_str_50_random_inputs() {
         let bytes = g.next_bytes(n);
         let mut s = String::new();
         for b in &bytes {
-            use std::fmt::Write as _;
             write!(s, "{b:02X} ").unwrap();
         }
         // Either Ok or specific Err — never panic.

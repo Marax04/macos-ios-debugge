@@ -43,7 +43,11 @@ fn prefix_len(p: &rustre_flirt::FlirtPattern) -> usize {
         .count()
 }
 
-fn main() {
+/// Resolve the three input paths from argv and read them.
+///
+/// Split out of `main` so neither half runs long: this half only does I/O
+/// and exits with a diagnostic when a path is missing.
+fn load_inputs() -> (String, String, String, Vec<u8>, Vec<u8>, Vec<u8>) {
     let a: Vec<String> = std::env::args().collect();
     let archive = a.get(1).map_or(r"C:\msys64\mingw64\lib\libmingwex.a", String::as_str);
     let target = a
@@ -65,6 +69,19 @@ fn main() {
         eprintln!("impossibile leggere {foreign}");
         std::process::exit(2);
     };
+
+    (
+        archive.to_string(),
+        target.to_string(),
+        foreign.to_string(),
+        arch_bytes,
+        target_bytes,
+        foreign_bytes,
+    )
+}
+
+fn main() {
+    let (archive, target, foreign, arch_bytes, target_bytes, foreign_bytes) = load_inputs();
 
     let opts = rustre_flirt_gen::coff_archive::ArchiveHarvestOptions::default();
     let (pats, stats) = rustre_flirt_gen::coff_archive::harvest_archive_bytes(&arch_bytes, &opts)

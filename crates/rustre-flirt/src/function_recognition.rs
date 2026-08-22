@@ -917,7 +917,7 @@ mod tests {
         assert_eq!(r.total_analyzed, 10);
         assert_eq!(r.matched, 0);
         assert_eq!(r.unmatched, 10);
-        assert_eq!(r.match_rate(), 0.0);
+        assert!((r.match_rate() - 0.0).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -943,7 +943,7 @@ mod tests {
     #[test]
     fn report_match_rate() {
         let r = RecognitionReport::build(0, vec![]);
-        assert_eq!(r.match_rate(), 0.0);
+        assert!((r.match_rate() - 0.0).abs() < f32::EPSILON);
     }
 
     #[test]

@@ -757,9 +757,9 @@ mod tests {
         let resolver = CollisionResolver::by_confidence();
         let high = MatchScore { pattern_idx: 0, module_name: "a".into(), name: "fn1".into(), name_offset: 0, confidence: 0.9, exact_byte_count: 5, crc_validated: true, tail_validated: false };
         let low = MatchScore { pattern_idx: 1, module_name: "b".into(), name: "fn2".into(), name_offset: 0, confidence: 0.5, exact_byte_count: 3, crc_validated: false, tail_validated: false };
-        let resolved = resolver.resolve(vec![high, low]);
-        assert_eq!(resolved.len(), 1);
-        assert_eq!(resolved[0].name, "fn1");
+        let winners = resolver.resolve(vec![high, low]);
+        assert_eq!(winners.len(), 1);
+        assert_eq!(winners[0].name, "fn1");
     }
 
     #[test]

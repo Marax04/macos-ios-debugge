@@ -88,33 +88,50 @@ pub struct FunctionSignature {
 
 impl FunctionSignature {
     /// Look up a known signature by function name.
+    ///
+    /// BUG FIX: this searched only [`BUILTIN_SIGNATURES`], which is an EMPTY
+    /// slice, so it returned `None` for every name in the language -- including
+    /// `memcpy`, `strlen` and the ~200 others that [`builtin_signatures`] builds
+    /// a few lines below. The const table stays (it is the compile-time source
+    /// and is consulted first); the lookup now falls through to the real table,
+    /// built once and cached.
     #[must_use]
     pub fn builtin(name: &str) -> Option<Self> {
-        BUILTIN_SIGNATURES.iter().find(|s| s.name == name).cloned()
+        static TABLE: std::sync::OnceLock<Vec<FunctionSignature>> = std::sync::OnceLock::new();
+        if let Some(s) = BUILTIN_SIGNATURES.iter().find(|s| s.name == name) {
+            return Some(s.clone());
+        }
+        TABLE
+            .get_or_init(builtin_signatures)
+            .iter()
+            .find(|s| s.name == name)
+            .cloned()
     }
 }
 
 /// Pre-built signatures for the most commonly identified library functions.
+///
+/// Empty for now: every entry is produced at run time by
+/// [`builtin_signatures`]. It is still consulted first by
+/// [`FunctionSignature::builtin`], so a future `const`-constructible entry
+/// placed here takes effect without touching the lookup.
 static BUILTIN_SIGNATURES: &[FunctionSignature] = &[];
 
 // We build them lazily with a helper function.
-/// Return a `Vec` of all known built-in signatures.
-#[must_use]
-pub fn builtin_signatures() -> Vec<FunctionSignature> {
-    use TypeDescriptor::{Pointer, Void, I8, U64, I32};
+// ── Type shorthands shared by the built-in signature tables ──────────────────
 
-    let ptr_void = || Pointer(Box::new(Void));
-    let ptr_char = || Pointer(Box::new(I8));
-    let ptr_const_char = || Pointer(Box::new(I8));
-    let size_t = || U64;
-    let int = || I32;
+use TypeDescriptor::{Void, U64};
 
-    let mut sigs = Vec::new();
+fn ptr_void() -> TypeDescriptor { TypeDescriptor::Pointer(Box::new(TypeDescriptor::Void)) }
+fn ptr_char() -> TypeDescriptor { TypeDescriptor::Pointer(Box::new(TypeDescriptor::I8)) }
+fn ptr_const_char() -> TypeDescriptor { TypeDescriptor::Pointer(Box::new(TypeDescriptor::I8)) }
+const fn size_t() -> TypeDescriptor { TypeDescriptor::U64 }
+const fn int() -> TypeDescriptor { TypeDescriptor::I32 }
+fn sysv() -> String { String::from("sysv_x64") }
+fn win64() -> String { String::from("msvc_x64") }
 
-    // Helper macros to reduce boilerplate for the many built-ins below.
-    let sysv = || String::from("sysv_x64");
-    let win64 = || String::from("msvc_x64");
-
+/// Built-in signatures: libc memory.
+fn builtin_libc_memory(sigs: &mut Vec<FunctionSignature>) {
     // ── libc: memory ────────────────────────────────────────────────
     for name in ["memcpy", "memmove"] {
         sigs.push(FunctionSignature { name: name.into(), return_type: ptr_void(),
@@ -131,6 +148,10 @@ pub fn builtin_signatures() -> Vec<FunctionSignature> {
         params: vec![("s".into(), ptr_void()), ("c".into(), int()), ("n".into(), size_t())],
         variadic: false, calling_convention: sysv() });
 
+}
+
+/// Built-in signatures: libc strings.
+fn builtin_libc_strings(sigs: &mut Vec<FunctionSignature>) {
     // ── libc: strings ───────────────────────────────────────────────
     sigs.push(FunctionSignature { name: "strlen".into(), return_type: size_t(),
         params: vec![("s".into(), ptr_const_char())],
@@ -184,6 +205,10 @@ pub fn builtin_signatures() -> Vec<FunctionSignature> {
             variadic: false, calling_convention: sysv() });
     }
 
+}
+
+/// Built-in signatures: libc heap.
+fn builtin_libc_heap(sigs: &mut Vec<FunctionSignature>) {
     // ── libc: heap ──────────────────────────────────────────────────
     sigs.push(FunctionSignature { name: "malloc".into(), return_type: ptr_void(),
         params: vec![("size".into(), size_t())],
@@ -198,6 +223,10 @@ pub fn builtin_signatures() -> Vec<FunctionSignature> {
         params: vec![("ptr".into(), ptr_void())],
         variadic: false, calling_convention: sysv() });
 
+}
+
+/// Built-in signatures: libc stdio.
+fn builtin_libc_stdio(sigs: &mut Vec<FunctionSignature>) {
     // ── libc: stdio ─────────────────────────────────────────────────
     for name in ["printf", "fprintf", "sprintf", "snprintf", "vprintf", "vfprintf", "vsprintf", "vsnprintf"] {
         sigs.push(FunctionSignature { name: name.into(), return_type: int(),
@@ -231,6 +260,10 @@ pub fn builtin_signatures() -> Vec<FunctionSignature> {
         params: vec![("buf".into(), ptr_char()), ("n".into(), int()), ("stream".into(), ptr_void())],
         variadic: false, calling_convention: sysv() });
 
+}
+
+/// Built-in signatures: libc process.
+fn builtin_libc_process(sigs: &mut Vec<FunctionSignature>) {
     // ── libc: process ───────────────────────────────────────────────
     sigs.push(FunctionSignature { name: "exit".into(), return_type: Void,
         params: vec![("status".into(), int())],
@@ -244,6 +277,10 @@ pub fn builtin_signatures() -> Vec<FunctionSignature> {
         params: vec![("name".into(), ptr_const_char())],
         variadic: false, calling_convention: sysv() });
 
+}
+
+/// Built-in signatures: posix syscalls.
+fn builtin_posix_syscalls(sigs: &mut Vec<FunctionSignature>) {
     // ── POSIX syscalls ─────────────────────────────────────────────
     sigs.push(FunctionSignature { name: "open".into(), return_type: int(),
         params: vec![("path".into(), ptr_const_char()), ("flags".into(), int()), ("mode".into(), int())],
@@ -274,6 +311,10 @@ pub fn builtin_signatures() -> Vec<FunctionSignature> {
         params: vec![("file".into(), ptr_const_char()), ("argv".into(), ptr_void()), ("envp".into(), ptr_void())],
         variadic: false, calling_convention: sysv() });
 
+}
+
+/// Built-in signatures: posix sockets.
+fn builtin_posix_sockets(sigs: &mut Vec<FunctionSignature>) {
     // ── POSIX sockets ──────────────────────────────────────────────
     sigs.push(FunctionSignature { name: "socket".into(), return_type: int(),
         params: vec![("domain".into(), int()), ("type_".into(), int()), ("protocol".into(), int())],
@@ -297,6 +338,10 @@ pub fn builtin_signatures() -> Vec<FunctionSignature> {
         params: vec![("sock".into(), int()), ("buf".into(), ptr_void()), ("len".into(), size_t()), ("flags".into(), int())],
         variadic: false, calling_convention: sysv() });
 
+}
+
+/// Built-in signatures: win32 api.
+fn builtin_win32_api(sigs: &mut Vec<FunctionSignature>) {
     // ── Win32 API (msvc_x64) ───────────────────────────────────────
     for name in ["ExitProcess", "GetCurrentProcess", "GetCurrentThread", "GetLastError", "SetLastError", "CloseHandle"] {
         sigs.push(FunctionSignature { name: name.into(), return_type: int(),
@@ -344,9 +389,26 @@ pub fn builtin_signatures() -> Vec<FunctionSignature> {
     sigs.push(FunctionSignature { name: "Sleep".into(), return_type: Void,
         params: vec![("ms".into(), int())],
         variadic: false, calling_convention: win64() });
+}
 
+/// Return a `Vec` of all known built-in signatures.
+///
+/// The table is assembled from one helper per library group; splitting it
+/// keeps any single function readable and lets a group be tested alone.
+#[must_use]
+pub fn builtin_signatures() -> Vec<FunctionSignature> {
+    let mut sigs = Vec::new();
+    builtin_libc_memory(&mut sigs);
+    builtin_libc_strings(&mut sigs);
+    builtin_libc_heap(&mut sigs);
+    builtin_libc_stdio(&mut sigs);
+    builtin_libc_process(&mut sigs);
+    builtin_posix_syscalls(&mut sigs);
+    builtin_posix_sockets(&mut sigs);
+    builtin_win32_api(&mut sigs);
     sigs
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RenameRecord
@@ -628,6 +690,39 @@ impl std::fmt::Display for PropagationStats {
 
 #[cfg(test)]
 mod tests {
+
+    /// `FunctionSignature::builtin` searched an EMPTY static and so answered
+    /// `None` for every name, while `builtin_signatures()` held the real table.
+    /// Reintroduce the defect (drop the fall-through) and this test fails.
+    #[test]
+    fn builtin_lookup_reaches_the_real_signature_table() {
+        let table = builtin_signatures();
+        assert!(
+            table.len() > 50,
+            "the built-in table should be substantial, got {}",
+            table.len()
+        );
+
+        let memcpy = FunctionSignature::builtin("memcpy")
+            .expect("memcpy is in builtin_signatures() and must be reachable by name");
+        assert_eq!(memcpy.name, "memcpy");
+        assert_eq!(memcpy.params.len(), 3, "memcpy(dst, src, n)");
+
+        let strlen = FunctionSignature::builtin("strlen").expect("strlen must be reachable");
+        assert_eq!(strlen.params.len(), 1, "strlen(s)");
+
+        // Every name in the table must be reachable through the lookup.
+        for sig in &table {
+            assert!(
+                FunctionSignature::builtin(&sig.name).is_some(),
+                "{} is in the table but not reachable via builtin()",
+                sig.name
+            );
+        }
+
+        // And an unknown name still answers None.
+        assert!(FunctionSignature::builtin("no_such_function_anywhere").is_none());
+    }
     use super::*;
 
     #[test]

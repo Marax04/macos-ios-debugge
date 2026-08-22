@@ -75,17 +75,17 @@ enum Kind {
 fn references(needle: &str) -> (usize, usize, usize) {
     let (mut prod, mut test, mut example) = (0usize, 0usize, 0usize);
 
-    for (src_path, kind) in sources() {
-        let Ok(text) = std::fs::read_to_string(&src_path) else { continue };
+    for (file, code_kind) in sources() {
+        let Ok(source) = std::fs::read_to_string(&file) else { continue };
 
         // Production files carry inline `#[cfg(test)]` modules. Everything from
         // the first one to end of file is test code, not production — counting
         // it as production would understate how dead these parsers are, which is
         // the safe direction but still wrong.
-        let effective = if kind == Kind::Production {
-            text.find("#[cfg(test)]").map_or(&text[..], |i| &text[..i])
+        let effective = if code_kind == Kind::Production {
+            source.find("#[cfg(test)]").map_or(&source[..], |i| &source[..i])
         } else {
-            &text[..]
+            &source[..]
         };
 
         for line in effective.lines() {
@@ -100,7 +100,7 @@ fn references(needle: &str) -> (usize, usize, usize) {
             if !t.contains(needle) {
                 continue;
             }
-            match kind {
+            match code_kind {
                 Kind::Production => prod += 1,
                 Kind::Test => test += 1,
                 Kind::Example => example += 1,

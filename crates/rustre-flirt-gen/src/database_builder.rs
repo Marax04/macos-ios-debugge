@@ -465,13 +465,13 @@ mod tests {
     fn test_estimate_quality_all_wildcard() {
         let pats = vec![FlirtPattern::new(vec![PatternByte::Wildcard; 8])];
         let q = DatabaseBuilder::estimate_quality(&pats);
-        assert_eq!(q, 0.0);
+        assert!((q - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_estimate_quality_empty() {
         let q = DatabaseBuilder::estimate_quality(&[]);
-        assert_eq!(q, 0.0);
+        assert!((q - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]

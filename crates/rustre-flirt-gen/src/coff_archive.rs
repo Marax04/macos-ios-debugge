@@ -629,9 +629,9 @@ mod tests {
         let (pats, _) = harvest_archive_bytes(&ar, &ArchiveHarvestOptions::default()).unwrap();
 
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("harvest.sig");
-        crate::write_sig_file(&pats, "synthlib", 75, &path).unwrap();
-        let sig_bytes = std::fs::read(&path).unwrap();
+        let out = dir.path().join("harvest.sig");
+        crate::write_sig_file(&pats, "synthlib", 75, &out).unwrap();
+        let sig_bytes = std::fs::read(&out).unwrap();
         assert_eq!(&sig_bytes[..6], b"IDASGN");
         assert_eq!(sig_bytes[6], 9);
         let hdr = rustre_flirt::sig_header::SigFileHeader::decode(&sig_bytes)

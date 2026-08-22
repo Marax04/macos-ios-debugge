@@ -3652,13 +3652,13 @@ mod tests {
     #[test]
     fn test_pattern_wildcard_ratio_all_exact() {
         let pat = FlirtPattern::new(vec![PatternByte::Exact(0x55); 8]);
-        assert_eq!(pat.wildcard_ratio(), 0.0);
+        assert!((pat.wildcard_ratio() - 0.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn test_pattern_wildcard_ratio_all_wildcard() {
         let pat = FlirtPattern::new(vec![PatternByte::Wildcard; 8]);
-        assert_eq!(pat.wildcard_ratio(), 1.0);
+        assert!((pat.wildcard_ratio() - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]

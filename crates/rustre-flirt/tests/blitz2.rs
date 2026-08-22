@@ -77,7 +77,7 @@ fn flirt_pattern_new_minimal() {
 #[test]
 fn flirt_pattern_wildcard_ratio() {
     let p = FlirtPattern::new(vec![]);
-    assert_eq!(p.wildcard_ratio(), 0.0);
+    assert!((p.wildcard_ratio() - 0.0).abs() < f32::EPSILON);
     let p2 = FlirtPattern::new(vec![PatternByte::Wildcard, PatternByte::Exact(1)]);
     assert!((p2.wildcard_ratio() - 0.5).abs() < 1e-6);
     let p3 = FlirtPattern::new(vec![PatternByte::Wildcard, PatternByte::Wildcard]);

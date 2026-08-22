@@ -267,7 +267,7 @@ mod tests {
         let bf = ByteFreq::new(0);
         let (b, f) = bf.most_common();
         assert_eq!(b, 0);
-        assert_eq!(f, 0.0);
+        assert!((f - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn test_bytefreq_entropy_empty() {
         let bf = ByteFreq::new(0);
-        assert_eq!(bf.entropy(), 0.0);
+        assert!((bf.entropy() - 0.0).abs() < f64::EPSILON);
     }
 
     // ── is_stable ─────────────────────────────────────────────────────────────
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn test_quality_score_all_wildcard() {
         let pat: Vec<Option<u8>> = vec![None; 8];
-        assert_eq!(VarianceAnalyzer::quality_score(&pat), 0.0);
+        assert!((VarianceAnalyzer::quality_score(&pat) - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -456,7 +456,7 @@ mod tests {
     #[test]
     fn test_quality_score_empty() {
         let pat: Vec<Option<u8>> = vec![];
-        assert_eq!(VarianceAnalyzer::quality_score(&pat), 0.0);
+        assert!((VarianceAnalyzer::quality_score(&pat) - 0.0).abs() < f64::EPSILON);
     }
 
     // ── effective_length ──────────────────────────────────────────────────────
