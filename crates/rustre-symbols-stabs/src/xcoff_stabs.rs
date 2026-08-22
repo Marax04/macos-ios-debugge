@@ -200,7 +200,10 @@ impl XcoffSectionHeader {
     /// Panics if the slice indexing is inconsistent (should not happen given length checks above).
     pub fn parse(data: &[u8], offset: usize, bitness: XcoffBitness) -> Result<Self, XcoffError> {
         let sz = match bitness { XcoffBitness::Xcoff32 => Self::SIZE32, XcoffBitness::Xcoff64 => Self::SIZE64 };
-        if offset + sz > data.len() {
+        // Checked: `offset` is caller-supplied on this public API, so
+        // `offset + sz` can WRAP (release builds have overflow-checks off),
+        // slip past the bound test and panic on the slice below.
+        if offset.checked_add(sz).is_none_or(|e| e > data.len()) {
             return Err(XcoffError::Truncated);
         }
         let d = &data[offset..offset+sz];
@@ -317,7 +320,8 @@ impl XcoffSymbolEntry {
     /// # Panics
     /// Panics if the slice indexing is inconsistent (should not happen given length checks above).
     pub fn parse(data: &[u8], offset: usize, strtab: &[u8]) -> Result<Self, XcoffError> {
-        if offset + Self::SIZE > data.len() {
+        // Checked for the same wrapping reason as `XcoffSectionHeader::parse`.
+        if offset.checked_add(Self::SIZE).is_none_or(|e| e > data.len()) {
             return Err(XcoffError::Truncated);
         }
         let d = &data[offset..offset+Self::SIZE];
@@ -680,5 +684,28 @@ mod tests {
         assert_eq!(info.bitness, XcoffBitness::Xcoff32);
         assert!(!info.has_debug_section);
         assert!(info.section_names.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod wrap_hardening_tests {
+    use super::*;
+
+    /// `parse` is public and takes a caller-supplied `offset`. With
+    /// `offset + sz > data.len()` the addition WRAPS in release (overflow-checks
+    /// are off), the guard passes, and the slice index panics. Both parsers must
+    /// use a checked add instead.
+    #[test]
+    fn section_header_parse_rejects_wrapping_offset() {
+        let data = [0u8; 64];
+        let r = XcoffSectionHeader::parse(&data, usize::MAX - 4, XcoffBitness::Xcoff32);
+        assert!(matches!(r, Err(XcoffError::Truncated)));
+    }
+
+    #[test]
+    fn symbol_entry_parse_rejects_wrapping_offset() {
+        let data = [0u8; 64];
+        let r = XcoffSymbolEntry::parse(&data, usize::MAX - 4, &[]);
+        assert!(matches!(r, Err(XcoffError::Truncated)));
     }
 }
