@@ -444,7 +444,7 @@ impl Fde {
     }
 
     /// Like [`Fde::parse`], but supplied with the section's virtual base address
-    /// so DW_EH_PE_pcrel encodings resolve to real addresses.
+    /// so `DW_EH_PE_pcrel` encodings resolve to real addresses.
     pub fn parse_at(
         data: &[u8],
         pos: &mut usize,
@@ -506,7 +506,7 @@ impl fmt::Display for Fde {
 ///
 /// The low nibble selects size and signedness; the high nibble selects the base
 /// the value is relative to. `section_vaddr` is the virtual address the section
-/// is loaded at (0 if unknown), used for DW_EH_PE_pcrel. The by-far most common
+/// is loaded at (0 if unknown), used for `DW_EH_PE_pcrel`. The by-far most common
 /// `.eh_frame` encoding is `pcrel|sdata4` (0x1B), which the old code did not
 /// handle at all: it consumed 8 bytes for a 4-byte field and treated a signed
 /// displacement as an absolute address.

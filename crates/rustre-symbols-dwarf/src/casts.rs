@@ -16,7 +16,7 @@ pub fn u64_to_u32(x: u64) -> u32 {
 /// `u64` → `u16`, truncating to the low 16 bits (matches `as u16` semantics).
 #[inline]
 #[must_use]
-pub fn u64_to_u16(x: u64) -> u16 {
+pub const fn u64_to_u16(x: u64) -> u16 {
     (x & 0xFFFF) as u16
 }
 

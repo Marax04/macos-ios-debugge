@@ -1376,7 +1376,7 @@ impl DwarfReader {
         self.sections.get(".debug_line").map_or(&[], Vec::as_slice)
     }
     /// DWARF 5 `.debug_line_str`, indexed by `DW_FORM_line_strp`. Distinct from
-    /// `.debug_str`; resolving line_strp against `.debug_str` yields
+    /// `.debug_str`; resolving `line_strp` against `.debug_str` yields
     /// plausible-but-wrong filenames.
     fn debug_line_str(&self) -> &[u8] {
         self.sections

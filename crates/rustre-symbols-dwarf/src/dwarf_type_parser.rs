@@ -217,7 +217,7 @@ pub struct BaseClass {
     pub type_ref: TypeRef,
     /// `DW_AT_data_member_location` byte offset of the base subobject.
     pub byte_offset: u64,
-    /// `DW_AT_virtuality`: 0=none, 1=virtual, 2=pure_virtual.
+    /// `DW_AT_virtuality`: 0=none, 1=virtual, `2=pure_virtual`.
     pub virtuality: u8,
     /// `DW_AT_accessibility`: 1=public, 2=protected, 3=private.
     pub accessibility: u8,

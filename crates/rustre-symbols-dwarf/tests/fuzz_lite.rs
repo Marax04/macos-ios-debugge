@@ -14,7 +14,7 @@ use rustre_symbols_dwarf::type_units::parse_type_unit_header;
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -62,7 +62,7 @@ fn random_noise_never_panics() {
 }
 
 /// Location expressions built from every possible leading opcode byte followed
-/// by noise — probes each DW_OP_* operand decoder.
+/// by noise — probes each `DW_OP`_* operand decoder.
 #[test]
 fn every_opcode_prefix_never_panics() {
     let mut rng = Rng(0xA5A5_5A5A_A5A5_5A5A);
