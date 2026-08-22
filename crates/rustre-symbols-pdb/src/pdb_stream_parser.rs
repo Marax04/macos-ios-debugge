@@ -76,7 +76,7 @@ impl MsfSuperblock {
     /// container.
     ///
     /// Everything downstream multiplies and divides by `block_size`; a value of
-    /// 3 or 0x4000_0000 reassembles a coherent-looking but entirely wrong
+    /// 3 or `0x4000_0000` reassembles a coherent-looking but entirely wrong
     /// stream with no error anywhere in the chain.
     ///
     /// # Errors

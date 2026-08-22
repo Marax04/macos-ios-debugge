@@ -2399,9 +2399,9 @@ mod tests {
     }
 
     /// Build a small abbrev table:
-    ///   code 1: compile_unit, has_children, [name:string, comp_dir:string]
+    ///   code 1: `compile_unit`, `has_children`, [name:string, `comp_dir:string`]
     ///   code 2: subprogram, no children,
-    ///           [name:string, low_pc:addr, high_pc:data8, external:flag]
+    ///           [name:string, `low_pc:addr`, `high_pc:data8`, external:flag]
     fn test_abbrev_table() -> Vec<u8> {
         let mut a = Vec::new();
         // decl 1
@@ -2446,7 +2446,7 @@ mod tests {
         assert_eq!(sp.attrs.len(), 4);
     }
 
-    /// Build a full synthetic DWARF v4 .debug_info with the test abbrev table:
+    /// Build a full synthetic DWARF v4 .`debug_info` with the test abbrev table:
     /// a compile unit "main.c" containing subprogram "main" @0x1000 size 0x40.
     fn synthetic_dwarf_v4() -> DwarfSections {
         let mut body = Vec::new();
@@ -2522,10 +2522,10 @@ mod tests {
     // ── DWARF 5 indexed forms (strx / addrx) ─────────────────────────────────
 
     /// Abbrev table using DWARF 5 indexed forms:
-    ///   code 1: compile_unit, has_children,
-    ///           [name:strx1, str_offsets_base:sec_offset, addr_base:sec_offset]
+    ///   code 1: `compile_unit`, `has_children`,
+    ///           [name:strx1, `str_offsets_base:sec_offset`, `addr_base:sec_offset`]
     ///   code 2: subprogram, no children,
-    ///           [name:strx1, low_pc:addrx1, high_pc:data8]
+    ///           [name:strx1, `low_pc:addrx1`, `high_pc:data8`]
     fn dwarf5_indexed_abbrev() -> Vec<u8> {
         let mut a = Vec::new();
         a.extend(uleb(1));
@@ -2822,8 +2822,8 @@ mod tests {
     // ── Real line-number program ─────────────────────────────────────────────
 
     /// Handcraft a tiny DWARF v3 line program:
-    /// files: ["a.c"], set_address 0x1000, copy (line 1), advance_line +4,
-    /// advance_pc 0x10, copy (line 5), end_sequence.
+    /// files: ["a.c"], `set_address` 0x1000, copy (line 1), `advance_line` +4,
+    /// `advance_pc` 0x10, copy (line 5), `end_sequence`.
     fn synthetic_line_program() -> Vec<u8> {
         let mut hdr_tail = Vec::new();
         hdr_tail.push(1); // min_inst_length
@@ -2942,7 +2942,7 @@ mod tests {
         d
     }
 
-    /// DW_OP_addr (0x03) followed by an 8-byte little-endian address.
+    /// `DW_OP_addr` (0x03) followed by an 8-byte little-endian address.
     fn op_addr64(addr: u64) -> Vec<u8> {
         let mut v = vec![0x03u8];
         v.extend_from_slice(&addr.to_le_bytes());

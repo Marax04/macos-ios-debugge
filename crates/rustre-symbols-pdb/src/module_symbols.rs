@@ -303,7 +303,7 @@ impl ModuleSymbols {
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
-/// The framing of one CodeView symbol record, as read from its 4-byte header.
+/// The framing of one `CodeView` symbol record, as read from its 4-byte header.
 ///
 /// Grouping these four values keeps [`dispatch_record`] to three parameters and
 /// makes the framing a single, nameable unit that can be logged or asserted on
@@ -322,7 +322,7 @@ struct RecordFrame {
 
 /// The mutable state a module-symbol parse threads through every record.
 ///
-/// `proc_stack` and `block_stack` model CodeView's `S_*`/`S_END` nesting;
+/// `proc_stack` and `block_stack` model `CodeView`'s `S_*`/`S_END` nesting;
 /// `result` accumulates everything already closed.
 #[derive(Debug, Default)]
 struct ParseState {

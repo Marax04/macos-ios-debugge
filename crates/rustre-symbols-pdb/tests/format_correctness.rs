@@ -46,7 +46,7 @@ fn public_symbol_code_reexports_are_correct() {
     assert_ne!(psi::S_CONSTANT32, 0x1009);
 }
 
-/// Append one CodeView symbol record (`u16 len, u16 kind, body`) with the
+/// Append one `CodeView` symbol record (`u16 len, u16 kind, body`) with the
 /// 4-byte record alignment the format requires.
 fn push_record(out: &mut Vec<u8>, kind: u16, body: &[u8]) {
     let len = u16::try_from(body.len() + 2).unwrap();
@@ -173,13 +173,13 @@ fn gsi_hash_is_case_insensitive() {
     );
 }
 
-/// The bitmap covers IPHR_HASH + 1 = 4097 bits rounded to a 32-bit boundary.
+/// The bitmap covers `IPHR_HASH` + 1 = 4097 bits rounded to a 32-bit boundary.
 #[test]
 fn gsi_bitmap_is_516_bytes_not_512() {
     assert_eq!(GsiBitmap::EXPECTED_BYTES, 516);
 }
 
-/// Bucket offsets are in units of the 12-byte in-memory HRFile, not the 8-byte
+/// Bucket offsets are in units of the 12-byte in-memory `HRFile`, not the 8-byte
 /// on-disk one.
 #[test]
 fn gsi_hash_record_in_memory_size_is_12() {
@@ -228,7 +228,7 @@ fn gsi_bucket_chain_is_bounded_by_next_bucket() {
 
 // ── Finding 5: LF_ONEMETHOD in field lists ───────────────────────────────────
 
-/// Build an LF_FIELDLIST TPI stream from raw field-list item bytes.
+/// Build an `LF_FIELDLIST` TPI stream from raw field-list item bytes.
 fn tpi_stream_with_field_list(items: &[u8]) -> Vec<u8> {
     let mut v = vec![0u8; 56];
     v[0..4].copy_from_slice(&20_040_203u32.to_le_bytes()); // version
@@ -245,7 +245,7 @@ fn tpi_stream_with_field_list(items: &[u8]) -> Vec<u8> {
 }
 
 /// `struct S { int a; void f(); int b; };` — the field list is
-/// `[LF_MEMBER a][LF_ONEMETHOD f][LF_MEMBER b]`. Before the fix, LF_ONEMETHOD
+/// `[LF_MEMBER a][LF_ONEMETHOD f][LF_MEMBER b]`. Before the fix, `LF_ONEMETHOD`
 /// hit the `_ => Stop` catch-all and member `b` vanished without any error.
 #[test]
 fn field_list_survives_lf_onemethod() {
@@ -516,8 +516,8 @@ fn tpi_stream(kind: u16, payload: &[u8]) -> Vec<u8> {
     v
 }
 
-/// LF_ENUM's name starts at offset **12** (after a full u32 field_list_ti).
-/// Reading at 10 spliced the low two bytes of field_list_ti onto the name.
+/// `LF_ENUM`'s name starts at offset **12** (after a full u32 `field_list_ti`).
+/// Reading at 10 spliced the low two bytes of `field_list_ti` onto the name.
 #[test]
 fn lib_tpi_enum_name_starts_at_offset_12() {
     let mut payload = Vec::new();
@@ -537,7 +537,7 @@ fn lib_tpi_enum_name_starts_at_offset_12() {
     );
 }
 
-/// A struct larger than 32767 bytes stores its size as an LF_LONG numeric leaf
+/// A struct larger than 32767 bytes stores its size as an `LF_LONG` numeric leaf
 /// (0x8003 + 4 bytes), pushing the name past the hardcoded offset 18.
 #[test]
 fn lib_tpi_struct_size_is_a_numeric_leaf() {

@@ -769,7 +769,7 @@ fn parse_tpi_record(leaf_type: u16, payload: &[u8]) -> Result<Option<PdbType>> {
     Ok(t)
 }
 
-/// Decode a CodeView numeric leaf at `payload[pos..]`.
+/// Decode a `CodeView` numeric leaf at `payload[pos..]`.
 ///
 /// A value below 0x8000 *is* the value and occupies the 2 tag bytes. Otherwise
 /// the tag names a wider signed/unsigned field that follows it. Returns

@@ -1,4 +1,4 @@
-//! CodeView symbol record type codes (`SYM_ENUM_e` from `cvinfo.h`).
+//! `CodeView` symbol record type codes (`SYM_ENUM_e` from `cvinfo.h`).
 //!
 //! This is the single source of truth for the crate. Several modules used to
 //! carry private copies of this table with wrong values for `S_LPROC32` and

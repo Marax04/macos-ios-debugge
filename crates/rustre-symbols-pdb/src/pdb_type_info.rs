@@ -181,7 +181,7 @@ pub mod leaf {
 
 /// Reinterpret a signed value's two's-complement bit pattern as `u64`.
 ///
-/// CodeView signed numeric leaves (`LF_CHAR`, `LF_SHORT`, `LF_LONG`) are
+/// `CodeView` signed numeric leaves (`LF_CHAR`, `LF_SHORT`, `LF_LONG`) are
 /// sign-extended to 64 bits and then handed back in the `u64` channel that
 /// [`read_numeric_leaf`] uses for every leaf kind, so that a caller converting
 /// back with `i64` recovers `-1` rather than `255`. This is a bit-pattern
