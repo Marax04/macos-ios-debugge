@@ -666,6 +666,51 @@ impl UsnReasonFlags {
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 != 0
     }
+
+    /// Every reason bit set on this entry, in USN documentation order.
+    ///
+    /// This is the single place that knows the full reason vocabulary; the
+    /// classifiers below consult the same constants, so a reason the crate
+    /// can name is never silently dropped from a timeline.
+    #[must_use]
+    pub fn names(self) -> Vec<&'static str> {
+        const TABLE: [(UsnReasonFlags, &str); 10] = [
+            (UsnReasonFlags::DATA_OVERWRITE, "DATA_OVERWRITE"),
+            (UsnReasonFlags::DATA_EXTEND, "DATA_EXTEND"),
+            (UsnReasonFlags::DATA_TRUNCATION, "DATA_TRUNCATION"),
+            (UsnReasonFlags::NAMED_DATA_OVERWRITE, "NAMED_DATA_OVERWRITE"),
+            (UsnReasonFlags::FILE_CREATE, "FILE_CREATE"),
+            (UsnReasonFlags::FILE_DELETE, "FILE_DELETE"),
+            (UsnReasonFlags::RENAME_OLD_NAME, "RENAME_OLD_NAME"),
+            (UsnReasonFlags::RENAME_NEW_NAME, "RENAME_NEW_NAME"),
+            (UsnReasonFlags::SECURITY_CHANGE, "SECURITY_CHANGE"),
+            (UsnReasonFlags::CLOSE, "CLOSE"),
+        ];
+        TABLE
+            .iter()
+            .filter(|(bit, _)| self.contains(*bit))
+            .map(|(_, name)| *name)
+            .collect()
+    }
+
+    /// True if any bit represents a change to file *content*.
+    ///
+    /// `DATA_TRUNCATION` and `NAMED_DATA_OVERWRITE` belong here: a truncated
+    /// or overwritten alternate stream is a content change, and treating it
+    /// as a metadata touch hides the usual wipe signature.
+    #[must_use]
+    pub const fn is_data_change(self) -> bool {
+        self.contains(Self::DATA_OVERWRITE)
+            || self.contains(Self::DATA_EXTEND)
+            || self.contains(Self::DATA_TRUNCATION)
+            || self.contains(Self::NAMED_DATA_OVERWRITE)
+    }
+
+    /// True if any bit represents a rename, from either side of the pair.
+    #[must_use]
+    pub const fn is_rename(self) -> bool {
+        self.contains(Self::RENAME_NEW_NAME) || self.contains(Self::RENAME_OLD_NAME)
+    }
 }
 
 /// A single entry from the NTFS Change Journal (`$UsnJrnl:$J`).
@@ -793,7 +838,16 @@ impl UsnjrnlReader {
     pub fn rename_events(&self) -> Vec<&UsnEntry> {
         self.entries
             .iter()
-            .filter(|e| e.reason.contains(UsnReasonFlags::RENAME_NEW_NAME))
+            .filter(|e| e.reason.is_rename())
+            .collect()
+    }
+
+    /// Return all entries whose reason bits indicate a content change.
+    #[must_use]
+    pub fn data_change_events(&self) -> Vec<&UsnEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.reason.is_data_change())
             .collect()
     }
 }
@@ -1036,11 +1090,9 @@ impl TimelineBuilder {
         for entry in &reader.entries {
             let event = if entry.reason.contains(UsnReasonFlags::FILE_DELETE) {
                 TimelineEvent::Deleted
-            } else if entry.reason.contains(UsnReasonFlags::RENAME_NEW_NAME) {
+            } else if entry.reason.is_rename() {
                 TimelineEvent::Renamed
-            } else if entry.reason.contains(UsnReasonFlags::DATA_EXTEND)
-                || entry.reason.contains(UsnReasonFlags::DATA_OVERWRITE)
-            {
+            } else if entry.reason.is_data_change() {
                 TimelineEvent::Modified
             } else {
                 TimelineEvent::MetadataModified
@@ -1444,6 +1496,45 @@ mod tests {
         a.parse_and_add(&buf, 0).unwrap();
         a.analyze();
         let _ = a.summary();
+    }
+
+    #[test]
+    fn usn_truncation_is_a_data_change() {
+        // Regression: DATA_TRUNCATION and NAMED_DATA_OVERWRITE were declared
+        // but never routed, so a truncated file (the usual wipe signature)
+        // was classified as a mere metadata touch.
+        let trunc = UsnReasonFlags(UsnReasonFlags::DATA_TRUNCATION.0);
+        assert!(trunc.is_data_change());
+        let ads = UsnReasonFlags(UsnReasonFlags::NAMED_DATA_OVERWRITE.0);
+        assert!(ads.is_data_change());
+        let sec = UsnReasonFlags(UsnReasonFlags::SECURITY_CHANGE.0);
+        assert!(!sec.is_data_change(), "a security change is not content");
+    }
+
+    #[test]
+    fn usn_rename_matches_both_sides() {
+        let old = UsnReasonFlags(UsnReasonFlags::RENAME_OLD_NAME.0);
+        let new = UsnReasonFlags(UsnReasonFlags::RENAME_NEW_NAME.0);
+        assert!(old.is_rename() && new.is_rename());
+    }
+
+    #[test]
+    fn usn_names_covers_every_declared_reason() {
+        let all = UsnReasonFlags(
+            UsnReasonFlags::DATA_OVERWRITE.0
+                | UsnReasonFlags::DATA_EXTEND.0
+                | UsnReasonFlags::DATA_TRUNCATION.0
+                | UsnReasonFlags::NAMED_DATA_OVERWRITE.0
+                | UsnReasonFlags::FILE_CREATE.0
+                | UsnReasonFlags::FILE_DELETE.0
+                | UsnReasonFlags::RENAME_OLD_NAME.0
+                | UsnReasonFlags::RENAME_NEW_NAME.0
+                | UsnReasonFlags::SECURITY_CHANGE.0
+                | UsnReasonFlags::CLOSE.0,
+        );
+        assert_eq!(all.names().len(), 10);
+        assert!(all.names().contains(&"DATA_TRUNCATION"));
+        assert!(UsnReasonFlags(0).names().is_empty());
     }
 
     #[test]
