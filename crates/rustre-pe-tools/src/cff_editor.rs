@@ -23,6 +23,15 @@ pub const EDITABLE_DATA_DIRS: &[usize] = &[
     data_dir_index::COM_DESCRIPTOR,
 ];
 
+/// Whether the CFF editor surface knows how to mutate a data directory.
+///
+/// `EDITABLE_DATA_DIRS` listed the supported indices but nothing consulted
+/// it, so a caller had no way to ask before attempting an edit.
+#[must_use]
+pub fn is_editable_data_dir(index: usize) -> bool {
+    EDITABLE_DATA_DIRS.contains(&index)
+}
+
 // ─── CffError ────────────────────────────────────────────────────────────────
 
 /// Errors produced by the CFF editor.
@@ -305,6 +314,24 @@ impl EditableSection {
     pub const DATA_SECTION: u32 = 0xC000_0040;
     /// Standard characteristics for a read-only data section.
     pub const RDATA_SECTION: u32 = 0x4000_0040;
+
+    /// A read-execute code section named `name`.
+    #[must_use]
+    pub fn new_code(name: impl Into<String>) -> Self {
+        Self::new(name, Self::CODE_SECTION)
+    }
+
+    /// A read-write initialised-data section named `name`.
+    #[must_use]
+    pub fn new_data(name: impl Into<String>) -> Self {
+        Self::new(name, Self::DATA_SECTION)
+    }
+
+    /// A read-only initialised-data section named `name`.
+    #[must_use]
+    pub fn new_rdata(name: impl Into<String>) -> Self {
+        Self::new(name, Self::RDATA_SECTION)
+    }
 
     /// Returns `true` if the section is executable.
     #[must_use]
@@ -1193,4 +1220,28 @@ mod tests {
         let removed = ed.remove_imports_from_dll("user32.dll");
         assert_eq!(removed, 2);
     }
+    #[test]
+    fn editable_data_dirs_are_queryable() {
+        assert!(is_editable_data_dir(data_dir_index::IMPORT));
+        assert!(is_editable_data_dir(data_dir_index::COM_DESCRIPTOR));
+        // BASERELOC is deliberately not in the editable set
+        assert!(!is_editable_data_dir(data_dir_index::BASERELOC));
+        assert_eq!(EDITABLE_DATA_DIRS.len(), 5);
+    }
+
+    #[test]
+    fn standard_section_constructors_use_the_declared_characteristics() {
+        let c = EditableSection::new_code(".text");
+        assert_eq!(c.characteristics, EditableSection::CODE_SECTION);
+        assert!(c.is_executable() && !c.is_writable());
+
+        let d = EditableSection::new_data(".data");
+        assert_eq!(d.characteristics, EditableSection::DATA_SECTION);
+        assert!(d.is_writable() && !d.is_executable());
+
+        let r = EditableSection::new_rdata(".rdata");
+        assert_eq!(r.characteristics, EditableSection::RDATA_SECTION);
+        assert!(!r.is_writable() && !r.is_executable());
+    }
+
 }

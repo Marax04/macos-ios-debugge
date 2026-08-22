@@ -1211,6 +1211,28 @@ impl PeFile {
             .is_some_and(|d| d.is_present())
     }
 
+    /// Returns `true` if the image has a load-configuration directory.
+    ///
+    /// Its presence is what carries the SafeSEH table and the Control Flow
+    /// Guard metadata, so it is a prerequisite for reading either.
+    #[must_use]
+    pub fn has_load_config(&self) -> bool {
+        self.data_dirs
+            .get(data_dir_index::LOAD_CONFIG)
+            .is_some_and(|d| d.is_present())
+    }
+
+    /// Returns `true` if the image has a bound-import directory.
+    ///
+    /// Bound imports cache resolved addresses at link time; when present the
+    /// import thunks may not match the on-disk import names.
+    #[must_use]
+    pub fn has_bound_imports(&self) -> bool {
+        self.data_dirs
+            .get(data_dir_index::BOUND_IMPORT)
+            .is_some_and(|d| d.is_present())
+    }
+
     /// Returns the highest-entropy section, if any sections exist.
     #[must_use]
     pub fn highest_entropy_section(&self) -> Option<&PeSection> {
@@ -2920,4 +2942,17 @@ mod tests {
         assert_eq!(align_up(4096, 4096), 4096);
         assert_eq!(align_up(4097, 4096), 8192);
     }
+    #[test]
+    fn load_config_and_bound_import_dirs_are_reachable() {
+        assert_eq!(data_dir_index::LOAD_CONFIG, 10);
+        assert_eq!(data_dir_index::BOUND_IMPORT, 11);
+        let mut b = PeBuilder::new_x64();
+        b.add_section(".text", vec![0x90; 32], 0x6000_0020);
+        let pe = PeFile::parse(&b.build()).expect("builder emits a valid PE");
+        // The builder emits empty directories, so both must read as absent
+        // rather than panicking or reading the wrong slot.
+        assert!(!pe.has_load_config());
+        assert!(!pe.has_bound_imports());
+    }
+
 }
