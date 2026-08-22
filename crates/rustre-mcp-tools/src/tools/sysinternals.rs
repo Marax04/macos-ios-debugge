@@ -25,6 +25,7 @@ pub struct SysinternalsProcessInTempDirTool;
 
 pub struct SysinternalsAutorunSuspiciousPathTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SysinternalsPeHasSignatureTool::definition(), Box::new(SysinternalsPeHasSignatureTool)),

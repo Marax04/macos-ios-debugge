@@ -149,6 +149,7 @@ impl ToolHandler for SandboxBehaviorRecordMockSummaryTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SandboxVmMemoryMapMockTool::definition(), Box::new(SandboxVmMemoryMapMockTool)),

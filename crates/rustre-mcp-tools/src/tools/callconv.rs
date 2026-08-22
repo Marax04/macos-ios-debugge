@@ -180,6 +180,7 @@ impl ToolHandler for CallconvAapcs64ArgRegisterCountTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (CallconvSysvX64NameTool::definition(), Box::new(CallconvSysvX64NameTool)),

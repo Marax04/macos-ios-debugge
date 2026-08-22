@@ -1298,6 +1298,7 @@ pub struct EventsExtBusMetricsSnapshotTool;
 impl EventsExtBusMetricsSnapshotTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "events_ext_bus_metrics_snapshot".to_string(), description: "Publish two events then read metrics via rustre_events::ExtEventBus::metrics.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for EventsExtBusMetricsSnapshotTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let bus = rustre_events::ExtEventBus::new_default(); let _rx = bus.subscribe(); bus.send_ttd_tick(1, 1, 0); bus.send_emulation_stop(1, "ok".into()); let m = bus.metrics(); Ok(ToolResult::text(json!({"total_published":m.total_published,"history_len":m.history_len,"receiver_count":m.receiver_count,"dropped":m.dropped,"variants":m.by_variant.len(),"source":"rustre_events::ExtEventBus::metrics"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (EventsBusNewDefaultTool::definition(), Box::new(EventsBusNewDefaultTool)),

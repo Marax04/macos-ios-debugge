@@ -240,6 +240,7 @@ pub struct EmuArchNameWireTool;
 
 pub struct EmuMemRegionInspectTool;
 impl EmuMemRegionInspectTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_mem_region_inspect".to_string(),
@@ -268,6 +269,7 @@ impl ToolHandler for EmuMemRegionInspectTool {
 
 pub struct EmuRegistryNamesTool;
 impl EmuRegistryNamesTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_registry_names".to_string(),
@@ -291,6 +293,7 @@ impl ToolHandler for EmuRegistryNamesTool {
 
 pub struct EmuCoverageMapSummaryTool;
 impl EmuCoverageMapSummaryTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_coverage_map_summary".to_string(),
@@ -320,6 +323,7 @@ impl ToolHandler for EmuCoverageMapSummaryTool {
 
 pub struct EmuCoverageTrackerPctTool;
 impl EmuCoverageTrackerPctTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_coverage_tracker_pct".to_string(),
@@ -352,6 +356,7 @@ impl ToolHandler for EmuCoverageTrackerPctTool {
 
 pub struct EmuStatsAggregateTool;
 impl EmuStatsAggregateTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_stats_aggregate".to_string(),
@@ -384,6 +389,7 @@ impl ToolHandler for EmuStatsAggregateTool {
 
 pub struct EmuInterpreterMemRoundtripTool;
 impl EmuInterpreterMemRoundtripTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_interpreter_mem_roundtrip".to_string(),
@@ -427,6 +433,7 @@ impl ToolHandler for EmuInterpreterMemRoundtripTool {
 
 pub struct EmuMemRegionBatchCheckTool;
 impl EmuMemRegionBatchCheckTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_mem_region_batch_check".to_string(),
@@ -1118,6 +1125,7 @@ impl ToolHandler for EmuBaseMemPermsFlagsTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         // [DISABLED 2026-07-12]         (EmuQilingLinuxX8664Tool::definition(), Box::new(EmuQilingLinuxX8664Tool)),

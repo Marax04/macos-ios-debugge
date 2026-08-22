@@ -269,6 +269,7 @@ impl ToolHandler for FuzzLibfuzzerPersistentHarnessRunTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FuzzLibfuzzerBucketBitmapTool::definition(), Box::new(FuzzLibfuzzerBucketBitmapTool)),

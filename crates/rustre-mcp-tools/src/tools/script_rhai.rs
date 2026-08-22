@@ -458,6 +458,7 @@ impl ToolHandler for ScriptRhaiEventHookSystemNewTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ScriptRhaiEntropyClassifyTool::definition(), Box::new(ScriptRhaiEntropyClassifyTool)),

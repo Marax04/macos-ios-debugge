@@ -117,6 +117,7 @@ impl IlMlilEliminateDeadStoresTool {
 
 // ── registration ──────────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (IlMlilFunctionToTextTool::definition(), Box::new(IlMlilFunctionToTextTool)),

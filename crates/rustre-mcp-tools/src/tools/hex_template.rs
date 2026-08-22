@@ -21,6 +21,7 @@ pub struct HexTemplateRiffChunkWireTool;
 
 pub struct HexTemplateWavWireTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (HexTemplateWavTool::definition(), Box::new(HexTemplateWavTool)),

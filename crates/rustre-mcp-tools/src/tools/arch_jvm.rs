@@ -7,6 +7,7 @@ pub struct ArchJvmDecodeTool;
 
 pub struct ArchJvmDecodeAtTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ArchJvmDecodeTool::definition(), Box::new(ArchJvmDecodeTool)),

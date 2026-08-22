@@ -9,6 +9,7 @@ pub struct TiOpenctiConfidenceClampTool;
 
 pub struct TiOpenctiConfidenceIsHighTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TiOpenctiGraphqlUrlTool::definition(), Box::new(TiOpenctiGraphqlUrlTool)),

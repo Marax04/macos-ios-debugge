@@ -123,6 +123,7 @@ pub struct FlirtGenGenerationStatsDefaultWireTool;
 impl FlirtGenGenerationStatsDefaultWireTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "flirt_gen_generation_stats_default_wire".to_string(), description: "flirt_gen_generation_stats_default_wire".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for FlirtGenGenerationStatsDefaultWireTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let s = rustre_flirt_gen::GenerationStats::default(); Ok(ToolResult::text(json!({"functions_processed":s.functions_processed,"patterns_generated":s.patterns_generated,"patterns_skipped":s.patterns_skipped,"duplicates_removed":s.duplicates_removed,"source":"rustre_flirt_gen::GenerationStats::default"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FlirtGenScanX86MasksTool::definition(), Box::new(FlirtGenScanX86MasksTool)),

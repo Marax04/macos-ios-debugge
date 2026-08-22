@@ -186,6 +186,7 @@ impl ToolHandler for TiExtTrackerKnownCountTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TiExtIocNewClampConfidenceTool::definition(), Box::new(TiExtIocNewClampConfidenceTool)),

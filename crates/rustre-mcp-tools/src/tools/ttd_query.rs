@@ -160,6 +160,7 @@ impl TtdQueryTimeRangeContainsTool { #[must_use] pub fn definition() -> ToolDefi
     Ok(ToolResult::text(json!({"contains":c,"source":"rustre_ttd_query::TimeRange::contains"}).to_string()))
 } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TtdQueryParseTool::definition(), Box::new(TtdQueryParseTool)),

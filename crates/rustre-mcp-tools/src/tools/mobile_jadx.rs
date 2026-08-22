@@ -111,6 +111,7 @@ pub struct MobileJadxNativeDecompileMethodTool;
 impl MobileJadxNativeDecompileMethodTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_jadx_native_decompile_method".to_string(), description: "rustre_mobile_jadx::NativeDexDecompiler::decompile_method".to_string(), input_schema: json!({"type":"object","properties":{"instructions":{"type":"array","items":{"type":"string"}}},"required":["instructions"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for MobileJadxNativeDecompileMethodTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let insns: Vec<String> = args.get("instructions").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default(); let m = rustre_mobile_jadx::DalvikMethod { name: "m".to_string(), class_name: "C".to_string(), return_type: "void".to_string(), params: vec![], instructions: insns }; match rustre_mobile_jadx::NativeDexDecompiler::decompile_method(&m) { Ok(out) => Ok(ToolResult::text(json!({"source_len":out.len(),"pseudo":out,"source":"rustre_mobile_jadx::NativeDexDecompiler::decompile_method"}).to_string())), Err(e) => Ok(ToolResult::text(json!({"error":e.to_string()}).to_string())) } } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MobileJadxFindTool::definition(), Box::new(MobileJadxFindTool)),

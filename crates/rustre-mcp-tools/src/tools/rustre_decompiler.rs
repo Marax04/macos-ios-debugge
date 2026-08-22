@@ -599,6 +599,7 @@ impl ToolHandler for RustreDecompilerQualityFromSourceTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (RustreDecompilerMemOperandParseTool::definition(), Box::new(RustreDecompilerMemOperandParseTool)),

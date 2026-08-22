@@ -11,6 +11,7 @@ pub struct ForensicsComputeSha256Tool;
 
 pub struct ForensicsComputeSha512Tool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ForensicsComputeMd5Tool::definition(), Box::new(ForensicsComputeMd5Tool)),

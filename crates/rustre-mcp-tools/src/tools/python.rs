@@ -7,6 +7,7 @@ pub struct PythonScriptPyValueNoneTypeNameTool;
 
 pub struct PythonScriptEngineInitialStepCountTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (PythonScriptPyValueNoneTypeNameTool::definition(), Box::new(PythonScriptPyValueNoneTypeNameTool)),

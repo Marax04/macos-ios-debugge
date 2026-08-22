@@ -19,6 +19,7 @@ pub struct DotnetEncodeTokenTool;
 
 pub struct DotnetTokenTableNameTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DotnetDecompileCilOpcodesTool::definition(), Box::new(DotnetDecompileCilOpcodesTool)),

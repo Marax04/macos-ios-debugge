@@ -682,6 +682,7 @@ pub struct PeEditorXHeaderFieldAllDisplayTool;
 impl PeEditorXHeaderFieldAllDisplayTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "pe_editor_x_header_field_all_display".to_string(), description: "Display every rustre_pe_editor::HeaderField variant via Display impl.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for PeEditorXHeaderFieldAllDisplayTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_pe_editor::HeaderField as H; let all = [H::MajorLinkerVersion,H::MinorLinkerVersion,H::MajorOsVersion,H::MinorOsVersion,H::MajorImageVersion,H::MinorImageVersion,H::MajorSubsystemVersion,H::MinorSubsystemVersion,H::Win32VersionValue,H::SizeOfStackReserve,H::SizeOfStackCommit,H::SizeOfHeapReserve,H::SizeOfHeapCommit,H::Subsystem,H::DllCharacteristics]; let names: Vec<String> = all.iter().map(|h| h.to_string()).collect(); Ok(ToolResult::text(json!({"count":names.len(),"names":names,"source":"rustre_pe_editor::HeaderField::Display"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (PeEditorCertificateHeaderTool::definition(), Box::new(PeEditorCertificateHeaderTool)),

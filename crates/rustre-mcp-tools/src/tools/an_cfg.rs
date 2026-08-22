@@ -815,6 +815,7 @@ impl ToolHandler for AnCfgDotPrinterRenderTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (AnCfgBuildStatsTool::definition(), Box::new(AnCfgBuildStatsTool)),

@@ -39,6 +39,7 @@ pub struct DemangleItaniumDetectWireTool;
 
 pub struct DemangleMsvcDetectWireTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DemangleIsConstructorTool::definition(), Box::new(DemangleIsConstructorTool)),

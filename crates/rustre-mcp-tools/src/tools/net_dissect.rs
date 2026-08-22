@@ -13,6 +13,7 @@ pub struct NetDissectDnp3AppFcNameTool;
 
 pub struct NetDissectIcmpStreamTunnelHeuristicTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (NetDissectByteEntropyTool::definition(), Box::new(NetDissectByteEntropyTool)),

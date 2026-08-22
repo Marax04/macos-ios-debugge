@@ -403,6 +403,7 @@ pub struct LuaLoaderOpcodeLayoutWx1Tool;
 impl LuaLoaderOpcodeLayoutWx1Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "lua_loader_lua_opcode_layout_wx1".to_string(), description: "Return OpcodeLayout for a version+opcode via rustre_loader_lua::opcode_layout.".to_string(), input_schema: json!({"type":"object","properties":{"version":{"type":"integer"},"opcode":{"type":"integer"}},"required":["version","opcode"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for LuaLoaderOpcodeLayoutWx1Tool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let vb = args.get("version").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'version'".into()))? as u8; let op = args.get("opcode").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'opcode'".into()))? as u8; let v = rustre_loader_lua::LuaVersion::from_byte(vb); let lay = rustre_loader_lua::opcode_layout(v, op); let name = rustre_loader_lua::opcode_name(v, op); Ok(ToolResult::text(json!({"layout":format!("{:?}", lay),"mnemonic":name,"version":v.to_string(),"opcode":op,"source":"rustre_loader_lua::opcode_layout"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (LuaLoaderIsBytecodeTool::definition(), Box::new(LuaLoaderIsBytecodeTool)),

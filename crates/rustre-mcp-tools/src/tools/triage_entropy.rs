@@ -26,6 +26,7 @@ pub struct TriageEntropyColorRgbTool;
 
 pub struct TriageEntropyRatingFromEntropyTool;
 impl TriageEntropyRatingFromEntropyTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_rating_from_entropy".to_string(),
@@ -47,6 +48,7 @@ impl ToolHandler for TriageEntropyRatingFromEntropyTool {
 
 pub struct TriageEntropySectionNewTool;
 impl TriageEntropySectionNewTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_section_new_path".to_string(),
@@ -78,6 +80,7 @@ impl ToolHandler for TriageEntropySectionNewTool {
 
 pub struct TriageEntropyAnalyzerAnalyzePathTool;
 impl TriageEntropyAnalyzerAnalyzePathTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_analyzer_analyze_path".to_string(),
@@ -105,6 +108,7 @@ impl ToolHandler for TriageEntropyAnalyzerAnalyzePathTool {
 
 pub struct TriageEntropyCategoryLabelTool;
 impl TriageEntropyCategoryLabelTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_category_label".to_string(),
@@ -126,6 +130,7 @@ impl ToolHandler for TriageEntropyCategoryLabelTool {
 
 pub struct TriageEntropyBlockFromSlicePathTool;
 impl TriageEntropyBlockFromSlicePathTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_block_from_slice_path".to_string(),
@@ -156,6 +161,7 @@ impl ToolHandler for TriageEntropyBlockFromSlicePathTool {
 
 pub struct TriageEntropyAnalyzeWithSectionsPathTool;
 impl TriageEntropyAnalyzeWithSectionsPathTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_analyze_with_sections_path".to_string(),
@@ -192,6 +198,7 @@ impl ToolHandler for TriageEntropyAnalyzeWithSectionsPathTool {
 
 pub struct TriageEntropyHistogramChiSquarePathTool;
 impl TriageEntropyHistogramChiSquarePathTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_histogram_chi_square_path".to_string(),
@@ -218,6 +225,7 @@ impl ToolHandler for TriageEntropyHistogramChiSquarePathTool {
 
 pub struct TriageEntropyHistogramMostCommonPathTool;
 impl TriageEntropyHistogramMostCommonPathTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_histogram_most_common_path".to_string(),
@@ -244,6 +252,7 @@ impl ToolHandler for TriageEntropyHistogramMostCommonPathTool {
 
 pub struct TriageEntropyHeatmapAsciiPathTool;
 impl TriageEntropyHeatmapAsciiPathTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_heatmap_ascii_path".to_string(),
@@ -269,6 +278,7 @@ impl ToolHandler for TriageEntropyHeatmapAsciiPathTool {
 
 pub struct TriageEntropyHeatmapRgbColorsPathTool;
 impl TriageEntropyHeatmapRgbColorsPathTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_heatmap_rgb_colors_path".to_string(),
@@ -296,6 +306,7 @@ impl ToolHandler for TriageEntropyHeatmapRgbColorsPathTool {
 
 pub struct TriageEntropyReportHighBlocksPathTool;
 impl TriageEntropyReportHighBlocksPathTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "triage_entropy_report_high_blocks_path".to_string(),
@@ -882,6 +893,7 @@ impl ToolHandler for TriageEntropyAnalyzeBlocksBytesTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TriageEntropyPackingIndicatorsTool::definition(), Box::new(TriageEntropyPackingIndicatorsTool)),

@@ -13,6 +13,7 @@ pub struct TtdRecorderValidateTraceTool;
 
 pub struct TtdRecorderIsValidExtensionTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TtdRecorderPositionStartTool::definition(), Box::new(TtdRecorderPositionStartTool)),

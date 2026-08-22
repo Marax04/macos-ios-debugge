@@ -17,6 +17,7 @@ pub struct TtdPositionEarliestTool;
 
 pub struct TtdTracePositionAsU128Tool;
 impl TtdTracePositionAsU128Tool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_trace_position_as_u128".to_string(),
@@ -38,6 +39,7 @@ impl ToolHandler for TtdTracePositionAsU128Tool {
 
 pub struct TtdTracePositionFromU128Tool;
 impl TtdTracePositionFromU128Tool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_trace_position_from_u128".to_string(),
@@ -59,6 +61,7 @@ impl ToolHandler for TtdTracePositionFromU128Tool {
 
 pub struct TtdTracePositionCompareTool;
 impl TtdTracePositionCompareTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_trace_position_compare".to_string(),
@@ -83,6 +86,7 @@ impl ToolHandler for TtdTracePositionCompareTool {
 
 pub struct TtdMemorySnapshotReadU32Tool;
 impl TtdMemorySnapshotReadU32Tool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_memory_snapshot_read_u32_le".to_string(),
@@ -109,6 +113,7 @@ impl ToolHandler for TtdMemorySnapshotReadU32Tool {
 
 pub struct TtdMemorySnapshotContainsTool;
 impl TtdMemorySnapshotContainsTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_memory_snapshot_contains".to_string(),
@@ -131,6 +136,7 @@ impl ToolHandler for TtdMemorySnapshotContainsTool {
 
 pub struct TtdTraceEventCountTool;
 impl TtdTraceEventCountTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_trace_event_count".to_string(),
@@ -151,6 +157,7 @@ impl ToolHandler for TtdTraceEventCountTool {
 
 pub struct TtdTraceThreadIdsMultiTool;
 impl TtdTraceThreadIdsMultiTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_trace_thread_ids_multi".to_string(),
@@ -171,6 +178,7 @@ impl ToolHandler for TtdTraceThreadIdsMultiTool {
 
 pub struct TtdPositionNextStepTool;
 impl TtdPositionNextStepTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_position_next_step".to_string(),
@@ -192,6 +200,7 @@ impl ToolHandler for TtdPositionNextStepTool {
 
 pub struct TtdPositionNextSequenceTool;
 impl TtdPositionNextSequenceTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_position_next_sequence".to_string(),
@@ -213,6 +222,7 @@ impl ToolHandler for TtdPositionNextSequenceTool {
 
 pub struct TtdPositionInRangeTool;
 impl TtdPositionInRangeTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_position_in_range".to_string(),
@@ -235,6 +245,7 @@ impl ToolHandler for TtdPositionInRangeTool {
 
 pub struct TtdMemorySnapshotReadU64Tool;
 impl TtdMemorySnapshotReadU64Tool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_memory_snapshot_read_u64_le".to_string(),
@@ -261,6 +272,7 @@ impl ToolHandler for TtdMemorySnapshotReadU64Tool {
 
 pub struct TtdMemorySnapshotApplyWriteTool;
 impl TtdMemorySnapshotApplyWriteTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_memory_snapshot_apply_write".to_string(),
@@ -288,6 +300,7 @@ impl ToolHandler for TtdMemorySnapshotApplyWriteTool {
 
 pub struct TtdMemoryRegionContainsTool;
 impl TtdMemoryRegionContainsTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_memory_region_contains".to_string(),
@@ -310,6 +323,7 @@ impl ToolHandler for TtdMemoryRegionContainsTool {
 
 pub struct TtdTraceStatsComputeTool;
 impl TtdTraceStatsComputeTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_trace_stats_compute".to_string(),
@@ -336,6 +350,7 @@ impl ToolHandler for TtdTraceStatsComputeTool {
 
 pub struct TtdMemoryMapFromTraceTool;
 impl TtdMemoryMapFromTraceTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_memory_map_from_trace".to_string(),
@@ -357,6 +372,7 @@ impl ToolHandler for TtdMemoryMapFromTraceTool {
 
 pub struct TtdSyscallSummaryFromTraceTool;
 impl TtdSyscallSummaryFromTraceTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_syscall_summary_from_trace".to_string(),
@@ -378,6 +394,7 @@ impl ToolHandler for TtdSyscallSummaryFromTraceTool {
 
 pub struct TtdTraceExportImportRoundtripTool;
 impl TtdTraceExportImportRoundtripTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_trace_export_import_roundtrip".to_string(),
@@ -400,6 +417,7 @@ impl ToolHandler for TtdTraceExportImportRoundtripTool {
 
 pub struct TtdCallStackFromTraceTool;
 impl TtdCallStackFromTraceTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_call_stack_from_trace".to_string(),
@@ -422,6 +440,7 @@ impl ToolHandler for TtdCallStackFromTraceTool {
 
 pub struct TtdWatchpointFindHitsTool;
 impl TtdWatchpointFindHitsTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_watchpoint_find_hits".to_string(),
@@ -452,6 +471,7 @@ impl ToolHandler for TtdWatchpointFindHitsTool {
 
 pub struct TtdTraceFilterApplyTool;
 impl TtdTraceFilterApplyTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_trace_filter_apply_by_kind".to_string(),
@@ -476,6 +496,7 @@ impl ToolHandler for TtdTraceFilterApplyTool {
 
 pub struct TtdIndexTotalEventCountTool;
 impl TtdIndexTotalEventCountTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ttd_index_total_event_count".to_string(),
@@ -498,6 +519,7 @@ impl ToolHandler for TtdIndexTotalEventCountTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TtdBuildTestTraceTool::definition(), Box::new(TtdBuildTestTraceTool)),

@@ -114,6 +114,7 @@ fn decode_write(v: &Value) -> AnyhowResult<MemoryWrite> {
 // ---------------------------------------------------------------------------
 
 /// Returns the two `debug.*` tools for live invariant tracking.
+#[must_use]
 pub fn handlers_live_invariant() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         // ── Tool 1: offline check against a write log ───────────────────────

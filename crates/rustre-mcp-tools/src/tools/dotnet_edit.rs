@@ -1079,6 +1079,7 @@ impl ToolHandler for DotnetEditNewMethodEncodeSigStaticTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DotnetEditOpcodeByteSizeTool::definition(), Box::new(DotnetEditOpcodeByteSizeTool)),

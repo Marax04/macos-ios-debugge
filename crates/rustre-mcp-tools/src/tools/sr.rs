@@ -203,6 +203,7 @@ pub struct SrReportCriticalIndicatorsV5Tool;
 impl SrReportCriticalIndicatorsV5Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "sandbox_report_critical_indicators_v5".to_string(), description: "SandboxReport::critical_indicators on mock report.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for SrReportCriticalIndicatorsV5Tool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let r = rustre_sandbox_report::SandboxReport::mock(); Ok(ToolResult::text(json!({"critical":r.critical_indicators().len(),"total":r.indicators.len(),"verdict":r.verdict.to_string(),"score":r.score,"family":r.family,"source":"rustre_sandbox_report::SandboxReport::critical_indicators"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SrIocCollectionMockV4Tool::definition(), Box::new(SrIocCollectionMockV4Tool)),

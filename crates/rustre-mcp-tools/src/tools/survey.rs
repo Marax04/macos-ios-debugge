@@ -5,6 +5,7 @@ use rustre_mcp_server::{ToolDefinition, ToolHandler};
 
 pub struct SurveyBinaryTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SurveyBinaryTool::definition(), Box::new(SurveyBinaryTool)),

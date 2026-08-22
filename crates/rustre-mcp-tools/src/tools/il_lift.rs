@@ -1580,6 +1580,7 @@ pub struct IlLiftLiftSessionResetJ30Tool;
 impl IlLiftLiftSessionResetJ30Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "il_lift_lift_session_reset_j30".to_string(), description: "LiftSession::new+total_stats+reset.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for IlLiftLiftSessionResetJ30Tool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let mut s = rustre_il_lift::LiftSession::new("x86_64"); let ts0 = s.total_stats(); s.reset(); let ts1 = s.total_stats(); Ok(ToolResult::text(json!({"total0":ts0.total_instructions,"total1":ts1.total_instructions,"source":"rustre_il_lift::LiftSession::reset"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (IlLiftSupportedArchesTool::definition(), Box::new(IlLiftSupportedArchesTool)),

@@ -76,6 +76,7 @@ pub struct FlirtSigFileParseErrTool;
 impl FlirtSigFileParseErrTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "flirt_sig_file_parse_wire".to_string(), description: "FlirtSigFile::parse.".to_string(), input_schema: json!({"type":"object","properties":{"buf_hex":{"type":"string"}}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for FlirtSigFileParseErrTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let buf_hex = args.get("buf_hex").and_then(Value::as_str).unwrap_or("00"); let bytes = _flirt_hex_to_bytes(buf_hex)?; let r = rustre_flirt::FlirtSigFile::parse(&bytes); Ok(ToolResult::text(json!({"ok":r.is_ok(),"error":r.err().map(|e| e.to_string()),"source":"rustre_flirt::FlirtSigFile::parse"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FlirtCrc16Tool::definition(), Box::new(FlirtCrc16Tool)),

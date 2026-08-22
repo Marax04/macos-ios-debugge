@@ -348,6 +348,7 @@ impl ToolHandler for StabsProviderFromBytesTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (StabsTypeNameForTool::definition(), Box::new(StabsTypeNameForTool)),

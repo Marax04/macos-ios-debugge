@@ -58,6 +58,7 @@ pub struct Arch68kEaKindImmediateDisplayTool;
 impl Arch68kEaKindImmediateDisplayTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "arch68k_eakind_immediate_display".to_string(), description: "Format an immediate-value EA (#$V).".to_string(), input_schema: json!({"type":"object","required":["value"],"properties":{"value":{"type":"integer"}}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for Arch68kEaKindImmediateDisplayTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let v = args.get("value").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'value'".into()))?; let ea = rustre_arch_68k::EaKind::Immediate((v & 0xFFFF_FFFF) as u32); Ok(ToolResult::text(json!({"value":v & 0xFFFF_FFFF,"display":ea.display(),"is_indirect":ea.is_indirect(),"source":"rustre_arch_68k::EaKind::Immediate"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (Arch68kSizeBytesTool::definition(), Box::new(Arch68kSizeBytesTool)),

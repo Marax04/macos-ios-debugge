@@ -7,6 +7,7 @@ pub struct AvrEncodeNopTool;
 
 pub struct AvrEncodeRetTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (AvrEncodeNopTool::definition(), Box::new(AvrEncodeNopTool)),

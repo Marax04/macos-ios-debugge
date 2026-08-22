@@ -9,6 +9,7 @@ pub struct TiOtxSamplePulseTool;
 
 pub struct TiOtxThreatLevelTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TiOtxPulseUrlTool::definition(), Box::new(TiOtxPulseUrlTool)),

@@ -156,6 +156,7 @@ pub struct ThreatintelIocTypeFromKeyTool;
 impl ThreatintelIocTypeFromKeyTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "threatintel_ioc_type_from_key".to_string(), description: "Parse an IoCType from its storage key via IoCType::from_key.".to_string(), input_schema: json!({"type":"object","required":["key"],"properties":{"key":{"type":"string"}}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for ThreatintelIocTypeFromKeyTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let k = args.get("key").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing key".into()))?; let t = rustre_threatintel::IoCType::from_key(k); Ok(ToolResult::text(json!({"key":k,"matched":t.is_some(),"display":t.as_ref().map(std::string::ToString::to_string),"as_str":t.map(|t| t.as_str().to_string()),"source":"rustre_threatintel::IoCType::from_key"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ThreatintelIocTypeDisplayW3Tool::definition(), Box::new(ThreatintelIocTypeDisplayW3Tool)),

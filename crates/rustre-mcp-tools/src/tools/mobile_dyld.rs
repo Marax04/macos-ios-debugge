@@ -105,6 +105,7 @@ pub struct MobileDyldHeaderUuidStringTool;
 impl MobileDyldHeaderUuidStringTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_dyld_header_uuid_string".to_string(), description: "DyldHeader::uuid_string via rustre_mobile_dyld.".to_string(), input_schema: json!({"type":"object","properties":{"uuid":{"type":"array","items":{"type":"integer"}}},"required":["uuid"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for MobileDyldHeaderUuidStringTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let arr = args.get("uuid").and_then(Value::as_array).ok_or_else(|| McpError::InvalidParams("missing 'uuid'".into()))?; if arr.len() != 16 { return Err(McpError::InvalidParams("uuid must have 16 bytes".into())); } let mut u = [0u8;16]; for (i,v) in arr.iter().enumerate() { u[i] = v.as_u64().unwrap_or(0) as u8; } let hdr = rustre_mobile_dyld::DyldHeader { magic: String::new(), mapping_offset:0, mapping_count:0, images_offset:0, images_count:0, dyld_base_address:0, code_sig_offset:0, code_sig_size:0, slide_info_offset:0, slide_info_size:0, uuid: u, platform:0, format_version:0, images_text_offset:0, images_text_count:0, subcache_array_offset:0, subcache_array_count:0 }; Ok(ToolResult::text(json!({"uuid_string": hdr.uuid_string(),"source":"rustre_mobile_dyld::DyldHeader::uuid_string"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MobileDyldHeaderParseTool::definition(), Box::new(MobileDyldHeaderParseTool)),

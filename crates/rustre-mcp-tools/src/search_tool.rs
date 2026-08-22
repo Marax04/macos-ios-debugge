@@ -192,6 +192,7 @@ pub fn pattern_results_to_json(results: &[PatternResult]) -> Value {
 // ─── Core search ─────────────────────────────────────────────────────────────
 
 /// Execute a search on `data`.
+#[must_use]
 pub fn search(input: &SearchInput, data: &[u8]) -> SearchOutput {
     let base = input.effective_base();
     let max_matches = input.effective_max_matches();
@@ -543,6 +544,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 pub struct SearchTool;
 
 impl SearchTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "search_binary".to_owned(),

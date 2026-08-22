@@ -187,6 +187,7 @@ fn query_to_json(q: &NlQuery) -> Value {
 // ---------------------------------------------------------------------------
 
 /// Returns MCP tool handlers for the natural-language debug query front-end.
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     let writes_schema = json!({
         "type": "array",

@@ -9,6 +9,7 @@ pub struct MalpediaBatchLookupTool;
 
 pub struct MalpediaCheckRulesetQualityTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MalpediaTlshDistanceTool::definition(), Box::new(MalpediaTlshDistanceTool)),

@@ -7,6 +7,7 @@ pub struct ArchDexVregTool;
 
 pub struct ArchDexPregTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ArchDexVregTool::definition(), Box::new(ArchDexVregTool)),

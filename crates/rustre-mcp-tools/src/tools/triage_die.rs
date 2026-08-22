@@ -282,6 +282,7 @@ pub struct TriageDieSignatureConfidentOnlyTool;
 impl TriageDieSignatureConfidentOnlyTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "triage_die_signature_confident_only".to_string(), description: "Return only DieMatchResult items where is_confident() is true.".to_string(), input_schema: json!({"type":"object","properties":{"bytes":{"type":"array","items":{"type":"integer"}},"hex":{"type":"string"}}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for TriageDieSignatureConfidentOnlyTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let data = extract_byte_array(&args, "bytes", "hex").unwrap_or_default(); let db = rustre_triage_die::DieSignatureDatabase::new(); let matches = db.scan(&data); let confident: Vec<_> = matches.iter().filter(|m| m.is_confident()).cloned().collect(); Ok(ToolResult::text(json!({"count":confident.len(),"matches":serde_json::to_value(&confident).unwrap_or(Value::Null),"source":"rustre_triage_die::DieMatchResult::is_confident"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TriageDieComputeEntropyTool::definition(), Box::new(TriageDieComputeEntropyTool)),

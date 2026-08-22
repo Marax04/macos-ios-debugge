@@ -35,6 +35,7 @@ pub struct PeRebuildIsMemoryPeWireTool;
 
 pub struct PeRebuildComputeEntropyWireTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (PeXorSectionTool::definition(), Box::new(PeXorSectionTool)),

@@ -364,6 +364,7 @@ impl ToolHandler for FuzzSanCoverageMapSummaryTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FuzzSanParseHexU64Tool::definition(), Box::new(FuzzSanParseHexU64Tool)),

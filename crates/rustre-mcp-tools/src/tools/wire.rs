@@ -11,6 +11,7 @@ pub struct WireEchoStringTool;
 
 pub struct WireStringLenTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (WireBytesLenTool::definition(), Box::new(WireBytesLenTool)),

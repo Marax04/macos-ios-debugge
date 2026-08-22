@@ -521,6 +521,7 @@ pub struct DiffSemJaccardIdenticalTool;
 impl DiffSemJaccardIdenticalTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "diff_semantic_jaccard_identical_wire".to_string(), description: "MinHash::estimate_jaccard on identical signatures.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for DiffSemJaccardIdenticalTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let mh = rustre_diff_semantic::MinHash::new(16); let sig = mh.signature(&[10u64,20,30,40,50]); let j = rustre_diff_semantic::MinHash::estimate_jaccard(&sig, &sig); Ok(ToolResult::text(json!({"jaccard":j,"len":sig.len(),"source":"rustre_diff_semantic::MinHash::estimate_jaccard"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DiffBindiffCfgHashLinearTool::definition(), Box::new(DiffBindiffCfgHashLinearTool)),

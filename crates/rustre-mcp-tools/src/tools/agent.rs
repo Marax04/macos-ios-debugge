@@ -1706,6 +1706,7 @@ impl ToolHandler for AgentObservationBuildTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (AgentShannonEntropyTool::definition(), Box::new(AgentShannonEntropyTool)),

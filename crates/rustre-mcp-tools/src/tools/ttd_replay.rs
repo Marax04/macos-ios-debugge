@@ -346,6 +346,7 @@ impl ToolHandler for TtdReplayEngineStateDbBreakpointsTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TtdReplayBuildCallGraphTool::definition(), Box::new(TtdReplayBuildCallGraphTool)),

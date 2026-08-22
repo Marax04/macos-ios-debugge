@@ -199,6 +199,7 @@ impl ToolHandler for SymbolsPdbSymbolServerMsdlTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SymbolsPdbParseInfoTool::definition(), Box::new(SymbolsPdbParseInfoTool)),

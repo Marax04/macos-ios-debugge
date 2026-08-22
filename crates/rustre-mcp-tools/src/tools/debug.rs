@@ -875,6 +875,7 @@ fn eval_on_session(sess: &LiveSession, expr: &str) -> AnyhowResult<u64> {
 // handlers() — returns all debug.* tool entries for the live MCP server
 // ---------------------------------------------------------------------------
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
 
     let mut v = vec![
@@ -4628,7 +4629,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
             let show_live = args.get("show_live")
                 .and_then(Value::as_bool).unwrap_or(true);
             let ntdll_base = args.get("ntdll_base")
-                .and_then(|v| coerce_u64(v));
+                .and_then(coerce_u64);
 
             // The tracker state is session-local; in a real wiring the
             // LiveSession would hold a HeapTrackerHandle and breakpoint hooks

@@ -418,6 +418,7 @@ impl ToolHandler for FuzzNetCrashKindLabelTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FuzzNetXorChecksumTool::definition(), Box::new(FuzzNetXorChecksumTool)),

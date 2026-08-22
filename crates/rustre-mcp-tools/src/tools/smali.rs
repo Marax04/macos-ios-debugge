@@ -7,6 +7,7 @@ pub struct SmaliRegDisplayTool;
 
 pub struct SmaliOpcodeToMnemonicTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SmaliRegDisplayTool::definition(), Box::new(SmaliRegDisplayTool)),

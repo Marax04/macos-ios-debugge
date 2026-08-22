@@ -13,6 +13,7 @@ pub struct IadlAnalyzeBinaryForProtectionsTool;
 
 pub struct IadlComputeHashTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (IadlConvergenceMovingAverageTool::definition(), Box::new(IadlConvergenceMovingAverageTool)),

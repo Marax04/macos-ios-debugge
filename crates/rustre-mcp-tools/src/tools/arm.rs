@@ -7,6 +7,7 @@ pub struct ArmSregNameTool;
 
 pub struct ArmDregNameTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ArmSregNameTool::definition(), Box::new(ArmSregNameTool)),

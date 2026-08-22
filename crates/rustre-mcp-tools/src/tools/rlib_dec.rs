@@ -242,6 +242,7 @@ pub struct RlibDecResultErrorsTool;
 impl RlibDecResultErrorsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "rlib_dec_result_errors".to_string(), description: "DecompilerResult::new+add_diagnostic+errors+has_errors+total_lines.".to_string(), input_schema: json!({"type":"object","properties":{"msg":{"type":"string"}},"required":["msg"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for RlibDecResultErrorsTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let msg = args.get("msg").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'msg'".into()))?; let mut r = rustre_decompiler::DecompilerResult::new(vec![rustre_decompiler::DecompiledFunction::new(0x1000, "f", "line1\nline2")], rustre_decompiler::DecompStats::default(), 0); r.add_diagnostic(rustre_decompiler::DecompilerDiagnostic::error(msg)); r.add_diagnostic(rustre_decompiler::DecompilerDiagnostic::warning(msg)); Ok(ToolResult::text(json!({"errors":r.errors().len(),"has_errors":r.has_errors(),"total_lines":r.total_lines(),"source":"rustre_decompiler::DecompilerResult"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (RlibDecSymbolMapOpsTool::definition(), Box::new(RlibDecSymbolMapOpsTool)),

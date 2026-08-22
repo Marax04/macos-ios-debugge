@@ -333,6 +333,7 @@ pub struct SyscallsBuilderBuildOpenV2Tool;
 impl SyscallsBuilderBuildOpenV2Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "syscalls_builder_build_open_v2".to_string(), description: "Build 'open' via SyscallBuilder and report prototype/input_arg_count/has_output_args.".to_string(), input_schema: json!({"type":"object"}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for SyscallsBuilderBuildOpenV2Tool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_syscalls::{SyscallBuilder, OsFamily, SyscallArch, SyscallType, ArgDirection, SyscallCategory, RiskLevel}; let s = SyscallBuilder::new(2, "open", OsFamily::Linux, SyscallArch::X86_64).arg("path", SyscallType::String, ArgDirection::In).arg("flags", SyscallType::Int, ArgDirection::In).opt_arg("mode", SyscallType::Mode, ArgDirection::In).returns(SyscallType::Fd).category(SyscallCategory::FileSystem).risk(RiskLevel::Low).alias("open64").build(); Ok(ToolResult::text(json!({"name":s.name,"number":s.number,"prototype":s.prototype(),"input_arg_count":s.input_arg_count(),"has_output_args":s.has_output_args(),"aliases":s.aliases,"source":"rustre_syscalls::SyscallBuilder::build"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SyscallsCategorizeByNameTool::definition(), Box::new(SyscallsCategorizeByNameTool)),

@@ -117,6 +117,7 @@ pub struct ThreatintelIndicatorGetByIdTool;
 
 pub struct ThreatintelIndicatorDbLookupTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ThreatintelIndicatorLookupTool::definition(), Box::new(ThreatintelIndicatorLookupTool)),

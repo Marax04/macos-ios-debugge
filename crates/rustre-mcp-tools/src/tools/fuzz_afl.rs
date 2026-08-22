@@ -501,6 +501,7 @@ impl ToolHandler for FuzzAflBucketTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FuzzAflDictLoadTool::definition(), Box::new(FuzzAflDictLoadTool)),

@@ -113,6 +113,7 @@ pub struct ForensicsMemThreadStateFromU8Tool;
 
 pub struct ForensicsMemConnectionStateFromU8Tool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ForensicsMemScanPeHeadersTool::definition(), Box::new(ForensicsMemScanPeHeadersTool)),

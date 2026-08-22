@@ -7,6 +7,7 @@ pub struct MipsEncodeNopTool;
 
 pub struct MipsGprNameTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MipsEncodeNopTool::definition(), Box::new(MipsEncodeNopTool)),

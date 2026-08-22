@@ -115,6 +115,7 @@ impl ToolHandler for ArchX86CallingConventionsTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ArchX86DisassembleAndLiftTool::definition(), Box::new(ArchX86DisassembleAndLiftTool)),

@@ -796,6 +796,7 @@ impl ToolHandler for NetProxySharedStatsOpsTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (NetProxyHttpRequestLineParseTool::definition(), Box::new(NetProxyHttpRequestLineParseTool)),

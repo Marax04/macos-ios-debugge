@@ -338,6 +338,7 @@ impl RlibDec2DiagnosticFromPassTool { #[must_use] pub fn definition() -> ToolDef
     Ok(ToolResult::text(json!({"error_msg":e.message,"warn_msg":w.message,"source":"rustre_decompiler::DecompilerDiagnostic"}).to_string()))
 } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (RlibDec2VariableNewTool::definition(), Box::new(RlibDec2VariableNewTool)),

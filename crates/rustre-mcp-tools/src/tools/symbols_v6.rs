@@ -45,6 +45,7 @@ pub struct SymbolsV6DemangleAllTableTool;
 impl SymbolsV6DemangleAllTableTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "symbols_v6_demangle_all_table".to_string(), description: "Apply demangle_all to a UnifiedSymbolTable built from names.".to_string(), input_schema: json!({"type":"object","properties":{"names":{"type":"array","items":{"type":"string"}}},"required":["names"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for SymbolsV6DemangleAllTableTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let names = args.get("names").and_then(Value::as_array).ok_or_else(|| McpError::InvalidParams("missing 'names'".into()))?; let mut t = rustre_symbols::UnifiedSymbolTable::new(); for (i, v) in names.iter().enumerate() { if let Some(n) = v.as_str() { t.add(rustre_symbols::UnifiedSymbol::new(n.to_string(), (i as u64) * 0x10 + 0x1000, rustre_symbols::SymbolKind::Function, rustre_symbols::SymbolSource::Elf)); } } rustre_symbols::demangle_all(&mut t); let demangled: Vec<(String, Option<String>)> = t.iter_by_address().map(|s| (s.name.clone(), s.demangled_name.clone())).collect(); let ln = t.len(); Ok(ToolResult::text(json!({"results": demangled, "len": ln, "source":"rustre_symbols::demangle_all"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SymbolsV6SourcePriorityAllTool::definition(), Box::new(SymbolsV6SourcePriorityAllTool)),

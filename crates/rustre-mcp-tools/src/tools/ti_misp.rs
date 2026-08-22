@@ -750,6 +750,7 @@ pub struct TiMispAttributeFullIocTypeV4Tool;
 impl TiMispAttributeFullIocTypeV4Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "ti_misp_attribute_full_ioc_type_v4".to_string(), description: "Build MispAttributeFull::new and return whether as_ioc_type resolves.".to_string(), input_schema: json!({"type":"object","properties":{"type_attribute":{"type":"string"},"value":{"type":"string"}}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for TiMispAttributeFullIocTypeV4Tool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let ty = args.get("type_attribute").and_then(Value::as_str).unwrap_or("md5").to_string(); let val = args.get("value").and_then(Value::as_str).unwrap_or("d41d8cd98f00b204e9800998ecf8427e").to_string(); let a = rustre_ti_misp::MispAttributeFull::new(1, ty, val); let ioc = a.as_ioc_type().map(|t| format!("{:?}", t)); Ok(ToolResult::text(json!({"type_attribute":a.type_,"ioc_type":ioc,"has_ioc":a.as_ioc_type().is_some(),"source":"rustre_ti_misp::MispAttributeFull::as_ioc_type"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TiMispParseAttributeTypeTool::definition(), Box::new(TiMispParseAttributeTypeTool)),

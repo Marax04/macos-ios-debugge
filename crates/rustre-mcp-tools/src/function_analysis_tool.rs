@@ -197,6 +197,7 @@ pub fn cfg_to_json(blocks: &[BasicBlock]) -> Value {
 // ─── Core analysis ────────────────────────────────────────────────────────────
 
 /// Analyse the function body in `data`.
+#[must_use]
 pub fn analyse_function(
     data: &[u8],
     base_address: u64,
@@ -502,6 +503,7 @@ fn check_epilogue(data: &[u8], _bitness: u32) -> bool {
 pub struct FunctionAnalysisTool;
 
 impl FunctionAnalysisTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "analyze_function".to_owned(),

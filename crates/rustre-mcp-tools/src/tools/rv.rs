@@ -7,6 +7,7 @@ pub struct RvBrev8_32Tool;
 
 pub struct RvCClassifyTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (RvBrev8_32Tool::definition(), Box::new(RvBrev8_32Tool)),

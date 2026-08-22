@@ -1103,6 +1103,7 @@ pub struct AdbFilterByLevelCountTool;
 impl AdbFilterByLevelCountTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adb_filter_by_level_count".to_string(), description: "Parse logcat and return counts at/above each severity via rustre_adb::filter_by_level.".to_string(), input_schema: json!({"type":"object","required":["output"],"properties":{"output":{"type":"string"}}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for AdbFilterByLevelCountTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let out = args.get("output").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'output'".into()))?; let entries = rustre_adb::parse_logcat_output(out); use rustre_adb::LogLevel::*; let count = |lvl: &rustre_adb::LogLevel| rustre_adb::filter_by_level(&entries, lvl).len(); Ok(ToolResult::text(json!({"total":entries.len(),"info_plus":count(&Info),"warning_plus":count(&Warning),"error_plus":count(&Error),"source":"rustre_adb::filter_by_level"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (AdbComputeCrc32Tool::definition(), Box::new(AdbComputeCrc32Tool)),

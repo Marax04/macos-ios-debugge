@@ -838,6 +838,7 @@ impl ToolHandler for SymbEngineStateMergerHashConstraintsTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SymbEngineWidenSequenceCheckTool::definition(), Box::new(SymbEngineWidenSequenceCheckTool)),

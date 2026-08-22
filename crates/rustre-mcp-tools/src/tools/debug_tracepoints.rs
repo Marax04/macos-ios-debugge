@@ -198,6 +198,7 @@ fn parse_context(v: Option<&Value>) -> MapEvalContext {
 // handlers_tracepoints() — debug.* tools for the "tracepoints" capability
 // ---------------------------------------------------------------------------
 
+#[must_use]
 pub fn handlers_tracepoints() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     let operand_schema = json!({
         "type": "object",

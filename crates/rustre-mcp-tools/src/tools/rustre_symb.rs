@@ -474,6 +474,7 @@ impl ToolHandler for RustreSymbV2SymexprIteTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (RustreSymbBvConstTool::definition(), Box::new(RustreSymbBvConstTool)),

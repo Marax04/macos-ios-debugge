@@ -121,6 +121,7 @@ impl HexTplYTemplateReportTool { #[must_use] pub fn definition() -> ToolDefiniti
 #[async_trait]
 impl ToolHandler for HexTplYTemplateReportTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let n = args.get("name").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("name".into()))?; let bytes = args_to_bytes(&args)?; let mut m = rustre_hex_template::builtin_templates(); let t = m.remove(n).ok_or_else(|| McpError::InvalidParams(format!("no template {n}")))?; let buf = rustre_hex::HexBuffer::new(bytes); let r = rustre_hex_template::TemplateApplier::new(&buf).apply(&t, 0).map_err(|e| McpError::InternalError(e.to_string()))?; let rep = rustre_hex_template::TemplateReport::build(&t, &r, "wire"); Ok(ToolResult::text(json!({"template_name": rep.template_name, "source_name": rep.source, "field_count": rep.field_count, "total_size": rep.total_size, "source":"rustre_hex_template::TemplateReport::build"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (HexTplXBuiltinCountTool::definition(), Box::new(HexTplXBuiltinCountTool)),

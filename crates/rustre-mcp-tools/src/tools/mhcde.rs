@@ -9,6 +9,7 @@ pub struct MhcdeJunkCodeDetectTool;
 
 pub struct MhcdeOrchestratorAnalyzeTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MhcdeOpaquePredicateDetectTool::definition(), Box::new(MhcdeOpaquePredicateDetectTool)),

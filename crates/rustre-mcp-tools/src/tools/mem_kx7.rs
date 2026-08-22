@@ -134,6 +134,7 @@ pub struct MemKx7BytePatternValidTool;
 impl MemKx7BytePatternValidTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mem_kx7_bytepattern_valid".to_string(), description: "Check whether rustre_mem::BytePattern::parse accepts a string.".to_string(), input_schema: json!({"type":"object","required":["pattern"],"properties":{"pattern":{"type":"string"}}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for MemKx7BytePatternValidTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let p = args.get("pattern").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'pattern'".into()))?; let r = rustre_mem::BytePattern::parse(p); Ok(ToolResult::text(json!({"valid":r.is_ok(),"error":r.as_ref().err().cloned(),"source":"rustre_mem::BytePattern::parse"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MemKx7ShannonEntropyHexTool::definition(), Box::new(MemKx7ShannonEntropyHexTool)),

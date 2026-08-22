@@ -23,6 +23,7 @@ pub struct IlPassesPassStatsNewTool;
 
 pub struct IlPassesPassContextNewTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (IlPassesCountInstrsTool::definition(), Box::new(IlPassesCountInstrsTool)),

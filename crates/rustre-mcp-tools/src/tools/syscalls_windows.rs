@@ -41,6 +41,7 @@ pub struct SyscallsWindowsFormatNtstatusWireV3Tool;
 
 pub struct SyscallsWindowsIsSystemPathWireV2Tool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SyscallsWindowsFormatNtstatusWireV2Tool::definition(), Box::new(SyscallsWindowsFormatNtstatusWireV2Tool)),

@@ -483,6 +483,7 @@ impl ToolHandler for ScriptLuaContextOutputTextTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ScriptLuaCastsU64ToI64Tool::definition(), Box::new(ScriptLuaCastsU64ToI64Tool)),

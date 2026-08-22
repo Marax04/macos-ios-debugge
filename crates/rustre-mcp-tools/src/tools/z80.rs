@@ -11,6 +11,7 @@ pub struct Z80EncodeRetTool;
 
 pub struct Z80EncodeEiTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (Z80EncodeNopTool::definition(), Box::new(Z80EncodeNopTool)),

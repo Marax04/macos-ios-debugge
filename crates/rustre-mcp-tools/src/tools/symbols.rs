@@ -277,6 +277,7 @@ impl ToolHandler for SymbolsTryDemangleTopTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SymbolsDiscoverPdbForBinaryTool::definition(), Box::new(SymbolsDiscoverPdbForBinaryTool)),

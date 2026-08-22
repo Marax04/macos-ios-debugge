@@ -75,6 +75,7 @@ fn make_tool(
 // ---------------------------------------------------------------------------
 
 /// Returns the `debug.causal_contribution_rank` tool.
+#[must_use]
 pub fn handlers_causal_contribution() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![make_tool(
         "debug.causal_contribution_rank",

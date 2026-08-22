@@ -268,6 +268,7 @@ pub struct ForensicsFsPrefetchFileLoadedModulesTool;
 impl ForensicsFsPrefetchFileLoadedModulesTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "forensics_fs_prefetch_file_loaded_modules".to_string(), description: "Parse a Prefetch file and return PrefetchFile::loaded_modules list plus summary text.".to_string(), input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"data":{}},"required":["path"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for ForensicsFsPrefetchFileLoadedModulesTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let (path, data) = read_path_or_data(&args)?; let pf = rustre_forensics_fs::prefetch_analyzer::PrefetchFile::parse(&data).map_err(|e| McpError::InternalError(format!("prefetch parse: {e}")))?; let mods: Vec<String> = pf.loaded_modules().into_iter().map(str::to_string).collect(); Ok(ToolResult::text(json!({"path":path,"loaded_modules":mods,"count":pf.file_metrics.len(),"summary":pf.summary(),"source":"rustre_forensics_fs::prefetch_analyzer::PrefetchFile::loaded_modules"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ForensicsFsPrefetchParseTool::definition(), Box::new(ForensicsFsPrefetchParseTool)),

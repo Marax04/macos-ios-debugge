@@ -249,6 +249,7 @@ impl ToolHandler for FuzzStatsCrashRateTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FuzzFnv1aTool::definition(), Box::new(FuzzFnv1aTool)),

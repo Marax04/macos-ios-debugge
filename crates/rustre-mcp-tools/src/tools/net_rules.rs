@@ -393,6 +393,7 @@ impl ToolHandler for NetRulesProtoDisplayTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (NetRulesFindBytesNocaseTool::definition(), Box::new(NetRulesFindBytesNocaseTool)),

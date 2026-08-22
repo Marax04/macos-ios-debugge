@@ -7,6 +7,7 @@ pub struct FirmwareDetectKindV2Tool;
 
 pub struct FirmwareScanEmbeddedSignaturesTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FirmwareDetectKindV2Tool::definition(), Box::new(FirmwareDetectKindV2Tool)),

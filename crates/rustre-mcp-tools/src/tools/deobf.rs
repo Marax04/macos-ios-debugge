@@ -1038,6 +1038,7 @@ pub struct DeobfSmcStatsFromRegionsTool;
 impl DeobfSmcStatsFromRegionsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "deobf_smc_stats_from_regions".to_string(), description: "Aggregate stats via rustre_deobf_smc::SmcStats::from_regions after detection.".to_string(), input_schema: json!({"type":"object","properties":{"hex":{"type":"string"}},"required":["hex"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for DeobfSmcStatsFromRegionsTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let s: String = args.get("hex").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'hex'".into()))?.chars().filter(|c| !c.is_whitespace()).collect(); let data: Vec<u8> = (0..s.len()).step_by(2).filter_map(|i| u8::from_str_radix(s.get(i..i+2)?, 16).ok()).collect(); let regions = rustre_deobf_smc::SmcDetector::new().detect(&data); let stats = rustre_deobf_smc::SmcStats::from_regions(&regions); Ok(ToolResult::text(json!({"regions_detected":stats.regions_detected,"regions_decrypted":stats.regions_decrypted,"bytes_decrypted":stats.bytes_decrypted,"xor_count":stats.xor_count,"add_count":stats.add_count,"rol_count":stats.rol_count,"rolling_count":stats.rolling_count,"derived_key_count":stats.derived_key_count,"source":"rustre_deobf_smc::XorChain::encrypt"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DeobfCrc32ChecksumTool::definition(), Box::new(DeobfCrc32ChecksumTool)),

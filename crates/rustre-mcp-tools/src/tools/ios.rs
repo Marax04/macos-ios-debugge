@@ -95,6 +95,7 @@ impl IosIpaBundleMockTool { #[must_use] pub fn definition() -> ToolDefinition { 
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (IosScanObjcSelectorsPathTool::definition(), Box::new(IosScanObjcSelectorsPathTool)),

@@ -53,6 +53,7 @@ pub struct MobileApktoolInstallFrameworkTool;
 impl MobileApktoolInstallFrameworkTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_apktool_install_framework".to_string(), description: "ApktoolRunnerImpl::install_framework validation.".to_string(), input_schema: json!({"type":"object","properties":{"apk_path":{"type":"string"}},"required":["apk_path"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for MobileApktoolInstallFrameworkTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let p = args.get("apk_path").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'apk_path'".into()))?; let cfg = rustre_mobile_apktool::ApktoolConfig::new("apktool", "out"); let r = rustre_mobile_apktool::ApktoolRunnerImpl::new(cfg); let ok = r.install_framework(p).is_ok(); Ok(ToolResult::text(json!({"ok":ok,"source":"rustre_mobile_apktool::ApktoolRunnerImpl::install_framework"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MobileApktoolFindTool::definition(), Box::new(MobileApktoolFindTool)),

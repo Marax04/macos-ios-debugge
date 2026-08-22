@@ -22,6 +22,7 @@ impl TracePtFlowEventCountTool { #[must_use] pub fn definition() -> ToolDefiniti
 #[async_trait]
 impl ToolHandler for TracePtFlowEventCountTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let flow = rustre_trace_pt::PtFlow::new(); Ok(ToolResult::text(json!({ "event_count": flow.event_count(), "source": "rustre_trace_pt::PtFlow::event_count" }).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TracePtDecodeBufferTool::definition(), Box::new(TracePtDecodeBufferTool)),

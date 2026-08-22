@@ -31,6 +31,7 @@ pub struct PatchPatchXorRegionAtVaTool;
 
 pub struct PatchBuildDeltaTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (PatchPeSecuritySummaryTool::definition(), Box::new(PatchPeSecuritySummaryTool)),

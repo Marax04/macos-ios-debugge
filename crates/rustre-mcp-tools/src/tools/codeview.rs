@@ -375,6 +375,7 @@ impl ToolHandler for CodeviewSymbolStreamCountTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (CodeviewParseSymbolsTool::definition(), Box::new(CodeviewParseSymbolsTool)),

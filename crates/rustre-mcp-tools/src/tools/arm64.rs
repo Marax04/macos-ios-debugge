@@ -7,6 +7,7 @@ pub struct Arm64AlignUpTool;
 
 pub struct Arm64AlignDownTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (Arm64AlignUpTool::definition(), Box::new(Arm64AlignUpTool)),

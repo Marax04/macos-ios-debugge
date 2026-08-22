@@ -49,6 +49,7 @@ pub struct AdfTraceCalleesForwardSimpleTool;
 impl AdfTraceCalleesForwardSimpleTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "adf_trace_callees_forward_simple".to_string(), description: "trace_callees_forward.".to_string(), input_schema: json!({"type":"object","properties":{"addr":{"type":"integer"},"hops":{"type":"integer"},"edges":{"type":"array"}},"required":["addr","edges"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for AdfTraceCalleesForwardSimpleTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let addr = args.get("addr").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'addr'".into()))?; let hops = args.get("hops").and_then(Value::as_u64).unwrap_or(4) as usize; let edges_arr = args.get("edges").and_then(Value::as_array).ok_or_else(|| McpError::InvalidParams("missing 'edges'".into()))?; let edges: Vec<(u64, u64)> = edges_arr.iter().filter_map(|v| { let a = v.as_array()?; Some((a.first()?.as_u64()?, a.get(1)?.as_u64()?)) }).collect(); let t = rustre_analysis_dataflow::trace_callees_forward(addr, hops, &edges); Ok(ToolResult::text(json!({"source_addr":addr,"hops":hops,"node_count":t.total,"source":"rustre_analysis_dataflow::trace_callees_forward"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (AdfLatticeValueMeetTopTool::definition(), Box::new(AdfLatticeValueMeetTopTool)),

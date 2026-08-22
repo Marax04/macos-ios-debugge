@@ -5,6 +5,7 @@ use rustre_mcp_server::{ToolDefinition, ToolHandler};
 
 pub struct StackFrameReportAsyncTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (StackFrameReportAsyncTool::definition(), Box::new(StackFrameReportAsyncTool)),

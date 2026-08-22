@@ -130,6 +130,7 @@ pub struct ThreatintelGroupTrackerKnownCountTool;
 
 pub struct ThreatintelGroupTrackerSearchTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ThreatintelGroupSearchTool::definition(), Box::new(ThreatintelGroupSearchTool)),

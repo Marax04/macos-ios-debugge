@@ -254,6 +254,7 @@ impl ToolHandler for DecompilerExprReferencedVarsTool {
 
 // ── registration ──────────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DecompilerExprSimplifTool::definition(), Box::new(DecompilerExprSimplifTool)),

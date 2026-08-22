@@ -850,6 +850,7 @@ impl ToolHandler for DotnetMetadataMethodDefByIndexTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DotnetMetadataParseFieldSigBlobTool::definition(), Box::new(DotnetMetadataParseFieldSigBlobTool)),

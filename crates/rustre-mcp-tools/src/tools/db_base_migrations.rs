@@ -35,6 +35,7 @@ pub struct DbBaseMigrationsLargestUpSqlTool;
 
 pub struct DbBaseMigrationsHasVersionTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DbBaseMigrationsCountTool::definition(), Box::new(DbBaseMigrationsCountTool)),

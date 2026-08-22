@@ -344,6 +344,7 @@ impl AnalysisFnArm64CallsTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FunctionListByKindTool::definition(), Box::new(FunctionListByKindTool)),

@@ -66,6 +66,7 @@ impl AxrGraphTopoSortTool { #[must_use] pub fn definition() -> ToolDefinition { 
 #[async_trait]
 impl ToolHandler for AxrGraphTopoSortTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let db = axr_build_db_from_calls(&args); let g = rustre_analysis_xref::XrefGraph::call_graph(&db); let order = g.topological_sort().map(|v| v.into_iter().map(|a| a.as_u64()).collect::<Vec<_>>()); Ok(ToolResult::text(json!({"order": order}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (AxrDbCallersOfTool::definition(), Box::new(AxrDbCallersOfTool)),

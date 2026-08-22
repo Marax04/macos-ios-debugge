@@ -7,6 +7,7 @@ pub struct HexViewFormatHexDumpTool;
 
 pub struct HexViewFormatHexDumpAnsiTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (HexViewFormatHexDumpTool::definition(), Box::new(HexViewFormatHexDumpTool)),

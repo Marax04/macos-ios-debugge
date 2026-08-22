@@ -162,6 +162,7 @@ tools/debug.rs, which this self-contained tool cannot reach.";
 // ---------------------------------------------------------------------------
 
 /// Return the debug.* tools implementing the "dataflow-dsl-query" capability.
+#[must_use]
 pub fn handlers_dataflow_dsl_query() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![make_tool(
         "debug.dataflow_query",

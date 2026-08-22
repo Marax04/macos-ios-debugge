@@ -141,6 +141,7 @@ pub struct CryptoIdAesRconTool;
 
 pub struct CryptoIdCrc32PolyTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (CryptoIdFunctionPatternScanTool::definition(), Box::new(CryptoIdFunctionPatternScanTool)),

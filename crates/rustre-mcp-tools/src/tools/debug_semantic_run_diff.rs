@@ -98,6 +98,7 @@ const WRITE_ITEM_SCHEMA: &str = r#"{"type":"object","properties":{"sequence":{"t
 // ---------------------------------------------------------------------------
 
 /// Returns the two `debug.*` tools for semantic run diffing.
+#[must_use]
 pub fn handlers_semantic_run_diff() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     let write_schema: Value = serde_json::from_str(WRITE_ITEM_SCHEMA).unwrap_or(json!({"type":"object"}));
 

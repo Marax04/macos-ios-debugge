@@ -7,6 +7,7 @@ pub struct ArchCilDecodeCompressedUintTool;
 
 pub struct ArchCilMaxLocalSlotTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ArchCilDecodeCompressedUintTool::definition(), Box::new(ArchCilDecodeCompressedUintTool)),

@@ -7,6 +7,7 @@ pub struct LuajitInstrOpTool;
 
 pub struct LuajitInstrATool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (LuajitInstrOpTool::definition(), Box::new(LuajitInstrOpTool)),

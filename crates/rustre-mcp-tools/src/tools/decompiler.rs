@@ -248,6 +248,7 @@ pub struct DecompilerCacheInsertGetDcx1Tool;
 impl DecompilerCacheInsertGetDcx1Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "decomp_cache_insert_get_dcx1".to_string(), description: "DecompilerCache insert+get+hit/miss+hit_rate via rustre_decompiler::DecompilerCache.".to_string(), input_schema: json!({"type":"object","properties":{"addr":{"type":"integer"}}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for DecompilerCacheInsertGetDcx1Tool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let addr = args.get("addr").and_then(Value::as_u64).unwrap_or(0x1000); let mut c = rustre_decompiler::DecompilerCache::new(4); let f = rustre_decompiler::DecompiledFunction::new(addr, "sub_x", "return 0;\n"); c.insert(f); let hit = c.get(addr).is_some(); let miss = c.get(addr.wrapping_add(1)).is_some(); Ok(ToolResult::text(json!({"len":c.len(),"is_empty":c.is_empty(),"hit":hit,"miss_lookup":miss,"hit_count":c.hit_count(),"miss_count":c.miss_count(),"hit_rate":c.hit_rate(),"source":"rustre_decompiler::DecompilerCache"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DecompilerCoreBatchDecompileTool::definition(), Box::new(DecompilerCoreBatchDecompileTool)),

@@ -645,6 +645,7 @@ impl ToolHandler for SandboxReportIndicatorsByCategoryTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SandboxReportMockSummaryTool::definition(), Box::new(SandboxReportMockSummaryTool)),

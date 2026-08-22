@@ -880,6 +880,7 @@ impl ToolHandler for TiMalpediaClientSearchQueryExecTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TiMalpediaNormalizeFamilyNameTool::definition(), Box::new(TiMalpediaNormalizeFamilyNameTool)),

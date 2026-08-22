@@ -272,6 +272,7 @@ impl ToolHandler for Decomp2AnnotationCategoryTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (Decomp2SymbolMapInsertLookupTool::definition(), Box::new(Decomp2SymbolMapInsertLookupTool)),

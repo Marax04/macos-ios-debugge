@@ -129,6 +129,7 @@ fn ctx_from_regs(args: &Value) -> (MapEvalContext, bool) {
 // "conditional-breakpoints" capability.
 // ---------------------------------------------------------------------------
 
+#[must_use]
 pub fn handlers_conditional_breakpoints() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         // ── debug.set_conditional_breakpoint ────────────────────────────────

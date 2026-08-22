@@ -609,6 +609,7 @@ fn detect_packers_detailed(data: &[u8]) -> Vec<(&'static str, bool, usize)> {
 /// Exposed rather than folded into [`detect_packers_detailed`]: the two answer
 /// different questions, and collapsing them would force every caller that only
 /// wants names to also reason about `strong` and the match offset.
+#[must_use]
 pub fn detect_packers(data: &[u8]) -> Vec<String> {
     let mut found: Vec<String> = Vec::with_capacity(PACKER_SIGS.len());
     for sig in PACKER_SIGS {

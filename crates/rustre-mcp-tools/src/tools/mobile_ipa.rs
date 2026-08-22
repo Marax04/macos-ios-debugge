@@ -117,6 +117,7 @@ pub struct MobileIpaEntitlementsFromPlistTool;
 impl MobileIpaEntitlementsFromPlistTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_entitlements_from_plist".to_string(), description: "Entitlements::from_plist on hex bytes.".to_string(), input_schema: json!({"type":"object","properties":{"hex":{"type":"string"}},"required":["hex"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for MobileIpaEntitlementsFromPlistTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let hex = args.get("hex").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'hex'".into()))?; let bytes = __ipa_hex_decode(hex)?; match rustre_mobile_ipa::Entitlements::from_plist(&bytes) { Ok(e) => Ok(ToolResult::text(json!({"entitlements":e,"source":"rustre_mobile_ipa::Entitlements::from_plist"}).to_string())), Err(e) => Ok(ToolResult::text(json!({"error":e.to_string()}).to_string())) } } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MobileIpaIsBinaryPlistTool::definition(), Box::new(MobileIpaIsBinaryPlistTool)),

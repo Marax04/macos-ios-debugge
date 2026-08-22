@@ -794,6 +794,7 @@ impl ArchWasmLimitsHasMaxTool { #[must_use] pub fn definition() -> ToolDefinitio
 #[async_trait]
 impl ToolHandler for ArchWasmLimitsHasMaxTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let (min_only, n1) = rustre_arch_wasm::WasmLimits::decode(&[0x00, 0x04]).map_err(|e| McpError::InternalError(e.to_string()))?; let (min_max, n2) = rustre_arch_wasm::WasmLimits::decode(&[0x01, 0x02, 0x10]).map_err(|e| McpError::InternalError(e.to_string()))?; Ok(ToolResult::text(json!({"min_only_min": min_only.min, "min_only_max": min_only.max, "min_only_bytes": n1, "min_max_min": min_max.min, "min_max_max": min_max.max, "min_max_bytes": n2, "source": "rustre_arch_wasm::WasmLimits::decode"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ArchWasmValueTypeFromByteTool::definition(), Box::new(ArchWasmValueTypeFromByteTool)),

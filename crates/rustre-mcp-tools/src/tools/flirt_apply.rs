@@ -280,6 +280,7 @@ impl ToolHandler for FlirtApplyResolveRenamesWireTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FlirtApplyAutoTool::definition(), Box::new(FlirtApplyAutoTool)),

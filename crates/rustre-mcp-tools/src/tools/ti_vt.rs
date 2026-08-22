@@ -210,6 +210,7 @@ impl TiVtScoringWeightsAvHeavyTool { #[must_use] pub fn definition() -> ToolDefi
 #[async_trait]
 impl ToolHandler for TiVtScoringWeightsAvHeavyTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let w = rustre_ti_vt::threat_score::ScoringWeights::av_heavy(); Ok(ToolResult::text(json!({"detection_weight": w.detection_weight, "community_weight": w.community_weight, "sandbox_weight": w.sandbox_weight, "file_type_weight": w.file_type_weight, "age_weight": w.age_weight, "threat_intel_weight": w.threat_intel_weight, "is_valid": w.is_valid()}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TiVtMockFileReportTool::definition(), Box::new(TiVtMockFileReportTool)),

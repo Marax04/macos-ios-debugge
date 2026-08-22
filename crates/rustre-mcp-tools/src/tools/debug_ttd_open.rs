@@ -56,6 +56,7 @@ fn state_json(state: &TtdState) -> Value {
 pub struct DebugTtdOpenTool;
 
 impl DebugTtdOpenTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "debug.ttd_open".to_string(),
@@ -123,6 +124,7 @@ impl ToolHandler for DebugTtdOpenTool {
 pub struct DebugTtdSeekTool;
 
 impl DebugTtdSeekTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "debug.ttd_replay_seek".to_string(),
@@ -167,6 +169,7 @@ impl ToolHandler for DebugTtdSeekTool {
 pub struct DebugTtdReadMemoryTool;
 
 impl DebugTtdReadMemoryTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "debug.ttd_read_memory".to_string(),
@@ -224,6 +227,7 @@ impl ToolHandler for DebugTtdReadMemoryTool {
 pub struct DebugTtdNextTool;
 
 impl DebugTtdNextTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "debug.ttd_next".to_string(),
@@ -262,6 +266,7 @@ impl ToolHandler for DebugTtdNextTool {
 pub struct DebugTtdPrevTool;
 
 impl DebugTtdPrevTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "debug.ttd_prev".to_string(),
@@ -306,6 +311,7 @@ impl ToolHandler for DebugTtdPrevTool {
 pub struct DebugTtdModulesAtTool;
 
 impl DebugTtdModulesAtTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "debug.ttd_modules_at".to_string(),
@@ -369,6 +375,7 @@ impl ToolHandler for DebugTtdModulesAtTool {
 // ── handlers() ────────────────────────────────────────────────────────────────
 
 /// Return all TTD open/seek/memory/step tool handlers.
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DebugTtdOpenTool::definition(),       Box::new(DebugTtdOpenTool)),

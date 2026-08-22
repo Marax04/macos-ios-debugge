@@ -1104,6 +1104,7 @@ impl ToolHandler for LoaderRichLoadResultHashesTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (LoaderCoreMd5Tool::definition(), Box::new(LoaderCoreMd5Tool)),

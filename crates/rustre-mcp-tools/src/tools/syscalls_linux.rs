@@ -291,6 +291,7 @@ impl ToolHandler for SyscallsLinuxHexDumpExtTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SyscallsLinuxX8664NameTool::definition(), Box::new(SyscallsLinuxX8664NameTool)),

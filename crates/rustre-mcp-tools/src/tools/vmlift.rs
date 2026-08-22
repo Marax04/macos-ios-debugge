@@ -539,6 +539,7 @@ pub struct VmliftIsaLenIsEmptyTool;
 impl VmliftIsaLenIsEmptyTool { #[must_use] pub fn definition() -> rustre_mcp_server::ToolDefinition { rustre_mcp_server::ToolDefinition { name: "vmlift_isa_len_is_empty".to_string(), description: "Return len/is_empty for both a fresh empty VmIsa and the default lifter ISA.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait::async_trait] impl ToolHandler for VmliftIsaLenIsEmptyTool { async fn call(&self, _args: Value) -> Result<ToolResult, rustre_mcp_server::McpError> { let e = rustre_deobf_vmlift::VmIsa::new(); let d = rustre_deobf_vmlift::VmIsa::default_lifter_isa(); Ok(ToolResult::text(json!({"empty_len": e.len(), "empty_is_empty": e.is_empty(), "default_len": d.len(), "default_is_empty": d.is_empty(), "source":"rustre_deobf_vmlift::VmIsa::len"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (VmliftDefaultIsaLenTool::definition(), Box::new(VmliftDefaultIsaLenTool)),

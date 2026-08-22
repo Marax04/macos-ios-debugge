@@ -149,6 +149,7 @@ fn report_json(report: &RootCauseReport) -> Value {
 
 /// `debug.*` tools for the "root-cause-ranking" capability. Self-contained:
 /// depends only on the rustre-debug public API + `rustre_mcp_server`.
+#[must_use]
 pub fn handlers_root_cause_ranking() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![make_tool(
         "debug.root_cause",

@@ -53,6 +53,7 @@ pub struct MobileSmaliParseMethodDescWireTool;
 impl MobileSmaliParseMethodDescWireTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_smali_parse_method_descriptor_wire".to_string(), description: "rustre_mobile_smali::parse_method_descriptor to (params, return)".to_string(), input_schema: json!({"type":"object","properties":{"desc":{"type":"string"}},"required":["desc"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for MobileSmaliParseMethodDescWireTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let d = args.get("desc").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'desc'".into()))?.to_string(); let (params, ret) = rustre_mobile_smali::parse_method_descriptor(&d); Ok(ToolResult::text(json!({"input":d,"params":params,"return":ret,"source":"rustre_mobile_smali::parse_method_descriptor"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MobileSmaliParseTypeDescriptorTool::definition(), Box::new(MobileSmaliParseTypeDescriptorTool)),

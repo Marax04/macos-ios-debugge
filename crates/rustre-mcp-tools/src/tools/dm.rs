@@ -113,6 +113,7 @@ pub struct DmItaniumNativeDemangleTool;
 impl DmItaniumNativeDemangleTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "demangle_itanium_native_demangle_wire".to_string(), description: "rustre_demangle::ItaniumNativeDemangler::demangle".to_string(), input_schema: json!({"type":"object","properties":{"symbol":{"type":"string"}},"required":["symbol"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for DmItaniumNativeDemangleTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let s = args.get("symbol").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'symbol'".into()))?.to_string(); let r = rustre_demangle::ItaniumNativeDemangler::demangle(&s); Ok(ToolResult::text(json!({"demangled":r,"source":"rustre_demangle::ItaniumNativeDemangler::demangle"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DmSwiftDemangleTool::definition(), Box::new(DmSwiftDemangleTool)),

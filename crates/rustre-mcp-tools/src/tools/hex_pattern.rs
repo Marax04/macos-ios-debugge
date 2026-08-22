@@ -648,6 +648,7 @@ impl HexPatternSequenceSearchV3Tool { #[must_use] pub fn definition() -> ToolDef
 #[async_trait]
 impl ToolHandler for HexPatternSequenceSearchV3Tool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let arr = args.get("entries").and_then(Value::as_array).ok_or_else(|| McpError::InvalidParams("missing 'entries'".into()))?; let data = crate::hex_decode(args.get("data_hex").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'data_hex'".into()))?)?; let mut seq = rustre_hex_pattern::SequencePattern::new(); for v in arr { let off = v.get("offset").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("entry missing 'offset'".into()))? as usize; let ps = v.get("pattern").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("entry missing 'pattern'".into()))?; let p = rustre_hex_pattern::Pattern::parse(ps).map_err(|e| McpError::InvalidParams(format!("{e}")))?; seq.add(off, p); } let hits = seq.search(&data); Ok(ToolResult::text(json!({ "count": hits.len(), "hits": hits, "source": "rustre_hex_pattern::SequencePattern::search" }).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (HexPatternCrc16IbmTool::definition(), Box::new(HexPatternCrc16IbmTool)),

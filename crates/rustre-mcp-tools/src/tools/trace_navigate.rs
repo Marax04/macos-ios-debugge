@@ -964,6 +964,7 @@ impl ToolHandler for TraceNavigateStackFrameWithNameWpTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TraceNavigateBytesToU64Tool::definition(), Box::new(TraceNavigateBytesToU64Tool)),

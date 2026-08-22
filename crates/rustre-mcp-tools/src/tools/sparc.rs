@@ -7,6 +7,7 @@ pub struct SparcEncodeNopTool;
 
 pub struct SparcEncodeCallTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SparcEncodeNopTool::definition(), Box::new(SparcEncodeNopTool)),

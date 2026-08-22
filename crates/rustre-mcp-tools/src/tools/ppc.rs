@@ -7,6 +7,7 @@ pub struct PpcEncodeBlTool;
 
 pub struct PpcEncodeLisTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (PpcEncodeBlTool::definition(), Box::new(PpcEncodeBlTool)),

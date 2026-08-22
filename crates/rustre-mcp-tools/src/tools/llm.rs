@@ -9,6 +9,7 @@ pub struct LlmCompressMessageTool;
 
 pub struct LlmTrimToBudgetTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (LlmTokenCountEstimateTool::definition(), Box::new(LlmTokenCountEstimateTool)),

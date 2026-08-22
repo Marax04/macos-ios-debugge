@@ -7,6 +7,7 @@ pub struct ArchLuaGetBx54Tool;
 
 pub struct ArchLuaGetAx54Tool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ArchLuaGetBx54Tool::definition(), Box::new(ArchLuaGetBx54Tool)),

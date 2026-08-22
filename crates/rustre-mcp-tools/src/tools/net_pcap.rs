@@ -13,6 +13,7 @@ pub struct NetPcapSplitByCountTool;
 
 pub struct NetPcapSplitByTimeTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (NetPcapLinkTypeFromU16Tool::definition(), Box::new(NetPcapLinkTypeFromU16Tool)),

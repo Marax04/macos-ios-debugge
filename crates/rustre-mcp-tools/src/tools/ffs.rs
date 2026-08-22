@@ -281,6 +281,7 @@ impl ToolHandler for FfsNodeV2SizesTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FfsNodeV2NewFileTool::definition(), Box::new(FfsNodeV2NewFileTool)),

@@ -7,6 +7,7 @@ pub struct SymbolsStabsParseAllTool;
 
 pub struct SymbolsStabsParseFromElfTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (SymbolsStabsParseAllTool::definition(), Box::new(SymbolsStabsParseAllTool)),

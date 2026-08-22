@@ -21,6 +21,7 @@ pub struct PluginPythonClassMethodsTaggedTool;
 
 pub struct PluginPythonFormatErrorTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (PluginLuaLoaderDefaultCountTool::definition(), Box::new(PluginLuaLoaderDefaultCountTool)),

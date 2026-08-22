@@ -7,6 +7,7 @@ pub struct M68kDecodeInstrTool;
 
 pub struct M68kVariantInfoTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (M68kDecodeInstrTool::definition(), Box::new(M68kDecodeInstrTool)),

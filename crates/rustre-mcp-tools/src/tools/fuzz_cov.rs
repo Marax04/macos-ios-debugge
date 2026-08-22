@@ -410,6 +410,7 @@ pub struct FuzzCovHistogramNewEmptyXTool;
 impl FuzzCovHistogramNewEmptyXTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "fuzz_cov_histogram_new_empty_x".to_string(), description: "CoverageHistogram::new + total_blocks + max_bucket on empty histogram.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for FuzzCovHistogramNewEmptyXTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let h = rustre_fuzz_cov::CoverageHistogram::new(); Ok(ToolResult::text(json!({"total_blocks": h.total_blocks(), "max_bucket": h.max_bucket(), "median": h.median(), "mean": h.mean(), "source":"rustre_fuzz_cov::CoverageHistogram::new"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FuzzCovRleEncodeTool::definition(), Box::new(FuzzCovRleEncodeTool)),

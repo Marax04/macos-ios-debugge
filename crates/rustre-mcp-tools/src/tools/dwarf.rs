@@ -74,6 +74,7 @@ impl ToolHandler for DwarfAbbrevReadSleb128Tool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DwarfFunctionsPathTool::definition(), Box::new(DwarfFunctionsPathTool)),

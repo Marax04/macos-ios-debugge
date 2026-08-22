@@ -7,6 +7,7 @@ pub struct Msp430RegNameTool;
 
 pub struct Msp430BwSuffixTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (Msp430RegNameTool::definition(), Box::new(Msp430RegNameTool)),

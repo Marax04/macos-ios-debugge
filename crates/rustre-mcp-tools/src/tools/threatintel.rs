@@ -506,6 +506,7 @@ pub struct ThreatintelAggregationMethodDisplayTool;
 impl ThreatintelAggregationMethodDisplayTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "threatintel_aggregation_method_display".to_string(), description: "Return Display strings for every AggregationMethod variant.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for ThreatintelAggregationMethodDisplayTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { use rustre_threatintel::AggregationMethod as A; let all = [A::WeightedMean, A::Maximum, A::Minimum, A::WeightedMedian]; let labels: Vec<String> = all.iter().map(std::string::ToString::to_string).collect(); Ok(ToolResult::text(json!({"count":labels.len(),"labels":labels,"source":"rustre_threatintel::AggregationMethod::Display"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ThreatintelConfidenceClampW3Tool::definition(), Box::new(ThreatintelConfidenceClampW3Tool)),

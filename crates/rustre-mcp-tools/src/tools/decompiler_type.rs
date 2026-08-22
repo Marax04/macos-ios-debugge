@@ -7,6 +7,7 @@ pub struct DecompilerTypeIntByteSizeTool;
 
 pub struct DecompilerTypeIntCNameTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DecompilerTypeIntByteSizeTool::definition(), Box::new(DecompilerTypeIntByteSizeTool)),

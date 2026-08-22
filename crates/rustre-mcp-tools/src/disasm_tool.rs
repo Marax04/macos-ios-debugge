@@ -186,6 +186,7 @@ pub fn format_instructions(insns: &[DecodedInstruction]) -> String {
 // ─── Core disassembly ─────────────────────────────────────────────────────────
 
 /// Perform disassembly of `data` starting at `offset` with the given parameters.
+#[must_use]
 pub fn disassemble(
     data: &[u8],
     base_address: u64,
@@ -359,6 +360,7 @@ fn extract_near_branch(insn: &Instruction) -> Option<u64> {
 pub struct DisasmTool;
 
 impl DisasmTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "disassemble".to_owned(),

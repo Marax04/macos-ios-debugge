@@ -342,6 +342,7 @@ impl ToolHandler for FMemLinuxFindSocksMockTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (FMemHeapAllocTool::definition(), Box::new(FMemHeapAllocTool)),

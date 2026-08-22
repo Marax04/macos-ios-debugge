@@ -7,6 +7,7 @@ pub struct MobileRegistryAllTool;
 
 pub struct MobileRegistryCountTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MobileRegistryAllTool::definition(), Box::new(MobileRegistryAllTool)),

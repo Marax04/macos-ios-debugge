@@ -286,6 +286,7 @@ pub struct TraceCovBitmapSetBitsWire3Tool;
 impl TraceCovBitmapSetBitsWire3Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "trace_coverage_covbitmap_set_bits_wire3".to_string(), description: "Enumerate set-bit indices via rustre_trace_coverage::CovBitmap::set_bits.".to_string(), input_schema: json!({"type":"object","properties":{"hex":{"type":"string"}},"required":["hex"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for TraceCovBitmapSetBitsWire3Tool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let s: String = args.get("hex").and_then(Value::as_str).unwrap_or("").chars().filter(|c| !c.is_whitespace()).collect(); let data: Vec<u8> = (0..s.len()).step_by(2).filter_map(|i| u8::from_str_radix(s.get(i..i+2)?, 16).ok()).collect(); let bm = rustre_trace_coverage::CovBitmap::from_afl_bitmap(&data); let bits = bm.set_bits(); Ok(ToolResult::text(json!({"count":bits.len(),"first16":bits.iter().take(16).collect::<Vec<_>>(),"count_clear":bm.count_clear(),"source":"rustre_trace_coverage::CovBitmap::set_bits"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TraceCovParseLcovTool::definition(), Box::new(TraceCovParseLcovTool)),

@@ -7,6 +7,7 @@ pub struct BpfLookupHelperTool;
 
 pub struct BpfLookupHelperByNameTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (BpfLookupHelperTool::definition(), Box::new(BpfLookupHelperTool)),

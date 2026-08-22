@@ -746,6 +746,7 @@ pub struct TraceCoverageRunHeatmapWire3Tool;
 impl TraceCoverageRunHeatmapWire3Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "trace_coverage_run_heatmap_wire3".to_string(), description: "Sorted (addr, count) heatmap from a CoverageRun via rustre_trace_coverage::CoverageRun::heatmap.".to_string(), input_schema: json!({"type":"object","properties":{"addrs":{"type":"array","items":{"type":"integer"}}},"required":["addrs"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for TraceCoverageRunHeatmapWire3Tool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let addrs: Vec<u64> = args.get("addrs").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default(); let q = addrs.first().copied().unwrap_or(0); let mut run = rustre_trace_coverage::CoverageRun::new("h").with_timestamp(1).with_source_tag("wire3"); for (i, a) in addrs.iter().enumerate() { run.record_bb_n(*a, (i as u64) + 1); } let hm = run.heatmap(); Ok(ToolResult::text(json!({"count":hm.len(),"timestamp":run.timestamp,"source_tag":run.source_tag,"is_covered_first":run.is_covered(q),"source":"rustre_trace_coverage::CoverageRun::heatmap"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (TraceCoveragePercentTool::definition(), Box::new(TraceCoveragePercentTool)),

@@ -555,6 +555,7 @@ impl ToolHandler for ScriptPythonPyvalueTypeNamesTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (ScriptPythonMarshalToAddressTool::definition(), Box::new(ScriptPythonMarshalToAddressTool)),

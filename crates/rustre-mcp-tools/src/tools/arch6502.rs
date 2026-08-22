@@ -7,6 +7,7 @@ pub struct Arch6502CyclesTool;
 
 pub struct Arch6502BranchTargetTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (Arch6502CyclesTool::definition(), Box::new(Arch6502CyclesTool)),

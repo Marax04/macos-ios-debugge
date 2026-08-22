@@ -299,6 +299,7 @@ impl ToolHandler for DebugRetroPrintRemoveTool {
 // Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (DebugRetroPrintTool::definition(),       Box::new(DebugRetroPrintTool)),

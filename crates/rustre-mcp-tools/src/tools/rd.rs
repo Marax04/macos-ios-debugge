@@ -91,6 +91,7 @@ impl RdExportDiffIsCleanTool { #[must_use] pub fn definition() -> ToolDefinition
     Ok(ToolResult::text(json!({"is_clean":d.is_clean(),"display":d.to_string(),"added":d.added.len(),"removed":d.removed.len(),"moved":d.moved.len(),"unchanged":d.unchanged.len(),"source":"rustre_diff::ExportDiff::is_clean"}).to_string()))
 } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (RdFpNewTool::definition(), Box::new(RdFpNewTool)),

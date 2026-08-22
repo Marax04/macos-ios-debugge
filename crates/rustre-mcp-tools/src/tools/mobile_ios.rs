@@ -7,6 +7,7 @@ pub struct MobileIosSwiftMangledTool;
 
 pub struct MobileIosDecodeTypeEncodingTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (MobileIosSwiftMangledTool::definition(), Box::new(MobileIosSwiftMangledTool)),

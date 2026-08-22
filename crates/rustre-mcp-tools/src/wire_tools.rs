@@ -173,6 +173,7 @@ use crate::tools::z80::*;
 
 // ── rustre-symbols core wrappers ─────────────────────────────────────────────
 
+#[must_use]
 pub fn rs_sym_core_extra_handlers() -> Vec<(rustre_mcp_server::ToolDefinition, Box<dyn rustre_mcp_server::ToolHandler>)> {
     vec![
         (RsSymCoreBackendsRegistryTool::definition(), Box::new(RsSymCoreBackendsRegistryTool)),
@@ -1376,7 +1377,7 @@ impl ToolHandler for StackFrameReportAsyncTool {
         use crate::tool_executor::ToolHandler as SyncToolHandler;
         let v = StackFrameReportTool
             .execute(&args)
-            .map_err(|e| McpError::InternalError(e))?;
+            .map_err(McpError::InternalError)?;
         Ok(ToolResult::text(v.to_string()))
     }
 }
@@ -28160,6 +28161,7 @@ impl ToolHandler for TriageDieFindBytesWireTool {
 }
 
 impl SandboxReportSeverityScoreTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "sandbox_report_severity_score".to_string(),
@@ -28195,6 +28197,7 @@ impl ToolHandler for SandboxReportSeverityScoreTool {
 }
 
 impl SandboxReportIocIsConfidentTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "sandbox_report_ioc_is_confident".to_string(),
@@ -28586,6 +28589,7 @@ impl ToolHandler for TriageEntropyColorRgbTool {
 // --- triage-entropy extra wrappers ---
 
 impl EmuArchPointerSizeWireTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_arch_pointer_size_wire".to_string(),
@@ -28626,6 +28630,7 @@ impl ToolHandler for EmuArchPointerSizeWireTool {
 }
 
 impl EmuArchNameWireTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "emu_arch_name_wire".to_string(),
@@ -29484,6 +29489,7 @@ impl ToolHandler for AgentPromptsRegistryCountTool {
 }
 
 impl AgentLlmMessageUserWireTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "agent_llm_message_user_wire".to_string(),
@@ -29518,6 +29524,7 @@ impl ToolHandler for AgentLlmMessageUserWireTool {
 }
 
 impl AgentLlmMessageAssistantWireTool {
+    #[must_use]
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "agent_llm_message_assistant_wire".to_string(),
@@ -34671,6 +34678,7 @@ fn artefact_bytes(args: &Value, what: &str) -> Result<Option<Vec<u8>>, McpError>
         .map_err(|e| McpError::ToolError(format!("cannot read '{path}': {e}")))
 }
 
+#[must_use]
 pub fn all_wire_handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     let mut all = Vec::new();
     all.extend(crate::tools::adb::handlers());

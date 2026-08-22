@@ -137,6 +137,7 @@ fn hex_pairs(pairs: &[(u64, u64)]) -> Vec<Value> {
 }
 
 /// Build the `debug.*` tool set for the "execution-heatmap" capability.
+#[must_use]
 pub fn handlers_execution_heatmap() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![make_tool(
         "debug.execution_heatmap",

@@ -60,6 +60,7 @@ pub struct NetIsMulticastAddrV2Tool;
 impl NetIsMulticastAddrV2Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "net_is_multicast_addr_v2".to_string(), description: "Return true if IP address is multicast.".to_string(), input_schema: json!({"type":"object","properties":{"addr":{"type":"string"}},"required":["addr"]}), parameters: Value::Null } } }
 #[async_trait] impl ToolHandler for NetIsMulticastAddrV2Tool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let s = args.get("addr").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'addr'".into()))?; let addr: std::net::IpAddr = s.parse().map_err(|e: std::net::AddrParseError| McpError::InvalidParams(e.to_string()))?; Ok(ToolResult::text(json!({"is_multicast":rustre_net::is_multicast_addr(addr),"is_private":rustre_net::is_private_addr(addr),"is_broadcast":rustre_net::is_broadcast_addr(addr),"source":"rustre_net::is_multicast_addr"}).to_string())) } }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (NetIpChecksumTool::definition(), Box::new(NetIpChecksumTool)),

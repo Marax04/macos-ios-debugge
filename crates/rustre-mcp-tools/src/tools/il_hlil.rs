@@ -131,6 +131,7 @@ impl IlHlilPrintStatementTool {
 
 // ── registration ──────────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (IlHlilFunctionPrintTool::definition(), Box::new(IlHlilFunctionPrintTool)),

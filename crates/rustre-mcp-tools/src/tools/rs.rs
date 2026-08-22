@@ -240,6 +240,7 @@ impl ToolHandler for RsAnalysisStringJaroWinklerTool {
     }
 }
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (RsAnalysisStringScanAsciiTool::definition(), Box::new(RsAnalysisStringScanAsciiTool)),

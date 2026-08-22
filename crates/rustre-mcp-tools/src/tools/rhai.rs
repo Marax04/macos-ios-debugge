@@ -7,6 +7,7 @@ pub struct RhaiEntropyBytesTool;
 
 pub struct RhaiHexEncodeBytesTool;
 
+#[must_use]
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![
         (RhaiEntropyBytesTool::definition(), Box::new(RhaiEntropyBytesTool)),
