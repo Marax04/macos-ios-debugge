@@ -1213,7 +1213,7 @@ mod prop_soundness {
         }
     }
 
-    /// propagate_binary must over-approximate the taint of both operands
+    /// `propagate_binary` must over-approximate the taint of both operands
     /// (a tainted operand cannot yield a clean result).
     #[test]
     fn prop_propagate_binary_over_approximates() {
@@ -1261,7 +1261,7 @@ mod prop_soundness {
             let mk = |r: &mut Xs| {
                 let mut st = TaintState::new();
                 for v in &vars {
-                    if r.next() % 3 != 0 {
+                    if !r.next().is_multiple_of(3) {
                         st.set(*v, rand_tv(r));
                     }
                 }

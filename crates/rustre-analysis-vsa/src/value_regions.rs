@@ -1160,7 +1160,7 @@ mod prop_soundness {
             let n = 2 + r.next() % 6;
             for _ in 0..n {
                 let p = rand_path(&mut r, 3);
-                if r.next() % 2 == 0 {
+                if r.next().is_multiple_of(2) {
                     summary.record_read(p);
                 } else {
                     summary.record_write(p);
@@ -1196,18 +1196,18 @@ mod prop_soundness {
             let mut adj: std::collections::HashMap<u32, Vec<u32>> = std::collections::HashMap::new();
             let nedges = r.next() % 10;
             for _ in 0..nedges {
-                let a = (r.next() % nnodes as u64) as u32;
-                let b = (r.next() % nnodes as u64) as u32;
+                let a = (r.next() % u64::from(nnodes)) as u32;
+                let b = (r.next() % u64::from(nnodes)) as u32;
                 rg.add_edge(RegionId(a), RegionId(b), RegionEdgeKind::PointsTo);
                 adj.entry(a).or_default().push(b);
             }
             // Occasionally add a decoy non-PointsTo edge.
-            if r.next() % 2 == 0 {
-                let a = (r.next() % nnodes as u64) as u32;
-                let b = (r.next() % nnodes as u64) as u32;
+            if r.next().is_multiple_of(2) {
+                let a = (r.next() % u64::from(nnodes)) as u32;
+                let b = (r.next() % u64::from(nnodes)) as u32;
                 rg.add_edge(RegionId(a), RegionId(b), RegionEdgeKind::MayAlias);
             }
-            let start = (r.next() % nnodes as u64) as u32;
+            let start = (r.next() % u64::from(nnodes)) as u32;
             // Brute-force BFS over PointsTo adjacency.
             let mut expected: HashSet<u32> = HashSet::new();
             let mut stack = vec![start];

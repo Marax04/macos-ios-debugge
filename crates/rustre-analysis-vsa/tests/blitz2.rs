@@ -22,10 +22,10 @@ use rustre_analysis_vsa::{
 
 struct Lcg(u64);
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self(0xDEAD_BEEF_CAFE_BABE)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
@@ -263,11 +263,10 @@ fn vs_widen_terminates_increasing_chain() {
         if prev.is_top() {
             return;
         }
-        if let ValueSet::Range { hi, .. } = &prev {
-            if *hi == u64::MAX {
+        if let ValueSet::Range { hi, .. } = &prev
+            && *hi == u64::MAX {
                 return;
             }
-        }
     }
     panic!("widen did not reach extreme: {prev:?}");
 }

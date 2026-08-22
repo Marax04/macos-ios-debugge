@@ -575,11 +575,10 @@ fn written_vars(func: &IpFunction) -> HashSet<String> {
     let mut w = HashSet::new();
     for b in &func.blocks {
         for i in &b.instrs {
-            if let IpInstr::Base(base) = i {
-                if let Some(d) = def_of(base) {
+            if let IpInstr::Base(base) = i
+                && let Some(d) = def_of(base) {
                     w.insert(d.to_string());
                 }
-            }
         }
     }
     w

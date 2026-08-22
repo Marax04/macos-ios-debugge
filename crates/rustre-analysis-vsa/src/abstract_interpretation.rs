@@ -1387,7 +1387,7 @@ mod prop_soundness {
 
     fn rand_interval(r: &mut Xs, range: i64) -> IntervalDomain {
         // 1/16 chance of bottom.
-        if r.next() % 16 == 0 {
+        if r.next().is_multiple_of(16) {
             return IntervalDomain::bottom();
         }
         let a = r.small(range);
@@ -1560,7 +1560,7 @@ mod prop_soundness {
         // DAG edges: only i→j with i<j.
         for i in 0..n {
             for j in (i + 1)..n {
-                if r.next() % 3 == 0 {
+                if r.next().is_multiple_of(3) {
                     p.add_edge(i, j);
                 }
             }
@@ -1693,7 +1693,7 @@ mod fixpoint_order_props {
         // Random forward edges (DAG).
         for from in 0..n.saturating_sub(1) {
             for to in (from + 1)..n {
-                if xorshift(state) % 2 == 0 {
+                if xorshift(state).is_multiple_of(2) {
                     prog.add_edge(from, to);
                 }
             }

@@ -1,7 +1,7 @@
 //! Blitz test suite for rustre-analysis-vsa.
 //!
-//! Exercises ValueSet, StridedInterval, VsaState, MemoryModel, MemoryAbstraction,
-//! VsaAnalyzer, AddressClassifier, IndirectCallResolver, RegisterState, jumptable APIs.
+//! Exercises `ValueSet`, `StridedInterval`, `VsaState`, `MemoryModel`, `MemoryAbstraction`,
+//! `VsaAnalyzer`, `AddressClassifier`, `IndirectCallResolver`, `RegisterState`, jumptable APIs.
 
 use rustre_analysis_vsa::{
     AddressClass, AddressClassifier, IndirectCallResolution, IndirectCallResolver, MemoryAbstraction,

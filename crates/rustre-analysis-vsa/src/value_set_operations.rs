@@ -1339,7 +1339,7 @@ mod prop_soundness {
             let mk = |r: &mut Xs| {
                 let mut e = VsaEnv::new();
                 for v in &vars {
-                    if r.next() % 3 != 0 {
+                    if !r.next().is_multiple_of(3) {
                         let lo = r.next() % 200;
                         let hi = lo + r.next() % 200;
                         e.set(*v, StridedInterval::range(lo, hi, 64));
@@ -1445,7 +1445,7 @@ mod prop_soundness {
             for _ in 0..nstores {
                 // Offset: half the time a singleton (strong), else imprecise.
                 let base = r.next() % 16;
-                let (off_si, coff) = if r.next() % 2 == 0 {
+                let (off_si, coff) = if r.next().is_multiple_of(2) {
                     (StridedInterval::singleton(base, 64), base)
                 } else {
                     let span = 1 + r.next() % 8;
@@ -1456,7 +1456,7 @@ mod prop_soundness {
                 };
                 // Value: half singleton, else a range; concrete drawn from it.
                 let vbase = r.next() % 1000;
-                let (val_si, cval) = if r.next() % 2 == 0 {
+                let (val_si, cval) = if r.next().is_multiple_of(2) {
                     (StridedInterval::singleton(vbase, 64), vbase)
                 } else {
                     let vspan = 1 + r.next() % 200;
@@ -1785,7 +1785,7 @@ mod env_lattice_props {
         let vars = ["a", "b", "c", "d"];
         let mut env = VsaEnv::new();
         for v in vars {
-            if xorshift(state) % 3 != 0 {
+            if !xorshift(state).is_multiple_of(3) {
                 env.set(v, rand_si8(state));
             }
         }

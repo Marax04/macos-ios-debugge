@@ -1472,9 +1472,9 @@ mod tests {
             let smul = a.smul(&b);
             let sdiv = a.sdiv(&b);
             for &x in &ea {
-                let xs = x as u8 as i8 as i64;
+                let xs = i64::from(x as u8 as i8);
                 for &y in &eb {
-                    let ys = y as u8 as i8 as i64;
+                    let ys = i64::from(y as u8 as i8);
                     let add = (xs.wrapping_add(ys) as u64) & mask;
                     assert!(sadd.contains(add), "sadd missed {xs}+{ys}: a={a} b={b} -> {sadd}");
                     let sub = (xs.wrapping_sub(ys) as u64) & mask;
@@ -1515,7 +1515,7 @@ mod tests {
                     assert!(shl.contains(l), "shl missed {x}<<{s}={l}: a={a} sh={sh} -> {shl}");
                     let r = (x >> s) & mask;
                     assert!(shr.contains(r), "shr missed {x}>>{s}={r}: a={a} sh={sh} -> {shr}");
-                    let ar = (((x as u8 as i8 as i64) >> s) as u64) & mask;
+                    let ar = ((i64::from(x as u8 as i8) >> s) as u64) & mask;
                     assert!(sar.contains(ar), "sar missed {x} sar {s}={ar}: a={a} sh={sh} -> {sar}");
                 }
                 for &y in &eb {
