@@ -958,8 +958,27 @@ impl Architecture for JvmArch {
                 ]);
                 instr.address.as_u64().wrapping_add_signed(i64::from(off))
             }
-            // tableswitch / lookupswitch: variable-length, no single branch target
-            0xaa | 0xab => return vec![],
+            // tableswitch / lookupswitch have MANY targets, so they are handled
+            // here in full rather than falling through to the single-target
+            // path below. Returning vec![] made every switch a CFG dead end.
+            0xaa | 0xab => {
+                let pc = instr.address.as_u64();
+                let Some(offsets) = crate::wide_opcodes::switch_branch_offsets(
+                    &instr.bytes,
+                    usize::try_from(pc).unwrap_or(0),
+                ) else {
+                    return vec![];
+                };
+                return offsets
+                    .into_iter()
+                    .map(|off| {
+                        BranchInfo::conditional_jump(
+                            pc.wrapping_add_signed(i64::from(off)),
+                            BranchCondition::Custom(0),
+                        )
+                    })
+                    .collect();
+            }
             // Standard 2-byte signed offset branches
             _ if instr.bytes.len() >= 3 => {
                 let off = i16::from_be_bytes([instr.bytes[1], instr.bytes[2]]);
@@ -1043,6 +1062,41 @@ impl Iterator for JvmLinearDisassembler<'_> {
 
 #[cfg(test)]
 mod tests {
+
+    /// tableswitch/lookupswitch used to return NO branch targets, so every
+    /// switch was a dead end in the CFG. Both must now yield the default plus
+    /// one edge per case.
+    #[test]
+    fn switch_opcodes_expose_every_branch_target() {
+        let arch = JvmArch;
+        use rustre_core::arch::Architecture as _;
+
+        // tableswitch at pc=0: pad=3, default=+40, low=1, high=3, three cases.
+        let mut ts = vec![0xaa, 0, 0, 0];
+        ts.extend_from_slice(&40i32.to_be_bytes()); // default
+        ts.extend_from_slice(&1i32.to_be_bytes()); // low
+        ts.extend_from_slice(&3i32.to_be_bytes()); // high
+        for off in [16i32, 24, 32] {
+            ts.extend_from_slice(&off.to_be_bytes());
+        }
+        let instr = arch.disassemble(Address::new(0), &ts).expect("decode tableswitch");
+        let br = arch.get_branches(&instr);
+        let targets: Vec<u64> = br.iter().filter_map(|b| b.target).collect();
+        assert_eq!(targets, vec![40, 16, 24, 32], "tableswitch targets");
+
+        // lookupswitch at pc=0: pad=3, default=+48, npairs=2.
+        let mut ls = vec![0xab, 0, 0, 0];
+        ls.extend_from_slice(&48i32.to_be_bytes()); // default
+        ls.extend_from_slice(&2i32.to_be_bytes()); // npairs
+        ls.extend_from_slice(&100i32.to_be_bytes()); // match 0
+        ls.extend_from_slice(&12i32.to_be_bytes()); // offset 0
+        ls.extend_from_slice(&200i32.to_be_bytes()); // match 1
+        ls.extend_from_slice(&20i32.to_be_bytes()); // offset 1
+        let instr = arch.disassemble(Address::new(0), &ls).expect("decode lookupswitch");
+        let br = arch.get_branches(&instr);
+        let targets: Vec<u64> = br.iter().filter_map(|b| b.target).collect();
+        assert_eq!(targets, vec![48, 12, 20], "lookupswitch targets");
+    }
     use super::*;
 
     fn arch() -> JvmArch {

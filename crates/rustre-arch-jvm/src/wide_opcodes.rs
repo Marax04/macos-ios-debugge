@@ -192,6 +192,47 @@ pub fn decode_wide(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
 // TABLESWITCH (0xAA)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Branch offsets of a `tableswitch` / `lookupswitch`, relative to the opcode.
+///
+/// Returns the default offset first, then one offset per case. `pc_offset` is
+/// the instruction's offset within the method, which fixes the 4-byte padding.
+///
+/// Exists so the CFG builder can see switch edges: `get_branches` used to
+/// return no targets at all for 0xAA/0xAB, making every switch a dead end.
+#[must_use]
+pub fn switch_branch_offsets(bytes: &[u8], pc_offset: usize) -> Option<Vec<i32>> {
+    let opcode = *bytes.first()?;
+    let pad = (4 - ((pc_offset + 1) % 4)) % 4;
+    let base = 1 + pad;
+    let i32be = |off: usize| -> Option<i32> {
+        let s = bytes.get(off..off + 4)?;
+        Some(i32::from_be_bytes([s[0], s[1], s[2], s[3]]))
+    };
+
+    let default_off = i32be(base)?;
+    let mut out = vec![default_off];
+
+    match opcode {
+        0xaa => {
+            let low = i32be(base + 4)?;
+            let high = i32be(base + 8)?;
+            let count = usize::try_from(i64::from(high) - i64::from(low) + 1).ok()?;
+            for i in 0..count {
+                out.push(i32be(base + 12 + i * 4)?);
+            }
+        }
+        0xab => {
+            let npairs = usize::try_from(i32be(base + 4)?).ok()?;
+            for i in 0..npairs {
+                // Each pair is (match, offset); we want the offset.
+                out.push(i32be(base + 8 + i * 8 + 4)?);
+            }
+        }
+        _ => return None,
+    }
+    Some(out)
+}
+
 /// Decode `tableswitch` using proper alignment relative to `pc_offset`.
 ///
 /// The instruction layout (JVM §6.5.tableswitch):

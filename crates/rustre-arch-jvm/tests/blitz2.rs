@@ -242,7 +242,7 @@ fn t13_arch_get_branches_nonbranch_empty() {
 }
 
 #[test]
-fn t14_arch_get_branches_switch_empty() {
+fn t14_arch_get_branches_switch_yields_all_targets() {
     let a = JvmArch;
     // tableswitch at pc=0: pad=3, base=4, default low high = 0,0,0, count=1 entry
     let mut bytes = vec![0xaa, 0, 0, 0]; // padding to offset 4
@@ -252,7 +252,10 @@ fn t14_arch_get_branches_switch_empty() {
     bytes.extend_from_slice(&[0, 0, 0, 4]); // one entry
     let i = a.disassemble(Address::new(0), &bytes).unwrap();
     assert_eq!(i.mnemonic, "tableswitch");
-    assert!(a.get_branches(&i).is_empty());
+    // Used to assert the branch list was EMPTY, which pinned the old dead-end
+    // behaviour. default=+8 and the single case=+4 are both real CFG edges.
+    let targets: Vec<Option<u64>> = a.get_branches(&i).iter().map(|b| b.target).collect();
+    assert_eq!(targets, vec![Some(8), Some(4)]);
 }
 
 // ---------------------------------------------------------------------------

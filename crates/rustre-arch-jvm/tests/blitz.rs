@@ -317,14 +317,19 @@ fn arch_get_branches_for_goto_w() {
 }
 
 #[test]
-fn arch_get_branches_for_tableswitch_is_empty() {
+fn arch_get_branches_for_tableswitch_yields_default_and_cases() {
+    // default=0, low=0, high=0 -> one case, so two edges: default + case 0.
+    // This test used to assert ZERO branches, pinning the old behaviour in
+    // which every switch was a dead end in the CFG.
     let mut buf = vec![0xaa, 0, 0, 0];
-    buf.extend_from_slice(&0i32.to_be_bytes());
-    buf.extend_from_slice(&0i32.to_be_bytes());
-    buf.extend_from_slice(&0i32.to_be_bytes());
-    buf.extend_from_slice(&0i32.to_be_bytes());
+    buf.extend_from_slice(&0i32.to_be_bytes()); // default
+    buf.extend_from_slice(&0i32.to_be_bytes()); // low
+    buf.extend_from_slice(&0i32.to_be_bytes()); // high
+    buf.extend_from_slice(&0i32.to_be_bytes()); // case 0
     let i = arch().disassemble(Address::new(0), &buf).unwrap();
-    assert_eq!(arch().get_branches(&i).len(), 0);
+    let branches = arch().get_branches(&i);
+    assert_eq!(branches.len(), 2, "default edge plus one case edge");
+    assert!(branches.iter().all(|b| b.target == Some(0)));
 }
 
 #[test]
