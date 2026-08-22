@@ -839,7 +839,7 @@ mod tests {
     }
 
     /// Negative test: the four never-implemented constraint kinds must fail
-    /// loudly rather than be silently dropped (see TypeUnifier in typerecov).
+    /// loudly rather than be silently dropped (see `TypeUnifier` in typerecov).
     #[test]
     fn constraint_system_rejects_unimplemented_kinds() {
         for c in [
@@ -1057,7 +1057,7 @@ mod tests {
     }
 
     /// Regression: `InterproceduralTypes::propagate` iterated the call graph
-    /// in HashMap order, so when two callers raced to fill a callee's Unknown
+    /// in `HashMap` order, so when two callers raced to fill a callee's Unknown
     /// param, the winner was nondeterministic. The lowest caller address must
     /// now win, consistently.
     #[test]

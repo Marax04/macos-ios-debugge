@@ -391,7 +391,7 @@ impl Drop for TypeTerm {
             return;
         }
         const LEAF: TypeTerm = TypeTerm::Var(TypeVariable(0));
-        let mut stack: Vec<TypeTerm> = Vec::new();
+        let mut stack: Vec<Self> = Vec::new();
         match self {
             Self::Ptr(inner) => stack.push(std::mem::replace(&mut **inner, LEAF)),
             Self::Func(params, ret) => {

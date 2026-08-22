@@ -2076,7 +2076,7 @@ mod tests {
         assert_eq!(subs, vec!["Bottom".to_string(), "L".into(), "R".into()]);
     }
 
-    /// Regression: `all_subclasses` output order must not follow HashMap
+    /// Regression: `all_subclasses` output order must not follow `HashMap`
     /// iteration order (it leaks into `devirtualise` target lists).
     #[test]
     fn regress_all_subclasses_deterministic_order() {
@@ -2096,7 +2096,7 @@ mod tests {
         }
     }
 
-    /// Regression: `OperatorTable::identify` scanned HashMaps for the first
+    /// Regression: `OperatorTable::identify` scanned `HashMaps` for the first
     /// substring match; a name containing several operator codes got a
     /// per-run-random answer. Now: leftmost match wins, deterministically.
     #[test]

@@ -1912,10 +1912,10 @@ mod tests {
 
     /// Determinism regression: `bottom_up_order` / `sccs` must not depend on
     /// `HashMap` iteration order. Build the *same* graph many times (each build
-    /// gets a freshly-seeded HashMap) and require byte-identical output.
+    /// gets a freshly-seeded `HashMap`) and require byte-identical output.
     ///
     /// Before the fix, `to_petgraph` iterated `self.functions`/`self.outgoing`
-    /// in HashMap order, so the node-index and neighbor discovery order handed
+    /// in `HashMap` order, so the node-index and neighbor discovery order handed
     /// to `tarjan_scc` â€” and therefore the flattened SCC order â€” varied per run.
     #[test]
     fn call_graph_order_is_deterministic() {
@@ -1952,7 +1952,7 @@ mod tests {
 
     use crate::test_prng::xorshift;
 
-    /// Generate a random IpaType (bounded depth).
+    /// Generate a random `IpaType` (bounded depth).
     fn random_type(state: &mut u64, depth: usize) -> IpaType {
         let choice = xorshift(state) % if depth == 0 { 7 } else { 10 };
         match choice {
@@ -2012,7 +2012,7 @@ mod tests {
     /// Regression: IPA fixpoint must actually converge (and quickly) when
     /// call sites repeatedly feed the same conflicting argument types.
     /// Before the join fix, every iteration re-wrapped param types in a new
-    /// Union, so the loop only stopped at max_iterations and reported
+    /// Union, so the loop only stopped at `max_iterations` and reported
     /// converged = false.
     #[test]
     fn regress_ipa_fixpoint_converges_with_conflicting_args() {
@@ -2246,8 +2246,8 @@ mod tests {
     }
 
     /// The worklist solver must also be insertion-order independent. Before
-    /// the fix the initial worklist was seeded from HashMap::keys(), so the
-    /// processing order (observable through the max_per_func cap and via
+    /// the fix the initial worklist was seeded from `HashMap::keys()`, so the
+    /// processing order (observable through the `max_per_func` cap and via
     /// join tie-breaking) was randomized per run.
     #[test]
     fn worklist_ipa_is_insertion_order_independent() {
@@ -2267,7 +2267,7 @@ mod tests {
         }
     }
 
-    /// Both solvers agree on var_types for the same input (they implement
+    /// Both solvers agree on `var_types` for the same input (they implement
     /// the same top-down return-type propagation).
     #[test]
     fn worklist_and_phase_solver_agree_on_var_types() {
@@ -2293,7 +2293,7 @@ mod tests {
     }
 
     /// Regression: `collect_annotations` must emit annotations in a stable
-    /// order (func_id, then global addr, then (struct, offset)), not HashMap
+    /// order (`func_id`, then global addr, then (struct, offset)), not `HashMap`
     /// iteration order.
     #[test]
     fn regress_collect_annotations_deterministic_order() {
@@ -2333,7 +2333,7 @@ mod tests {
     }
 
     /// Regression: `get_fields_of_struct` must return fields sorted by
-    /// offset, not in HashMap iteration order.
+    /// offset, not in `HashMap` iteration order.
     #[test]
     fn regress_get_fields_of_struct_sorted() {
         let mut db = StructFieldTypeDb::new();

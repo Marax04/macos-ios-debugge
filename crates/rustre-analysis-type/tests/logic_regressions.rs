@@ -255,7 +255,7 @@ fn leaf_typeinfo_stays_a_leaf() {
     assert!(ti.base_classes.is_empty());
 }
 
-/// Multiple inheritance keeps working: flags + base_count + the base array.
+/// Multiple inheritance keeps working: flags + `base_count` + the base array.
 #[test]
 fn multiple_inheritance_typeinfo_is_detected() {
     let mut d = vec![0u8; 0x400];

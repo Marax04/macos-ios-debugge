@@ -1576,7 +1576,7 @@ mod tests {
     }
 
     /// Regression: merging a field that does not yet exist in `base` must not
-    /// double its access_count (`or_insert_with(clone)` already carried the
+    /// double its `access_count` (`or_insert_with(clone)` already carried the
     /// count, then `+=` added it again).
     #[test]
     fn regress_solver_merge_no_double_count_for_new_fields() {
@@ -1926,10 +1926,10 @@ mod tests {
     }
 
     /// Determinism regression: `CLayoutEmitter::emit_all` concatenates every
-    /// struct in a `TypeDb`. The DB keys live in a HashMap, so before the fix
-    /// the emitted header fragment ordered its structs by HashMap iteration
+    /// struct in a `TypeDb`. The DB keys live in a `HashMap`, so before the fix
+    /// the emitted header fragment ordered its structs by `HashMap` iteration
     /// order — a different byte string on different runs. Register many structs
-    /// (freshly-seeded HashMap per build) and require identical output.
+    /// (freshly-seeded `HashMap` per build) and require identical output.
     #[test]
     fn emit_all_is_deterministic() {
         fn build() -> String {
@@ -1952,7 +1952,7 @@ mod tests {
         assert!(p00 < p29, "structs must be emitted in name-sorted order");
     }
 
-    /// Regression: `finalize` drained a HashMap, so WHICH candidate received
+    /// Regression: `finalize` drained a `HashMap`, so WHICH candidate received
     /// each sequential `Struct_N` auto-name was hash-iteration-order random.
     /// Candidates must be registered in base-name order.
     #[test]
@@ -2022,7 +2022,7 @@ mod tests {
     }
 
     /// Abstract-contains-concrete: after merge, every field present in either
-    /// input is present, access counts sum, ever_written is OR'd, size is max.
+    /// input is present, access counts sum, `ever_written` is OR'd, size is max.
     #[test]
     fn solver_merge_contains_both_inputs() {
         let solver = LayoutSolver;

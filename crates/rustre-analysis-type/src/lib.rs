@@ -2145,7 +2145,7 @@ impl TypeRecoveryPass {
                     )
                 })
                 .collect();
-            v.sort_by(|a, b| a.0.cmp(&b.0));
+            v.sort_by_key(|a| a.0);
             v
         };
         let functions_found = funcs.len();
@@ -3824,7 +3824,7 @@ mod enterprise_battery {
     }
 
     /// Regression: `CallGraph::topological_order` iterated `nodes.keys()`
-    /// (randomized HashMap order), so the returned order — and everything
+    /// (randomized `HashMap` order), so the returned order — and everything
     /// downstream that consumed it — differed between runs. It must now be
     /// deterministic AND still place every callee before its caller.
     #[test]
@@ -3863,9 +3863,9 @@ mod enterprise_battery {
     }
 
     /// Regression: `ArrayDetector::detect` returned `groups.values()` in
-    /// randomized HashMap order, making the pattern list (and the winning
+    /// randomized `HashMap` order, making the pattern list (and the winning
     /// entry of `detect_as_facts` for a base observed at two strides)
-    /// nondeterministic. The output must be sorted by (base_var, stride).
+    /// nondeterministic. The output must be sorted by (`base_var`, stride).
     #[test]
     fn array_detector_output_order_is_deterministic_and_sorted() {
         fn instrs() -> Vec<InstructionRef> {
