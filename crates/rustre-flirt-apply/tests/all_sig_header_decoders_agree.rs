@@ -39,17 +39,18 @@ use rustre_flirt::sig_header::{self, SigFileHeader};
 /// number — a fixed-offset reader that assumes a padded name field will land in
 /// the wrong place, which is exactly the defect T27 fixed.
 fn canonical_header() -> SigFileHeader {
-    let mut h = SigFileHeader::default();
-    h.version = 10;
-    h.arch = 6;
-    h.file_types = 0x0000_0002;
-    h.os_types = 0x0001;
-    h.app_types = 0x0003;
-    h.feature_flags = 0;
-    h.n_functions = 4321;
-    h.pattern_size = sig_header::DEFAULT_PATTERN_SIZE;
-    h.lib_name = "libz mingw64 build".to_string();
-    h
+    SigFileHeader {
+        version: 10,
+        arch: 6,
+        file_types: 0x0000_0002,
+        os_types: 0x0001,
+        app_types: 0x0003,
+        feature_flags: 0,
+        n_functions: 4321,
+        pattern_size: sig_header::DEFAULT_PATTERN_SIZE,
+        lib_name: "libz mingw64 build".to_string(),
+        ..SigFileHeader::default()
+    }
 }
 
 #[test]

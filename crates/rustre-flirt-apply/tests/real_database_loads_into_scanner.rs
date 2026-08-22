@@ -22,13 +22,11 @@ fn repo_root() -> PathBuf {
 
 fn load_asset() -> Option<Vec<u8>> {
     let p = repo_root().join("assets/rust-stdlib.sig");
-    match std::fs::read(&p) {
-        Ok(b) => Some(b),
-        Err(_) => {
-            eprintln!("assets/rust-stdlib.sig assente in questo checkout — test saltato");
-            None
-        }
-    }
+    let Ok(b) = std::fs::read(&p) else {
+        eprintln!("assets/rust-stdlib.sig assente in questo checkout — test saltato");
+        return None;
+    };
+    Some(b)
 }
 
 #[test]

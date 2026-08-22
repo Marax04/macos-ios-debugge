@@ -438,7 +438,7 @@ mod tests {
         assert_eq!(c.flirt_match.address, 0x1000);
         assert!(c.tail_bytes.is_empty());
         assert!(c.ref_patterns.is_empty());
-        assert_eq!(c.score, 0.0);
+        assert!(c.score.abs() < f64::EPSILON);
     }
 
     #[test]

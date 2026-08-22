@@ -121,9 +121,11 @@ fn members_of(lines: &[&str], start: usize, is_enum: bool) -> BTreeSet<String> {
             if !t.starts_with('#') && !t.starts_with("//") && !t.is_empty() {
                 let candidate = if is_enum {
                     // `Variant,` / `Variant {` / `Variant(..)` at depth 1 only.
-                    (depth == 1)
-                        .then(|| t.split(['(', '{', ',', ' ']).next().unwrap_or(""))
-                        .unwrap_or("")
+                    if depth == 1 {
+                        t.split(['(', '{', ',', ' ']).next().unwrap_or("")
+                    } else {
+                        ""
+                    }
                 } else if let Some(rest) = t.strip_prefix("pub ") {
                     // `pub name: Type,` — a field, not `pub fn` inside an impl.
                     rest.split(':').next().unwrap_or("").trim()

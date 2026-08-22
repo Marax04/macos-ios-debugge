@@ -134,7 +134,7 @@ fn parallel_named_modules_do_not_multiply() {
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if !name.ends_with(".rs") {
+            if std::path::Path::new(&name).extension().is_none_or(|e| e != "rs") {
                 continue;
             }
             let stem = name.trim_end_matches(".rs");

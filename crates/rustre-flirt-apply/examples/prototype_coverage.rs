@@ -53,11 +53,11 @@ fn main() {
             }
     }
 
-    let covered: Vec<&String> = truth.iter().filter(|n| known.contains(*n)).collect();
+    let covered = truth.iter().filter(|n| known.contains(*n)).count();
     let missing: Vec<&String> = truth.iter().filter(|n| !known.contains(*n)).collect();
 
     println!("nomi nella ground truth : {}", truth.len());
-    println!("coperti dal bridge      : {}", covered.len());
+    println!("coperti dal bridge      : {covered}");
     println!("NON coperti             : {}", missing.len());
     if !missing.is_empty() {
         println!("\nprimi 20 non coperti (questi sono il lavoro da fare):");

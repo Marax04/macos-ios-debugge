@@ -38,13 +38,13 @@ fn main() {
     };
 
     let opts = rustre_flirt_gen::coff_archive::ArchiveHarvestOptions::default();
-    let (pats, harvest_stats) =
+    let (patterns, harvest_stats) =
         rustre_flirt_gen::coff_archive::harvest_archive_bytes(&data, &opts).expect("harvest");
     println!("archivio  : {path}");
     println!("membri    : {}, oggetti {}", harvest_stats.members, harvest_stats.objects_parsed);
-    println!("pattern   : {}", pats.len());
+    println!("pattern   : {}", patterns.len());
 
-    if pats.is_empty() {
+    if patterns.is_empty() {
         eprintln!("nessun pattern: l'esperimento non proverebbe nulla");
         std::process::exit(1);
     }
@@ -52,8 +52,8 @@ fn main() {
     let has_wc = |p: &rustre_flirt::FlirtPattern| {
         p.initial_bytes.iter().any(|b| matches!(b, PatternByte::Wildcard))
     };
-    let with_wc: Vec<_> = pats.iter().filter(|p| has_wc(p)).cloned().collect();
-    let no_wc: Vec<_> = pats.iter().filter(|p| !has_wc(p)).cloned().collect();
+    let with_wc: Vec<_> = patterns.iter().filter(|p| has_wc(p)).cloned().collect();
+    let no_wc: Vec<_> = patterns.iter().filter(|p| !has_wc(p)).cloned().collect();
     println!("  con wildcard : {}", with_wc.len());
     println!("  senza        : {}", no_wc.len());
     println!();
@@ -83,7 +83,7 @@ fn main() {
         );
     };
 
-    run("tutti i pattern", &pats);
+    run("tutti i pattern", &patterns);
     run("solo SENZA wildcard", &no_wc);
     run("solo CON wildcard", &with_wc);
 
@@ -97,7 +97,7 @@ fn main() {
         q.crc_length = 0;
         q
     };
-    let no_crc_all: Vec<_> = pats.iter().map(strip_crc).collect();
+    let no_crc_all: Vec<_> = patterns.iter().map(strip_crc).collect();
     let no_crc_wc: Vec<_> = with_wc.iter().map(strip_crc).collect();
     run("senza CRC, tutti", &no_crc_all);
     run("senza CRC, con wc", &no_crc_wc);

@@ -883,7 +883,7 @@ mod tests {
     #[test]
     fn progress_tracker_zero_total() {
         let t = ProgressTracker::new(0);
-        assert_eq!(t.fraction(), 1.0);
+        assert!((t.fraction() - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]

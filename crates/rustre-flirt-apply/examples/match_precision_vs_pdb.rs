@@ -18,8 +18,8 @@
 //! Verdicts:
 //! * **AGREE**    — PDB has a symbol at that address and the names correspond.
 //! * **DISAGREE** — PDB has a *different* symbol there. A real false positive.
-//! * **UNKNOWN**  — PDB has nothing at that address (static/inlined/thunk), so
-//!                  the match can be neither confirmed nor refuted.
+//! * **UNKNOWN**  — PDB has nothing at that address (static/inlined/thunk),
+//!   so the match can be neither confirmed nor refuted.
 //!
 //! `UNKNOWN` is reported separately and never folded into either side: counting
 //! it as success would fabricate precision, counting it as failure would invent
@@ -197,10 +197,10 @@ fn main() {
     }
 
     if std::env::var_os("FLIRT_DUMP_ADDRS").is_some() {
-        let mut h: u64 = 1469598103934665603;
+        let mut h: u64 = 1_469_598_103_934_665_603;
         for (&a, n) in &by_addr {
             for b in a.to_le_bytes().iter().chain(n.as_bytes()) {
-                h ^= u64::from(*b); h = h.wrapping_mul(1099511628211);
+                h ^= u64::from(*b); h = h.wrapping_mul(1_099_511_628_211);
             }
         }
         println!("impronta indirizzi+nomi: {h:#018x}");

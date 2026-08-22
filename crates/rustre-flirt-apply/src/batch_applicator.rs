@@ -564,7 +564,7 @@ mod tests {
         let sink = NullSink;
         let summary = batch.run(&mut db, &scan_fn, &sink);
         assert_eq!(summary.apply_stats.applied, 0);
-        assert_eq!(summary.coverage_percent, 0.0);
+        assert!(summary.coverage_percent.abs() < f64::EPSILON);
     }
 
     #[test]

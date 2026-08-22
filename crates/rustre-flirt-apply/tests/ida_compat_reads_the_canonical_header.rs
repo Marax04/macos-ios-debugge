@@ -21,13 +21,14 @@ use rustre_flirt::sig_header::SigFileHeader;
 use rustre_flirt_apply::ida_sig_compat::IdaSigHeader;
 
 fn canonical(name: &str) -> SigFileHeader {
-    let mut h = SigFileHeader::default();
-    h.version = 10;
-    h.arch = 6;
-    h.file_types = 0x0000_0002;
-    h.n_functions = 1234;
-    h.lib_name = name.to_string();
-    h
+    SigFileHeader {
+        version: 10,
+        arch: 6,
+        file_types: 0x0000_0002,
+        n_functions: 1234,
+        lib_name: name.to_string(),
+        ..SigFileHeader::default()
+    }
 }
 
 #[test]

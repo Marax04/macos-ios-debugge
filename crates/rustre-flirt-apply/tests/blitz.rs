@@ -125,8 +125,8 @@ fn db_default_is_empty() {
 #[test]
 fn db_add_many_patterns() {
     let mut db = FlirtSigDb::new();
-    for i in 0..50 {
-        let p = FlirtPattern::new(format!("fn{i}"), vec![Some(i as u8); 8]);
+    for i in 0..50u8 {
+        let p = FlirtPattern::new(format!("fn{i}"), vec![Some(i); 8]);
         db.add_pattern(p);
     }
     assert_eq!(db.pattern_count(), 50);
@@ -813,10 +813,12 @@ fn ida_sig_header_parse_v9_smoke() {
     // a parser that has drifted: the bytes come from the component that owns the
     // offsets, and `cur` is compared against that header's real length instead
     // of a constant carried over from the wrong layout.
-    let mut h = rustre_flirt::sig_header::SigFileHeader::default();
-    h.version = 9;
-    h.arch = 0; // x86
-    h.lib_name = "demo".to_string();
+    let h = rustre_flirt::sig_header::SigFileHeader {
+        version: 9,
+        arch: 0, // x86
+        lib_name: "demo".to_string(),
+        ..rustre_flirt::sig_header::SigFileHeader::default()
+    };
     let buf = h.encode();
 
     let (parsed, cur) = IdaSigHeader::parse(&buf).unwrap();

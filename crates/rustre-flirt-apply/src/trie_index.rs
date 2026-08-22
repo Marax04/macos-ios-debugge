@@ -338,7 +338,7 @@ mod tests {
     fn test_stats_avg_depth_zero_for_empty() {
         let trie = PatternTrie::new();
         let s = trie.stats();
-        assert_eq!(s.avg_depth, 0.0);
+        assert!(s.avg_depth.abs() < f64::EPSILON);
     }
 
     // ── Default ───────────────────────────────────────────────────────────────

@@ -83,14 +83,15 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 /// read 6 where the answer was 9.
 fn production_lines(text: &str) -> Vec<&str> {
     let mut out = Vec::new();
-    let (mut depth, mut in_test, mut test_depth) = (0i32, false, 0i32);
+    let (mut depth, mut in_test, mut test_depth) = (0i64, false, 0i64);
     for line in text.lines() {
         if !in_test && line.contains("#[cfg(test)]") {
             in_test = true;
             test_depth = depth;
             continue;
         }
-        let delta = line.matches('{').count() as i32 - line.matches('}').count() as i32;
+        let delta = i64::try_from(line.matches('{').count()).unwrap()
+            - i64::try_from(line.matches('}').count()).unwrap();
         if in_test {
             depth += delta;
             if depth <= test_depth && line.contains('}') {

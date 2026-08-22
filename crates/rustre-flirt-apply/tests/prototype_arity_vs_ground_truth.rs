@@ -91,7 +91,7 @@ fn extracted_arity_matches_ground_truth_for_every_shared_name() {
         }
         let Some(&got) = db.get(name) else { continue };
         shared += 1;
-        if got as i64 != want {
+        if i64::try_from(got).unwrap() != want {
             mismatches.push(format!("{name}: estratto {got}, ground truth {want}"));
         }
     }

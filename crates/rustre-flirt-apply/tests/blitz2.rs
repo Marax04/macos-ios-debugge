@@ -6,6 +6,8 @@
 //! `load_pat_file`, `load_auto`, `build_ac_index`, `scan_with_ac`.
 
 use std::io::Write;
+use std::sync::Arc;
+use std::thread;
 use std::path::Path;
 
 use rustre_flirt_apply::{
@@ -23,12 +25,12 @@ impl Lcg {
     const fn next_u64(&mut self) -> u64 {
         self.0 = self
             .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
     const fn next_u8(&mut self) -> u8 {
-        (self.next_u64() >> 33) as u8
+        ((self.next_u64() >> 33) & 0xFF) as u8
     }
     fn next_bytes(&mut self, n: usize) -> Vec<u8> {
         (0..n).map(|_| self.next_u8()).collect()
@@ -156,7 +158,8 @@ fn pattern_round_trip_str_to_struct_50_inputs() {
                 expected.push(None);
             } else {
                 let b = g.next_u8();
-                s.push_str(&format!("{b:02X}"));
+                use std::fmt::Write as _;
+                write!(s, "{b:02X}").unwrap();
                 expected.push(Some(b));
             }
         }
@@ -692,10 +695,11 @@ fn fuzz_pattern_from_str_50_random_inputs() {
     for _ in 0..50 {
         let n = (g.next_u8() as usize % 32) + 1;
         let bytes = g.next_bytes(n);
-        let s: String = bytes
-            .iter()
-            .map(|b| format!("{b:02X} "))
-            .collect();
+        let mut s = String::new();
+        for b in &bytes {
+            use std::fmt::Write as _;
+            write!(s, "{b:02X} ").unwrap();
+        }
         // Either Ok or specific Err — never panic.
         let _ = FlirtPattern::from_pattern_str(&s, "n".into(), "l".into());
     }
@@ -726,9 +730,6 @@ fn applier_send_sync_threaded_stress() {
     assert_send_sync::<FlirtScanner>();
     assert_send_sync::<FlirtSignature>();
     assert_send_sync::<FlirtPattern>();
-
-    use std::sync::Arc;
-    use std::thread;
 
     let db = FlirtSigDb::load_demo_sigs();
     let applier = Arc::new(FlirtApplier::new(db));

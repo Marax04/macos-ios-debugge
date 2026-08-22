@@ -38,7 +38,7 @@ fn valid_sig() -> Vec<u8> {
     let mut pats = Vec::new();
     for (i, name) in ["alpha", "beta_function", "gamma"].iter().enumerate() {
         let mut p = FlirtPattern::new(
-            (0..12u8).map(|b| PatternByte::Exact(b.wrapping_add(i as u8 * 7))).collect(),
+            (0..12u8).map(|b| PatternByte::Exact(b.wrapping_add(u8::try_from(i).unwrap() * 7))).collect(),
         );
         p.crc16 = 0x1234;
         p.crc_length = 8;
@@ -60,9 +60,9 @@ fn valid_rflirt() -> Vec<u8> {
     f.extend_from_slice(&2u32.to_le_bytes());
     for name in ["one", "two_longer_name"] {
         let prefix: Vec<u8> = (0..10u8).collect();
-        f.extend_from_slice(&(prefix.len() as u16).to_le_bytes());
+        f.extend_from_slice(&u16::try_from(prefix.len()).unwrap().to_le_bytes());
         f.extend_from_slice(&prefix);
-        f.extend_from_slice(&(prefix.len() as u16).to_le_bytes());
+        f.extend_from_slice(&u16::try_from(prefix.len()).unwrap().to_le_bytes());
         f.extend_from_slice(&vec![0xffu8; prefix.len()]);
         f.extend_from_slice(&0xABCDu16.to_le_bytes());
         f.push(8);
@@ -70,7 +70,7 @@ fn valid_rflirt() -> Vec<u8> {
         f.push(1);
         f.push(0x01);
         f.extend_from_slice(&0u16.to_le_bytes());
-        f.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        f.extend_from_slice(&u16::try_from(name.len()).unwrap().to_le_bytes());
         f.extend_from_slice(name.as_bytes());
     }
     f

@@ -521,7 +521,7 @@ mod tests {
     fn test_byte_match_analyzer_full() {
         let (density, penalty) = ByteMatchAnalyzer::analyse(16, 16, 16);
         assert!((density - 100.0).abs() < f64::EPSILON);
-        assert_eq!(penalty, 0.0);
+        assert!(penalty.abs() < f64::EPSILON);
     }
 
     #[test]
