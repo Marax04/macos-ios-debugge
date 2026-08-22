@@ -734,7 +734,7 @@ impl<'a> BlobDecoder<'a> {
     pub fn read_compressed_int(&mut self) -> Result<i32> {
         let u = self.read_compressed_uint()?;
         // rotate right by 1 to recover the sign bit
-        let signed = if u & 1 == 0 { (u >> 1) as i32 } else { -((u >> 1) as i32) - 1 };
+        let signed = if u & 1 == 0 { (u >> 1).cast_signed() } else { -((u >> 1).cast_signed()) - 1 };
         Ok(signed)
     }
 

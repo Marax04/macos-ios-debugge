@@ -283,13 +283,13 @@ impl<'a> AttributeBlobReader<'a> {
     pub fn read_fixed_arg(&mut self, arg_type: &FixedArgType) -> Result<FixedArg> {
         Ok(match arg_type {
             FixedArgType::Bool => FixedArg::Bool(self.read_byte()? != 0),
-            FixedArgType::I1 => FixedArg::I1(self.read_byte()? as i8),
+            FixedArgType::I1 => FixedArg::I1(self.read_byte()?.cast_signed()),
             FixedArgType::U1 => FixedArg::U1(self.read_byte()?),
-            FixedArgType::I2 => FixedArg::I2(self.read_u16_le()? as i16),
+            FixedArgType::I2 => FixedArg::I2(self.read_u16_le()?.cast_signed()),
             FixedArgType::U2 => FixedArg::U2(self.read_u16_le()?),
-            FixedArgType::I4 => FixedArg::I4(self.read_u32_le()? as i32),
+            FixedArgType::I4 => FixedArg::I4(self.read_u32_le()?.cast_signed()),
             FixedArgType::U4 => FixedArg::U4(self.read_u32_le()?),
-            FixedArgType::I8 => FixedArg::I8(self.read_u64_le()? as i64),
+            FixedArgType::I8 => FixedArg::I8(self.read_u64_le()?.cast_signed()),
             FixedArgType::U8 => FixedArg::U8(self.read_u64_le()?),
             FixedArgType::R4 => FixedArg::R4(self.read_f32()?),
             FixedArgType::R8 => FixedArg::R8(self.read_f64()?),
@@ -302,7 +302,7 @@ impl<'a> AttributeBlobReader<'a> {
             FixedArgType::Type => FixedArg::Type(self.read_ser_string()?),
             FixedArgType::Enum(type_name) => {
                 // Treat as I4 by default (most common underlying type)
-                let v = i64::from(self.read_u32_le()? as i32);
+                let v = i64::from(self.read_u32_le()?.cast_signed());
                 FixedArg::Enum(type_name.clone(), v)
             }
             FixedArgType::Object => {

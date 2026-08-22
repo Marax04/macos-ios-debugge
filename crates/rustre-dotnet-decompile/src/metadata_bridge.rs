@@ -889,7 +889,7 @@ pub fn lambda_from_metadata(
         delegate_type: Some(delegate),
         inference_source: DelegateInferenceSource::CallSiteInference {
             return_type: m.return_type.clone(),
-            param_types: param_types.clone(),
+            param_types,
         },
         is_static_lambda: m.is_static,
     })
