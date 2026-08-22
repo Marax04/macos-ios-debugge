@@ -145,11 +145,19 @@ impl VerifierState {
     }
 
     /// Pop one stack slot; returns `Err` on underflow.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn pop(&mut self) -> Result<TypeInfo, VerifyError> {
         self.stack.pop().ok_or(VerifyError::StackUnderflow)
     }
 
     /// Pop one stack slot and verify it matches `expected`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn pop_expect(&mut self, expected: &TypeInfo) -> Result<TypeInfo, VerifyError> {
         let t = self.pop()?;
         if &t != expected && *expected != TypeInfo::Unknown {
@@ -210,6 +218,10 @@ impl VerifierState {
     }
 
     /// Get a local variable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn get_local(&self, idx: usize) -> Result<TypeInfo, VerifyError> {
         self.locals.get(idx).cloned().ok_or(VerifyError::InvalidLocalIndex(idx))
     }
@@ -295,6 +307,10 @@ impl JvmBytecodeVerifier {
     /// - `bytecode`: raw Code attribute bytecode bytes
     /// - `max_locals`: the `max_locals` field from the Code attribute
     /// - `arg_types`: parameter types to initialise locals from (including `this` for instance methods)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn verify_method(
         &self,
         bytecode: &[u8],
@@ -526,6 +542,10 @@ impl Default for JvmBytecodeVerifier {
 
 /// Verify `bytecode` with the given `max_locals` and initial `arg_types`.
 /// Returns a [`VerifyResult`] on success or a [`VerifyError`] on hard failure.
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn verify_method(
     bytecode: &[u8],
     max_locals: usize,

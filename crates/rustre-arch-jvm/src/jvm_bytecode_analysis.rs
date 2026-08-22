@@ -117,6 +117,9 @@ impl StackFrame {
         }
     }
 
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn push(&mut self, v: JvmValue) -> Result<(), JvmAnalysisError> {
         if v.category() == 2 {
             self.operand_stack.push(v);
@@ -127,6 +130,9 @@ impl StackFrame {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn pop(&mut self, pc: usize) -> Result<JvmValue, JvmAnalysisError> {
         self.operand_stack
             .pop()
@@ -374,6 +380,14 @@ impl InvokeDynamicResolver {
     }
 
     /// Attempt to resolve an invokedynamic at `pc` using bootstrap index `bsm_index`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if an internal invariant is violated.
     pub fn resolve(
         &mut self,
         pc: usize,

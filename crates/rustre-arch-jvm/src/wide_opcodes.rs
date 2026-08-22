@@ -53,6 +53,10 @@ pub fn decode_jvm_insn(
 
 /// Decode the wide prefix instruction `0xC4 <sub_op> <u16_index>` or
 /// `0xC4 0x84 <u16_index> <i16_const>` (wide iinc).
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_wide(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
     need(bytes, 2)?;
     let sub = bytes[1];
@@ -199,6 +203,10 @@ pub fn decode_wide(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
 /// highbyte1..4
 /// offsets[high - low + 1] × 4 bytes each
 /// ```
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_tableswitch(
     bytes: &[u8],
     pc_offset: usize,
@@ -255,6 +263,10 @@ pub fn decode_tableswitch(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Decode `lookupswitch` with proper position-aware alignment.
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_lookupswitch(
     bytes: &[u8],
     pc_offset: usize,
@@ -308,6 +320,10 @@ pub fn decode_lookupswitch(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Decode `multianewarray #cpref, dims` — 4-byte instruction.
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_multianewarray(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
     need(bytes, 4)?;
     let cpref = u16::from_be_bytes([bytes[1], bytes[2]]);
@@ -328,6 +344,10 @@ pub fn decode_multianewarray(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecod
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Decode `invokevirtual` with symbolic annotation.
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_invokevirtual(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
     need(bytes, 3)?;
     let cpref = u16::from_be_bytes([bytes[1], bytes[2]]);
@@ -343,6 +363,10 @@ pub fn decode_invokevirtual(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecode
 }
 
 /// Decode `invokespecial`.
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_invokespecial(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
     need(bytes, 3)?;
     let cpref = u16::from_be_bytes([bytes[1], bytes[2]]);
@@ -358,6 +382,10 @@ pub fn decode_invokespecial(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecode
 }
 
 /// Decode `invokestatic`.
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_invokestatic(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
     need(bytes, 3)?;
     let cpref = u16::from_be_bytes([bytes[1], bytes[2]]);
@@ -373,6 +401,10 @@ pub fn decode_invokestatic(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeE
 }
 
 /// Decode `invokeinterface` — 5 bytes: opcode + cpref(2) + count + 0.
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_invokeinterface(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
     need(bytes, 5)?;
     let cpref = u16::from_be_bytes([bytes[1], bytes[2]]);
@@ -389,6 +421,10 @@ pub fn decode_invokeinterface(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDeco
 }
 
 /// Decode `invokedynamic` — 5 bytes: opcode + cpref(2) + 0 + 0.
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn decode_invokedynamic(bytes: &[u8]) -> Result<(JvmInstr, usize), JvmDecodeError> {
     need(bytes, 5)?;
     let cpref = u16::from_be_bytes([bytes[1], bytes[2]]);

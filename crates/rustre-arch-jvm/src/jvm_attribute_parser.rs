@@ -316,6 +316,10 @@ impl JvmAttributeParser {
     ///
     /// The `cp_utf8` closure resolves a constant-pool index to a `&str`.
     /// Any attribute whose name cannot be resolved is stored as `Unknown`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn parse_all<'a, F>(
         buf: &[u8],
         count: u16,
@@ -330,6 +334,10 @@ impl JvmAttributeParser {
     /// Same as [`parse_all`] but takes the resolver by reference, so recursive
     /// calls inside `Code` attributes don't re-monomorphize the parser with an
     /// ever-deepening `&&...&F` type.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn parse_all_ref<'a, F>(
         buf: &[u8],
         count: u16,
@@ -364,6 +372,10 @@ impl JvmAttributeParser {
     }
 
     /// Parse a single attribute given its resolved `name` and raw `info` bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn parse_one<'a, F>(
         name: &str,
         info: &[u8],
@@ -591,6 +603,10 @@ impl JvmAttributeParser {
     }
 
     /// Parse the `Code` attribute including its nested sub-attributes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn parse_code<'a, F>(info: &[u8], cp_utf8: &F) -> Result<JvmAttribute, AttrParseError>
     where
         F: Fn(u16) -> Option<&'a str>,
@@ -600,6 +616,10 @@ impl JvmAttributeParser {
 }
 
 /// Parse a `Code` attribute body, returning a [`CodeAttribute`].
+///
+/// # Errors
+///
+/// Returns an error when the input is malformed or an index is out of range.
 pub fn parse_code_attr<'a, F>(info: &[u8], cp_utf8: &F) -> Result<CodeAttribute, AttrParseError>
 where
     F: Fn(u16) -> Option<&'a str>,

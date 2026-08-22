@@ -245,6 +245,10 @@ impl JvmConstantPool {
     /// `count - 1` actual entries.
     ///
     /// Returns the pool and the number of bytes consumed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn parse(bytes: &[u8], count: u16) -> Result<(Self, usize), CpParseError> {
         if count == 0 {
             return Ok((Self { entries: vec![ConstantEntry::Unusable], class_name_cache: HashMap::new() }, 0));
@@ -421,6 +425,10 @@ impl JvmConstantPool {
     }
 
     /// Resolve a `Utf8` entry at `index` to a `&str`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn resolve_utf8(&self, index: u16) -> Result<&str, CpParseError> {
         if index == 0 { return Err(CpParseError::ZeroIndex); }
         match self.entries.get(index as usize) {
@@ -431,6 +439,10 @@ impl JvmConstantPool {
     }
 
     /// Resolve a `Class` entry at `index` to its class name string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn resolve_class(&mut self, index: u16) -> Result<String, CpParseError> {
         if let Some(cached) = self.class_name_cache.get(&index) {
             return Ok(cached.clone());
@@ -445,6 +457,10 @@ impl JvmConstantPool {
     }
 
     /// Resolve a `NameAndType` entry to `(name, descriptor)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn resolve_name_and_type(&self, index: u16) -> Result<(&str, &str), CpParseError> {
         match self.entries.get(index as usize) {
             Some(ConstantEntry::NameAndType(n, d)) => {
@@ -455,6 +471,10 @@ impl JvmConstantPool {
     }
 
     /// Resolve a `Methodref` or `Interfaceref` to `(class_index, name, descriptor)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn resolve_method_ref(&mut self, index: u16) -> Result<(u16, String, String), CpParseError> {
         let (class_index, nat_index) = match self.entries.get(index as usize) {
             Some(ConstantEntry::Methodref(c, n) | ConstantEntry::InterfaceMethodref(c, n)) => (*c, *n),
