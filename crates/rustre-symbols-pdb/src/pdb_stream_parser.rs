@@ -57,6 +57,14 @@ impl MsfSuperblock {
         if raw.len() < 56 {
             return Err(PdbError::BadMagic);
         }
+        // A PDB 2.00 container is a *recognised* format we cannot read, not
+        // garbage. Reporting it as `BadMagic` told the caller "this is not a
+        // PDB at all" and sent them looking for a download/corruption problem
+        // that does not exist. `MSF_MAGIC_V2` and `PdbError::UnsupportedVersion`
+        // both existed for this and neither was wired to anything.
+        if raw.len() >= MSF_MAGIC_V2.len() && &raw[0..MSF_MAGIC_V2.len()] == MSF_MAGIC_V2 {
+            return Err(PdbError::UnsupportedVersion);
+        }
         if &raw[0..32] != MSF_MAGIC_V7 {
             return Err(PdbError::BadMagic);
         }
@@ -745,6 +753,27 @@ impl Iterator for StreamIter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `MSF_MAGIC_V2` and `PdbError::UnsupportedVersion` were both declared and
+    /// neither was referenced anywhere: a PDB 2.00 file came back as `BadMagic`,
+    /// i.e. "not a PDB", which is a wrong answer, not just a vague one.
+    /// Deleting the new v2 branch makes this test see `BadMagic` and fail.
+    #[test]
+    fn pdb_v2_container_reports_unsupported_version_not_bad_magic() {
+        let mut raw = vec![0u8; 128];
+        raw[..MSF_MAGIC_V2.len()].copy_from_slice(MSF_MAGIC_V2);
+        let e = MsfSuperblock::parse(&raw).unwrap_err();
+        assert!(matches!(e, PdbError::UnsupportedVersion), "got {e:?}");
+    }
+
+    /// Real garbage must still be `BadMagic`, so the branch above cannot be
+    /// passing by simply swallowing every rejection.
+    #[test]
+    fn non_pdb_bytes_are_still_bad_magic() {
+        let raw = vec![0x41u8; 128];
+        let e = MsfSuperblock::parse(&raw).unwrap_err();
+        assert!(matches!(e, PdbError::BadMagic), "got {e:?}");
+    }
 
     fn make_superblock_bytes(block_size: u32, num_blocks: u32, dir_bytes: u32, bm_addr: u32) -> Vec<u8> {
         let mut v = vec![0u8; 56];

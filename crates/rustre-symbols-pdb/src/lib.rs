@@ -272,6 +272,14 @@ fn parse_superblock(raw: &[u8]) -> Result<MsfSuperblock> {
     if raw.len() < 56 {
         return Err(PdbError::BadMagic);
     }
+    // Same as `MsfSuperblock::parse`: name the PDB 2.00 container instead of
+    // calling it garbage. See `pdb_stream_parser::MSF_MAGIC_V2`.
+    if raw.len() >= crate::pdb_stream_parser::MSF_MAGIC_V2.len()
+        && &raw[0..crate::pdb_stream_parser::MSF_MAGIC_V2.len()]
+            == crate::pdb_stream_parser::MSF_MAGIC_V2
+    {
+        return Err(PdbError::UnsupportedVersion);
+    }
     if &raw[0..32] != MSF_MAGIC_V7 {
         return Err(PdbError::BadMagic);
     }

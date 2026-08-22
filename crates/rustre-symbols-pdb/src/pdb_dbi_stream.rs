@@ -128,8 +128,16 @@ impl DbiHeader {
             return Err(DbiError::BadSignature(sig));
         }
         let version = read_u32_le(data, 4)?;
+        // Match on the named constants, not on bare literals: the five
+        // `DbiHeader::VERSION_*` constants were declared and documented and
+        // then nothing referenced them, so editing one silently did not change
+        // what the parser accepts.
         match version {
-            930_803 | 19_960_307 | 19_970_606 | 19_990_903 | 20_091_201 => {}
+            Self::VERSION_V41
+            | Self::VERSION_V50
+            | Self::VERSION_V60
+            | Self::VERSION_V70
+            | Self::VERSION_V110 => {}
             _ => return Err(DbiError::UnsupportedVersion(version)),
         }
         Ok(Self {
@@ -1231,6 +1239,32 @@ const fn align4(offset: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The five `DbiHeader::VERSION_*` constants were dead: the accept-set was
+    /// spelled as bare literals beside them. This pins each named constant to
+    /// the accept-set, so the two can no longer drift apart.
+    #[test]
+    fn every_named_dbi_version_constant_is_accepted() {
+        for v in [
+            DbiHeader::VERSION_V41,
+            DbiHeader::VERSION_V50,
+            DbiHeader::VERSION_V60,
+            DbiHeader::VERSION_V70,
+            DbiHeader::VERSION_V110,
+        ] {
+            let mut d = vec![0u8; DbiHeader::SIZE];
+            d[0..4].copy_from_slice(&DbiHeader::SIGNATURE.to_le_bytes());
+            d[4..8].copy_from_slice(&v.to_le_bytes());
+            assert!(DbiHeader::parse(&d).is_ok(), "version {v} rejected");
+        }
+        let mut d = vec![0u8; DbiHeader::SIZE];
+        d[0..4].copy_from_slice(&DbiHeader::SIGNATURE.to_le_bytes());
+        d[4..8].copy_from_slice(&1u32.to_le_bytes());
+        assert!(matches!(
+            DbiHeader::parse(&d),
+            Err(DbiError::UnsupportedVersion(1))
+        ));
+    }
 
     // ── Bounds-checked scalar readers ────────────────────────────────────────
     // These used to return a fabricated 0 past the end of the buffer, so a
