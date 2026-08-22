@@ -586,9 +586,28 @@ fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|w| w == needle)
 }
 
+/// True if the PKCS#7 blob carries a legacy `counterSignature` attribute.
+///
+/// This is the marker of an old-style Authenticode timestamp, as opposed to
+/// an RFC 3161 token (`OID_SPC_NESTED_SIGNATURE`).
+#[must_use]
+pub fn has_countersignature(pkcs7: &[u8]) -> bool {
+    find_subsequence(pkcs7, OID_COUNTER_SIGNATURE).is_some()
+}
+
 fn find_timestamp_in_pkcs7(pkcs7: &[u8]) -> Option<TimestampInfo> {
-    if let Some(pos) = find_subsequence(pkcs7, OID_SIGNING_TIME) {
-        let after = pos + OID_SIGNING_TIME.len();
+    // OID_COUNTER_SIGNATURE was declared and never read, so a legacy
+    // countersigned blob that carries its signingTime inside the
+    // counterSignature attribute -- after the point this scan starts from --
+    // was reported as having no timestamp at all. Search from the
+    // signingTime OID when present, and fall back to the countersignature.
+    let start = find_subsequence(pkcs7, OID_SIGNING_TIME)
+        .map(|p| p + OID_SIGNING_TIME.len())
+        .or_else(|| {
+            find_subsequence(pkcs7, OID_COUNTER_SIGNATURE)
+                .map(|p| p + OID_COUNTER_SIGNATURE.len())
+        });
+    if let Some(after) = start {
         let limit = (after + 64).min(pkcs7.len());
         let search = &pkcs7[after..limit];
         for offset in 0..search.len().saturating_sub(4) {
@@ -812,4 +831,25 @@ mod tests {
         assert!(!r.file_sha256.is_empty());
         assert!(!r.catalog_match);
     }
+    #[test]
+    fn legacy_countersignature_timestamp_is_found() {
+        // A blob whose signingTime lives inside the counterSignature
+        // attribute, with no bare signingTime OID before it: previously
+        // reported as "no timestamp".
+        let mut blob = vec![0u8; 8];
+        blob.extend_from_slice(OID_COUNTER_SIGNATURE);
+        blob.push(0x17); // UTCTime
+        let ts = b"230115120000Z";
+        blob.push(ts.len() as u8);
+        blob.extend_from_slice(ts);
+
+        assert!(has_countersignature(&blob));
+        let found = find_timestamp_in_pkcs7(&blob).expect("legacy timestamp found");
+        assert_eq!(found.signing_time, "230115120000Z");
+        assert!(!found.is_rfc3161);
+
+        assert!(!has_countersignature(&[0u8; 32]));
+        assert!(find_timestamp_in_pkcs7(&[0u8; 32]).is_none());
+    }
+
 }

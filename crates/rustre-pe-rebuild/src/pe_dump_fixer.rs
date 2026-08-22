@@ -45,6 +45,30 @@ pub mod dd {
     pub const IAT:        usize = 12;
     pub const DELAY_IMPORT: usize = 13;
     pub const COM_DESCRIPTOR: usize = 14;
+
+    /// Conventional name of a data directory index.
+    ///
+    /// The indices above were declared and never read -- the one place that
+    /// needed an index wrote a bare `4` with a comment instead -- so a fix
+    /// record could not say which directory it had touched.
+    #[must_use]
+    pub const fn name(index: usize) -> &'static str {
+        match index {
+            EXPORT         => "Export",
+            IMPORT         => "Import",
+            RESOURCE       => "Resource",
+            EXCEPTION      => "Exception",
+            SECURITY       => "Security",
+            BASERELOC      => "BaseReloc",
+            DEBUG          => "Debug",
+            TLS            => "TLS",
+            LOAD_CFG       => "LoadConfig",
+            IAT            => "IAT",
+            DELAY_IMPORT   => "DelayImport",
+            COM_DESCRIPTOR => "COMDescriptor",
+            _              => "Unknown",
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -408,13 +432,17 @@ impl PeDumpFixer {
     }
 
     fn strip_security_directory(&mut self) {
-        // Security directory is at data directory index 4.
-        let dd_base = self.data_directory_offset(4);
+        self.zero_data_directory(dd::SECURITY);
+    }
+
+    /// Zero one data directory entry, recording the fix under its name.
+    fn zero_data_directory(&mut self, index: usize) {
+        let dd_base = self.data_directory_offset(index);
         if dd_base + 8 <= self.data.len() {
             let old_rva = u32::from_le_bytes(self.data[dd_base..dd_base+4].try_into().unwrap());
             let old_sz  = u32::from_le_bytes(self.data[dd_base+4..dd_base+8].try_into().unwrap());
             if old_rva != 0 || old_sz != 0 {
-                self.record_fix("Strip Security directory", dd_base,
+                self.record_fix(&format!("Strip {} directory", dd::name(index)), dd_base,
                     &format!("rva={old_rva:#x} sz={old_sz:#x}"), "zeroed");
                 self.data[dd_base..dd_base+8].fill(0);
             }
@@ -710,4 +738,16 @@ mod tests {
         assert!(cfg.flags.repair_signatures());
         assert!(cfg.flags.convert_virtual_to_raw());
     }
+    #[test]
+    fn data_directory_indices_have_names() {
+        assert_eq!(dd::name(dd::SECURITY), "Security");
+        assert_eq!(dd::name(dd::LOAD_CFG), "LoadConfig");
+        assert_eq!(dd::name(dd::COM_DESCRIPTOR), "COMDescriptor");
+        assert_eq!(dd::name(dd::DELAY_IMPORT), "DelayImport");
+        assert_eq!(dd::name(dd::EXCEPTION), "Exception");
+        assert_eq!(dd::name(dd::BASERELOC), "BaseReloc");
+        assert_eq!(dd::name(dd::IAT), "IAT");
+        assert_eq!(dd::name(7), "Unknown");
+    }
+
 }
