@@ -412,11 +412,12 @@ impl MftRecord {
         let _ = alloc_size;
 
         let mut attributes = Vec::new();
+        // `record_size` is an attacker-controlled header field and may be
+        // smaller than `attr_offset`, which would make the range start exceed
+        // its end and panic.  Clamp the end below.
+        let attr_end = data.len().min(record_size).max(attr_offset);
         if attr_offset < data.len() {
-            Self::parse_attributes(
-                &data[attr_offset..data.len().min(record_size)],
-                &mut attributes,
-            );
+            Self::parse_attributes(&data[attr_offset..attr_end], &mut attributes);
         }
 
         Ok(Self {

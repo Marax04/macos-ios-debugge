@@ -380,7 +380,12 @@ fn parse_file_metrics(
     record_size: usize,
     strings: &[String],
 ) -> Result<Vec<FileMetrics>, PrefetchError> {
-    let mut metrics = Vec::with_capacity(count);
+    // `count` is a u32 header field; the loop below bounds-checks every
+    // record, but `with_capacity(count)` would allocate before the first
+    // check and abort the process on a crafted file.  Reserve only what the
+    // buffer could actually hold.
+    let capacity = count.min(data.len() / record_size.max(1));
+    let mut metrics = Vec::with_capacity(capacity);
     for i in 0..count {
         let rec_off = offset + i * record_size;
         if rec_off + record_size > data.len() { break; }
@@ -418,7 +423,9 @@ fn parse_volumes(data: &[u8], section_offset: usize, count: usize) -> Result<Vec
     // Volume record size varies slightly but the standard layout is 40 bytes for
     // the fixed portion.
     const VOL_RECORD_SIZE: usize = 104;
-    let mut volumes = Vec::with_capacity(count);
+    // Bounded for the same reason as in `parse_file_metrics`.
+    let capacity = count.min(data.len() / VOL_RECORD_SIZE);
+    let mut volumes = Vec::with_capacity(capacity);
     for i in 0..count {
         let vol_off = section_offset + i * VOL_RECORD_SIZE;
         if vol_off + 40 > data.len() { break; }
