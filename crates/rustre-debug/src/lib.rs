@@ -766,7 +766,7 @@ pub(crate) fn arm64_encode_watchpoint_wcr(
 /// `DBGWVR` holds the DOUBLEWORD-aligned base; the low three bits are RES0 and
 /// the byte within it is selected by `BAS`. Writing the caller's unaligned
 /// address straight in is the classic way to arm a watchpoint that never fires.
-pub(crate) const fn arm64_watchpoint_wvr(addr: u64) -> u64 {
+pub const fn arm64_watchpoint_wvr(addr: u64) -> u64 {
     addr & !7
 }
 
@@ -782,7 +782,7 @@ pub(crate) const fn arm64_watchpoint_wvr(addr: u64) -> u64 {
 /// 4-byte aligned. That last one is a refusal and not a rounding: `DBGBVR`'s
 /// low two bits are RES0, so quietly aligning it down would arm a breakpoint on
 /// a different instruction than the caller named.
-pub(crate) fn arm64_breakpoint_from_dr_slot(addr: u64, dr7: u64, slot: u8) -> Option<(u64, u64)> {
+pub fn arm64_breakpoint_from_dr_slot(addr: u64, dr7: u64, slot: u8) -> Option<(u64, u64)> {
     if dr7 & (1u64 << (2 * u32::from(slot))) == 0 {
         return None;
     }
@@ -810,7 +810,7 @@ pub(crate) fn arm64_breakpoint_from_dr_slot(addr: u64, dr7: u64, slot: u8) -> Op
 /// the engine reads `DR7` to find a free slot and to recognise what it already
 /// armed, so a read-back that does not match the write would make `set` keep
 /// allocating slots and `disarm` never recognise its own work.
-pub(crate) fn dr_slot_from_arm64_breakpoint(bvr: u64, bcr: u64, slot: u8) -> Option<(u64, u64)> {
+pub fn dr_slot_from_arm64_breakpoint(bvr: u64, bcr: u64, slot: u8) -> Option<(u64, u64)> {
     if bcr & 1 == 0 {
         return None;
     }
@@ -822,7 +822,7 @@ pub(crate) fn dr_slot_from_arm64_breakpoint(bvr: u64, bcr: u64, slot: u8) -> Opt
 }
 
 /// First disabled slot among the 16 `DBGWCR` values, or `None` if all are armed.
-pub(crate) fn arm64_free_watchpoint_slot(wcr: &[u64]) -> Option<usize> {
+pub fn arm64_free_watchpoint_slot(wcr: &[u64]) -> Option<usize> {
     wcr.iter().position(|w| w & 1 == 0)
 }
 
@@ -831,7 +831,7 @@ pub(crate) fn arm64_free_watchpoint_slot(wcr: &[u64]) -> Option<usize> {
 /// Re-arming an address must re-use its slot; without this the same address
 /// would consume a second of the sixteen and the first would stay armed with
 /// nothing tracking it — the defect the x86 path already fixed.
-pub(crate) fn arm64_watchpoint_slot_for(wvr: &[u64], wcr: &[u64], addr: u64) -> Option<usize> {
+pub fn arm64_watchpoint_slot_for(wvr: &[u64], wcr: &[u64], addr: u64) -> Option<usize> {
     let base = arm64_watchpoint_wvr(addr);
     wcr.iter()
         .zip(wvr.iter())
@@ -852,7 +852,7 @@ pub(crate) fn arm64_watchpoint_slot_for(wvr: &[u64], wcr: &[u64], addr: u64) -> 
 ///
 /// Returns `None` when the slot is disabled in `DR7`, which is how the caller
 /// distinguishes "clear this pair" from "program it".
-pub(crate) fn arm64_watchpoint_from_dr_slot(
+pub fn arm64_watchpoint_from_dr_slot(
     addr: u64,
     dr7: u64,
     slot: u8,
@@ -1240,7 +1240,7 @@ pub(crate) const fn aliased_register_write(
 /// lie the engine then acts on. And `None` for a `BAS` that names no bytes,
 /// which is an untouched pair rather than a described one.
 #[must_use]
-const fn arm64_wcr_to_dr7_fields(wcr: u64) -> Option<(u64, u64)> {
+pub const fn arm64_wcr_to_dr7_fields(wcr: u64) -> Option<(u64, u64)> {
     let bas = (wcr >> 5) & 0xff;
     if bas == 0 {
         return None;
@@ -1276,7 +1276,7 @@ const fn arm64_wcr_to_dr7_fields(wcr: u64) -> Option<(u64, u64)> {
 /// `None` for a slot that is ENABLED — that is the ordinary path's job — and
 /// for an execution slot, which belongs to `DBGBVR`/`DBGBCR`.
 #[must_use]
-pub(crate) fn arm64_watchpoint_ctrl_for_disabled_slot(dr7: u64, slot: u8) -> Option<u64> {
+pub fn arm64_watchpoint_ctrl_for_disabled_slot(dr7: u64, slot: u8) -> Option<u64> {
     if dr7 & (1u64 << (2 * u32::from(slot))) != 0 {
         return None;
     }
@@ -1315,7 +1315,7 @@ pub(crate) fn arm64_watchpoint_ctrl_for_disabled_slot(dr7: u64, slot: u8) -> Opt
 /// Returns the address and the `DR7` bits WITHOUT any enable bit, so a caller
 /// cannot mistake a staged slot for an armed one.
 #[must_use]
-pub(crate) fn dr_slot_from_arm64_watchpoint_staged(
+pub fn dr_slot_from_arm64_watchpoint_staged(
     wvr: u64,
     wcr: u64,
     slot: u8,
@@ -1339,7 +1339,7 @@ pub(crate) fn dr_slot_from_arm64_watchpoint_staged(
 /// already watches, so what it reads back must match what it wrote — otherwise
 /// `set` would keep allocating new slots for the same address and `disarm`
 /// would never recognise its own work.
-pub(crate) fn dr_slot_from_arm64_watchpoint(wvr: u64, wcr: u64, slot: u8) -> Option<(u64, u64)> {
+pub fn dr_slot_from_arm64_watchpoint(wvr: u64, wcr: u64, slot: u8) -> Option<(u64, u64)> {
     if wcr & 1 == 0 {
         return None;
     }
