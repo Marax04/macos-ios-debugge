@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Read, BufRead};
-use anyhow::{Result, bail, Context};
+use anyhow::{Result, anyhow, bail, Context};
 use serde::{Serialize, Deserialize};
 
 /// Read all bytes from a generic `Read` implementer and parse them as a PDF
@@ -390,12 +390,15 @@ impl PdfParser {
                     let count = index[idx_pos + 1] as u32;
                     idx_pos += 2;
                     for i in 0..count {
+                        // `/Index [4294967295 4]` makes `start + i` wrap in release
+                        // builds and alias low object numbers; stop the run instead.
+                        let Some(obj_id) = start.checked_add(i) else { break };
                         if offset + entry_size > data.len() { break; }
                         let t = read_be_uint(&data[offset..offset + w0], w0);
                         let f1 = read_be_uint(&data[offset + w0..offset + w0 + w1], w1);
                         let f2 = read_be_uint(&data[offset + w0 + w1..offset + w0 + w1 + w2], w2);
                         offset += entry_size;
-                        table.entries.insert(start + i, match t {
+                        table.entries.insert(obj_id, match t {
                             0 => XRefEntry { offset: 0, gen_val: f2 as u16, in_use: false, compressed: false, stream_obj: None, index_in_stream: None },
                             1 => XRefEntry { offset: f1, gen_val: f2 as u16, in_use: true, compressed: false, stream_obj: None, index_in_stream: None },
                             2 => XRefEntry { offset: 0, gen_val: 0, in_use: true, compressed: true, stream_obj: Some(f1 as u32), index_in_stream: Some(f2 as u32) },
@@ -721,7 +724,11 @@ fn decode_ascii85(data: &[u8]) -> Result<Vec<u8>> {
                 buf[count] = u32::from(b - b'!');
                 count += 1;
                 if count == 5 {
-                    let v = buf[0]*85u32.pow(4) + buf[1]*85u32.pow(3) + buf[2]*85*85 + buf[3]*85 + buf[4];
+                    // A group of five 'u' bytes (84,84,84,84,84) evaluates to
+                    // 0x1_03_0C_A5_AF, past u32::MAX; the unchecked form wrapped
+                    // in release. Per the spec such a group is invalid — reject it.
+                    let v = a85_group_value(&buf)
+                        .ok_or_else(|| anyhow!("ASCII85: group value exceeds 2^32-1"))?;
                     out.extend_from_slice(&v.to_be_bytes());
                     count = 0;
                 }
@@ -732,11 +739,28 @@ fn decode_ascii85(data: &[u8]) -> Result<Vec<u8>> {
     }
     if count > 0 {
         for i in count..5 { buf[i] = 84; }
-        let v = buf[0]*85u32.pow(4) + buf[1]*85u32.pow(3) + buf[2]*85*85 + buf[3]*85 + buf[4];
+        let v = a85_group_value(&buf)
+            .ok_or_else(|| anyhow!("ASCII85: final group value exceeds 2^32-1"))?;
         let bytes = v.to_be_bytes();
         out.extend_from_slice(&bytes[..count - 1]);
     }
     Ok(out)
+}
+
+/// Fold one ASCII85 group of five base-85 digits into its `u32` value.
+///
+/// Returns `None` when the group encodes a value above `u32::MAX` (e.g. the
+/// group `uuuuu`), which the PDF/PostScript specification declares invalid.
+/// Every step is checked: the plain expression wraps in release builds.
+fn a85_group_value(buf: &[u32; 5]) -> Option<u32> {
+    let mut v: u32 = 0;
+    for &d in buf {
+        if d > 84 {
+            return None;
+        }
+        v = v.checked_mul(85)?.checked_add(d)?;
+    }
+    Some(v)
 }
 
 fn decode_rle(data: &[u8]) -> Result<Vec<u8>> {
@@ -811,5 +835,80 @@ impl PdfDocument {
             javascript_streams: Vec::new(),
             embedded_files: Vec::new(),
         })
+    }
+}
+
+#[cfg(test)]
+mod malformed_input_hardening {
+    //! Regressions for overflow guards in the full PDF parser. Each test FAILS
+    //! when the corresponding guard is removed — verified by reintroducing the
+    //! defect and re-running.
+
+    use super::*;
+
+    /// The ASCII85 group `uuuuu` folds to 0x1_03_0C_A5_AF, past `u32::MAX`.
+    ///
+    /// The unguarded expression `buf[0]*85^4 + …` wrapped in release builds
+    /// (`overflow-checks` is off), silently emitting four bytes of a value the
+    /// input never encoded. The specification calls such a group invalid.
+    #[test]
+    fn ascii85_rejects_group_above_u32_max() {
+        let err = decode_ascii85(b"uuuuu~>")
+            .expect_err("a group encoding more than 2^32-1 must be rejected");
+        assert!(
+            err.to_string().contains("exceeds 2^32-1"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Same overflow reached through the short final group.
+    #[test]
+    fn ascii85_rejects_final_group_above_u32_max() {
+        let err = decode_ascii85(b"uuuu~>")
+            .expect_err("a padded final group above 2^32-1 must be rejected");
+        assert!(
+            err.to_string().contains("exceeds 2^32-1"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// A legitimate stream must still decode: `87cURD]` is "Hello".
+    #[test]
+    fn ascii85_still_decodes_valid_input() {
+        let out = decode_ascii85(b"87cURD]i,\"Ebo80~>").expect("valid ASCII85 must decode");
+        assert_eq!(&out, b"Hello World!");
+    }
+
+    /// `/Index [4294967295 2]` makes `start + i` wrap on the second entry,
+    /// aliasing object 0 with an offset belonging to object 4294967295.
+    #[test]
+    fn xref_stream_index_wrap_does_not_alias_object_zero() {
+        let mut data = b"%PDF-1.5
+1 0 obj
+".to_vec();
+        // Point at the dictionary: `parse_xref_stream` parses one object from
+        // the cursor and requires it to be a stream.
+        let obj_off = data.len() as u64;
+        data.extend_from_slice(
+            b"<< /Type /XRef /Size 3 /W [1 2 1] /Index [4294967295 2] /Length 8 >>\nstream\n",
+        );
+        data.extend_from_slice(&[0x01, 0x00, 0x10, 0x00, 0x01, 0x00, 0x20, 0x00]);
+        data.extend_from_slice(b"\nendstream\nendobj\n");
+        data.extend_from_slice(format!("startxref\n{obj_off}\n%%EOF\n").as_bytes());
+
+        let mut parser = PdfParser::new(data);
+        let table = parser
+            .parse_xref_at(obj_off)
+            .expect("the xref stream should be readable");
+        assert!(
+            table.entries.contains_key(&4_294_967_295),
+            "the first /Index entry should have been recorded: {:?}",
+            table.entries.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            !table.entries.contains_key(&0),
+            "object 0 was aliased by a wrapped /Index counter: {:?}",
+            table.entries.keys().collect::<Vec<_>>()
+        );
     }
 }

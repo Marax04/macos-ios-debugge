@@ -24,6 +24,10 @@ pub enum LjParseError {
     Leb128Overflow { offset: usize },
     InvalidProto { proto_idx: usize, reason: String },
     InvalidConstType { ktype: u64, offset: usize },
+    /// A count field read from the file is so large that computing the byte
+    /// span it describes overflows `usize`. Reported instead of letting the
+    /// multiplication saturate and the following addition wrap.
+    CountOverflow { proto_idx: usize, field: &'static str, count: u64 },
 }
 
 impl fmt::Display for LjParseError {
@@ -42,6 +46,10 @@ impl fmt::Display for LjParseError {
             Self::InvalidProto { proto_idx, reason } => {
                 write!(f, "invalid proto #{proto_idx}: {reason}")
             }
+            Self::CountOverflow { proto_idx, field, count } => write!(
+                f,
+                "invalid proto #{proto_idx}: {field} count {count} overflows the address space"
+            ),
             Self::InvalidConstType { ktype, offset } => {
                 write!(f, "invalid KGC type {ktype} at offset {offset:#x}")
             }
@@ -621,10 +629,22 @@ impl LjParser {
         };
         p = np;
 
-        // Bytecode â€” use saturating arithmetic to avoid overflow when bc_count is large.
+        // Bytecode.
+        // `saturating_mul` does NOT protect this check: it saturates to `usize::MAX`
+        // and `p + usize::MAX` then WRAPS in release (overflow-checks are off in the
+        // release profile), yielding a small value that passes the bound test. Both
+        // the multiplication and the addition must be checked.
         let bc_count_usize = usize::try_from(bc_count).unwrap_or(usize::MAX);
-        let bc_bytes = bc_count_usize.saturating_mul(4);
-        if p + bc_bytes > pd.len() {
+        let bc_end = bc_count_usize
+            .checked_mul(4)
+            .and_then(|n| p.checked_add(n))
+            .ok_or(LjParseError::CountOverflow {
+                proto_idx,
+                field: "bytecode",
+                count: bc_count,
+            })?;
+        let bc_bytes = bc_end - p;
+        if bc_end > pd.len() {
             return Err(LjParseError::InvalidProto {
                 proto_idx,
                 reason: format!("bytecode section out of bounds (need {bc_bytes})"),

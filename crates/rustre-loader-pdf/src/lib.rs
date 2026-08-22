@@ -1475,6 +1475,13 @@ pub struct PdfParser {
     loaded_xref_offsets: std::collections::HashSet<u64>,
 }
 
+/// Maximum depth of nested PDF containers (`<<…>>` and `[…]`).
+///
+/// Container nesting costs one input byte and one native stack frame per level,
+/// so `[[[[[…` is a stack-exhaustion primitive without a cap. Real documents
+/// nest a few levels; 128 is far above any legitimate file.
+pub const MAX_NESTING_DEPTH: usize = 128;
+
 impl PdfParser {
     pub fn parse(data: Vec<u8>) -> Result<Self, PdfError> {
         if !data.starts_with(b"%PDF-") {
@@ -1667,7 +1674,12 @@ impl PdfParser {
                 let field_type = read_be_uint(row, 0, w[0]);
                 let field2 = read_be_uint(row, w[0], w[1]);
                 if field_type == 1 {
-                    self.xref.entry(first + i).or_insert(field2);
+                    // `/Index [4294967295 4]` makes `first + i` wrap in release,
+                    // aliasing object 0. Stop the run instead of aliasing.
+                    let Some(obj_id) = first.checked_add(i) else {
+                        break;
+                    };
+                    self.xref.entry(obj_id).or_insert(field2);
                 }
                 data_pos += row_size;
             }
@@ -1771,14 +1783,34 @@ impl PdfParser {
         }
     }
 
-    fn parse_value(&self, mut pos: usize) -> Result<(PdfObject, usize), PdfError> {
+    fn parse_value(&self, pos: usize) -> Result<(PdfObject, usize), PdfError> {
+        self.parse_value_at_depth(pos, 0)
+    }
+
+    /// Parse one PDF object, bounding container nesting.
+    ///
+    /// `parse_value` → `parse_array`/`parse_dict` → `parse_value` is mutual
+    /// recursion driven by one input byte per level, so `[[[[[…` is a
+    /// stack-exhaustion primitive. `depth` counts the enclosing containers and
+    /// the parse fails past [`MAX_NESTING_DEPTH`] — the same defensive shape as
+    /// the `/Prev` chain, which `loaded_xref_offsets` already bounds.
+    fn parse_value_at_depth(
+        &self,
+        mut pos: usize,
+        depth: usize,
+    ) -> Result<(PdfObject, usize), PdfError> {
+        if depth > MAX_NESTING_DEPTH {
+            return Err(PdfError::ParseError(format!(
+                "object nesting deeper than {MAX_NESTING_DEPTH}"
+            )));
+        }
         pos = self.skip_ws(pos);
         if pos >= self.data.len() {
             return Ok((PdfObject::Null, pos));
         }
         match self.data[pos] {
             b'<' if self.data.get(pos + 1) == Some(&b'<') => {
-                let (d, e) = self.parse_dict(pos)?;
+                let (d, e) = self.parse_dict_at_depth(pos, depth + 1)?;
                 Ok((PdfObject::Dict(d), e))
             }
             b'<' => {
@@ -1794,7 +1826,7 @@ impl PdfParser {
                 Ok((PdfObject::Name(n), e))
             }
             b'[' => {
-                let (a, e) = self.parse_array(pos)?;
+                let (a, e) = self.parse_array_at_depth(pos, depth + 1)?;
                 Ok((PdfObject::Array(a), e))
             }
             b't' if self.data.get(pos..pos + 4) == Some(b"true") => {
@@ -1819,6 +1851,15 @@ impl PdfParser {
     }
 
     fn parse_dict(&self, pos: usize) -> Result<(PdfDict, usize), PdfError> {
+        self.parse_dict_at_depth(pos, 0)
+    }
+
+    /// Parse a dictionary at a known nesting depth. See [`Self::parse_value_at_depth`].
+    fn parse_dict_at_depth(
+        &self,
+        pos: usize,
+        depth: usize,
+    ) -> Result<(PdfDict, usize), PdfError> {
         if pos + 2 > self.data.len() || &self.data[pos..pos + 2] != b"<<" {
             return Err(PdfError::ParseError("expected <<".into()));
         }
@@ -1838,14 +1879,29 @@ impl PdfParser {
             }
             let (key, ak) = self.parse_name(p)?;
             p = self.skip_ws(ak);
-            let (val, av) = self.parse_value(p)?;
+            let (val, av) = self.parse_value_at_depth(p, depth + 1)?;
             p = av;
             dict.set(key, val);
         }
         Err(PdfError::ParseError("unterminated dict".into()))
     }
 
-    fn parse_array(&self, pos: usize) -> Result<(Vec<PdfObject>, usize), PdfError> {
+    /// Parse a PDF array starting at `pos`, at nesting depth zero.
+    ///
+    /// # Errors
+    /// Returns [`PdfError::ParseError`] if `pos` does not start an array, the
+    /// array is unterminated, or its contents nest deeper than
+    /// [`MAX_NESTING_DEPTH`].
+    pub fn parse_array(&self, pos: usize) -> Result<(Vec<PdfObject>, usize), PdfError> {
+        self.parse_array_at_depth(pos, 0)
+    }
+
+    /// Parse an array at a known nesting depth. See [`Self::parse_value_at_depth`].
+    fn parse_array_at_depth(
+        &self,
+        pos: usize,
+        depth: usize,
+    ) -> Result<(Vec<PdfObject>, usize), PdfError> {
         if pos >= self.data.len() || self.data[pos] != b'[' {
             return Err(PdfError::ParseError("expected [".into()));
         }
@@ -1859,7 +1915,7 @@ impl PdfParser {
             if self.data[p] == b']' {
                 return Ok((arr, p + 1));
             }
-            let (val, after) = self.parse_value(p)?;
+            let (val, after) = self.parse_value_at_depth(p, depth + 1)?;
             arr.push(val);
             p = after;
         }
@@ -2433,9 +2489,27 @@ fn parser_png_predictor(
     bits: usize,
     columns: usize,
 ) -> Result<Vec<u8>, PdfError> {
-    let bpp = (colors * bits).div_ceil(8);
-    let row_size = (columns * colors * bits).div_ceil(8);
-    let stride = row_size + 1;
+    // `colors`, `bits` and `columns` come straight from /DecodeParms and are
+    // attacker-controlled: `/Columns 4000000000 /Colors 4` overflows the product
+    // and drives a multi-gigabyte `vec![0u8; row_size]`. Checked like the twin
+    // implementation in `pdf_stream_decoder::png_predictor_undo`.
+    let bits_per_pixel = colors
+        .checked_mul(bits)
+        .ok_or_else(|| PdfError::ParseError("PNG predictor: colors * bits overflow".into()))?;
+    let bpp = bits_per_pixel.div_ceil(8);
+    let row_bits = columns.checked_mul(bits_per_pixel).ok_or_else(|| {
+        PdfError::ParseError("PNG predictor: columns * colors * bits overflow".into())
+    })?;
+    let row_size = row_bits.div_ceil(8);
+    let stride = row_size
+        .checked_add(1)
+        .ok_or_else(|| PdfError::ParseError("PNG predictor: stride overflow".into()))?;
+    // Never reserve a row larger than the stream itself: the loop below cannot
+    // consume even one row in that case, so the allocation would be pure waste
+    // driven by a bogus /Columns.
+    if stride > data.len() {
+        return Ok(Vec::new());
+    }
     let mut out = Vec::with_capacity(data.len());
     let mut prev = vec![0u8; row_size];
     let mut ri = 0;
@@ -3923,5 +3997,93 @@ mod lzw_hardening_tests {
     fn lzw_plain_literals_round_trip() {
         let data = pack(&[0x41, 0x42, 0x43, 257], 9);
         assert_eq!(parser_lzw_decompress(&data, true).unwrap(), b"ABC");
+    }
+}
+
+#[cfg(test)]
+mod malformed_input_hardening {
+    //! Regressions for overflow and recursion guards on attacker-controlled PDF
+    //! input. Each test FAILS when the corresponding guard is removed —
+    //! verified by reintroducing the defect and re-running.
+
+    use super::*;
+
+    /// `/DecodeParms << /Columns … /Colors 4 /BitsPerComponent 8 >>` with a
+    /// column count large enough that `columns * colors * bits` overflows.
+    ///
+    /// Unguarded, the product wraps in release builds (`overflow-checks` is off)
+    /// and the predictor silently proceeds with a bogus `row_size` — it returns
+    /// success on input it cannot possibly have decoded, and for other column
+    /// values drives a multi-gigabyte `vec![0u8; row_size]`.
+    #[test]
+    fn png_predictor_rejects_overflowing_decode_parms() {
+        let data = [0u8; 64];
+        let err = parser_png_predictor(&data, 4, 8, 1usize << 60)
+            .expect_err("columns * colors * bits overflows usize and must be rejected");
+        assert!(
+            err.to_string().contains("overflow"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Honest predictor parameters must keep working.
+    #[test]
+    fn png_predictor_still_decodes_normal_parameters() {
+        // 3 columns, 1 color, 8 bits => row_size 3, stride 4. Two "None" rows.
+        let data = [0, 1, 2, 3, 0, 4, 5, 6];
+        let out = parser_png_predictor(&data, 1, 8, 3).expect("well-formed rows must decode");
+        assert_eq!(out, vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    /// `[[[[[…` costs one input byte and one stack frame per level.
+    #[test]
+    fn deeply_nested_arrays_error_instead_of_exhausting_the_stack() {
+        let mut data = b"%PDF-1.4\n".to_vec();
+        let start = data.len();
+        data.extend(std::iter::repeat_n(b'[', 100_000));
+        let parser = PdfParser::parse(data).expect("header is well-formed");
+        let err = parser
+            .parse_value(start)
+            .expect_err("100k nesting levels must be refused");
+        assert!(
+            err.to_string().contains("nesting"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Nesting within the cap still parses.
+    #[test]
+    fn moderately_nested_arrays_still_parse() {
+        let depth = 8;
+        let mut data = b"%PDF-1.4\n".to_vec();
+        let start = data.len();
+        data.extend(std::iter::repeat_n(b'[', depth));
+        data.extend(std::iter::repeat_n(b']', depth));
+        let parser = PdfParser::parse(data).expect("header is well-formed");
+        let (val, _) = parser.parse_value(start).expect("8 levels are legitimate");
+        assert!(matches!(val, PdfObject::Array(_)));
+    }
+
+    /// `/Index [4294967295 2]` makes `first + i` wrap on the second entry,
+    /// aliasing object 0 with an offset that belongs to object 4294967295.
+    #[test]
+    fn xref_stream_index_wrap_does_not_alias_object_zero() {
+        let body = b"<< /Type /XRef /Size 3 /W [1 2 1] /Index [4294967295 2] /Length 8 >>\nstream\n\x01\x00\x10\x00\x01\x00\x20\x00\nendstream\nendobj\n";
+        let mut data = b"%PDF-1.5\n".to_vec();
+        let obj_off = data.len();
+        data.extend_from_slice(b"1 0 obj\n");
+        data.extend_from_slice(body);
+        data.extend_from_slice(format!("startxref\n{obj_off}\n%%EOF\n").as_bytes());
+        let parser = PdfParser::parse(data).expect("header is well-formed");
+        assert!(
+            parser.xref.contains_key(&4_294_967_295),
+            "the first /Index entry should have been recorded: {:?}",
+            parser.xref
+        );
+        assert!(
+            !parser.xref.contains_key(&0),
+            "object 0 was aliased by a wrapped /Index counter: {:?}",
+            parser.xref
+        );
     }
 }

@@ -851,9 +851,12 @@ impl LjProto {
 
         // Bytecode — use checked arithmetic to prevent multiplication overflow
         // when bc_count is a large attacker-controlled ULEB128 value.
+        // `saturating_mul` alone is NOT enough: it saturates to `usize::MAX`, and
+        // `p + usize::MAX` then WRAPS in release (overflow-checks are off), producing
+        // a small number that passes the bound check. Both operations must be checked.
         let bc_count_usize = usize::try_from(bc_count).unwrap_or(usize::MAX);
-        let bc_bytes = bc_count_usize.saturating_mul(4);
-        if p + bc_bytes > pd.len() {
+        let bc_bytes = bc_count_usize.checked_mul(4)?;
+        if p.checked_add(bc_bytes)? > pd.len() {
             return None;
         }
         let mut instructions = Vec::with_capacity(bc_count_usize);
@@ -873,8 +876,8 @@ impl LjProto {
 
         // Upvalue descriptors (2 bytes each)
         let num_upvalues_usize = usize::from(num_upvalues);
-        let uv_bytes = num_upvalues_usize.saturating_mul(2);
-        if p + uv_bytes > pd.len() {
+        let uv_bytes = num_upvalues_usize.checked_mul(2)?;
+        if p.checked_add(uv_bytes)? > pd.len() {
             return None;
         }
         let mut upvalues = Vec::with_capacity(num_upvalues_usize);

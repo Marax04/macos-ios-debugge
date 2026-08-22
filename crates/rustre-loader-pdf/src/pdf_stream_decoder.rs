@@ -575,6 +575,11 @@ pub fn png_predictor_undo(
         // Tolerant: process as many complete rows as possible.
     }
 
+    // A `row_size` larger than the whole stream yields zero rows; allocating a
+    // row buffer of that size would be a bogus-/Columns amplification.
+    if stride > data.len() {
+        return Ok(Vec::new());
+    }
     let num_rows = data.len() / stride;
     let mut out = vec![0u8; num_rows * row_size];
     let mut prev_row = vec![0u8; row_size];
