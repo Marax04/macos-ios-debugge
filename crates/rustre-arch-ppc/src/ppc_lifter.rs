@@ -264,6 +264,23 @@ pub struct PpcLifter<'a> {
     _arch: &'a PpcArch,
 }
 
+/// Decode a PowerPC SPR field, which is stored with its two 5-bit halves
+/// swapped relative to the register number.
+const fn spr_decode(v: u32) -> u32 {
+    ((v & 0x1F) << 5) | (v >> 5)
+}
+
+/// Sign-extend the low 16 bits of an instruction word (D-form SIMM field).
+fn simm16(v: u32) -> i32 {
+    let low = u16::try_from(v & 0xFFFF).unwrap_or(0);
+    i32::from(i16::from_ne_bytes(low.to_ne_bytes()))
+}
+
+/// The low 16 bits of an instruction word (D-form UIMM field).
+const fn uimm16(v: u32) -> u32 {
+    v & 0xFFFF
+}
+
 impl<'a> PpcLifter<'a> {
     /// Create a new lifter bound to an architecture instance.
     #[must_use]
@@ -277,16 +294,6 @@ impl<'a> PpcLifter<'a> {
     /// Returns `None` if `bytes` is shorter than 4.
     #[must_use]
     pub fn lift_insn(&self, pc: u64, bytes: &[u8]) -> Option<LiftedInsn> {
-        fn simm16(v: u32) -> i32 {
-            let low = u16::try_from(v & 0xFFFF).unwrap_or(0);
-            i32::from(i16::from_ne_bytes(low.to_ne_bytes()))
-        }
-        const fn uimm16(v: u32) -> u32 {
-            v & 0xFFFF
-        }
-        const fn spr_decode(v: u32) -> u32 {
-            ((v & 0x1F) << 5) | (v >> 5)
-        }
 
         if bytes.len() < 4 {
             return None;
@@ -304,438 +311,11 @@ impl<'a> PpcLifter<'a> {
 
         match opcd {
             // ── ORI (NOP if all zero) ──────────────────────────────────────
-            24 => {
-                if instr == 0x6000_0000 {
-                    il.push(PpcILInsn::Nop);
-                } else {
-                    il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::or(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr))),
-                    });
-                }
-            }
-            // ── ADDI / LI ─────────────────────────────────────────────────
-            14 => {
-                let val = if ra == 0 {
-                    PpcILExpr::simm(simm16(instr))
-                } else {
-                    PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::simm(simm16(instr)))
-                };
-                il.push(PpcILInsn::Set {
-                    dst: PpcILExpr::reg(rs),
-                    value: val,
-                });
-            }
-            // ── ADDIS / LIS ────────────────────────────────────────────────
-            15 => {
-                let shifted = simm16(instr) << 16;
-                let val = if ra == 0 {
-                    PpcILExpr::simm(shifted)
-                } else {
-                    PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::simm(shifted))
-                };
-                il.push(PpcILInsn::Set {
-                    dst: PpcILExpr::reg(rs),
-                    value: val,
-                });
-            }
-            // ── SUBFIC ─────────────────────────────────────────────────────
-            8 => {
-                il.push(PpcILInsn::Set {
-                    dst: PpcILExpr::reg(rs),
-                    value: PpcILExpr::sub(PpcILExpr::simm(simm16(instr)), PpcILExpr::reg(ra)),
-                });
-            }
-            // ── MULLI ──────────────────────────────────────────────────────
-            7 => {
-                il.push(PpcILInsn::Unlifted(format!(
-                    "mulli r{rs},r{ra},{}",
-                    simm16(instr)
-                )));
-            }
-            // ── ADDIC ──────────────────────────────────────────────────────
-            12 | 13 => {
-                il.push(PpcILInsn::Set {
-                    dst: PpcILExpr::reg(rs),
-                    value: PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::simm(simm16(instr))),
-                });
-            }
-            // ── CMPWI / CMPLWI ────────────────────────────────────────────
-            11 => {
-                let crfd = (instr >> 23) & 7;
-                il.push(PpcILInsn::Compare {
-                    cr: PpcILExpr::crfield(crfd),
-                    lhs: PpcILExpr::reg(ra),
-                    rhs: PpcILExpr::simm(simm16(instr)),
-                    signed: true,
-                });
-            }
-            10 => {
-                let crfd = (instr >> 23) & 7;
-                il.push(PpcILInsn::Compare {
-                    cr: PpcILExpr::crfield(crfd),
-                    lhs: PpcILExpr::reg(ra),
-                    rhs: PpcILExpr::uimm(uimm16(instr)),
-                    signed: false,
-                });
-            }
-            // ── ORI / ORIS / XORI / XORIS / ANDI / ANDIS ──────────────────
-            25 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(ra),
-                value: PpcILExpr::or(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr) << 16)),
-            }),
-            26 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(ra),
-                value: PpcILExpr::xor(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr))),
-            }),
-            27 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(ra),
-                value: PpcILExpr::xor(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr) << 16)),
-            }),
-            28 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(ra),
-                value: PpcILExpr::and(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr))),
-            }),
-            29 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(ra),
-                value: PpcILExpr::and(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr) << 16)),
-            }),
-            // ── RLWINM ────────────────────────────────────────────────────
-            21 => {
-                let sh = ((instr >> 11) & 31) as u8;
-                let mb = ((instr >> 6) & 31) as u8;
-                let me = ((instr >> 1) & 31) as u8;
-                il.push(PpcILInsn::Rlwinm {
-                    dst: PpcILExpr::reg(ra),
-                    src: PpcILExpr::reg(rs),
-                    sh,
-                    mb,
-                    me,
-                });
-            }
-            // ── RLWIMI ────────────────────────────────────────────────────
-            20 => {
-                let sh = ((instr >> 11) & 31) as u8;
-                let mb = ((instr >> 6) & 31) as u8;
-                let me = ((instr >> 1) & 31) as u8;
-                il.push(PpcILInsn::Unlifted(format!(
-                    "rlwimi r{ra},r{rs},{sh},{mb},{me}"
-                )));
-            }
-            // ── Loads ─────────────────────────────────────────────────────
-            32 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(rs),
-                value: PpcILExpr::load(4, PpcILExpr::mem_addr(ra, simm16(instr))),
-            }),
-            34 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(rs),
-                value: PpcILExpr::load(1, PpcILExpr::mem_addr(ra, simm16(instr))),
-            }),
-            40 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(rs),
-                value: PpcILExpr::load(2, PpcILExpr::mem_addr(ra, simm16(instr))),
-            }),
-            42 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(rs),
-                value: PpcILExpr::sext(
-                    PpcILExpr::load(2, PpcILExpr::mem_addr(ra, simm16(instr))),
-                    16,
-                ),
-            }),
-            58 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::reg(rs),
-                value: PpcILExpr::load(8, PpcILExpr::mem_addr(ra, simm16(instr))),
-            }),
-            48 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::freg(rs),
-                value: PpcILExpr::load(4, PpcILExpr::mem_addr(ra, simm16(instr))),
-            }),
-            50 => il.push(PpcILInsn::Set {
-                dst: PpcILExpr::freg(rs),
-                value: PpcILExpr::load(8, PpcILExpr::mem_addr(ra, simm16(instr))),
-            }),
-            // ── Stores ────────────────────────────────────────────────────
-            36 => il.push(PpcILInsn::Store {
-                width: 4,
-                addr: PpcILExpr::mem_addr(ra, simm16(instr)),
-                value: PpcILExpr::reg(rs),
-            }),
-            38 => il.push(PpcILInsn::Store {
-                width: 1,
-                addr: PpcILExpr::mem_addr(ra, simm16(instr)),
-                value: PpcILExpr::reg(rs),
-            }),
-            44 => il.push(PpcILInsn::Store {
-                width: 2,
-                addr: PpcILExpr::mem_addr(ra, simm16(instr)),
-                value: PpcILExpr::reg(rs),
-            }),
-            62 => il.push(PpcILInsn::Store {
-                width: 8,
-                addr: PpcILExpr::mem_addr(ra, simm16(instr)),
-                value: PpcILExpr::reg(rs),
-            }),
-            52 => il.push(PpcILInsn::Store {
-                width: 4,
-                addr: PpcILExpr::mem_addr(ra, simm16(instr)),
-                value: PpcILExpr::freg(rs),
-            }),
-            54 => il.push(PpcILInsn::Store {
-                width: 8,
-                addr: PpcILExpr::mem_addr(ra, simm16(instr)),
-                value: PpcILExpr::freg(rs),
-            }),
-            // ── Unconditional branch ──────────────────────────────────────
-            18 => {
-                let li_raw = i32::try_from(instr & 0x03FF_FFFC).unwrap_or(0);
-                let li = if li_raw & 0x0200_0000 != 0 {
-                    li_raw - 0x0400_0000
-                } else {
-                    li_raw
-                };
-                let aa = (instr >> 1) & 1;
-                let lk = instr & 1;
-                let target = if aa != 0 {
-                    PpcILExpr::addr(u64::from(u32::from_ne_bytes(li.to_ne_bytes())))
-                } else {
-                    PpcILExpr::addr(pc.wrapping_add_signed(i64::from(li)))
-                };
-                if lk != 0 {
-                    il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::LR,
-                        value: PpcILExpr::addr(pc + 4),
-                    });
-                    il.push(PpcILInsn::Call(target));
-                    flags = InstrFlags::CALL;
-                } else {
-                    il.push(PpcILInsn::Jump(target));
-                    flags = InstrFlags::BRANCH;
-                }
-            }
-            // ── Conditional branch ────────────────────────────────────────
-            16 => {
-                let bd_raw = i32::try_from(instr & 0xFFFC).unwrap_or(0);
-                let bd = if bd_raw & 0x8000 != 0 {
-                    bd_raw - 0x1_0000
-                } else {
-                    bd_raw
-                };
-                let aa = (instr >> 1) & 1;
-                let lk = instr & 1;
-                let target_val = if aa != 0 {
-                    u64::from(u32::from_ne_bytes(bd.to_ne_bytes()))
-                } else {
-                    pc.wrapping_add_signed(i64::from(bd))
-                };
-                let bi_field = (instr >> 16) & 31;
-                if lk != 0 {
-                    il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::LR,
-                        value: PpcILExpr::addr(pc + 4),
-                    });
-                }
-                il.push(PpcILInsn::CondJump {
-                    cond: PpcILExpr::crfield(bi_field >> 2),
-                    target: PpcILExpr::addr(target_val),
-                });
-                flags = if lk != 0 {
-                    InstrFlags::CALL.union(InstrFlags::CONDITIONAL)
-                } else {
-                    InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL)
-                };
-            }
-            // ── SC ────────────────────────────────────────────────────────
-            17 => {
-                il.push(PpcILInsn::Syscall);
-            }
-            // ── XO (opcode 19) ────────────────────────────────────────────
-            19 => {
-                let xo19 = (instr >> 1) & 0x3FF;
-                match xo19 {
-                    16 => {
-                        let lk = instr & 1;
-                        if lk != 0 {
-                            il.push(PpcILInsn::Set {
-                                dst: PpcILExpr::LR,
-                                value: PpcILExpr::addr(pc + 4),
-                            });
-                        }
-                        il.push(PpcILInsn::Return);
-                        flags = InstrFlags::RET;
-                    }
-                    528 => {
-                        let lk = instr & 1;
-                        if lk != 0 {
-                            il.push(PpcILInsn::Set {
-                                dst: PpcILExpr::LR,
-                                value: PpcILExpr::addr(pc + 4),
-                            });
-                            il.push(PpcILInsn::Call(PpcILExpr::CTR));
-                            flags = InstrFlags::CALL;
-                        } else {
-                            il.push(PpcILInsn::BranchCTR);
-                            flags = InstrFlags::BRANCH.union(InstrFlags::INDIRECT);
-                        }
-                    }
-                    150 | 598 | 854 => {
-                        il.push(PpcILInsn::Barrier);
-                    }
-                    _ => il.push(PpcILInsn::Nop),
-                }
-            }
-            // ── XO (opcode 31) ────────────────────────────────────────────
+            _ if Self::lift_opcd_imm(&mut il, opcd, instr, rs, ra) => {}
+            _ if Self::lift_opcd_mem(&mut il, opcd, instr, rs, ra) => {}
+            _ if Self::lift_opcd_branch(&mut il, &mut flags, opcd, instr, pc) => {}
             31 => {
-                match xo {
-                    // ADD
-                    266 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(rs),
-                        value: PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
-                    }),
-                    // SUBF (rd = rb - ra)
-                    40 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(rs),
-                        value: PpcILExpr::sub(PpcILExpr::reg(rb), PpcILExpr::reg(ra)),
-                    }),
-                    // AND
-                    28 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::and(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
-                    }),
-                    // OR (MR if rs==rb)
-                    444 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::or(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
-                    }),
-                    // XOR
-                    316 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::xor(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
-                    }),
-                    // NOR (NOT OR)
-                    124 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::not(PpcILExpr::or(
-                            PpcILExpr::reg(rs),
-                            PpcILExpr::reg(rb),
-                        )),
-                    }),
-                    // NEG
-                    104 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(rs),
-                        value: PpcILExpr::sub(PpcILExpr::simm(0), PpcILExpr::reg(ra)),
-                    }),
-                    // SLW
-                    23 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::lsl(PpcILExpr::reg(rs), (rb & 31) as u8),
-                    }),
-                    // SRW
-                    536 | 26 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::lsr(PpcILExpr::reg(rs), (rb & 31) as u8),
-                    }),
-                    // SRAW
-                    792 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::asr(PpcILExpr::reg(rs), (rb & 31) as u8),
-                    }),
-                    // SRAWI
-                    824 => {
-                        let sh = rb as u8;
-                        il.push(PpcILInsn::Set {
-                            dst: PpcILExpr::reg(ra),
-                            value: PpcILExpr::asr(PpcILExpr::reg(rs), sh),
-                        });
-                    }
-                    // CMP (signed) — crfd is rs>>2
-                    0 => {
-                        il.push(PpcILInsn::Compare {
-                            cr: PpcILExpr::crfield(rs >> 2),
-                            lhs: PpcILExpr::reg(ra),
-                            rhs: PpcILExpr::reg(rb),
-                            signed: true,
-                        });
-                    }
-                    // CMPL (unsigned)
-                    32 => {
-                        il.push(PpcILInsn::Compare {
-                            cr: PpcILExpr::crfield(rs >> 2),
-                            lhs: PpcILExpr::reg(ra),
-                            rhs: PpcILExpr::reg(rb),
-                            signed: false,
-                        });
-                    }
-                    // LWZX
-                    21 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(rs),
-                        value: PpcILExpr::load(
-                            4,
-                            PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
-                        ),
-                    }),
-                    // LBZX
-                    87 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(rs),
-                        value: PpcILExpr::load(
-                            1,
-                            PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
-                        ),
-                    }),
-                    // STWX
-                    151 => il.push(PpcILInsn::Store {
-                        width: 4,
-                        addr: PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
-                        value: PpcILExpr::reg(rs),
-                    }),
-                    // STBX
-                    215 => il.push(PpcILInsn::Store {
-                        width: 1,
-                        addr: PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
-                        value: PpcILExpr::reg(rs),
-                    }),
-                    // MFSPR
-                    339 => {
-                        let spr_raw = (instr >> 11) & 0x3FF;
-                        let spr = spr_decode(spr_raw);
-                        let src = match spr {
-                            8 => PpcILExpr::LR,
-                            9 => PpcILExpr::CTR,
-                            _ => PpcILExpr::spr(spr),
-                        };
-                        il.push(PpcILInsn::Set {
-                            dst: PpcILExpr::reg(rs),
-                            value: src,
-                        });
-                    }
-                    // MTSPR
-                    467 => {
-                        let spr_raw = (instr >> 11) & 0x3FF;
-                        let spr = spr_decode(spr_raw);
-                        let dst = match spr {
-                            8 => PpcILExpr::LR,
-                            9 => PpcILExpr::CTR,
-                            _ => PpcILExpr::spr(spr),
-                        };
-                        il.push(PpcILInsn::Set {
-                            dst,
-                            value: PpcILExpr::reg(rs),
-                        });
-                    }
-                    // EXTSB / EXTSH
-                    954 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::sext(PpcILExpr::reg(rs), 8),
-                    }),
-                    922 => il.push(PpcILInsn::Set {
-                        dst: PpcILExpr::reg(ra),
-                        value: PpcILExpr::sext(PpcILExpr::reg(rs), 16),
-                    }),
-                    // SYNC/EIEIO barriers
-                    598 | 854 => il.push(PpcILInsn::Barrier),
-                    _ => {
-                        il.push(PpcILInsn::Unlifted(format!("opcd31 xo={xo} rc={rc}")));
-                    }
-                }
+                Self::lift_opcd31(&mut il, instr, rs, ra, rb, xo, rc);
             }
             _ => {
                 il.push(PpcILInsn::Unlifted(format!(
@@ -754,6 +334,509 @@ impl<'a> PpcLifter<'a> {
             il,
             flags,
         })
+    }
+
+    /// Lift the opcode-31 shift, compare, load/store-indexed, SPR and
+    /// sign-extension arms.
+    ///
+    /// The second half of [`Self::lift_opcd31`], split for length only;
+    /// arms are verbatim. Returns false when `xo` is not in this half.
+    fn lift_opcd31_tail(il: &mut Vec<PpcILInsn>, instr: u32, rs: u32, ra: u32, rb: u32, xo: u32) -> bool {
+        match xo {
+            792 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::asr(PpcILExpr::reg(rs), u8::try_from(rb & 31).unwrap_or(0)),
+            }),
+            // SRAWI
+            824 => {
+                let sh = u8::try_from(rb & 31).unwrap_or(0);
+                il.push(PpcILInsn::Set {
+                    dst: PpcILExpr::reg(ra),
+                    value: PpcILExpr::asr(PpcILExpr::reg(rs), sh),
+                });
+            }
+            // CMP (signed) — crfd is rs>>2
+            0 => {
+                il.push(PpcILInsn::Compare {
+                    cr: PpcILExpr::crfield(rs >> 2),
+                    lhs: PpcILExpr::reg(ra),
+                    rhs: PpcILExpr::reg(rb),
+                    signed: true,
+                });
+            }
+            // CMPL (unsigned)
+            32 => {
+                il.push(PpcILInsn::Compare {
+                    cr: PpcILExpr::crfield(rs >> 2),
+                    lhs: PpcILExpr::reg(ra),
+                    rhs: PpcILExpr::reg(rb),
+                    signed: false,
+                });
+            }
+            // LWZX
+            21 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: PpcILExpr::load(
+                    4,
+                    PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
+                ),
+            }),
+            // LBZX
+            87 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: PpcILExpr::load(
+                    1,
+                    PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
+                ),
+            }),
+            // STWX
+            151 => il.push(PpcILInsn::Store {
+                width: 4,
+                addr: PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
+                value: PpcILExpr::reg(rs),
+            }),
+            // STBX
+            215 => il.push(PpcILInsn::Store {
+                width: 1,
+                addr: PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
+                value: PpcILExpr::reg(rs),
+            }),
+            // MFSPR
+            339 => {
+                let spr_raw = (instr >> 11) & 0x3FF;
+                let spr = spr_decode(spr_raw);
+                let src = match spr {
+                    8 => PpcILExpr::LR,
+                    9 => PpcILExpr::CTR,
+                    _ => PpcILExpr::spr(spr),
+                };
+                il.push(PpcILInsn::Set {
+                    dst: PpcILExpr::reg(rs),
+                    value: src,
+                });
+            }
+            // MTSPR
+            467 => {
+                let spr_raw = (instr >> 11) & 0x3FF;
+                let spr = spr_decode(spr_raw);
+                let dst = match spr {
+                    8 => PpcILExpr::LR,
+                    9 => PpcILExpr::CTR,
+                    _ => PpcILExpr::spr(spr),
+                };
+                il.push(PpcILInsn::Set {
+                    dst,
+                    value: PpcILExpr::reg(rs),
+                });
+            }
+            // EXTSB / EXTSH
+            954 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::sext(PpcILExpr::reg(rs), 8),
+            }),
+            922 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::sext(PpcILExpr::reg(rs), 16),
+            }),
+            // SYNC/EIEIO barriers
+            598 | 854 => il.push(PpcILInsn::Barrier),
+            _ => return false,
+        }
+        true
+    }
+
+    /// Lift the logical-immediate and rotate/mask opcodes (25-29, 20-21).
+    ///
+    /// The second half of [`Self::lift_opcd_imm`], split for length only;
+    /// arms are verbatim.
+    fn lift_opcd_imm_logic(il: &mut Vec<PpcILInsn>, opcd: u32, instr: u32, rs: u32, ra: u32) -> bool {
+        match opcd {
+        25 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(ra),
+            value: PpcILExpr::or(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr) << 16)),
+        }),
+        26 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(ra),
+            value: PpcILExpr::xor(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr))),
+        }),
+        27 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(ra),
+            value: PpcILExpr::xor(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr) << 16)),
+        }),
+        28 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(ra),
+            value: PpcILExpr::and(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr))),
+        }),
+        29 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(ra),
+            value: PpcILExpr::and(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr) << 16)),
+        }),
+        // ── RLWINM ────────────────────────────────────────────────────
+        21 => {
+            let sh = ((instr >> 11) & 31) as u8;
+            let mb = ((instr >> 6) & 31) as u8;
+            let me = ((instr >> 1) & 31) as u8;
+            il.push(PpcILInsn::Rlwinm {
+                dst: PpcILExpr::reg(ra),
+                src: PpcILExpr::reg(rs),
+                sh,
+                mb,
+                me,
+            });
+        }
+        // ── RLWIMI ────────────────────────────────────────────────────
+        20 => {
+            let sh = ((instr >> 11) & 31) as u8;
+            let mb = ((instr >> 6) & 31) as u8;
+            let me = ((instr >> 1) & 31) as u8;
+            il.push(PpcILInsn::Unlifted(format!(
+                "rlwimi r{ra},r{rs},{sh},{mb},{me}"
+            )));
+        }
+        // ── Loads ─────────────────────────────────────────────────────
+            _ => return false,
+        }
+        true
+    }
+
+    /// Lift the D-form immediate and rotate/mask opcodes (7-29).
+    ///
+    /// Split out of [`Self::lift_insn`] for length only; the arms are
+    /// verbatim and push into `il` exactly as before.
+    fn lift_opcd_imm(il: &mut Vec<PpcILInsn>, opcd: u32, instr: u32, rs: u32, ra: u32) -> bool {
+        match opcd {
+        24 => {
+            if instr == 0x6000_0000 {
+                il.push(PpcILInsn::Nop);
+            } else {
+                il.push(PpcILInsn::Set {
+                    dst: PpcILExpr::reg(ra),
+                    value: PpcILExpr::or(PpcILExpr::reg(rs), PpcILExpr::uimm(uimm16(instr))),
+                });
+            }
+        }
+        // ── ADDI / LI ─────────────────────────────────────────────────
+        14 => {
+            let val = if ra == 0 {
+                PpcILExpr::simm(simm16(instr))
+            } else {
+                PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::simm(simm16(instr)))
+            };
+            il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: val,
+            });
+        }
+        // ── ADDIS / LIS ────────────────────────────────────────────────
+        15 => {
+            let shifted = simm16(instr) << 16;
+            let val = if ra == 0 {
+                PpcILExpr::simm(shifted)
+            } else {
+                PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::simm(shifted))
+            };
+            il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: val,
+            });
+        }
+        // ── SUBFIC ─────────────────────────────────────────────────────
+        8 => {
+            il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: PpcILExpr::sub(PpcILExpr::simm(simm16(instr)), PpcILExpr::reg(ra)),
+            });
+        }
+        // ── MULLI ──────────────────────────────────────────────────────
+        7 => {
+            il.push(PpcILInsn::Unlifted(format!(
+                "mulli r{rs},r{ra},{}",
+                simm16(instr)
+            )));
+        }
+        // ── ADDIC ──────────────────────────────────────────────────────
+        12 | 13 => {
+            il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::simm(simm16(instr))),
+            });
+        }
+        // ── CMPWI / CMPLWI ────────────────────────────────────────────
+        11 => {
+            let crfd = (instr >> 23) & 7;
+            il.push(PpcILInsn::Compare {
+                cr: PpcILExpr::crfield(crfd),
+                lhs: PpcILExpr::reg(ra),
+                rhs: PpcILExpr::simm(simm16(instr)),
+                signed: true,
+            });
+        }
+        10 => {
+            let crfd = (instr >> 23) & 7;
+            il.push(PpcILInsn::Compare {
+                cr: PpcILExpr::crfield(crfd),
+                lhs: PpcILExpr::reg(ra),
+                rhs: PpcILExpr::uimm(uimm16(instr)),
+                signed: false,
+            });
+        }
+        // ── ORI / ORIS / XORI / XORIS / ANDI / ANDIS ──────────────────
+        _ if Self::lift_opcd_imm_logic(il, opcd, instr, rs, ra) => {}
+            _ => return false,
+        }
+        true
+    }
+
+    /// Lift the D-form load and store opcodes (32-62).
+    ///
+    /// Split out of [`Self::lift_insn`] for length only; the arms are
+    /// verbatim and push into `il` exactly as before.
+    fn lift_opcd_mem(il: &mut Vec<PpcILInsn>, opcd: u32, instr: u32, rs: u32, ra: u32) -> bool {
+        match opcd {
+        32 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(rs),
+            value: PpcILExpr::load(4, PpcILExpr::mem_addr(ra, simm16(instr))),
+        }),
+        34 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(rs),
+            value: PpcILExpr::load(1, PpcILExpr::mem_addr(ra, simm16(instr))),
+        }),
+        40 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(rs),
+            value: PpcILExpr::load(2, PpcILExpr::mem_addr(ra, simm16(instr))),
+        }),
+        42 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(rs),
+            value: PpcILExpr::sext(
+                PpcILExpr::load(2, PpcILExpr::mem_addr(ra, simm16(instr))),
+                16,
+            ),
+        }),
+        58 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::reg(rs),
+            value: PpcILExpr::load(8, PpcILExpr::mem_addr(ra, simm16(instr))),
+        }),
+        48 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::freg(rs),
+            value: PpcILExpr::load(4, PpcILExpr::mem_addr(ra, simm16(instr))),
+        }),
+        50 => il.push(PpcILInsn::Set {
+            dst: PpcILExpr::freg(rs),
+            value: PpcILExpr::load(8, PpcILExpr::mem_addr(ra, simm16(instr))),
+        }),
+        // ── Stores ────────────────────────────────────────────────────
+        36 => il.push(PpcILInsn::Store {
+            width: 4,
+            addr: PpcILExpr::mem_addr(ra, simm16(instr)),
+            value: PpcILExpr::reg(rs),
+        }),
+        38 => il.push(PpcILInsn::Store {
+            width: 1,
+            addr: PpcILExpr::mem_addr(ra, simm16(instr)),
+            value: PpcILExpr::reg(rs),
+        }),
+        44 => il.push(PpcILInsn::Store {
+            width: 2,
+            addr: PpcILExpr::mem_addr(ra, simm16(instr)),
+            value: PpcILExpr::reg(rs),
+        }),
+        62 => il.push(PpcILInsn::Store {
+            width: 8,
+            addr: PpcILExpr::mem_addr(ra, simm16(instr)),
+            value: PpcILExpr::reg(rs),
+        }),
+        52 => il.push(PpcILInsn::Store {
+            width: 4,
+            addr: PpcILExpr::mem_addr(ra, simm16(instr)),
+            value: PpcILExpr::freg(rs),
+        }),
+        54 => il.push(PpcILInsn::Store {
+            width: 8,
+            addr: PpcILExpr::mem_addr(ra, simm16(instr)),
+            value: PpcILExpr::freg(rs),
+        }),
+        // ── Unconditional branch ──────────────────────────────────────
+            _ => return false,
+        }
+        true
+    }
+
+    /// Lift the branch, syscall and opcode-19 condition-register group (16-19).
+    ///
+    /// Split out of [`Self::lift_insn`] for length only; the arms are
+    /// verbatim and push into `il` exactly as before.
+    fn lift_opcd_branch(
+        il: &mut Vec<PpcILInsn>,
+        flags: &mut InstrFlags,
+        opcd: u32,
+        instr: u32,
+        pc: u64,
+    ) -> bool {
+        match opcd {
+        18 => {
+            let li_raw = i32::try_from(instr & 0x03FF_FFFC).unwrap_or(0);
+            let li = if li_raw & 0x0200_0000 != 0 {
+                li_raw - 0x0400_0000
+            } else {
+                li_raw
+            };
+            let aa = (instr >> 1) & 1;
+            let lk = instr & 1;
+            let target = if aa != 0 {
+                PpcILExpr::addr(u64::from(u32::from_ne_bytes(li.to_ne_bytes())))
+            } else {
+                PpcILExpr::addr(pc.wrapping_add_signed(i64::from(li)))
+            };
+            if lk != 0 {
+                il.push(PpcILInsn::Set {
+                    dst: PpcILExpr::LR,
+                    value: PpcILExpr::addr(pc + 4),
+                });
+                il.push(PpcILInsn::Call(target));
+                *flags = InstrFlags::CALL;
+            } else {
+                il.push(PpcILInsn::Jump(target));
+                *flags = InstrFlags::BRANCH;
+            }
+        }
+        // ── Conditional branch ────────────────────────────────────────
+        16 => {
+            let bd_raw = i32::try_from(instr & 0xFFFC).unwrap_or(0);
+            let bd = if bd_raw & 0x8000 != 0 {
+                bd_raw - 0x1_0000
+            } else {
+                bd_raw
+            };
+            let aa = (instr >> 1) & 1;
+            let lk = instr & 1;
+            let target_val = if aa != 0 {
+                u64::from(u32::from_ne_bytes(bd.to_ne_bytes()))
+            } else {
+                pc.wrapping_add_signed(i64::from(bd))
+            };
+            let bi_field = (instr >> 16) & 31;
+            if lk != 0 {
+                il.push(PpcILInsn::Set {
+                    dst: PpcILExpr::LR,
+                    value: PpcILExpr::addr(pc + 4),
+                });
+            }
+            il.push(PpcILInsn::CondJump {
+                cond: PpcILExpr::crfield(bi_field >> 2),
+                target: PpcILExpr::addr(target_val),
+            });
+            *flags = if lk != 0 {
+                InstrFlags::CALL.union(InstrFlags::CONDITIONAL)
+            } else {
+                InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL)
+            };
+        }
+        // ── SC ────────────────────────────────────────────────────────
+        17 => {
+            il.push(PpcILInsn::Syscall);
+        }
+        // ── XO (opcode 19) ────────────────────────────────────────────
+        19 => {
+            let xo19 = (instr >> 1) & 0x3FF;
+            match xo19 {
+                16 => {
+                    let lk = instr & 1;
+                    if lk != 0 {
+                        il.push(PpcILInsn::Set {
+                            dst: PpcILExpr::LR,
+                            value: PpcILExpr::addr(pc + 4),
+                        });
+                    }
+                    il.push(PpcILInsn::Return);
+                    *flags = InstrFlags::RET;
+                }
+                528 => {
+                    let lk = instr & 1;
+                    if lk != 0 {
+                        il.push(PpcILInsn::Set {
+                            dst: PpcILExpr::LR,
+                            value: PpcILExpr::addr(pc + 4),
+                        });
+                        il.push(PpcILInsn::Call(PpcILExpr::CTR));
+                        *flags = InstrFlags::CALL;
+                    } else {
+                        il.push(PpcILInsn::BranchCTR);
+                        *flags = InstrFlags::BRANCH.union(InstrFlags::INDIRECT);
+                    }
+                }
+                150 | 598 | 854 => {
+                    il.push(PpcILInsn::Barrier);
+                }
+                _ => il.push(PpcILInsn::Nop),
+            }
+        }
+        // ── XO (opcode 31) ────────────────────────────────────────────
+            _ => return false,
+        }
+        true
+    }
+
+    /// Lift the opcode-31 extended-opcode (XO form) group.
+    ///
+    /// Split out of [`Self::lift_insn`] for length only: the body is the
+    /// `match xo` block verbatim, and every arm pushes into `il` exactly as
+    /// before. `rc` is read only to render the `Unlifted` fallback text.
+    fn lift_opcd31(il: &mut Vec<PpcILInsn>, instr: u32, rs: u32, ra: u32, rb: u32, xo: u32, rc: u32) {
+        match xo {
+            // ADD
+            266 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
+            }),
+            // SUBF (rd = rb - ra)
+            40 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: PpcILExpr::sub(PpcILExpr::reg(rb), PpcILExpr::reg(ra)),
+            }),
+            // AND
+            28 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::and(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
+            }),
+            // OR (MR if rs==rb)
+            444 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::or(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
+            }),
+            // XOR
+            316 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::xor(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
+            }),
+            // NOR (NOT OR)
+            124 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::not(PpcILExpr::or(
+                    PpcILExpr::reg(rs),
+                    PpcILExpr::reg(rb),
+                )),
+            }),
+            // NEG
+            104 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: PpcILExpr::sub(PpcILExpr::simm(0), PpcILExpr::reg(ra)),
+            }),
+            // SLW
+            23 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::lsl(PpcILExpr::reg(rs), (rb & 31) as u8),
+            }),
+            // SRW
+            536 | 26 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::lsr(PpcILExpr::reg(rs), (rb & 31) as u8),
+            }),
+            // SRAW
+            _ if Self::lift_opcd31_tail(il, instr, rs, ra, rb, xo) => {}
+            _ => {
+                il.push(PpcILInsn::Unlifted(format!("opcd31 xo={xo} rc={rc}")));
+            }
+        }
     }
 }
 
