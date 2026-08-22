@@ -693,7 +693,16 @@ impl LineProgram {
             let v = u32::from_le_bytes(data[pos..pos+4].try_into().unwrap());
             pos += 4; v as usize
         };
-        let program_start = pos + header_length;
+        // `header_length` is an attacker-controlled file field. `pos +
+        // header_length` WRAPS in release, and a wrapped `program_start`
+        // slips past the `program_start < opcode_end` test below, so the
+        // HEADER bytes get re-read as the opcode stream.
+        let program_start = pos
+            .checked_add(header_length)
+            .ok_or("header_length overflows the address space")?;
+        if program_start > data.len() {
+            return Err("header_length runs past the end of the section");
+        }
 
         let minimum_instruction_length = if pos < data.len() { let v = data[pos]; pos += 1; v } else { return Err("eof"); };
         let maximum_ops_per_insn = if version >= 4 {
@@ -1350,6 +1359,23 @@ mod line_program_end_to_end_tests {
         let (prog, _) = LineProgram::parse(&data, 0).expect("parse");
         let matrix = prog.execute();
         assert!(matrix.lookup(0x0FFF).is_none());
+    }
+
+    /// `header_length` is attacker-controlled and was added to `pos`
+    /// unchecked. An out-of-range value does not panic — it makes
+    /// `program_start` overshoot, the `program_start < opcode_end` test then
+    /// reads FALSE, and the unit parses "successfully" with an empty opcode
+    /// stream: a corrupt line program silently reported as a valid one with no
+    /// rows. It must be an error instead.
+    #[test]
+    fn an_out_of_range_header_length_is_rejected() {
+        let mut data = minimal_line_program_bytes();
+        // DWARF 4, 32-bit format: unit_length(4) + version(2), then header_length.
+        data[6..10].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+        assert!(
+            LineProgram::parse(&data, 0).is_err(),
+            "a header_length past the end of the section was accepted"
+        );
     }
 
     /// Truncating the unit must produce an error, not a partial matrix that
