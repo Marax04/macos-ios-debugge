@@ -17,7 +17,7 @@ use rustre_il_llil::{
 };
 use rustre_il_passes::PassManager;
 
-fn ai(addr: u64, instr: LlilInstruction) -> LlilAnnotatedInstr {
+const fn ai(addr: u64, instr: LlilInstruction) -> LlilAnnotatedInstr {
     LlilAnnotatedInstr { address: Address::new(addr), size: 8, length: 4, instr }
 }
 
@@ -29,7 +29,7 @@ fn regref(name: &str) -> LlilExpr {
     LlilExpr::RegisterRef { reg: reg(name), size: Size::QWord }
 }
 
-/// A do/while-shaped flat stream: body, compare feeding a backward CondJump.
+/// A do/while-shaped flat stream: body, compare feeding a backward `CondJump`.
 /// This is the shape whose loop condition the corpus diff shows being lost.
 fn dowhile_flat_stream() -> Vec<LlilAnnotatedInstr> {
     vec![
@@ -71,7 +71,7 @@ fn dowhile_flat_stream() -> Vec<LlilAnnotatedInstr> {
 /// The standard pipeline run over `instructions` (blocks empty — the exact
 /// decompiler wiring shape) must either optimize that stream or leave it
 /// alone; it must never report "changed" without touching it, and must never
-/// drop the comparison that feeds the CondJump.
+/// drop the comparison that feeds the `CondJump`.
 #[test]
 fn standard_pipeline_on_flat_instruction_stream_is_a_noop() {
     let mut func = LlilFunction::new(Address::new(0x1000));

@@ -24,10 +24,10 @@ use rustre_il_passes::{PassContext, PassStats};
 // Seeded LCG (deterministic, no rand crate, no std::time)
 // ---------------------------------------------------------------------------
 
-fn lcg_new() -> u64 {
+const fn lcg_new() -> u64 {
     0xDEAD_BEEF_CAFE_BABE
 }
-fn lcg_step(s: &mut u64) -> u64 {
+const fn lcg_step(s: &mut u64) -> u64 {
     *s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
     *s
 }
@@ -36,8 +36,8 @@ fn lcg_step(s: &mut u64) -> u64 {
 // Helpers (mirror those in blitz.rs)
 // ---------------------------------------------------------------------------
 
-fn const_e(k: i128) -> MlilExpr { MlilExpr::Const(k) }
-fn var_e(v: VarId) -> MlilExpr { MlilExpr::Var(v) }
+const fn const_e(k: i128) -> MlilExpr { MlilExpr::Const(k) }
+const fn var_e(v: VarId) -> MlilExpr { MlilExpr::Var(v) }
 
 fn func_with(entry: BBId, blocks: Vec<BasicBlock>, params: Vec<VarId>) -> MlilFunction {
     let mut f = MlilFunction::new(0, entry);
@@ -65,7 +65,7 @@ fn linear(id: BBId, stmts: Vec<MlilStmt>, succ: Vec<BBId>, pred: Vec<BBId>) -> B
 fn lattice_meet_idempotent_lcg() {
     let mut s = lcg_new();
     for _ in 0..60 {
-        let v = lcg_step(&mut s) as i128;
+        let v = i128::from(lcg_step(&mut s));
         let a = Lattice::Const(v);
         assert_eq!(a.meet(&a), Lattice::Const(v));
     }
@@ -75,8 +75,8 @@ fn lattice_meet_idempotent_lcg() {
 fn lattice_meet_commutative_lcg() {
     let mut s = lcg_new();
     for _ in 0..60 {
-        let x = lcg_step(&mut s) as i128;
-        let y = lcg_step(&mut s) as i128;
+        let x = i128::from(lcg_step(&mut s));
+        let y = i128::from(lcg_step(&mut s));
         let a = Lattice::Const(x);
         let b = Lattice::Const(y);
         assert_eq!(a.meet(&b), b.meet(&a));
@@ -89,8 +89,8 @@ fn lattice_meet_associative_lcg() {
     let lattices = [Lattice::Top, Lattice::Bottom];
     for _ in 0..50 {
         let xs = [
-            Lattice::Const(lcg_step(&mut s) as i128),
-            Lattice::Const(lcg_step(&mut s) as i128),
+            Lattice::Const(i128::from(lcg_step(&mut s))),
+            Lattice::Const(i128::from(lcg_step(&mut s))),
             lattices[(lcg_step(&mut s) as usize) & 1].clone(),
         ];
         let l = xs[0].meet(&xs[1]).meet(&xs[2]);
@@ -103,7 +103,7 @@ fn lattice_meet_associative_lcg() {
 fn lattice_top_identity_lcg() {
     let mut s = lcg_new();
     for _ in 0..50 {
-        let v = lcg_step(&mut s) as i128;
+        let v = i128::from(lcg_step(&mut s));
         let a = Lattice::Const(v);
         assert_eq!(Lattice::Top.meet(&a), a);
         assert_eq!(a.meet(&Lattice::Top), a);
@@ -114,7 +114,7 @@ fn lattice_top_identity_lcg() {
 fn lattice_bottom_absorbs_lcg() {
     let mut s = lcg_new();
     for _ in 0..50 {
-        let v = lcg_step(&mut s) as i128;
+        let v = i128::from(lcg_step(&mut s));
         let a = Lattice::Const(v);
         assert_eq!(Lattice::Bottom.meet(&a), Lattice::Bottom);
         assert_eq!(a.meet(&Lattice::Bottom), Lattice::Bottom);
@@ -125,7 +125,7 @@ fn lattice_bottom_absorbs_lcg() {
 fn lattice_diff_const_collapses_lcg() {
     let mut s = lcg_new();
     for _ in 0..50 {
-        let x = lcg_step(&mut s) as i128;
+        let x = i128::from(lcg_step(&mut s));
         let y = x.wrapping_add(1); // guaranteed different
         let a = Lattice::Const(x);
         let b = Lattice::Const(y);
@@ -158,7 +158,7 @@ fn lattice_display_round_trip_const() {
     // Display of Const is just the decimal value; check a few:
     let mut s = lcg_new();
     for _ in 0..30 {
-        let v = (lcg_step(&mut s) as i64) as i128; // narrow to i64 range
+        let v = i128::from(lcg_step(&mut s) as i64); // narrow to i64 range
         let d = format!("{}", Lattice::Const(v));
         assert_eq!(d.parse::<i128>().ok(), Some(v));
     }
@@ -174,7 +174,7 @@ fn const_lattice_monotonic_descent_lcg() {
     let mut s = lcg_new();
     let mut l = ConstantLattice::new();
     for i in 0..80u32 {
-        let v = lcg_step(&mut s) as i128;
+        let v = i128::from(lcg_step(&mut s));
         let _ = l.set(i % 8, &Lattice::Const(v));
         // After enough mixed sets, observe Bottom for some vars.
         match l.get(i % 8) {
@@ -226,8 +226,8 @@ fn fold_expr_add_sub_inverse_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..60 {
-        let x = (lcg_step(&mut s) as i64) as i128;
-        let y = (lcg_step(&mut s) as i64) as i128;
+        let x = i128::from(lcg_step(&mut s) as i64);
+        let y = i128::from(lcg_step(&mut s) as i64);
         // (x + y) - y == x  (mod 2^128 wrap)
         let add = MlilExpr::Add(Box::new(const_e(x)), Box::new(const_e(y)));
         let sub = MlilExpr::Sub(Box::new(add), Box::new(const_e(y)));
@@ -243,8 +243,8 @@ fn fold_expr_xor_self_inverse_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..60 {
-        let x = lcg_step(&mut s) as i128;
-        let y = lcg_step(&mut s) as i128;
+        let x = i128::from(lcg_step(&mut s));
+        let y = i128::from(lcg_step(&mut s));
         // (x ^ y) ^ y == x
         let inner = MlilExpr::Xor(Box::new(const_e(x)), Box::new(const_e(y)));
         let outer = MlilExpr::Xor(Box::new(inner), Box::new(const_e(y)));
@@ -261,7 +261,7 @@ fn fold_expr_not_involution_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..50 {
-        let x = lcg_step(&mut s) as i128;
+        let x = i128::from(lcg_step(&mut s));
         // !!x == x
         let e = MlilExpr::Not(Box::new(MlilExpr::Not(Box::new(const_e(x)))));
         match fold_expr(&e, &lat) {
@@ -276,7 +276,7 @@ fn fold_expr_neg_involution_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..50 {
-        let x = lcg_step(&mut s) as i128;
+        let x = i128::from(lcg_step(&mut s));
         // --x == x   (wrapping_neg is its own inverse)
         let e = MlilExpr::Neg(Box::new(MlilExpr::Neg(Box::new(const_e(x)))));
         match fold_expr(&e, &lat) {
@@ -291,7 +291,7 @@ fn fold_expr_zx_then_trunc_round_trip_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..50 {
-        let raw = lcg_step(&mut s) as i128;
+        let raw = i128::from(lcg_step(&mut s));
         let bits: u8 = 8 + ((lcg_step(&mut s) as u8) % 56); // 8..=63
         // trunc_n(zx_n(x)) == x mod 2^n
         let e = MlilExpr::Trunc(bits, Box::new(MlilExpr::Zx(bits, Box::new(const_e(raw)))));
@@ -311,9 +311,9 @@ fn fold_expr_sx_idempotent_within_width_lcg() {
     for _ in 0..50 {
         let bits: u8 = 8 + ((lcg_step(&mut s) as u8) % 56);
         // start from a value that already fits sign-extended at `bits` width
-        let raw = (lcg_step(&mut s) as i64) >> (64 - bits as i64 % 64).max(1);
-        let outer = MlilExpr::Sx(bits, Box::new(MlilExpr::Sx(bits, Box::new(const_e(raw as i128)))));
-        let single = MlilExpr::Sx(bits, Box::new(const_e(raw as i128)));
+        let raw = (lcg_step(&mut s) as i64) >> (64 - i64::from(bits) % 64).max(1);
+        let outer = MlilExpr::Sx(bits, Box::new(MlilExpr::Sx(bits, Box::new(const_e(i128::from(raw))))));
+        let single = MlilExpr::Sx(bits, Box::new(const_e(i128::from(raw))));
         assert_eq!(fold_expr(&outer, &lat).clone_to_const(), fold_expr(&single, &lat).clone_to_const());
     }
 }
@@ -323,7 +323,7 @@ fn fold_expr_div_by_zero_never_panics_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..50 {
-        let n = lcg_step(&mut s) as i128;
+        let n = i128::from(lcg_step(&mut s));
         for ctor in [
             MlilExpr::Div as fn(_, _) -> _,
             MlilExpr::DivU as fn(_, _) -> _,
@@ -343,8 +343,8 @@ fn fold_expr_shift_large_amount_does_not_panic_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..50 {
-        let v = lcg_step(&mut s) as i128;
-        let shift = (lcg_step(&mut s) as i128) | 1; // any nonzero
+        let v = i128::from(lcg_step(&mut s));
+        let shift = i128::from(lcg_step(&mut s)) | 1; // any nonzero
         let shl = MlilExpr::Shl(Box::new(const_e(v)), Box::new(const_e(shift)));
         let shr = MlilExpr::Shr(Box::new(const_e(v)), Box::new(const_e(shift)));
         let sar = MlilExpr::Sar(Box::new(const_e(v)), Box::new(const_e(shift)));
@@ -361,7 +361,7 @@ fn fold_expr_cmp_signed_unsigned_disagree_on_neg_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..30 {
-        let neg = -((lcg_step(&mut s) as i64 & 0x7FFF_FFFF) as i128) - 1; // < 0
+        let neg = -i128::from(lcg_step(&mut s) as i64 & 0x7FFF_FFFF) - 1; // < 0
         // signed: -1 < 0 == 1
         let signed_lt = MlilExpr::CmpLt(Box::new(const_e(neg)), Box::new(const_e(0)));
         // unsigned: huge u128 < 0 == 0
@@ -383,7 +383,7 @@ fn fold_expr_add_zero_identity_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..30 {
-        let x = lcg_step(&mut s) as i128;
+        let x = i128::from(lcg_step(&mut s));
         let e = MlilExpr::Add(Box::new(const_e(x)), Box::new(const_e(0)));
         match fold_expr(&e, &lat) {
             MlilExpr::Const(k) => assert_eq!(k, x),
@@ -397,7 +397,7 @@ fn fold_expr_mul_by_zero_lcg() {
     let lat = ConstantLattice::new();
     let mut s = lcg_new();
     for _ in 0..30 {
-        let x = lcg_step(&mut s) as i128;
+        let x = i128::from(lcg_step(&mut s));
         let e = MlilExpr::Mul(Box::new(const_e(x)), Box::new(const_e(0)));
         match fold_expr(&e, &lat) {
             MlilExpr::Const(0) => {}
@@ -427,7 +427,7 @@ trait CloneToConst {
 impl CloneToConst for MlilExpr {
     fn clone_to_const(&self) -> Option<i128> {
         match self {
-            MlilExpr::Const(k) => Some(*k),
+            Self::Const(k) => Some(*k),
             _ => None,
         }
     }
@@ -467,8 +467,8 @@ fn sccp_self_loop_terminates() {
 fn sccp_fuzz_random_two_block_cfgs_lcg() {
     let mut s = lcg_new();
     for _ in 0..50 {
-        let rv = lcg_step(&mut s) as i128;
-        let cond_const = (lcg_step(&mut s) & 1) as i128;
+        let rv = i128::from(lcg_step(&mut s));
+        let cond_const = i128::from(lcg_step(&mut s) & 1);
         let entry = linear(
             0,
             vec![
@@ -522,8 +522,8 @@ fn sccp_pipeline_idempotent_on_const_only_function() {
 fn reanalyse_from_matches_fresh_run_lcg() {
     let mut s = lcg_new();
     for _ in 0..15 {
-        let a = lcg_step(&mut s) as i128;
-        let b = lcg_step(&mut s) as i128;
+        let a = i128::from(lcg_step(&mut s));
+        let b = i128::from(lcg_step(&mut s));
         let bb = linear(
             0,
             vec![
@@ -750,7 +750,7 @@ fn make_info(cases: Vec<(Vec<i64>, u64)>, default: Option<u64>) -> SwitchInfo {
     SwitchInfo {
         dispatch_block: BlockId(0),
         switch_var: "r".into(),
-        case_count: case_vec.len() + default.is_some() as usize,
+        case_count: case_vec.len() + usize::from(default.is_some()),
         cases: case_vec,
         default_addr: default,
         pattern: SwitchPattern::JumpTable,
@@ -868,7 +868,7 @@ fn switch_detector_single_nontrivial_block_no_panic() {
 fn threaded_lattice_meet_4x100() {
     // Lattice values shared across threads — purely value semantics.
     let consts: Arc<Vec<Lattice>> = Arc::new(
-        (0..16).map(|i| Lattice::Const(i as i128 * 7)).collect()
+        (0..16).map(|i| Lattice::Const(i128::from(i) * 7)).collect()
     );
     let mut handles = Vec::new();
     for t in 0..4 {
@@ -934,7 +934,7 @@ fn threaded_fold_expr_4x100() {
             let mut s = 0xC0FFEE_u64 ^ (t as u64);
             for _ in 0..100 {
                 s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                let x = s as i128;
+                let x = i128::from(s);
                 let e = MlilExpr::Add(Box::new(const_e(x)), Box::new(const_e(1)));
                 match fold_expr(&e, &lc) {
                     MlilExpr::Const(k) => assert_eq!(k, x.wrapping_add(1)),
@@ -956,7 +956,7 @@ fn collect_defs_no_duplicates_for_unique_assigns_lcg() {
     let mut stmts = Vec::new();
     let mut ids = Vec::new();
     for i in 0..30u32 {
-        let v = lcg_step(&mut s) as i128;
+        let v = i128::from(lcg_step(&mut s));
         stmts.push(MlilStmt::Assign { dst: i, rhs: const_e(v) });
         ids.push(i);
     }
@@ -972,7 +972,7 @@ fn collect_defs_no_duplicates_for_unique_assigns_lcg() {
 fn analyse_function_consistent_with_run_sccp_lcg() {
     let mut s = lcg_new();
     for _ in 0..15 {
-        let v = lcg_step(&mut s) as i128;
+        let v = i128::from(lcg_step(&mut s));
         let bb = linear(
             0,
             vec![MlilStmt::Assign { dst: 1, rhs: const_e(v) }],
@@ -1006,7 +1006,7 @@ fn remove_dead_blocks_keeps_entry_lcg() {
     // Even with weird configurations, entry block must remain.
     let mut s = lcg_new();
     for _ in 0..10 {
-        let cond = (lcg_step(&mut s) & 1) as i128;
+        let cond = i128::from(lcg_step(&mut s) & 1);
         let entry = linear(
             0,
             vec![MlilStmt::Branch { cond: const_e(cond), true_bb: 1, false_bb: 2 }],
@@ -1029,7 +1029,7 @@ fn remove_dead_blocks_keeps_entry_lcg() {
 #[test]
 fn fold_expr_boundary_constants() {
     let lat = ConstantLattice::new();
-    let boundaries = [0i128, 1, -1, i128::MIN, i128::MAX, i64::MAX as i128, i64::MIN as i128];
+    let boundaries = [0i128, 1, -1, i128::MIN, i128::MAX, i128::from(i64::MAX), i128::from(i64::MIN)];
     for &v in &boundaries {
         let e = MlilExpr::Add(Box::new(const_e(v)), Box::new(const_e(0)));
         match fold_expr(&e, &lat) {

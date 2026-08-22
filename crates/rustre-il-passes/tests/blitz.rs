@@ -145,8 +145,8 @@ fn work_item_equality() {
 // MLIL helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-fn const_expr(k: i128) -> MlilExpr { MlilExpr::Const(k) }
-fn var_expr(v: VarId) -> MlilExpr { MlilExpr::Var(v) }
+const fn const_expr(k: i128) -> MlilExpr { MlilExpr::Const(k) }
+const fn var_expr(v: VarId) -> MlilExpr { MlilExpr::Var(v) }
 
 fn func_with(entry: BBId, blocks: Vec<BasicBlock>, params: Vec<VarId>) -> MlilFunction {
     let mut f = MlilFunction::new(0 as FuncId, entry);
@@ -722,7 +722,7 @@ fn make_switch_info(cases: Vec<(Vec<i64>, u64)>, default: Option<u64>) -> Switch
     SwitchInfo {
         dispatch_block: BlockId(0),
         switch_var: "rax".into(),
-        case_count: case_vec.len() + default.is_some() as usize,
+        case_count: case_vec.len() + usize::from(default.is_some()),
         cases: case_vec,
         default_addr: default,
         pattern: SwitchPattern::JumpTable,

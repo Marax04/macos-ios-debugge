@@ -981,7 +981,7 @@ impl fmt::Display for SwitchDetectionStats {
 mod tests {
     use super::*;
 
-    /// A simple fake BinaryImage for testing.
+    /// A simple fake `BinaryImage` for testing.
     struct FakeImage {
         data: Vec<u8>,
         base: u64,
@@ -990,7 +990,7 @@ mod tests {
 
     impl FakeImage {
         fn new(base: u64, data: Vec<u8>, exec_lo: u64, exec_hi: u64) -> Self {
-            FakeImage { data, base, exec_range: (exec_lo, exec_hi) }
+            Self { data, base, exec_range: (exec_lo, exec_hi) }
         }
     }
 
