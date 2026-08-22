@@ -69,6 +69,7 @@ impl Lua52Header {
         ))
     }
 
+    #[must_use]
     pub const fn is_little_endian(&self) -> bool {
         self.endian == 1
     }
@@ -126,6 +127,7 @@ pub enum Lua52Opcode {
 }
 
 impl Lua52Opcode {
+    #[must_use]
     pub const fn from_u8(n: u8) -> Option<Self> {
         Some(match n {
             0 => Self::Move,
@@ -174,6 +176,7 @@ impl Lua52Opcode {
         })
     }
 
+    #[must_use]
     pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::Move => "MOVE",
@@ -280,6 +283,7 @@ pub struct Lua52Local {
 }
 
 impl Lua52Proto {
+    #[must_use]
     pub const fn instr_count(&self) -> usize {
         self.code.len()
     }
@@ -448,6 +452,7 @@ impl Lua53Header {
         ))
     }
 
+    #[must_use]
     pub const fn is_little_endian(&self) -> bool {
         self.endian == 1
     }
@@ -510,6 +515,7 @@ pub enum Lua53Opcode {
 }
 
 impl Lua53Opcode {
+    #[must_use]
     pub const fn from_u8(n: u8) -> Option<Self> {
         Some(match n {
             0 => Self::Move,
@@ -563,6 +569,7 @@ impl Lua53Opcode {
         })
     }
 
+    #[must_use]
     pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::Move => "MOVE",
@@ -616,6 +623,7 @@ impl Lua53Opcode {
     }
 
     /// Returns true if this opcode is new in Lua 5.3.
+    #[must_use]
     pub const fn is_new_in_53(self) -> bool {
         matches!(
             self,
@@ -671,9 +679,11 @@ pub struct Lua53Proto {
 }
 
 impl Lua53Proto {
+    #[must_use]
     pub const fn instr_count(&self) -> usize {
         self.code.len()
     }
+    #[must_use]
     pub fn integer_constants(&self) -> Vec<i64> {
         self.constants
             .iter()
@@ -686,6 +696,7 @@ impl Lua53Proto {
             })
             .collect()
     }
+    #[must_use]
     pub fn float_constants(&self) -> Vec<f64> {
         self.constants
             .iter()

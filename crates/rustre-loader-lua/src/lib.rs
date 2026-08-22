@@ -1904,6 +1904,7 @@ const fn decode_54(word: u32) -> (u8, u32, u32, u32, bool) {
 ///
 /// # Returns
 /// A `Vec<String>`, one entry per instruction.
+#[must_use]
 pub fn disassemble_proto(proto: &LuaProto, version: u8) -> Vec<String> {
     let ver = LuaVersion::from_byte(version);
     let is_54 = matches!(ver, LuaVersion::Lua54);

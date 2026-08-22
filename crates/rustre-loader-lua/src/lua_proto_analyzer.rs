@@ -39,6 +39,7 @@ pub struct ComplexityMetrics {
 
 impl ComplexityMetrics {
     /// Compute metrics from a proto for the given Lua version.
+    #[must_use]
     pub fn compute(proto: &LuaProto, ver: LuaVersion) -> Self {
         let mut m = Self::default();
         m.insn_count = proto.insn_count();
@@ -186,6 +187,7 @@ impl UpvalueChain {
     ///
     /// `ancestors`: list of ancestor protos from outermost (index 0) to the
     /// direct parent of `proto`.
+    #[must_use]
     pub fn build_for_proto(proto: &LuaProto, ancestors: &[&LuaProto]) -> Vec<Self> {
         proto
             .upvalues
@@ -230,6 +232,7 @@ impl UpvalueChain {
     }
 
     /// Depth of the chain (number of closure boundaries crossed).
+    #[must_use]
     pub const fn depth(&self) -> usize {
         self.steps.len()
     }
@@ -323,6 +326,7 @@ pub struct ProtoCallGraph {
 
 impl ProtoCallGraph {
     /// Create an empty call graph.
+    #[must_use]
     pub fn new() -> Self {
         Self { edges: Vec::new(), adj: HashMap::new() }
     }
@@ -343,6 +347,7 @@ impl ProtoCallGraph {
     }
 
     /// Recursively detects self-calls (caller == callee).
+    #[must_use]
     pub fn recursive_protos(&self) -> Vec<u32> {
         self.edges
             .iter()
@@ -352,6 +357,7 @@ impl ProtoCallGraph {
     }
 
     /// Returns all callees of `proto_id` in BFS order.
+    #[must_use]
     pub fn reachable_from(&self, proto_id: u32) -> Vec<u32> {
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
@@ -370,6 +376,7 @@ impl ProtoCallGraph {
     }
 
     /// Number of unique call edges.
+    #[must_use]
     pub const fn edge_count(&self) -> usize {
         self.edges.len()
     }
@@ -424,6 +431,7 @@ pub struct ProtoAnalysis {
 
 impl ProtoAnalysis {
     /// Build a `ProtoAnalysis` from a proto at `index`.
+    #[must_use]
     pub fn build(
         proto: &LuaProto,
         index: u32,
@@ -470,11 +478,13 @@ impl ProtoAnalysis {
     }
 
     /// Returns `true` if the proto matches the given pattern.
+    #[must_use]
     pub fn has_pattern(&self, p: &ProtoPattern) -> bool {
         self.patterns.contains(p)
     }
 
     /// Estimated complexity category.
+    #[must_use]
     pub const fn complexity_category(&self) -> &'static str {
         match self.metrics.cyclomatic {
             0..=3 => "simple",
@@ -628,6 +638,7 @@ pub struct LuaProtoAnalyzer {
 
 impl LuaProtoAnalyzer {
     /// Create a new analyzer for the given Lua version.
+    #[must_use]
     pub fn new(version: LuaVersion) -> Self {
         Self {
             version,
@@ -677,11 +688,13 @@ impl LuaProtoAnalyzer {
     }
 
     /// Returns a reference to the analysis for the root proto.
+    #[must_use]
     pub fn root_analysis(&self) -> Option<&ProtoAnalysis> {
         self.analyses.get(&0)
     }
 
     /// Returns all analyses sorted by index.
+    #[must_use]
     pub fn sorted_analyses(&self) -> Vec<&ProtoAnalysis> {
         let mut v: Vec<&ProtoAnalysis> = self.analyses.values().collect();
         v.sort_by_key(|a| a.index);
@@ -689,11 +702,13 @@ impl LuaProtoAnalyzer {
     }
 
     /// Count protos with a given pattern.
+    #[must_use]
     pub fn count_with_pattern(&self, p: &ProtoPattern) -> usize {
         self.analyses.values().filter(|a| a.has_pattern(p)).count()
     }
 
     /// Return analyses for protos categorised as "complex" or above.
+    #[must_use]
     pub fn complex_protos(&self) -> Vec<&ProtoAnalysis> {
         self.analyses
             .values()
@@ -702,11 +717,13 @@ impl LuaProtoAnalyzer {
     }
 
     /// Total number of protos analysed.
+    #[must_use]
     pub fn total_protos(&self) -> usize {
         self.analyses.len()
     }
 
     /// Average cyclomatic complexity across all protos.
+    #[must_use]
     pub fn average_cyclomatic(&self) -> f64 {
         if self.analyses.is_empty() {
             return 0.0;
@@ -716,6 +733,7 @@ impl LuaProtoAnalyzer {
     }
 
     /// Collect all unique string constants across all protos.
+    #[must_use]
     pub fn all_strings(&self) -> Vec<&str> {
         let mut seen: HashSet<&str> = HashSet::new();
         let mut result = Vec::new();

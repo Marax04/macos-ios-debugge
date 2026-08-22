@@ -107,9 +107,11 @@ impl Lua51Header {
         ))
     }
 
+    #[must_use]
     pub const fn is_little_endian(&self) -> bool {
         self.endian == 1
     }
+    #[must_use]
     pub const fn is_64bit(&self) -> bool {
         self.size_t_size == 8
     }
@@ -164,6 +166,7 @@ pub enum Lua51Opcode {
 }
 
 impl Lua51Opcode {
+    #[must_use]
     pub const fn from_u8(n: u8) -> Option<Self> {
         Some(match n {
             0 => Self::Move,
@@ -208,6 +211,7 @@ impl Lua51Opcode {
         })
     }
 
+    #[must_use]
     pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::Move => "MOVE",
@@ -274,6 +278,7 @@ pub struct Lua51Instruction {
 }
 
 impl Lua51Instruction {
+    #[must_use]
     pub const fn decode(raw: u32) -> Self {
         let opcode_byte = (raw & 0x3f) as u8;
         let a = ((raw >> 6) & 0xff) as u8;
@@ -357,11 +362,13 @@ pub struct Lua51Proto {
 
 impl Lua51Proto {
     /// Number of instructions.
+    #[must_use]
     pub const fn instr_count(&self) -> usize {
         self.code.len()
     }
 
     /// Decode all instructions.
+    #[must_use]
     pub fn instructions(&self) -> Vec<Lua51Instruction> {
         self.code
             .iter()
@@ -370,6 +377,7 @@ impl Lua51Proto {
     }
 
     /// Number of nested prototypes.
+    #[must_use]
     pub const fn sub_proto_count(&self) -> usize {
         self.protos.len()
     }
@@ -509,11 +517,13 @@ impl Default for Lua51Disassembler {
 }
 
 impl Lua51Disassembler {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Disassemble a single prototype to a string.
+    #[must_use]
     pub fn disassemble(&self, proto: &Lua51Proto) -> String {
         let mut out = String::new();
         let name = proto.source_name.as_deref().unwrap_or("(anonymous)");
@@ -548,6 +558,7 @@ impl Lua51Disassembler {
     }
 
     /// Disassemble all protos recursively.
+    #[must_use]
     pub fn disassemble_all(&self, proto: &Lua51Proto) -> String {
         let mut out = self.disassemble(proto);
         for sub in &proto.protos {

@@ -21,6 +21,7 @@ pub enum LuaVersion {
 
 impl LuaVersion {
     /// Parse from the version byte in the bytecode header.
+    #[must_use]
     pub const fn from_byte(b: u8) -> Option<Self> {
         match b {
             0x51 => Some(Self::Lua51),
@@ -32,6 +33,7 @@ impl LuaVersion {
     }
 
     /// Human-readable version string.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Lua51 => "5.1",
@@ -42,18 +44,21 @@ impl LuaVersion {
     }
 
     /// Whether integers in the bytecode file are encoded as 64-bit (5.3+).
+    #[must_use]
     pub const fn uses_integer64(self) -> bool {
         matches!(self, Self::Lua53 | Self::Lua54)
     }
 
     /// Float constant tag used in constant encoding (`LUA_TNUMBER` / `LUA_TFLT`).
     /// Both old (5.1/5.2) and new (5.3/5.4) encodings use tag value 3 for floats.
+    #[must_use]
     pub const fn float_tag(self) -> u8 {
         3 // LUA_TNUMBER for 5.1/5.2; LUA_TFLT (0x03) for 5.3/5.4 — same value
     }
 
     /// Integer constant tag used in constant encoding (Lua 5.3+ only: `LUA_TINT` = 0x13).
     /// Returns `None` for Lua 5.1/5.2 which have no native integer constant type.
+    #[must_use]
     pub const fn integer_tag(self) -> Option<u8> {
         match self {
             Self::Lua53 | Self::Lua54 => Some(0x13),
@@ -89,11 +94,13 @@ pub enum LuaConstant {
 
 impl LuaConstant {
     /// Returns `true` if this constant is a string of any kind.
+    #[must_use]
     pub const fn is_string(&self) -> bool {
         matches!(self, Self::String(_) | Self::ShortString(_))
     }
 
     /// Extract the string value regardless of short/long tag.
+    #[must_use]
     pub const fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(s) | Self::ShortString(s) => Some(s.as_str()),
@@ -134,11 +141,13 @@ pub struct UpvalueDesc {
 
 impl UpvalueDesc {
     /// Construct a simple upvalue descriptor with only index info.
+    #[must_use]
     pub const fn simple(in_stack: u8, idx: u8) -> Self {
         Self { name: String::new(), in_stack, idx, kind: 0 }
     }
 
     /// Returns `true` if this upvalue is a register-local capture.
+    #[must_use]
     pub const fn is_local_capture(&self) -> bool {
         self.in_stack != 0
     }
@@ -168,6 +177,7 @@ pub struct LocalVar {
 
 impl LocalVar {
     /// Returns `true` if `pc` is within the live range of this local.
+    #[must_use]
     pub const fn is_live_at(&self, pc: u32) -> bool {
         pc >= self.start_pc && pc < self.end_pc
     }
@@ -218,6 +228,7 @@ pub struct LuaProto {
 
 impl LuaProto {
     /// Create an empty proto.
+    #[must_use]
     pub const fn empty() -> Self {
         Self {
             source_name: String::new(),
@@ -238,6 +249,7 @@ impl LuaProto {
     }
 
     /// Number of instructions.
+    #[must_use]
     pub const fn insn_count(&self) -> usize {
         self.instructions.len()
     }
@@ -248,6 +260,7 @@ impl LuaProto {
     }
 
     /// Collect all string constants (including nested protos).
+    #[must_use]
     pub fn all_strings(&self) -> Vec<&str> {
         let mut result: Vec<&str> = self.constants.iter().filter_map(|c| c.as_str()).collect();
         for child in &self.protos {
@@ -257,17 +270,20 @@ impl LuaProto {
     }
 
     /// Returns `true` if this proto has debug info (non-empty `line_info`).
+    #[must_use]
     pub const fn has_debug_info(&self) -> bool {
         !self.line_info.is_empty()
     }
 
     /// Find locals alive at instruction index `pc`.
+    #[must_use]
     pub fn locals_at(&self, pc: u32) -> Vec<&LocalVar> {
         self.locals.iter().filter(|l| l.is_live_at(pc)).collect()
     }
 
     /// Opcode of instruction at index `i` (bits 0–5 for Lua 5.1–5.3;
     /// bits 0–6 for Lua 5.4).
+    #[must_use]
     pub fn opcode_at(&self, i: usize, version: LuaVersion) -> u8 {
         let insn = self.instructions[i];
         match version {
@@ -325,6 +341,7 @@ impl LuaHeader {
     pub const MAGIC: [u8; 4] = [0x1b, 0x4c, 0x75, 0x61];
 
     /// Validate the magic bytes.
+    #[must_use]
     pub fn check_magic(bytes: &[u8]) -> bool {
         bytes.len() >= 4 && bytes[..4] == Self::MAGIC
     }
@@ -355,12 +372,14 @@ pub struct LuaChunk {
 
 impl LuaChunk {
     /// Build a chunk from a header and main proto.
+    #[must_use]
     pub fn new(header: LuaHeader, main_proto: LuaProto) -> Self {
         let total_protos = main_proto.total_proto_count();
         Self { header, main_proto, total_protos, warnings: Vec::new() }
     }
 
     /// Collect all string constants in the entire chunk.
+    #[must_use]
     pub fn all_strings(&self) -> Vec<&str> {
         self.main_proto.all_strings()
     }
@@ -566,6 +585,7 @@ pub struct LuaBytecodeParser {
 
 impl LuaBytecodeParser {
     /// Create a new parser.
+    #[must_use]
     pub const fn new() -> Self {
         Self { warnings: Vec::new(), trailing_bytes: 0 }
     }

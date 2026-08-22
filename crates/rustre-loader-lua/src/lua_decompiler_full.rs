@@ -59,6 +59,7 @@ pub enum LuaConst {
 }
 
 impl LuaConst {
+    #[must_use]
     pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Nil => "nil",
@@ -69,6 +70,7 @@ impl LuaConst {
         }
     }
 
+    #[must_use]
     pub const fn is_falsy(&self) -> bool {
         matches!(self, Self::Nil | Self::Bool(false))
     }
@@ -161,6 +163,7 @@ pub enum BinOp {
 }
 
 impl BinOp {
+    #[must_use]
     pub const fn symbol(self) -> &'static str {
         match self {
             Self::Add => "+",
@@ -187,6 +190,7 @@ impl BinOp {
         }
     }
 
+    #[must_use]
     pub const fn is_comparison(self) -> bool {
         matches!(
             self,
@@ -194,6 +198,7 @@ impl BinOp {
         )
     }
 
+    #[must_use]
     pub const fn is_logical(self) -> bool {
         matches!(self, Self::And | Self::Or)
     }
@@ -209,6 +214,7 @@ pub enum UnOp {
 }
 
 impl UnOp {
+    #[must_use]
     pub const fn symbol(self) -> &'static str {
         match self {
             Self::Neg => "-",
@@ -302,6 +308,7 @@ pub struct StatementList {
 }
 
 impl StatementList {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -310,14 +317,17 @@ impl StatementList {
         self.statements.push(s);
     }
 
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.statements.len()
     }
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.statements.is_empty()
     }
 
     /// Number of `return` statements in this block (direct children only).
+    #[must_use]
     pub fn return_count(&self) -> usize {
         self.statements
             .iter()
@@ -343,6 +353,7 @@ pub struct BasicBlock {
 }
 
 impl BasicBlock {
+    #[must_use]
     pub fn new(id: u32, pc_start: u32) -> Self {
         Self {
             id,
@@ -368,6 +379,7 @@ impl BasicBlock {
     }
 
     /// `true` if this block has more than one successor (conditional branch).
+    #[must_use]
     pub const fn is_conditional(&self) -> bool {
         self.successors.len() > 1
     }
@@ -382,6 +394,7 @@ pub struct ControlFlow {
 }
 
 impl ControlFlow {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -393,11 +406,13 @@ impl ControlFlow {
         self.block_by_pc.insert(pc, id);
     }
 
+    #[must_use]
     pub fn find_block_by_pc(&self, pc: u32) -> Option<&BasicBlock> {
         let id = *self.block_by_pc.get(&pc)?;
         self.blocks.iter().find(|b| b.id == id)
     }
 
+    #[must_use]
     pub fn loop_header_count(&self) -> usize {
         self.blocks.iter().filter(|b| b.is_loop_header).count()
     }
@@ -422,6 +437,7 @@ pub struct FunctionAst {
 }
 
 impl FunctionAst {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             params: Vec::new(),
@@ -446,6 +462,7 @@ impl FunctionAst {
     }
 
     /// `true` if the function has a variable argument list.
+    #[must_use]
     pub const fn accepts_vararg(&self) -> bool {
         self.is_vararg
     }
@@ -477,6 +494,7 @@ pub enum LuaInferredType {
 }
 
 impl LuaInferredType {
+    #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
@@ -492,6 +510,7 @@ impl LuaInferredType {
         }
     }
 
+    #[must_use]
     pub const fn is_primitive(self) -> bool {
         matches!(
             self,
@@ -501,6 +520,7 @@ impl LuaInferredType {
 }
 
 /// Infer the type of an expression node (best-effort).
+#[must_use]
 pub fn infer_type(expr: &ExpressionTree) -> LuaInferredType {
     match expr {
         ExpressionTree::Nil => LuaInferredType::Nil,
@@ -562,6 +582,7 @@ impl LuaLocal {
     }
 
     /// `true` if this local is live at `pc`.
+    #[must_use]
     pub const fn is_live_at(&self, pc: u32) -> bool {
         pc >= self.pc_start && pc < self.pc_end
     }
@@ -574,6 +595,7 @@ pub struct LuaLocalScope {
 }
 
 impl LuaLocalScope {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -583,6 +605,7 @@ impl LuaLocalScope {
     }
 
     /// Find a local by register at a given PC.
+    #[must_use]
     pub fn find_at_pc(&self, register: u8, pc: u32) -> Option<&LuaLocal> {
         self.locals
             .iter()
@@ -591,13 +614,16 @@ impl LuaLocalScope {
     }
 
     /// All locals live at `pc`.
+    #[must_use]
     pub fn live_at(&self, pc: u32) -> Vec<&LuaLocal> {
         self.locals.iter().filter(|l| l.is_live_at(pc)).collect()
     }
 
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.locals.len()
     }
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.locals.is_empty()
     }
@@ -608,6 +634,7 @@ impl LuaLocalScope {
 // ---------------------------------------------------------------------------
 
 /// Attempts to fold a constant binary expression.
+#[must_use]
 pub fn fold_binop(op: BinOp, lhs: &ExpressionTree, rhs: &ExpressionTree) -> Option<ExpressionTree> {
     match (op, lhs, rhs) {
         (BinOp::Add, ExpressionTree::Integer(a), ExpressionTree::Integer(b)) => {
@@ -641,6 +668,7 @@ pub fn fold_binop(op: BinOp, lhs: &ExpressionTree, rhs: &ExpressionTree) -> Opti
 }
 
 /// Fold a unary expression at decompile time.
+#[must_use]
 pub fn fold_unop(op: UnOp, operand: &ExpressionTree) -> Option<ExpressionTree> {
     match (op, operand) {
         (UnOp::Neg, ExpressionTree::Integer(n)) => Some(ExpressionTree::Integer(-n)),
@@ -663,44 +691,54 @@ pub struct LuaBytecodeInstruction(pub u32);
 
 impl LuaBytecodeInstruction {
     /// Opcode field (bits 0-5 in Lua 5.1, bits 0-6 in 5.4).
+    #[must_use]
     pub const fn opcode_51(self) -> u8 {
         (self.0 & 0x3f) as u8
     }
     /// Register A (bits 6-13).
+    #[must_use]
     pub const fn a_51(self) -> u8 {
         ((self.0 >> 6) & 0xff) as u8
     }
     /// Register B (bits 23-31).
+    #[must_use]
     pub const fn b_51(self) -> u16 {
         ((self.0 >> 23) & 0x1ff) as u16
     }
     /// Register C (bits 14-22).
+    #[must_use]
     pub const fn c_51(self) -> u16 {
         ((self.0 >> 14) & 0x1ff) as u16
     }
     /// sBx field (B+C combined as signed).
+    #[must_use]
     pub const fn sbx_51(self) -> i32 {
         (self.b_51() as u32 * 512 + self.c_51() as u32) as i32 - 131_071
     }
     /// Bx field.
+    #[must_use]
     pub const fn bx_51(self) -> u32 {
         (self.0 >> 14) & 0x3ffff
     }
 
     /// `true` if B field has the `isk` bit set (constant reference).
+    #[must_use]
     pub const fn b_is_k(self) -> bool {
         self.b_51() & 0x100 != 0
     }
     /// `true` if C field has the `isk` bit set.
+    #[must_use]
     pub const fn c_is_k(self) -> bool {
         self.c_51() & 0x100 != 0
     }
 
     /// Constant index from B (when `b_is_k`).
+    #[must_use]
     pub const fn b_const_idx(self) -> u8 {
         (self.b_51() & 0xff) as u8
     }
     /// Constant index from C (when `c_is_k`).
+    #[must_use]
     pub const fn c_const_idx(self) -> u8 {
         (self.c_51() & 0xff) as u8
     }
@@ -729,6 +767,7 @@ pub struct LuaPrototype {
 }
 
 impl LuaPrototype {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             source_name: String::new(),
@@ -747,17 +786,21 @@ impl LuaPrototype {
         }
     }
 
+    #[must_use]
     pub const fn instruction_count(&self) -> usize {
         self.instructions.len()
     }
+    #[must_use]
     pub const fn constant_count(&self) -> usize {
         self.constants.len()
     }
+    #[must_use]
     pub const fn nested_count(&self) -> usize {
         self.sub_prototypes.len()
     }
 
     /// Line number for a given instruction index (0 if no debug info).
+    #[must_use]
     pub fn line_for_pc(&self, pc: usize) -> u32 {
         self.line_info.get(pc).copied().unwrap_or(0)
     }
@@ -795,6 +838,7 @@ impl UpvalueInfo {
     }
 
     /// `true` if the upvalue is a register capture (closed-over variable).
+    #[must_use]
     pub const fn is_closed_over(&self) -> bool {
         self.in_stack
     }
@@ -807,19 +851,23 @@ pub struct UpvalueAnalysis {
 }
 
 impl UpvalueAnalysis {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
     pub fn add(&mut self, info: UpvalueInfo) {
         self.upvalues.push(info);
     }
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.upvalues.len()
     }
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.upvalues.is_empty()
     }
 
+    #[must_use]
     pub fn closed_over_count(&self) -> usize {
         self.upvalues.iter().filter(|u| u.is_closed_over()).count()
     }
@@ -918,6 +966,7 @@ pub struct LuaDecompilerFull {
 }
 
 impl LuaDecompilerFull {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -955,11 +1004,13 @@ impl LuaDecompilerFull {
     }
 
     /// `true` if decompilation produced any errors.
+    #[must_use]
     pub const fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
 
     /// Total statement count in the decompiled AST.
+    #[must_use]
     pub fn total_statements(&self) -> usize {
         self.ast
             .as_ref()
@@ -1456,12 +1507,15 @@ pub struct LuaChunkInfo {
 }
 
 impl LuaChunkInfo {
+    #[must_use]
     pub const fn is_64bit(&self) -> bool {
         self.size_t_size == 8
     }
+    #[must_use]
     pub const fn is_float_numbers(&self) -> bool {
         !self.integral_flag
     }
+    #[must_use]
     pub fn lua_version_str(&self) -> String {
         format!("{}.{}", self.version >> 4, self.version & 0xf)
     }
@@ -1482,6 +1536,7 @@ pub struct LuaVersionConfig {
 }
 
 impl LuaVersionConfig {
+    #[must_use]
     pub const fn lua51() -> Self {
         Self {
             version: 0x51,
@@ -1492,6 +1547,7 @@ impl LuaVersionConfig {
             uses_int_numbers: false,
         }
     }
+    #[must_use]
     pub const fn lua52() -> Self {
         Self {
             version: 0x52,
@@ -1502,6 +1558,7 @@ impl LuaVersionConfig {
             uses_int_numbers: false,
         }
     }
+    #[must_use]
     pub const fn lua53() -> Self {
         Self {
             version: 0x53,
@@ -1512,6 +1569,7 @@ impl LuaVersionConfig {
             uses_int_numbers: false,
         }
     }
+    #[must_use]
     pub const fn lua54() -> Self {
         Self {
             version: 0x54,
@@ -1523,9 +1581,11 @@ impl LuaVersionConfig {
         }
     }
 
+    #[must_use]
     pub const fn is_64bit(&self) -> bool {
         self.size_t_size == 8
     }
+    #[must_use]
     pub const fn version_name(&self) -> &'static str {
         match self.version {
             0x51 => "5.1",
@@ -1564,13 +1624,16 @@ impl Default for LuaDecompilerConfig {
 }
 
 impl LuaDecompilerConfig {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
+    #[must_use]
     pub const fn with_line_numbers(mut self) -> Self {
         self.emit_line_numbers = true;
         self
     }
+    #[must_use]
     pub const fn without_constant_folding(mut self) -> Self {
         self.fold_constants = false;
         self
@@ -1600,6 +1663,7 @@ impl LuaInternedString {
             is_long,
         }
     }
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.content.len()
     }
@@ -1609,6 +1673,7 @@ impl LuaInternedString {
     pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    #[must_use]
     pub const fn is_empty_str(&self) -> bool {
         self.content.is_empty()
     }
@@ -1639,18 +1704,22 @@ pub struct LuaGlobalTable {
 }
 
 impl LuaGlobalTable {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
     pub fn add(&mut self, name: impl Into<String>) {
         self.names.push(name.into());
     }
+    #[must_use]
     pub fn contains(&self, name: &str) -> bool {
         self.names.iter().any(|n| n == name)
     }
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.names.len()
     }
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
@@ -1675,6 +1744,7 @@ pub fn read_cstring(data: &[u8], offset: usize) -> Option<String> {
 }
 
 /// Align a value up to `align` (power-of-two).
+#[must_use]
 pub const fn align_up(val: u64, align: u64) -> u64 {
     if align == 0 {
         return val;
@@ -1683,6 +1753,7 @@ pub const fn align_up(val: u64, align: u64) -> u64 {
 }
 
 /// Align a value down to `align` (power-of-two).
+#[must_use]
 pub const fn align_down(val: u64, align: u64) -> u64 {
     if align == 0 {
         return val;
@@ -1691,11 +1762,13 @@ pub const fn align_down(val: u64, align: u64) -> u64 {
 }
 
 /// Check whether `val` is a power of two.
+#[must_use]
 pub const fn is_power_of_two(val: u64) -> bool {
     val != 0 && val.is_power_of_two()
 }
 
 /// Simple entropy estimate over a byte slice (0.0 = uniform, 1.0 = random).
+#[must_use]
 pub fn byte_entropy(data: &[u8]) -> f64 {
     if data.is_empty() {
         return 0.0;
@@ -1721,6 +1794,7 @@ pub fn byte_entropy(data: &[u8]) -> f64 {
 
 /// Parse a little-endian u16.
 #[inline]
+#[must_use]
 pub fn le_u16(data: &[u8], off: usize) -> u16 {
     if off + 2 > data.len() {
         return 0;
@@ -1729,6 +1803,7 @@ pub fn le_u16(data: &[u8], off: usize) -> u16 {
 }
 /// Parse a little-endian u32.
 #[inline]
+#[must_use]
 pub fn le_u32(data: &[u8], off: usize) -> u32 {
     if off + 4 > data.len() {
         return 0;
@@ -1737,6 +1812,7 @@ pub fn le_u32(data: &[u8], off: usize) -> u32 {
 }
 /// Parse a little-endian u64.
 #[inline]
+#[must_use]
 pub fn le_u64(data: &[u8], off: usize) -> u64 {
     if off + 8 > data.len() {
         return 0;
@@ -1745,6 +1821,7 @@ pub fn le_u64(data: &[u8], off: usize) -> u64 {
 }
 /// Parse a big-endian u32.
 #[inline]
+#[must_use]
 pub fn be_u32(data: &[u8], off: usize) -> u32 {
     if off + 4 > data.len() {
         return 0;
@@ -1752,6 +1829,7 @@ pub fn be_u32(data: &[u8], off: usize) -> u32 {
     u32::from_be_bytes(data[off..off + 4].try_into().unwrap())
 }
 /// Verify a 32-bit Adler-32 checksum over `data`.
+#[must_use]
 pub fn adler32(data: &[u8]) -> u32 {
     let (mut a, mut b) = (1u32, 0u32);
     for &byte in data {
@@ -1766,6 +1844,7 @@ pub fn adler32(data: &[u8]) -> u32 {
 // ---------------------------------------------------------------------------
 
 /// Search `haystack` for the first occurrence of `needle`.
+#[must_use]
 pub fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
         return Some(0);
@@ -1774,6 +1853,7 @@ pub fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 /// Count non-overlapping occurrences of `needle` in `haystack`.
+#[must_use]
 pub fn count_bytes(haystack: &[u8], needle: &[u8]) -> usize {
     if needle.is_empty() {
         return 0;
@@ -1791,12 +1871,14 @@ pub fn count_bytes(haystack: &[u8], needle: &[u8]) -> usize {
 }
 
 /// Extract a sub-slice at `offset` with `len`, returning `None` if out of bounds.
+#[must_use]
 pub fn try_slice(data: &[u8], offset: usize, len: usize) -> Option<&[u8]> {
     data.get(offset..offset + len)
 }
 
 // Last additions
 /// Check if a byte slice is all zeros.
+#[must_use]
 pub fn is_zeroed(data: &[u8]) -> bool {
     data.iter().all(|&b| b == 0)
 }
@@ -1811,10 +1893,12 @@ pub fn xor_bytes(data: &mut [u8], key: u8) {
     }
 }
 /// Rotate `val` left by `n` bits (32-bit).
+#[must_use]
 pub const fn rol32(val: u32, n: u32) -> u32 {
     val.rotate_left(n)
 }
 /// Rotate `val` right by `n` bits (32-bit).
+#[must_use]
 pub const fn ror32(val: u32, n: u32) -> u32 {
     val.rotate_right(n)
 }

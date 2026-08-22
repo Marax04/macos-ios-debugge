@@ -357,6 +357,7 @@ pub struct LuaJitLoader<'a> {
 }
 
 impl<'a> LuaJitLoader<'a> {
+    #[must_use]
     pub const fn new(data: &'a [u8]) -> Self {
         Self {
             data,
