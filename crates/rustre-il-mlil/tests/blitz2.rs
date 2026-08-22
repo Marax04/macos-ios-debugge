@@ -1,6 +1,6 @@
 //! blitz2 — deep adversarial tests for rustre-il-mlil.
 //!
-//! No std::time / rand: seeded LCG for fuzz determinism.
+//! No `std::time` / rand: seeded LCG for fuzz determinism.
 
 use rustre_core::address::Address;
 use rustre_il_mlil::{
@@ -16,18 +16,18 @@ use rustre_il_mlil::{
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-fn lcg_seed() -> u64 {
+const fn lcg_seed() -> u64 {
     0xDEAD_BEEF_CAFE_BABE
 }
 
-fn lcg_step(s: &mut u64) -> u64 {
+const fn lcg_step(s: &mut u64) -> u64 {
     *s = s
         .wrapping_mul(6364136223846793005)
         .wrapping_add(1442695040888963407);
     *s
 }
 
-fn cst(v: u64, sz: Size) -> MlilExpr {
+const fn cst(v: u64, sz: Size) -> MlilExpr {
     MlilExpr::Const { value: v, size: sz }
 }
 
@@ -974,10 +974,9 @@ fn fuzz_propagate_copies_terminates() {
         let _ = propagate_copies(&mut f);
         // After transitive prop, return should point at v0.
         let last = f.blocks[0].instrs.last().unwrap();
-        if let MlilInstruction::Ret { values } = &last.instr {
-            if let MlilExpr::Var { var: v, .. } = &values[0] {
+        if let MlilInstruction::Ret { values } = &last.instr
+            && let MlilExpr::Var { var: v, .. } = &values[0] {
                 assert_eq!(v.name, "v0");
             }
-        }
     }
 }

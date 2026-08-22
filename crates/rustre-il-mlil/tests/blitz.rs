@@ -1,8 +1,8 @@
 //! Blitz test suite for rustre-il-mlil core APIs.
 //!
-//! Exhaustive coverage of: SsaVar, MlilExpr, MlilInstruction, MlilBasicBlock,
-//! MlilFunction, fold_mlil_expr, eliminate_dead_stores, propagate_copies,
-//! eliminate_trivial_phis, infer_types, MlilPassManager, text/dot/json output.
+//! Exhaustive coverage of: `SsaVar`, `MlilExpr`, `MlilInstruction`, `MlilBasicBlock`,
+//! `MlilFunction`, `fold_mlil_expr`, `eliminate_dead_stores`, `propagate_copies`,
+//! `eliminate_trivial_phis`, `infer_types`, `MlilPassManager`, text/dot/json output.
 
 use rustre_core::address::Address;
 use rustre_il_mlil::*;
@@ -10,7 +10,7 @@ use rustre_il_mlil::*;
 fn v(name: &str, ver: u32) -> SsaVar {
     SsaVar::new(name, ver)
 }
-fn cst(val: u64, sz: Size) -> MlilExpr {
+const fn cst(val: u64, sz: Size) -> MlilExpr {
     MlilExpr::Const { value: val, size: sz }
 }
 fn var(name: &str, ver: u32, sz: Size) -> MlilExpr {
@@ -279,7 +279,7 @@ fn instr_display_smoke() {
 
 // ─── MlilBasicBlock ─────────────────────────────────────────────────────────
 
-fn ann(addr: u64, instr: MlilInstruction) -> MlilAnnotatedInstr {
+const fn ann(addr: u64, instr: MlilInstruction) -> MlilAnnotatedInstr {
     MlilAnnotatedInstr { address: Address::new(addr), instr }
 }
 
@@ -874,11 +874,10 @@ fn trivial_phi_eliminated() {
     let n = eliminate_trivial_phis(&mut f);
     assert_eq!(n, 1);
     assert_eq!(f.blocks[0].instrs.len(), 1);
-    if let MlilInstruction::Ret { values } = &f.blocks[0].instrs[0].instr {
-        if let MlilExpr::Var { var, .. } = &values[0] {
+    if let MlilInstruction::Ret { values } = &f.blocks[0].instrs[0].instr
+        && let MlilExpr::Var { var, .. } = &values[0] {
             assert_eq!(var, &v("x", 1));
         }
-    }
 }
 
 #[test]

@@ -1042,7 +1042,7 @@ mod tests {
         ];
         let ssa = SsaForm::build(&cfg, &blocks, SsaVariant::Minimal);
         // BB3 must have a PHI for x (join point for BB1/BB2 definitions).
-        let bb3_phis = ssa.phi_nodes.get(&BBId(3)).map(|v| v.len()).unwrap_or(0);
+        let bb3_phis = ssa.phi_nodes.get(&BBId(3)).map_or(0, |v| v.len());
         assert!(bb3_phis >= 1, "Expected PHI at BB3, got {}", bb3_phis);
     }
 

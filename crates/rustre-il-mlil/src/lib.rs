@@ -368,7 +368,7 @@ pub enum MlilInstruction {
 /// instead of `Unknown` (which printed as the non-C word `unknown`).
 fn call_ret_var_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| !matches!(std::env::var("RUSTRE_CALL_RET_VAR").as_deref(), Ok("0") | Ok("false")))
+    *ON.get_or_init(|| !matches!(std::env::var("RUSTRE_CALL_RET_VAR").as_deref(), Ok("0" | "false")))
 }
 
 impl MlilInstruction {
