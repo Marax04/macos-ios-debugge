@@ -184,6 +184,18 @@ fn read_addr_insn(data: &[u8], pos: &mut usize, addr_size: u8) -> u64 {
     }
 }
 
+/// Read a DWARF register number (a ULEB128, so up to `u64`) as the `u32` the
+/// rule tables are keyed by.
+///
+/// Narrowing with `as u32` would DISCARD the high bits, so `0x1_0000_0006`
+/// would land on register 6 — on x86-64 that is rbp — and a bogus register
+/// number in a hostile `.eh_frame` would silently overwrite the unwind rule of
+/// a real callee-saved register. Saturating instead keeps an out-of-range
+/// number out of the range of every architecture's real registers.
+fn read_register(data: &[u8], pos: &mut usize) -> u32 {
+    u32::try_from(read_uleb128(data, pos).unwrap_or(0)).unwrap_or(u32::MAX)
+}
+
 fn decode_extended_cfa_insn(data: &[u8], pos: &mut usize, op: u8, addr_size: u8) -> CfaInsn {
     match op {
         0x00 => CfaInsn::Nop,
@@ -207,54 +219,54 @@ fn decode_extended_cfa_insn(data: &[u8], pos: &mut usize, op: u8, addr_size: u8)
             CfaInsn::AdvanceLoc4(d)
         }
         0x05 => {
-            let reg = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let reg = read_register(data, pos);
             let off = read_uleb128(data, pos).unwrap_or(0);
             CfaInsn::Offset { reg, offset: off }
         }
-        0x06 => CfaInsn::Restore(read_uleb128(data, pos).unwrap_or(0) as u32),
-        0x07 => CfaInsn::Undefined(read_uleb128(data, pos).unwrap_or(0) as u32),
-        0x08 => CfaInsn::SameValue(read_uleb128(data, pos).unwrap_or(0) as u32),
+        0x06 => CfaInsn::Restore(read_register(data, pos)),
+        0x07 => CfaInsn::Undefined(read_register(data, pos)),
+        0x08 => CfaInsn::SameValue(read_register(data, pos)),
         0x09 => {
-            let r1 = read_uleb128(data, pos).unwrap_or(0) as u32;
-            let r2 = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let r1 = read_register(data, pos);
+            let r2 = read_register(data, pos);
             CfaInsn::Register { reg1: r1, reg2: r2 }
         }
         0x0A => CfaInsn::RememberState,
         0x0B => CfaInsn::RestoreState,
         0x0C => {
-            let reg = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let reg = read_register(data, pos);
             let off = read_uleb128(data, pos).unwrap_or(0);
             CfaInsn::DefCfa { reg, offset: off }
         }
-        0x0D => CfaInsn::DefCfaRegister(read_uleb128(data, pos).unwrap_or(0) as u32),
+        0x0D => CfaInsn::DefCfaRegister(read_register(data, pos)),
         0x0E => CfaInsn::DefCfaOffset(read_uleb128(data, pos).unwrap_or(0)),
         0x0F => CfaInsn::DefCfaExpression(read_block_insn(data, pos)),
         0x10 => {
-            let reg = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let reg = read_register(data, pos);
             CfaInsn::Expression { reg, expr: read_block_insn(data, pos) }
         }
         0x11 => {
-            let reg = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let reg = read_register(data, pos);
             let off = read_sleb128(data, pos).unwrap_or(0);
             CfaInsn::OffsetSf { reg, offset: off }
         }
         0x12 => {
-            let reg = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let reg = read_register(data, pos);
             let off = read_uleb128(data, pos).unwrap_or(0);
             CfaInsn::ValOffset { reg, offset: off }
         }
         0x13 => {
-            let reg = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let reg = read_register(data, pos);
             let off = read_sleb128(data, pos).unwrap_or(0);
             CfaInsn::ValOffsetSf { reg, offset: off }
         }
         0x14 => {
-            let reg = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let reg = read_register(data, pos);
             CfaInsn::ValExpression { reg, expr: read_block_insn(data, pos) }
         }
-        0x15 => CfaInsn::RestoreExtended(read_uleb128(data, pos).unwrap_or(0) as u32),
+        0x15 => CfaInsn::RestoreExtended(read_register(data, pos)),
         0x19 => {
-            let reg = read_uleb128(data, pos).unwrap_or(0) as u32;
+            let reg = read_register(data, pos);
             let off = read_sleb128(data, pos).unwrap_or(0);
             CfaInsn::DefCfaSf { reg, offset: off }
         }
@@ -1098,5 +1110,63 @@ mod frame_length_wrap_tests {
         let mut pos = 0usize;
         let _ = Cie::parse(&data, &mut pos, true);
         assert!(pos >= 12, "cursor rewound to {pos}, below the entry header it consumed");
+    }
+}
+
+#[cfg(test)]
+mod register_truncation_tests {
+    use super::*;
+
+    /// Encode `v` as ULEB128.
+    fn uleb(mut v: u64, out: &mut Vec<u8>) {
+        loop {
+            let mut b = (v & 0x7f) as u8;
+            v >>= 7;
+            if v != 0 { b |= 0x80; }
+            out.push(b);
+            if v == 0 { break; }
+        }
+    }
+
+    /// A DWARF register number is a ULEB128 — i.e. up to u64. Narrowing it with
+    /// `as u32` DISCARDS the high bits, so `0x1_0000_0006` becomes `6`. The rule
+    /// is then installed on register 6 (rbp on x86-64): a bogus register number
+    /// in a hostile .eh_frame silently OVERWRITES the unwind rule of a real
+    /// callee-saved register. Out-of-range numbers must not alias a real one.
+    #[test]
+    fn oversized_register_number_does_not_alias_a_real_register() {
+        let mut data = vec![0x05u8]; // DW_CFA_offset_extended
+        uleb(0x1_0000_0006, &mut data); // register: truncates to 6
+        uleb(1, &mut data); // offset
+        let mut pos = 0usize;
+        let insns = decode_cfa_insns(&data, &mut pos, data.len(), 8);
+        assert_eq!(insns.len(), 1);
+        match insns[0] {
+            CfaInsn::Offset { reg, .. } => assert_ne!(
+                reg, 6,
+                "register 0x1_0000_0006 was truncated onto real register 6"
+            ),
+            ref other => panic!("unexpected insn {other:?}"),
+        }
+    }
+
+    /// Same defect through the rule-application path: the truncated number must
+    /// not end up as a rule for the real register it aliases.
+    #[test]
+    fn oversized_register_number_does_not_install_rule_on_real_register() {
+        let mut data = vec![0x05u8];
+        uleb(0x1_0000_0006, &mut data);
+        uleb(1, &mut data);
+        let mut pos = 0usize;
+        let insns = decode_cfa_insns(&data, &mut pos, data.len(), 8);
+        let mut row = UnwindRow::new(0);
+        let mut stack: Vec<UnwindRow> = Vec::new();
+        let mut table = UnwindTable::default();
+        let initial: HashMap<u32, RegRule> = HashMap::new();
+        apply_cfa_insns(&insns, &mut row, &mut stack, &mut table, 1, -8, &initial);
+        assert!(
+            !row.registers.contains_key(&6),
+            "a rule was installed on real register 6 from an out-of-range number"
+        );
     }
 }
