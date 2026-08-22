@@ -366,9 +366,9 @@ fn function_all_instrs_iterates_in_order() {
     for i in 0..3 {
         let mut b = LlilBasicBlock::default();
         b.id = i;
-        b.start = Address::new(i as u64 * 0x10);
+        b.start = Address::new(u64::from(i) * 0x10);
         b.instrs.push(LlilAnnotatedInstr {
-            address: Address::new(i as u64 * 0x10),
+            address: Address::new(u64::from(i) * 0x10),
             size: 1,
             instr: LlilInstruction::Nop,
             length: 1,

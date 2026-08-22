@@ -945,10 +945,9 @@ mod tests {
         };
         let elevated = bridge.elevate(&func);
         let instr = &elevated.blocks[0].instrs[0].instr;
-        if let LlilInstruction::SetReg { value, .. } = instr {
-            if let LlilExpr::RegisterRef { reg, .. } = value {
+        if let LlilInstruction::SetReg { value, .. } = instr
+            && let LlilExpr::RegisterRef { reg, .. } = value {
                 assert_eq!(reg.name(), "arg0");
             }
-        }
     }
 }

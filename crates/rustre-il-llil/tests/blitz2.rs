@@ -627,7 +627,7 @@ fn llil_reg_and_tmp_constructors() {
 }
 
 // ── Send/Sync stress ────────────────────────────────────────────────────
-fn assert_send_sync<T: Send + Sync>() {}
+const fn assert_send_sync<T: Send + Sync>() {}
 
 #[test]
 fn types_are_send_sync() {
@@ -732,7 +732,7 @@ fn fuzz_eval_never_panics() {
 #[test]
 fn boundary_const_evaluations() {
     let it = interp();
-    for v in [0u64, 1, u8::MAX as u64, u16::MAX as u64, u32::MAX as u64, u64::MAX] {
+    for v in [0u64, 1, u64::from(u8::MAX), u64::from(u16::MAX), u64::from(u32::MAX), u64::MAX] {
         let e = llil_const(v, Size::QWord);
         assert_eq!(it.eval_expr(&e).unwrap(), v);
     }
