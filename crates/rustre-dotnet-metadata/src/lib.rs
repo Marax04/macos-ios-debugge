@@ -2679,6 +2679,10 @@ pub fn parse_method_sig_blob(blob: &[u8]) -> Result<MethodSigInfo> {
     let param_count = read_compressed_uint_slice(blob, &mut pos) as usize;
     let return_type = read_type_sig(blob, &mut pos);
     // Cap allocation: untrusted param_count from blob must not exhaust memory.
+    // Capping only `with_capacity` was not enough -- the loop below pushes
+    // `param_count` entries regardless, so the Vec grew unbounded anyway. Each
+    // real parameter costs at least one blob byte, so bound the loop too.
+    let param_count = param_count.min(blob.len().saturating_sub(pos));
     let mut params = Vec::with_capacity(param_count.min(1024));
     for _ in 0..param_count {
         if pos < blob.len() && blob[pos] == 0x41 {
@@ -2727,6 +2731,8 @@ pub fn parse_local_var_sig(blob: &[u8]) -> Result<Vec<String>> {
     }
     let mut pos = 1usize;
     let count = read_compressed_uint_slice(blob, &mut pos) as usize;
+    // Same as `parse_method_sig_blob`: bound the loop, not just the capacity.
+    let count = count.min(blob.len().saturating_sub(pos));
     // Cap allocation: untrusted local-var count from blob must not exhaust memory.
     let mut types = Vec::with_capacity(count.min(1024));
     for _ in 0..count {
@@ -2762,9 +2768,28 @@ fn read_compressed_uint_slice(blob: &[u8], pos: &mut usize) -> u32 {
     }
 }
 
+/// Maximum nesting accepted in a type signature. Mirrors the cap used by
+/// `type_system::SigReader`. Each level consumes at least one blob byte, so an
+/// uncapped parser recurses once per byte of a hostile blob and overflows the
+/// stack (an abort, not a catchable error).
+const MAX_TYPE_SIG_DEPTH: u32 = 64;
+
+/// Blob bytes still unread -- the natural upper bound for any element count a
+/// signature can legitimately declare, since each element costs >= 1 byte.
+fn remaining(blob: &[u8], pos: &usize) -> u32 {
+    u32::try_from(blob.len().saturating_sub(*pos)).unwrap_or(u32::MAX)
+}
+
 fn read_type_sig(blob: &[u8], pos: &mut usize) -> String {
+    read_type_sig_depth(blob, pos, MAX_TYPE_SIG_DEPTH)
+}
+
+fn read_type_sig_depth(blob: &[u8], pos: &mut usize, depth: u32) -> String {
     if *pos >= blob.len() {
         return "void".into();
+    }
+    if depth == 0 {
+        return "?".into();
     }
     let b = blob[*pos];
     *pos += 1;
@@ -2799,7 +2824,7 @@ fn read_type_sig(blob: &[u8], pos: &mut usize) -> String {
         }
         0x14 => {
             // ARRAY —" skip rank and bounds
-            let elem = read_type_sig(blob, pos);
+            let elem = read_type_sig_depth(blob, pos, depth - 1);
             let _rank = read_compressed_uint_slice(blob, pos);
             let num_sizes = read_compressed_uint_slice(blob, pos);
             for _ in 0..num_sizes {
@@ -2813,9 +2838,14 @@ fn read_type_sig(blob: &[u8], pos: &mut usize) -> String {
         }
         0x15 => {
             // GENERICINST
-            let _cv = read_type_sig(blob, pos); // class/valuetype
-            let count = read_compressed_uint_slice(blob, pos);
-            let args: Vec<String> = (0..count).map(|_| read_type_sig(blob, pos)).collect();
+            let _cv = read_type_sig_depth(blob, pos, depth - 1); // class/valuetype
+            // `count` is an untrusted compressed uint (up to 0x1FFF_FFFF). Every
+            // real argument costs at least one blob byte, so anything beyond the
+            // bytes left is malformed -- without this the collect allocates
+            // hundreds of millions of Strings.
+            let count = read_compressed_uint_slice(blob, pos).min(remaining(blob, pos));
+            let args: Vec<String> =
+                (0..count).map(|_| read_type_sig_depth(blob, pos, depth - 1)).collect();
             format!("Generic<{}>", args.join(", "))
         }
         0x16 => "TypedRef".into(),
@@ -2823,7 +2853,7 @@ fn read_type_sig(blob: &[u8], pos: &mut usize) -> String {
         0x19 => "UIntPtr".into(),
         0x1C => "object".into(),
         0x1D => {
-            let elem = read_type_sig(blob, pos);
+            let elem = read_type_sig_depth(blob, pos, depth - 1);
             format!("{elem}[]")
         }
         0x1E => {
@@ -2833,12 +2863,12 @@ fn read_type_sig(blob: &[u8], pos: &mut usize) -> String {
         0x1F => {
             // CMOD_REQD —" skip modifier token, recurse
             read_compressed_uint_slice(blob, pos);
-            read_type_sig(blob, pos)
+            read_type_sig_depth(blob, pos, depth - 1)
         }
         0x20 => {
             // CMOD_OPT —" skip modifier token, recurse
             read_compressed_uint_slice(blob, pos);
-            read_type_sig(blob, pos)
+            read_type_sig_depth(blob, pos, depth - 1)
         }
         0x40 => {
             // FNPTR
@@ -2846,7 +2876,7 @@ fn read_type_sig(blob: &[u8], pos: &mut usize) -> String {
         }
         0x45 => {
             // PINNED
-            let inner = read_type_sig(blob, pos);
+            let inner = read_type_sig_depth(blob, pos, depth - 1);
             format!("pinned {inner}")
         }
         _ => format!("unknown(0x{b:02X})"),
@@ -3509,6 +3539,63 @@ mod tests {
         assert_eq!(locals.len(), 2);
         assert_eq!(locals[0], "int");
         assert_eq!(locals[1], "string");
+    }
+
+    fn hostile_count_blob(kind: u8) -> Vec<u8> {
+        // Compressed uint 0x1FFF_FFFF encodes as 0xDF FF FF FF (4-byte form).
+        vec![kind, 0xDF, 0xFF, 0xFF, 0xFF]
+    }
+
+    #[test]
+    fn method_sig_param_count_is_bounded_by_blob_length() {
+        // param_count = 0x1FFF_FFFF in a 5-byte blob. The loop used to push that
+        // many Strings (~13 GB) because only `with_capacity` was capped.
+        let blob = hostile_count_blob(0x00);
+        let sig = parse_method_sig_blob(&blob).expect("parses");
+        assert!(
+            sig.params.len() <= blob.len(),
+            "param count {} must not exceed blob length {}",
+            sig.params.len(),
+            blob.len()
+        );
+    }
+
+    #[test]
+    fn local_var_sig_count_is_bounded_by_blob_length() {
+        let mut blob = hostile_count_blob(0x07);
+        blob[0] = 0x07; // LOCAL_SIG
+        let types = parse_local_var_sig(&blob).expect("parses");
+        assert!(types.len() <= blob.len());
+    }
+
+    #[test]
+    fn generic_inst_arg_count_is_bounded_by_blob_length() {
+        // GENERICINST, class token, then a 0x1FFF_FFFF argument count.
+        let blob = vec![0x15, 0x12, 0x01, 0xDF, 0xFF, 0xFF, 0xFF];
+        let mut pos = 0usize;
+        let s = read_type_sig(&blob, &mut pos);
+        assert!(s.starts_with("Generic<"));
+        // One entry per remaining byte at most, not 500M.
+        assert!(s.matches(',').count() <= blob.len());
+    }
+
+    #[test]
+    fn type_sig_recursion_is_depth_capped() {
+        // 100_000 nested SZARRAY markers. Uncapped this recurses once per byte
+        // and overflows the stack; capped it unwinds at MAX_TYPE_SIG_DEPTH.
+        let blob = vec![0x1Du8; 100_000];
+        let mut pos = 0usize;
+        let s = read_type_sig(&blob, &mut pos);
+        assert_eq!(s.matches("[]").count(), MAX_TYPE_SIG_DEPTH as usize);
+        assert!(s.starts_with('?'));
+    }
+
+    #[test]
+    fn type_sig_shallow_nesting_is_unchanged() {
+        // Well-formed signatures stay exactly as before the cap.
+        let blob = vec![0x1D, 0x1D, 0x08];
+        let mut pos = 0usize;
+        assert_eq!(read_type_sig(&blob, &mut pos), "int[][]");
     }
 
     #[test]
@@ -6752,7 +6839,8 @@ fn decode_method_spec_instantiation(blob: &[u8]) -> Vec<String> {
         return Vec::new();
     }
     let mut pos = 1usize;
-    let count = read_compressed_uint_slice(blob, &mut pos) as usize;
+    let count = (read_compressed_uint_slice(blob, &mut pos) as usize)
+        .min(blob.len().saturating_sub(pos));
     (0..count).map(|_| read_type_sig(blob, &mut pos)).collect()
 }
 
