@@ -41,6 +41,8 @@ pub enum SurgeonError {
     BadELfanew(u32),
     #[error("checksum field not found (not a PE32/PE32+)")]
     NoChecksumField,
+    #[error("NT signature is {0:#010x}, expected 0x00004550 (\"PE\0\0\")")]
+    BadNtSignature(u32),
 }
 
 pub type SurgeonResult<T> = Result<T, SurgeonError>;
@@ -52,6 +54,8 @@ pub type SurgeonResult<T> = Result<T, SurgeonError>;
 const E_MAGIC: usize = 0;
 const E_LFANEW: usize = 0x3C;
 pub const NT_SIGNATURE: usize = 0;
+/// Expected value at `nt + NT_SIGNATURE`: "PE\0\0".
+pub const NT_SIGNATURE_VALUE: u32 = 0x0000_4550;
 // COFF header relative to PE signature
 pub const COFF_MACHINE: usize = 4;
 const COFF_NUM_SECTIONS: usize = 6;
@@ -123,7 +127,16 @@ fn nt_header_offset(buf: &[u8]) -> SurgeonResult<usize> {
     if e_lfanew as usize + 4 > buf.len() {
         return Err(SurgeonError::BadELfanew(e_lfanew));
     }
-    Ok(e_lfanew as usize)
+    let nt = e_lfanew as usize;
+    // NT_SIGNATURE was declared and never read: the header was accepted on
+    // the MZ magic and a in-range e_lfanew alone, so any file starting with
+    // "MZ" was treated as a PE and the writers below would patch arbitrary
+    // bytes of it.
+    let sig = read_u32_le(buf, nt + NT_SIGNATURE)?;
+    if sig != NT_SIGNATURE_VALUE {
+        return Err(SurgeonError::BadNtSignature(sig));
+    }
+    Ok(nt)
 }
 
 /// Returns the file offset of the first section header.
@@ -239,8 +252,13 @@ impl ChecksumFixer {
     pub fn fix(&self, buf: &mut [u8]) -> SurgeonResult<u32> {
         let nt = nt_header_offset(buf)?;
         let opt_magic = read_u16_le(buf, nt + OPT_MAGIC)?;
+        // PE32 and PE32+ happen to place CheckSum at the same optional-header
+        // offset (ImageBase widening is absorbed by BaseOfData disappearing),
+        // but each arm now names its own constant so the two can never drift
+        // apart silently.
         let checksum_off = match opt_magic {
-            PE32_MAGIC | PE64_MAGIC => nt + PE32_CHECKSUM_OFF,
+            PE32_MAGIC => nt + PE32_CHECKSUM_OFF,
+            PE64_MAGIC => nt + PE64_CHECKSUM_OFF,
             _ => return Err(SurgeonError::NoChecksumField),
         };
         let ck = self.compute(buf, checksum_off);
@@ -315,7 +333,8 @@ impl HeaderFixer {
     /// Returns [`SurgeonError`] if the PE header offset is invalid.
     pub fn set_size_of_image(&self, buf: &mut [u8], size: u32) -> SurgeonResult<()> {
         let nt = nt_header_offset(buf)?;
-        write_u32_le(buf, nt + PE32_SIZE_OF_IMAGE_OFF, size)
+        let off = Self::size_of_image_off(buf, nt)?;
+        write_u32_le(buf, off, size)
     }
 
     /// Read `SizeOfImage`.
@@ -324,7 +343,8 @@ impl HeaderFixer {
     /// Returns [`SurgeonError`] if the PE header offset is invalid.
     pub fn size_of_image(&self, buf: &[u8]) -> SurgeonResult<u32> {
         let nt = nt_header_offset(buf)?;
-        read_u32_le(buf, nt + PE32_SIZE_OF_IMAGE_OFF)
+        let off = Self::size_of_image_off(buf, nt)?;
+        read_u32_le(buf, off)
     }
 
     /// Set `SizeOfHeaders`.
@@ -333,7 +353,41 @@ impl HeaderFixer {
     /// Returns [`SurgeonError`] if the PE header offset is invalid.
     pub fn set_size_of_headers(&self, buf: &mut [u8], size: u32) -> SurgeonResult<()> {
         let nt = nt_header_offset(buf)?;
-        write_u32_le(buf, nt + PE32_SIZE_OF_HEADERS_OFF, size)
+        let off = Self::size_of_headers_off(buf, nt)?;
+        write_u32_le(buf, off, size)
+    }
+
+    /// Read the COFF `Machine` word.
+    ///
+    /// # Errors
+    /// Returns [`SurgeonError`] if the PE header offset is invalid.
+    pub fn machine(&self, buf: &[u8]) -> SurgeonResult<u16> {
+        let nt = nt_header_offset(buf)?;
+        read_u16_le(buf, nt + COFF_MACHINE)
+    }
+
+    /// Offset of `SizeOfImage` for the optional-header magic in `buf`.
+    ///
+    /// # Errors
+    /// Returns [`SurgeonError`] if the header is not PE32/PE32+.
+    fn size_of_image_off(buf: &[u8], nt: usize) -> SurgeonResult<usize> {
+        match read_u16_le(buf, nt + OPT_MAGIC)? {
+            PE32_MAGIC => Ok(nt + PE32_SIZE_OF_IMAGE_OFF),
+            PE64_MAGIC => Ok(nt + PE64_SIZE_OF_IMAGE_OFF),
+            _ => Err(SurgeonError::NotOptional(nt + OPT_MAGIC)),
+        }
+    }
+
+    /// Offset of `SizeOfHeaders` for the optional-header magic in `buf`.
+    ///
+    /// # Errors
+    /// Returns [`SurgeonError`] if the header is not PE32/PE32+.
+    fn size_of_headers_off(buf: &[u8], nt: usize) -> SurgeonResult<usize> {
+        match read_u16_le(buf, nt + OPT_MAGIC)? {
+            PE32_MAGIC => Ok(nt + PE32_SIZE_OF_HEADERS_OFF),
+            PE64_MAGIC => Ok(nt + PE64_SIZE_OF_HEADERS_OFF),
+            _ => Err(SurgeonError::NotOptional(nt + OPT_MAGIC)),
+        }
     }
 
     /// Patch the Characteristics field.
@@ -1100,4 +1154,45 @@ mod tests {
         r.record("op2", "d2", None);
         assert_eq!(r.operations.len(), 2);
     }
+    #[test]
+    fn nt_signature_is_verified() {
+        // Regression: NT_SIGNATURE was declared and never read, so a file
+        // that merely began with "MZ" was accepted and the writers would
+        // patch arbitrary bytes of it.
+        let mut buf = minimal_pe32();
+        let nt = u32::from_le_bytes(buf[0x3C..0x40].try_into().unwrap()) as usize;
+        assert!(HeaderFixer::new().size_of_image(&buf).is_ok());
+
+        buf[nt] ^= 0xFF; // corrupt the "PE" signature only
+        let err = HeaderFixer::new().size_of_image(&buf).unwrap_err();
+        assert!(
+            matches!(err, SurgeonError::BadNtSignature(_)),
+            "expected BadNtSignature, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn coff_machine_is_readable() {
+        let buf = minimal_pe32();
+        let m = HeaderFixer::new().machine(&buf).expect("machine reads");
+        assert_ne!(m, 0, "COFF_MACHINE offset must point at a real machine word");
+    }
+
+    #[test]
+    fn pe32_and_pe64_size_offsets_coincide_by_construction() {
+        // PE32 and PE32+ really do agree here; the constants are kept
+        // separate so a future edit to one cannot silently move the other.
+        assert_eq!(PE32_CHECKSUM_OFF, PE64_CHECKSUM_OFF);
+        assert_eq!(PE32_SIZE_OF_IMAGE_OFF, PE64_SIZE_OF_IMAGE_OFF);
+        assert_eq!(PE32_SIZE_OF_HEADERS_OFF, PE64_SIZE_OF_HEADERS_OFF);
+
+        // and a PE32+ image round-trips through the PE64 arm
+        let mut buf = minimal_pe32();
+        let nt = u32::from_le_bytes(buf[0x3C..0x40].try_into().unwrap()) as usize;
+        buf[nt + OPT_MAGIC..nt + OPT_MAGIC + 2].copy_from_slice(&PE64_MAGIC.to_le_bytes());
+        let sc = HeaderFixer::new();
+        sc.set_size_of_image(&mut buf, 0x4321).expect("write");
+        assert_eq!(sc.size_of_image(&buf).expect("read"), 0x4321);
+    }
+
 }
