@@ -1265,3 +1265,93 @@ la spiegazione di cosa è stato tolto dalla lista e perché.
 10. **`crates/rustre-decompiler/src/binary_entry.rs` non compila** — 112 righe
     non committate di un'altra sessione, il cui test destruttura una coppia da
     una funzione che ora restituisce una tripla. Modifica loro, correzione loro.
+
+---
+
+# Addendum C — sessione 2026-08-22 (ripresa)
+
+Additivo, come i precedenti. Dove contraddice il corpo del documento lo dico
+esplicitamente invece di riscriverlo.
+
+## C.1 La voce 10 del piano non è più vera
+
+Il corpo di questo documento elenca come punto aperto:
+
+> 10. `crates/rustre-decompiler/src/binary_entry.rs` non compila — 112 righe non
+>     committate di un'altra sessione, il cui test destruttura una coppia da una
+>     funzione che ora restituisce una tripla.
+
+**Chiuso.** Quel lavoro era parte di un cambio di firma incompleto: ora
+`callee_arities_for` restituisce una quadrupla (arità, tipi di ritorno, argc, e
+gli **inizi di funzione** disassemblati), e tutti i siti di chiamata sono
+aggiornati. Il crate compila e i 1337 test passano. Commit `0f7992ace`.
+
+La quarta componente esiste per un motivo preciso: `callee_arities` è indicizzata
+per bersaglio di **chiamata**, quindi una funzione raggiunta solo per **salto** —
+il caso tipico della chiamata di coda verso la funzione successiva — non vi
+compariva affatto.
+
+## C.2 Un difetto di misura che invalida un'abitudine
+
+`cargo test --test fidelity` legge `tests/decompiler_corpus/out`, cioè **output
+pre-generato su disco**. Quella directory è datata **20 luglio**; i sorgenti del
+decompilatore sono di oggi.
+
+Conseguenza: girare l'harness prima e dopo una modifica non distingue nulla,
+perché l'oggetto misurato è identico nei due casi **per costruzione**. In questa
+sessione ho ottenuto gli stessi 7 fallimenti con e senza la modifica in esame e
+stavo per leggerlo come "la modifica è innocua". Non lo dimostra: dimostra solo
+che entrambe le esecuzioni leggevano lo stesso artefatto di un mese fa.
+
+Vale per chiunque legga i numeri di fedeltà in questo repository: **senza
+rigenerare il corpus, quell'harness è un rituale, non una misura.**
+
+## C.3 Due guardie che si erano rotte da sole (`rustre-debug`)
+
+Da 2111 passati / 3 falliti a **2114 / 0**. Le tre cause sono istruttive perché
+due erano difetti *delle guardie*:
+
+1. **Guardia autoreferenziale.** Cercava l'ancora `"pub fn
+   backend_capabilities()"`, ma la dichiarazione era diventata `pub **const**
+   fn`. L'ancora non corrispondeva più alla dichiarazione — e corrispondeva
+   invece al **proprio letterale**, perché il test vive dentro `lib.rs`. Quindi
+   `.expect("guard misanchored")` non è mai scattato: la scansione leggeva sé
+   stessa. L'ha salvata solo l'asserzione sul conteggio, l'unica non ingannabile.
+
+2. **Guardia troppo severa che ha fabbricato il difetto cercato da un'altra.**
+   Rifiutava ogni riga che iniziasse con `self.rewind_past_own_breakpoint(`,
+   incluso `...await?` che propaga correttamente. Per soddisfarla i tre backend
+   scrivevano una forma non idiomatica; quando Windows è passato a `?`, la
+   guardia ha sparato su codice corretto **e** la guardia di logica condivisa ha
+   sparato a sua volta perché i corpi non coincidevano più. Un controllo troppo
+   severo non è solo fastidioso: **produce la divergenza che un secondo controllo
+   esiste per rilevare.**
+
+3. **Difetto reale, guardia corretta.** Tre correzioni clippy applicate a un solo
+   backend (`to_string`, let-chain, `is_multiple_of`). Allineati linux e macos.
+
+## C.4 Un difetto di parsing PE con un anno di vita
+
+`rustre-debug/src/seh_traversal.rs` leggeva `VirtualSize` e `SizeOfRawData`
+**dallo stesso offset** (+16). Quindi `virtual_size.min(raw_size)` era una
+tautologia e il clamp non clampava nulla. Un linker allinea `SizeOfRawData` a 512
+byte: per una `.pdata` con **una** funzione reale, il padding veniva percorso
+come **41 `RUNTIME_FUNCTION` inventate**.
+
+Il test di regressione usa padding fatto di voci *ben formate*, così il
+comportamento vecchio produce voci in più e non un errore — un errore sarebbe
+stato il fallimento facile da notare. Verificato non vacuo: reintroducendo
+l'offset sbagliato, fallisce. Commit `f5a20f7ff`.
+
+## C.5 Capacità spenta, ancora una volta
+
+In `rustre-debug` una famiglia di **otto** funzioni ARM64 per i watchpoint
+(`arm64_watchpoint_wvr`, `arm64_watchpoint_slot_for`, `arm64_breakpoint_from_dr_slot`,
+…) è implementata e coperta da test, ma **nessun backend la chiama**: le uniche
+referenze sono fra loro e dentro `#[cfg(test)]`. Su ARM i backend programmano
+ancora `dr0..dr7`, registri che lì non esistono.
+
+È lo stesso schema di `MATURITA.md` (81 crate avanzati ma spenti) e di
+`OTTIMIZZAZIONI.md` (`rustc-hash`/`ahash`/`rayon` già dipendenti e quasi
+inutilizzate). **Non è un intervento di igiene: cablarla cambia il comportamento
+del debugger**, quindi resta aperta in attesa di una decisione esplicita.

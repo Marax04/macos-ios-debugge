@@ -6683,7 +6683,7 @@ cinque le modalita', 1337 test passati.
 ---
 
 
-<!-- ULTIMO-RAPPORTO: 114 -->
+<!-- ULTIMO-RAPPORTO: 117 -->
 
 ## Come si conta (regola dell'utente, 2026-08-18)
 
@@ -8944,7 +8944,6 @@ compilazione; la regressione era unica di `SSE_INTRIN`.
 
 1337 test verdi.
 
-<!-- ULTIMO-RAPPORTO: 114 -->
 
 # Round 116 — ⚠ IL PUNTO DA CUI RIPARTIRE: le mie verifiche comportamentali misuravano 19 funzioni su 63
 
@@ -9015,4 +9014,83 @@ In entrambi i casi la domanda mancante era **«questo controllo vede davvero
 cio' che ho cambiato?»**, e in entrambi i casi la risposta e' arrivata da una
 misura sulla MISURA, non sul codice.
 
-<!-- ULTIMO-RAPPORTO: 114 -->
+# Round 117 — RAPPORTO: il lavoro interrotto recuperato, e l'harness di fedelta' che misura un artefatto di luglio
+
+Round di ripresa dopo una sessione chiusa a meta'. Il marcatore diceva 114 mentre
+i round erano 116: **due round non erano stati riportati**, ed erano presenti
+DUE copie del marcatore (righe 8947 e 9018, entrambe "114"). Il meccanismo conta
+gli header dopo il marcatore, quindi con due marcatori il conteggio e' ambiguo e
+l'innesco era rotto. Consolidato in un solo marcatore in fondo. La copia orfana a
+meta' documento e' l'unica riga rimossa in questo round: e' un commento di
+controllo duplicato, non contenuto.
+
+## 1. Il diff da 91 332 righe era churn di fine riga
+
+`crates/rustre-decompiler/src/lib.rs` risultava modificato per 91 332 righe. Non
+lo era: **45 814 righe su 45 814 erano state convertite a CRLF**. La modifica
+reale, con `git diff --ignore-cr-at-eol`, era **968 righe su 6 file**.
+
+Nota operativa che e' costata due tentativi: `core.autocrlf = true` NON ha
+normalizzato in fase di commit, e il primo commit ha memorizzato CRLF su file
+che il repository conteneva in LF. Verificato leggendo il blob, non fidandosi
+del warning di git. Corretto con `--amend` dopo normalizzazione esplicita; il
+commit e' passato da 48 644/45 546 a **3 127/29**.
+
+## 2. Cosa conteneva davvero: raggiungibilita' a PUNTO FISSO
+
+`remove_unreachable_after_terminator` guardava UN passo. Il caso transitivo —
+un blocco e' bersaglio di un `goto`, quindi sembra vivo, ma quel `goto` sta a sua
+volta in codice irraggiungibile — non lo vedeva.
+
+Il punto fisso e' **DECRESCENTE**: parte ottimista con tutte le etichette vive e
+restringe. E' la direzione sicura per una rimozione, perche' si toglie solo cio'
+che e' PROVATAMENTE irraggiungibile; partire da niente e crescere toglierebbe
+codice per mancanza di prove.
+
+Default-ON, si spegne con `RUSTRE_HLIL_REACH=0`.
+
+Verificato: `il-hlil` 477 test verdi, `decompiler` 1337 verdi, build release
+pulita.
+
+## 3. ⚠ L'HARNESS DI FEDELTA' MISURA UN ARTEFATTO DI LUGLIO
+
+Questo e' il ritrovamento del round, e invalida un modo di ragionare che era in
+uso.
+
+`cargo test --test fidelity` riportava **7 fallimenti**. L'ho girato anche su
+HEAD senza la modifica: **gli stessi 7**. La conclusione naturale — "non e' colpa
+della modifica" — e' VUOTA, e per un motivo che va scritto:
+
+`fidelity.rs:17` legge `tests/decompiler_corpus/out`, cioe' **output
+PRE-GENERATO su disco**, non il codice attuale.
+
+    out/                        20 luglio 2026
+    decompiler/src/lib.rs       22 agosto 2026
+
+Entrambe le esecuzioni leggevano lo stesso artefatto vecchio di **oltre un mese**.
+Il confronto prima/dopo non poteva distinguere nulla, perche' l'oggetto misurato
+era identico nei due casi per costruzione.
+
+Quindi: **l'harness di fedelta' non misura il decompilatore da settimane**, e i
+suoi 7 fallimenti non dicono niente sul codice di oggi. Girarlo senza rigenerare
+il corpus e' un rituale, non una misura. La verifica vera resta
+`measure.sh --label before/after`.
+
+E' la terza forma dello stesso difetto gia' registrato nel §115 e nel §116: un
+controllo che gira, riporta un esito, e non guarda l'oggetto che dovrebbe
+misurare. Qui non era vacuo per una guardia sbagliata ne' per un campione
+parziale, ma perche' **l'oggetto era congelato**.
+
+## 4. Inizi di funzione raggiunti per SALTO
+
+`callee_arities_for` restituisce ora anche gli inizi di funzione disassemblati.
+`callee_arities` non bastava: e' indicizzata per bersaglio di CHIAMATA, e una
+funzione raggiunta solo per SALTO — il caso tipico della chiamata di coda verso
+la funzione successiva — non vi compariva affatto.
+
+## 5. Stato aggiornato di una voce del rapporto radice
+
+La voce 10 di `STATUS.md` in radice dice che `binary_entry.rs` non compila.
+**Non e' piu' vero**: compila, e i 1337 test del crate passano. La coppia/tripla
+citata li' e' esattamente il cambio di firma del §4, ora completo su tutti i
+siti di chiamata.
