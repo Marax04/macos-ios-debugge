@@ -546,11 +546,11 @@ mod tests {
     #[test]
     fn test_dwp_entry_struct() {
         let entry = DwpEntry {
-            dwo_id: 0xABCD1234,
+            dwo_id: 0xABCD_1234,
             section_offsets: HashMap::new(),
             section_sizes: HashMap::new(),
         };
-        assert_eq!(entry.dwo_id, 0xABCD1234);
+        assert_eq!(entry.dwo_id, 0xABCD_1234);
     }
 
     #[test]

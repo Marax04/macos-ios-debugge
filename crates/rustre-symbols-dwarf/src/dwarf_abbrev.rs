@@ -883,7 +883,7 @@ mod tests {
         let data: [u8; 4] = [0x78, 0x56, 0x34, 0x12];
         let mut pos = 0;
         let v = read_form_value(&data, &mut pos, DwForm::Data4, 4, false, 0).unwrap();
-        assert_eq!(v, FormValue::Uint(0x12345678));
+        assert_eq!(v, FormValue::Uint(0x1234_5678));
         assert_eq!(pos, 4);
     }
 

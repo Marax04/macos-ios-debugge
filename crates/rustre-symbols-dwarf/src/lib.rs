@@ -3783,7 +3783,7 @@ mod symbol_provider_tests {
     fn test_dwarf_unwinder_from_sections_debug() {
         let unwinder = DwarfUnwinder::from_sections(&[], &[]);
         // With empty sections, unwind should return None gracefully.
-        assert!(unwinder.unwind_at(0xdeadbeef).is_none());
+        assert!(unwinder.unwind_at(0xdead_beef).is_none());
     }
 
     #[test]

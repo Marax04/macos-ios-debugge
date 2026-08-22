@@ -1199,10 +1199,10 @@ pub(crate) mod tests {
     #[test]
     fn test_state_machine_set_address() {
         let mut sm = StateMachine::new(true, 1, 1, -5, 14, 13);
-        let (row, end) = sm.execute(&LineOp::SetAddress(0xdeadbeef));
+        let (row, end) = sm.execute(&LineOp::SetAddress(0xdead_beef));
         assert!(row.is_none());
         assert!(!end);
-        assert_eq!(sm.register.address, 0xdeadbeef);
+        assert_eq!(sm.register.address, 0xdead_beef);
     }
 
     #[test]

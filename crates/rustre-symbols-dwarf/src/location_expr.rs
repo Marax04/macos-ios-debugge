@@ -899,13 +899,13 @@ mod tests {
     #[test]
     fn test_fbreg_zero_offset() {
         let regs = RegisterFile {
-            frame_base: 0x7FFF0000,
+            frame_base: 0x7FFF_0000,
             ..RegisterFile::default()
         };
         let expr = LocationExpr::from_slice(&[DW_OP_FBREG, 0x00]); // offset 0
         let mem = SimpleMemory::default();
         let result = ExprEvaluator::new(&regs, &mem).evaluate(&expr);
-        assert_eq!(result, LocationResult::Address(0x7FFF0000));
+        assert_eq!(result, LocationResult::Address(0x7FFF_0000));
     }
 
     #[test]
@@ -1051,7 +1051,7 @@ mod tests {
         let mut mem = SimpleMemory::new();
         mem.write(0x1000, &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
         let v = mem.read_u64(0x1000).unwrap();
-        assert_eq!(v, 0x0807060504030201);
+        assert_eq!(v, 0x0807_0605_0403_0201);
     }
 
     #[test]

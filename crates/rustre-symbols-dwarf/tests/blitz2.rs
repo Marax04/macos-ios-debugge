@@ -29,8 +29,8 @@ impl Lcg {
     }
     const fn next(&mut self) -> u64 {
         self.0 = self.0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
     fn bytes(&mut self, n: usize) -> Vec<u8> {
@@ -359,14 +359,14 @@ fn read_form_value_addr_sizes() {
     let mut pos = 0;
     assert_eq!(
         ab::read_form_value(&data, &mut pos, ab::DwForm::Addr, 4, false, 0),
-        Some(ab::FormValue::Uint(0xDEADBEEF))
+        Some(ab::FormValue::Uint(0xDEAD_BEEF))
     );
     // 8-byte addr
     let mut pos = 0;
     let d8 = [0x78, 0x56, 0x34, 0x12, 0x9A, 0x78, 0x56, 0x34];
     assert_eq!(
         ab::read_form_value(&d8, &mut pos, ab::DwForm::Addr, 8, false, 0),
-        Some(ab::FormValue::Uint(0x3456789A12345678))
+        Some(ab::FormValue::Uint(0x3456_789A_1234_5678))
     );
 }
 
@@ -426,10 +426,10 @@ fn build_type_unit_v4_le(sig: u64, type_off: u32, body: &[u8]) -> Vec<u8> {
 
 #[test]
 fn type_unit_header_parses_v4() {
-    let blob = build_type_unit_v4_le(0xCAFEBABE_DEADBEEF, 0x10, &[]);
+    let blob = build_type_unit_v4_le(0xCAFE_BABE_DEAD_BEEF, 0x10, &[]);
     let (hdr, after) = tu::parse_type_unit_header(&blob, 0).expect("parse");
     assert_eq!(hdr.version, 4);
-    assert_eq!(hdr.type_signature, 0xCAFEBABE_DEADBEEF);
+    assert_eq!(hdr.type_signature, 0xCAFE_BABE_DEAD_BEEF);
     assert_eq!(hdr.address_size, 8);
     assert_eq!(hdr.type_offset, 0x10);
     assert!(!hdr.is_64bit);
