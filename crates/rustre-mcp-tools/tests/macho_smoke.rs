@@ -77,7 +77,7 @@ fn claims_a_result(v: &Value) -> bool {
     }
 }
 
-/// A minimal, well-formed 64-bit Mach-O header (`MH_MAGIC_64`, x86_64,
+/// A minimal, well-formed 64-bit Mach-O header (`MH_MAGIC_64`, `x86_64`,
 /// `MH_EXECUTE`, no load commands).
 fn minimal_macho64_hex() -> &'static str {
     concat!(

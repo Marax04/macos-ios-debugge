@@ -23,7 +23,7 @@ use serde_json::{json, Value};
 pub struct PatternMatch {
     /// File offset of the match.
     pub offset: usize,
-    /// Virtual address (offset + base_address).
+    /// Virtual address (offset + `base_address`).
     pub virtual_address: u64,
     /// Number of bytes matched.
     pub length: usize,

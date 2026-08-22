@@ -1,5 +1,5 @@
 //! MCP wrappers for the rustre-debug crate.
-//! Extracted from wire_tools.rs by workflow_split_wire_tools.
+//! Extracted from `wire_tools.rs` by `workflow_split_wire_tools`.
 
 use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};
@@ -14,7 +14,7 @@ use anyhow::{Result as AnyhowResult, anyhow};
 /// Resolve a symbol from a loaded module's EXPORT table, with no PDB.
 ///
 /// From a live audit: `debug.resolve_symbol` answers "no symbols loaded; call
-/// debug.load_symbols first" for every name, including ones that need no symbol
+/// `debug.load_symbols` first" for every name, including ones that need no symbol
 /// server at all. `RtlUserThreadStart` — which this backend prints in its own
 /// backtraces — is an `ntdll.dll` export, mapped into every Windows process.
 ///
@@ -297,7 +297,7 @@ struct LiveSession {
     /// Address-indexed provenance log of writes performed through this session,
     /// backing `debug.who_wrote`/`debug.trace_origin`. `debug.write_memory`
     /// appends to it automatically; `debug.record_write` adds entries with
-    /// explicit provenance (writer_pc/source_address).
+    /// explicit provenance (`writer_pc/source_address`).
     omniscient: rustre_debug::omniscient_query::OmniscientIndex,
     /// Monotonic sequence counter for `omniscient` writes.
     write_seq: u64,
@@ -306,17 +306,17 @@ struct LiveSession {
     ttd: rustre_debug::time_travel_debug::TtdSession,
     /// Next TTD trace sequence number to record a snapshot at.
     ttd_seq: u64,
-    /// Concrete replay backend fed by debug.ttd_record with the live thread's
+    /// Concrete replay backend fed by `debug.ttd_record` with the live thread's
     /// real pc/sp/registers, so reverse ops can return recorded register state
     /// (not just the position-only simulation of `ttd`).
     ttd_backend: rustre_debug::time_travel_debug::SnapshotReplayBackend,
     /// Per-session hardware watchpoint engine: allocates distinct DR0-DR3 slots
     /// across multiple watchpoints (a throwaway engine per call would collide on
-    /// DR0). Backs debug.set_watchpoint / remove_watchpoint / watchpoints.
+    /// DR0). Backs `debug.set_watchpoint` / `remove_watchpoint` / watchpoints.
     watchpoints: rustre_debug::watchpoint_engine::WatchpointEngine,
     /// Expression-evaluator type system for this session, seeded with C
-    /// primitives and extended by debug.define_struct so `((Foo*)p)->field`
-    /// resolves in debug.evaluate / debug.ttd_evaluate.
+    /// primitives and extended by `debug.define_struct` so `((Foo*)p)->field`
+    /// resolves in debug.evaluate / `debug.ttd_evaluate`.
     types: rustre_debug::expression_evaluator::TypeSystem,
 }
 
@@ -371,7 +371,7 @@ impl LiveSession {
     /// trap.
     ///
     /// Routing through `set_watchpoint_sized` also picks up each backend's
-    /// register work for free, including the AArch64 DBGWVR/DBGWCR translation
+    /// register work for free, including the `AArch64` DBGWVR/DBGWCR translation
     /// on Apple Silicon that a direct `dr0-3` write could never reach.
     fn arm_watchpoint(&self, addr: u64, kind: rustre_debug::watchpoint_engine::WatchpointType, size: u8) -> AnyhowResult<()> {
         block_on(self.dbg.set_watchpoint_sized(
@@ -834,7 +834,7 @@ impl rustre_debug::expression_evaluator::SymbolTable for NoSymbols {
     fn reverse_lookup(&self, _addr: u64) -> Option<String> { None }
 }
 
-/// Bridges a session's loaded CodeView symbols into the evaluator's SymbolTable.
+/// Bridges a session's loaded `CodeView` symbols into the evaluator's `SymbolTable`.
 struct SessionSyms<'a>(Option<&'a rustre_debug::codeview::CodeViewProvider>);
 impl rustre_debug::expression_evaluator::SymbolTable for SessionSyms<'_> {
     fn lookup_symbol(&self, name: &str) -> Option<u64> {
@@ -5449,7 +5449,7 @@ mod tests {
     /// The id was dropped from `bp_ids` BEFORE the backend was asked, so a
     /// failure took it with it: the breakpoint stays installed in the process,
     /// but every later `debug.remove_breakpoint` answers "unknown
-    /// breakpoint_id" and `debug.breakpoints` can no longer put a name to it —
+    /// `breakpoint_id`" and `debug.breakpoints` can no longer put a name to it —
     /// nothing can ever remove it again. Same defect fixed in
     /// `rustre_debug::live_script_context` (iter 291); this is the FOURTH copy
     /// of that id↔address bookkeeping and the one the MCP surface actually
@@ -5725,7 +5725,7 @@ mod tests {
     /// two-chunk ptmalloc2 arena into the live process's own stack (writable,
     /// and harmless since we kill the process afterward), then walk it through
     /// the MCP tool and assert the returned graph has both chunk nodes. Proves
-    /// the live pipeline write_memory → tool's read_memory → `Ptmalloc2Parser`
+    /// the live pipeline `write_memory` → tool's `read_memory` → `Ptmalloc2Parser`
     /// → `HeapChunkGraph` end to end.
     #[cfg(windows)]
     #[tokio::test]
@@ -5939,7 +5939,7 @@ mod tests {
         }
     }
 
-    /// debug.load_types auto-imports CodeView structs (accurate LF_FIELDLIST
+    /// `debug.load_types` auto-imports `CodeView` structs (accurate `LF_FIELDLIST`
     /// offsets) so field access works WITHOUT hand-defining the layout: build a
     /// synthetic TPI stream for Point{i32 x@0; i32 y@4;}, load it, write the
     /// stack, then `((Point*)$rsp)->y` resolves.
@@ -6008,7 +6008,7 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// debug.load_types accepts a FULL `.pdb`: a synthetic MSF container is
+    /// `debug.load_types` accepts a FULL `.pdb`: a synthetic MSF container is
     /// built (super-block → block map → directory → TPI stream #2 with its
     /// 56-byte header), passed whole, and the auto-extracted struct resolves
     /// live field access — the complete PDB → evaluator pipeline.
@@ -6094,7 +6094,7 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// debug.load_types{path}: point the tool at a REAL `.pdb` on disk (found
+    /// `debug.load_types{path}`: point the tool at a REAL `.pdb` on disk (found
     /// under target\debug; skips when absent) — server-side read, MSF walk,
     /// modern-leaf parse, struct import into the live session.
     #[cfg(windows)]
@@ -6135,8 +6135,8 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// End-to-end capstone: a realistic CodeView type stream (nested struct +
-    /// array member) auto-imported via debug.load_types, then nested and array
+    /// End-to-end capstone: a realistic `CodeView` type stream (nested struct +
+    /// array member) auto-imported via `debug.load_types`, then nested and array
     /// field access evaluated against live memory.
     #[cfg(windows)]
     #[tokio::test]
@@ -6212,8 +6212,8 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// Capstone: a self-referential CodeView struct (linked-list Node) auto-
-    /// imported via debug.load_types, then live pointer-chasing `->next->val`
+    /// Capstone: a self-referential `CodeView` struct (linked-list Node) auto-
+    /// imported via `debug.load_types`, then live pointer-chasing `->next->val`
     /// across two nodes written into process memory.
     #[cfg(windows)]
     #[tokio::test]
@@ -6320,7 +6320,7 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// debug.define_struct + debug.evaluate: register a struct on the session,
+    /// `debug.define_struct` + debug.evaluate: register a struct on the session,
     /// write its bytes to the stack, then `((Point*)$rsp)->y` reads field y at
     /// the right offset/width from live memory.
     #[cfg(windows)]
@@ -6480,7 +6480,7 @@ mod tests {
     /// End-to-end `debug.continue_until` against a real process: plant a
     /// breakpoint at an address that is never re-executed with a condition that
     /// can never be met, and assert the tool drives the live process all the way
-    /// to a clean exit (exited=true, condition_met=false) — proving the
+    /// to a clean exit (exited=true, `condition_met=false`) — proving the
     /// continue-loop + exit handling work on a real backend.
     #[cfg(windows)]
     #[tokio::test]
@@ -6507,7 +6507,7 @@ mod tests {
         assert_eq!(res["exited"], json!(true), "process should run to exit: {res}");
     }
 
-    /// End-to-end symbol pipeline: synthesize a CodeView GPROC32 record, load it
+    /// End-to-end symbol pipeline: synthesize a `CodeView` GPROC32 record, load it
     /// into a live session via `debug.load_symbols`, then prove both
     /// `debug.resolve_symbol` (name→addr and addr→nearest) and `debug.evaluate`
     /// (a symbol name used inside an expression) resolve against it.
@@ -6743,8 +6743,8 @@ mod tests {
     }
 
     /// The live TTD-navigation tools operate on the SAME session trace that
-    /// debug.ttd_record builds: record 3 positions, then debug.ttd_history sees
-    /// them and debug.ttd_seek moves the live position.
+    /// `debug.ttd_record` builds: record 3 positions, then `debug.ttd_history` sees
+    /// them and `debug.ttd_seek` moves the live position.
     #[cfg(windows)]
     #[tokio::test]
     async fn mcp_ttd_navigation_shares_the_live_trace() {
@@ -6779,9 +6779,9 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// debug.dataflow_query and debug.root_cause run against the SAME live
+    /// `debug.dataflow_query` and `debug.root_cause` run against the SAME live
     /// omniscient write-log the session records: record a B←A copy chain, then
-    /// query both by session_id (no writes array) and assert live:true results.
+    /// query both by `session_id` (no writes array) and assert live:true results.
     #[cfg(windows)]
     #[tokio::test]
     async fn mcp_dataflow_and_root_cause_use_live_write_log() {
@@ -6818,9 +6818,9 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// debug.execution_heatmap builds from the session's real TTD navigation
+    /// `debug.execution_heatmap` builds from the session's real TTD navigation
     /// history: record positions, reverse-step to populate history, then query
-    /// by session_id (no history array) and assert a live heatmap.
+    /// by `session_id` (no history array) and assert a live heatmap.
     #[cfg(windows)]
     #[tokio::test]
     async fn mcp_execution_heatmap_uses_live_ttd_history() {
@@ -6849,8 +6849,8 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// debug.set_conditional_breakpoint evaluates against the REAL stopped
-    /// thread's registers when a session_id is given: read live rip, then assert
+    /// `debug.set_conditional_breakpoint` evaluates against the REAL stopped
+    /// thread's registers when a `session_id` is given: read live rip, then assert
     /// a `rip == <live rip>` condition fires (live:true), and a wrong value does not.
     #[cfg(windows)]
     #[tokio::test]
@@ -6964,7 +6964,7 @@ mod tests {
     }
     /// Full watchpoint lifecycle on a live session: two watchpoints occupy
     /// DISTINCT DR slots (DR0 + DR1, no collision), debug.watchpoints lists both,
-    /// debug.remove_watchpoint frees one and the list shrinks.
+    /// `debug.remove_watchpoint` frees one and the list shrinks.
     #[cfg(windows)]
     #[tokio::test]
     async fn mcp_watchpoint_lifecycle_allocates_distinct_slots() {
@@ -7058,8 +7058,8 @@ mod tests {
     }
 
     /// A general-purpose register write must persist on a live thread: set rax
-    /// to a sentinel via debug.set_register, then read it back with a SEPARATE
-    /// debug.get_register call and assert it stuck. (Unlike the DR debug
+    /// to a sentinel via `debug.set_register`, then read it back with a SEPARATE
+    /// `debug.get_register` call and assert it stuck. (Unlike the DR debug
     /// registers, general registers DO round-trip at the initial breakpoint.)
     #[cfg(windows)]
     #[tokio::test]
@@ -7086,7 +7086,7 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// debug.ttd_evaluate evaluates an expression against RECORDED registers at a
+    /// `debug.ttd_evaluate` evaluates an expression against RECORDED registers at a
     /// past position: `$rip` at seq 1 must equal that position's recorded pc, and
     /// `$rsp + 8` must equal recorded rsp + 8.
     #[cfg(windows)]
@@ -7126,7 +7126,7 @@ mod tests {
 
     /// Historical memory deref: write a sentinel u64 to the stack, record it into
     /// the trace, advance, then read it back with `*(u64*)$rsp` evaluated at the
-    /// RECORDED position — proving ttd_record snapshots memory and ttd_evaluate
+    /// RECORDED position — proving `ttd_record` snapshots memory and `ttd_evaluate`
     /// derefs it historically (not from current, possibly-changed memory).
     #[cfg(windows)]
     #[tokio::test]
@@ -7171,7 +7171,7 @@ mod tests {
         let _ = call_tool(&tools, "debug.kill", json!({ "session_id": session_id })).await;
     }
 
-    /// debug.ttd_diff reports which registers changed between two recorded trace
+    /// `debug.ttd_diff` reports which registers changed between two recorded trace
     /// positions: record 3 positions (single-stepping between them so rip moves),
     /// then diff seq 1 vs seq 3 and assert rip is among the changed registers.
     #[cfg(windows)]

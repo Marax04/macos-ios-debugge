@@ -490,7 +490,7 @@ struct PackerSig {
     /// kinds of entry live here and they must not be conflated:
     ///
     /// * **strong** — a structural marker no ordinary file carries: the `UPX!`
-    ///   tag, the `UPX0` section name, PECompact's `PEC2`, NSIS's
+    ///   tag, the `UPX0` section name, `PECompact`'s `PEC2`, NSIS's
     ///   `NullsoftInst`. Seeing one is evidence of packing.
     /// * **weak** — the product's name spelled as a human would write it.
     ///   `7-Zip` and `WinRAR` occur in readmes, error messages, help text, any

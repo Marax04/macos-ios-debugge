@@ -1,5 +1,5 @@
 //! MCP wrappers for the rustre-flirt_gen crate.
-//! Extracted from wire_tools.rs by workflow_split_wire_tools.
+//! Extracted from `wire_tools.rs` by `workflow_split_wire_tools`.
 
 use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};

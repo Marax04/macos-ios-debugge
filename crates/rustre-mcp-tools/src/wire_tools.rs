@@ -1,5 +1,5 @@
 ﻿//! Cross-cutting MCP tool wrappers — orchestrator.
-//! The actual tools live under crate::tools::<prefix>.
+//! The actual tools live under `crate::tools::`<prefix>.
 
 use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use async_trait::async_trait;
@@ -4267,7 +4267,7 @@ impl ToolHandler for HexPatternParseTool {
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ rustre-events wrappers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-/// Report the initial receiver_count of a freshly-created EventBus.
+/// Report the initial `receiver_count` of a freshly-created `EventBus`.
 
 impl EventsBusNewDefaultTool {
     #[must_use]
@@ -4299,7 +4299,7 @@ impl ToolHandler for EventsBusNewDefaultTool {
     }
 }
 
-/// Report the initial count of a freshly-created EventLogger.
+/// Report the initial count of a freshly-created `EventLogger`.
 
 impl EventsLoggerNewTool {
     #[must_use]
@@ -6298,7 +6298,7 @@ impl ToolHandler for FuzzSanParseHexU64Tool {
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ gap: fuzz-sanitizers classify_crash_severity Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-/// Classify a sanitizer error_type string into a severity level.
+/// Classify a sanitizer `error_type` string into a severity level.
 
 impl FuzzSanClassifySeverityTool {
     #[must_use]
@@ -8277,7 +8277,7 @@ impl ToolHandler for MobileRegistryCountTool {
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ iOS ObjC scanners (path-based) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-/// Scan a Mach-O binary on disk for ObjC selector strings.
+/// Scan a Mach-O binary on disk for `ObjC` selector strings.
 
 impl IosScanObjcSelectorsPathTool {
     #[must_use]
@@ -8320,7 +8320,7 @@ impl ToolHandler for IosScanObjcSelectorsPathTool {
     }
 }
 
-/// Scan a Mach-O binary on disk for ObjC class name strings.
+/// Scan a Mach-O binary on disk for `ObjC` class name strings.
 
 impl IosScanObjcClassesPathTool {
     #[must_use]
@@ -9863,7 +9863,7 @@ pub(crate) fn parse_bindiff_function_info(v: &Value) -> rustre_diff_bindiff::Fun
     fi
 }
 
-/// Four-component BinDiff similarity between two `FunctionInfo` records.
+/// Four-component `BinDiff` similarity between two `FunctionInfo` records.
 
 impl DiffBindiffSimilarityScoreTool {
     #[must_use]
@@ -10306,7 +10306,7 @@ impl ToolHandler for FlirtBuiltinMatcherTool {
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ rustre-diff-semantic wrappers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-/// Compute a MinHash signature over a set of u64 elements.
+/// Compute a `MinHash` signature over a set of u64 elements.
 
 impl DiffSemanticMinhashSignatureTool {
     #[must_use]
@@ -10341,7 +10341,7 @@ impl ToolHandler for DiffSemanticMinhashSignatureTool {
     }
 }
 
-/// Estimate Jaccard similarity from two MinHash signatures.
+/// Estimate Jaccard similarity from two `MinHash` signatures.
 
 impl DiffSemanticMinhashEstimateJaccardTool {
     #[must_use]
@@ -10376,7 +10376,7 @@ impl ToolHandler for DiffSemanticMinhashEstimateJaccardTool {
     }
 }
 
-/// Compute a SemanticSignature summary from raw function bytes.
+/// Compute a `SemanticSignature` summary from raw function bytes.
 
 impl DiffSemanticSignatureComputeTool {
     #[must_use]
@@ -11074,7 +11074,7 @@ impl ToolHandler for DiffByteHistogramSimilarityTool {
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ rustre-loader-luajit wrappers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-/// Detects LuaJIT bytecode magic (`\x1BLJ`).
+/// Detects `LuaJIT` bytecode magic (`\x1BLJ`).
 
 impl LoaderLuajitIsLuajitTool {
     #[must_use]
@@ -12052,11 +12052,11 @@ impl ToolHandler for MemPageContainingTool {
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ crypto-id extras: function-pattern scan, signature DB list, active plan Ã¢â€â‚¬
 
-/// Report EventStats totals after recording one Custom event.
+/// Report `EventStats` totals after recording one Custom event.
 
-/// Push a Custom event into an EventReplay and report the buffer length.
+/// Push a Custom event into an `EventReplay` and report the buffer length.
 
-/// Report the initial hook_count of a HookDispatcher.
+/// Report the initial `hook_count` of a `HookDispatcher`.
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ rustre-symbols additional wrappers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -13001,7 +13001,7 @@ impl ToolHandler for DeobfStringCaesarBruteforceTool {
     }
 }
 
-/// Detect Base64 variant (Standard, UrlSafe, Custom) of a byte blob.
+/// Detect Base64 variant (Standard, `UrlSafe`, Custom) of a byte blob.
 
 impl DeobfStringDetectBase64VariantTool {
     #[must_use]
@@ -13086,7 +13086,7 @@ impl ToolHandler for DeobfStringDetectXorKeyLengthIcTool {
 
 /// Return the human-readable listing of the default lifter ISA.
 
-/// Lift a bytecode blob to pseudo-IL text lines via VmLifter.
+/// Lift a bytecode blob to pseudo-IL text lines via `VmLifter`.
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ deobf_vm_read_u64_le Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -13536,7 +13536,7 @@ impl ToolHandler for IadlConvergenceTrendSlopeTool {
 
 /// Classify a constant integer as a trivial opaque predicate value.
 
-/// Report the default TruthTableChecker configuration.
+/// Report the default `TruthTableChecker` configuration.
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ rustre-deobf core wrappers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -13782,7 +13782,7 @@ impl ToolHandler for ThreatintelGroupListKnownTool {
     }
 }
 
-/// Add an IOC to a fresh ThreatIndicatorDatabase and look it up by value.
+/// Add an IOC to a fresh `ThreatIndicatorDatabase` and look it up by value.
 
 impl ThreatintelIndicatorLookupTool {
     #[must_use]
@@ -13923,17 +13923,17 @@ pub(crate) fn x86_arch_for_bits(bits: u64) -> Result<rustre_arch_x86::X86Arch, M
 
 /// Return `X86Arch` metadata (name, pointer size, endian) for a given bitness.
 
-/// Return the count and full list of register names exposed by X86Arch::registers().
+/// Return the count and full list of register names exposed by `X86Arch::registers()`.
 
 /// Return the calling conventions defined for a given x86 bitness.
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ rustre-decompiler-ghidra: server config / script / decompile stub Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-/// Return the default GhidraServerConfig (host, port, timeout_ms, use_tls).
+/// Return the default `GhidraServerConfig` (host, port, `timeout_ms`, `use_tls`).
 
-/// Build the command line string for a GhidraScript with name and args.
+/// Build the command line string for a `GhidraScript` with name and args.
 
-/// Produce a stub GhidraDecompileResponse for a function address/name.
+/// Produce a stub `GhidraDecompileResponse` for a function address/name.
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ rustre-decompiler QualityMetrics / DecompilePipeline wrappers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -14379,15 +14379,15 @@ impl ToolHandler for AgentCastI64ToF64Tool {
     }
 }
 
-/// Build a mock VirusTotal file report for the given SHA-256.
+/// Build a mock `VirusTotal` file report for the given SHA-256.
 
-/// Build a mock VirusTotal IP report for the given IP.
+/// Build a mock `VirusTotal` IP report for the given IP.
 
-/// Parse a VirusTotal Intelligence search response JSON.
+/// Parse a `VirusTotal` Intelligence search response JSON.
 
-/// Validate a VirusTotal API key string (must be 64 hex chars).
+/// Validate a `VirusTotal` API key string (must be 64 hex chars).
 
-/// Compute VirusTotal analysis-stats detection ratio "malicious/total".
+/// Compute `VirusTotal` analysis-stats detection ratio "malicious/total".
 
 // â”€â”€â”€ rustre-ti-malpedia wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -14753,9 +14753,9 @@ impl ToolHandler for DemangleBatchTool {
 
 /// Insert a custom threat group with an alias and TTP, then return its stored form.
 
-/// Render an IocType variant via its Display implementation.
+/// Render an `IocType` variant via its Display implementation.
 
-/// Report is_empty and len for a freshly built or populated ThreatIndicatorDatabase.
+/// Report `is_empty` and len for a freshly built or populated `ThreatIndicatorDatabase`.
 
 // --- threatintel round 5 ---
 
@@ -14985,7 +14985,7 @@ impl ToolHandler for EmuUnicornNewArmThumbTool {
 
 // â”€â”€â”€ rustre-ti-opencti wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/// Build the GraphQL endpoint URL for an OpenCTI base URL.
+/// Build the GraphQL endpoint URL for an `OpenCTI` base URL.
 
 impl TiOpenctiGraphqlUrlTool {
     #[must_use]
@@ -15640,7 +15640,7 @@ impl ToolHandler for TracePtCoverageTool {
     }
 }
 
-/// Convert raw PT buffer to a DRcov v2 coverage file (hex-encoded bytes).
+/// Convert raw PT buffer to a `DRcov` v2 coverage file (hex-encoded bytes).
 
 impl TracePtDrcovTool {
     #[must_use]
@@ -16117,7 +16117,7 @@ impl ToolHandler for TraceCoresightTpiuDemuxTool {
     }
 }
 
-/// Decode a raw CoreSight STM stream and return all decoded packets.
+/// Decode a raw `CoreSight` STM stream and return all decoded packets.
 
 impl TraceCoresightStmDecodeStreamTool {
     #[must_use]
@@ -17823,31 +17823,31 @@ impl ToolHandler for VtableScanBinaryTool {
 
 // ---- vtable extra wrappers (stateless) ----
 
-/// Build a code/pointer Section descriptor via rustre_analysis_vtable::make_ptr_section.
+/// Build a code/pointer Section descriptor via `rustre_analysis_vtable::make_ptr_section`.
 
-/// Build a NUL-terminated string Section via rustre_analysis_vtable::make_str_section.
+/// Build a NUL-terminated string Section via `rustre_analysis_vtable::make_str_section`.
 
-/// Test if vtable A extends vtable B via rustre_analysis_vtable::vtable_extends.
+/// Test if vtable A extends vtable B via `rustre_analysis_vtable::vtable_extends`.
 
-/// Demangle an MSVC RTTI name via MsvcRttiDecoder::demangle_msvc.
+/// Demangle an MSVC RTTI name via `MsvcRttiDecoder::demangle_msvc`.
 
-/// Read a little-endian pointer from a Section blob via Section::read_ptr.
+/// Read a little-endian pointer from a Section blob via `Section::read_ptr`.
 
-/// Read a NUL-terminated string from a Section blob via Section::read_cstr.
+/// Read a NUL-terminated string from a Section blob via `Section::read_cstr`.
 
-/// Read a little-endian i32 from a Section blob via Section::read_i32.
+/// Read a little-endian i32 from a Section blob via `Section::read_i32`.
 
-/// Read a little-endian u32 from a Section blob via Section::read_u32.
+/// Read a little-endian u32 from a Section blob via `Section::read_u32`.
 
-/// Report Section end_address and contains(addr) via rustre_analysis_vtable::Section.
+/// Report Section `end_address` and contains(addr) via `rustre_analysis_vtable::Section`.
 
-/// Decode VmiFlags bits via rustre_analysis_vtable::VmiFlags.
+/// Decode `VmiFlags` bits via `rustre_analysis_vtable::VmiFlags`.
 
-/// Format a VtableEntry via its Display impl.
+/// Format a `VtableEntry` via its Display impl.
 
-/// Scan a blob using a configurable VtableScanner (ptr_size, min_slots).
+/// Scan a blob using a configurable `VtableScanner` (`ptr_size`, `min_slots`).
 
-/// Report the AnalysisPass name of VtableAnalysisPass.
+/// Report the `AnalysisPass` name of `VtableAnalysisPass`.
 
 // â”€â”€â”€ forensics-fs â€” prefetch / lnk path-accepting wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -18018,7 +18018,7 @@ impl ToolHandler for AnalysisTypeLookupBuiltinTypeTool {
     }
 }
 
-/// Look up a WinAPI / CRT function signature by name (optionally scoped by DLL).
+/// Look up a `WinAPI` / CRT function signature by name (optionally scoped by DLL).
 
 impl AnalysisTypeWinapiLookupTool {
     #[must_use]
@@ -18064,7 +18064,7 @@ impl ToolHandler for AnalysisTypeWinapiLookupTool {
 
 // --- threatintel extra: link_ioc, indicator db get/is_empty ------------------
 
-/// Link an IocId to a threat group and report the resulting IOC count.
+/// Link an `IocId` to a threat group and report the resulting IOC count.
 
 impl ThreatintelGroupLinkIocTool {
     #[must_use]
@@ -18117,7 +18117,7 @@ impl ToolHandler for ThreatintelGroupLinkIocTool {
     }
 }
 
-/// Report is_empty() on a freshly-constructed ThreatIndicatorDatabase.
+/// Report `is_empty()` on a freshly-constructed `ThreatIndicatorDatabase`.
 
 impl ThreatintelIndicatorDbIsEmptyTool {
     #[must_use]
@@ -18166,7 +18166,7 @@ impl ToolHandler for ThreatintelIndicatorDbIsEmptyTool {
     }
 }
 
-/// Insert an IOC then retrieve it by its returned IocId.
+/// Insert an IOC then retrieve it by its returned `IocId`.
 
 impl ThreatintelIndicatorGetByIdTool {
     #[must_use]
@@ -18691,7 +18691,7 @@ impl ToolHandler for AgentBuiltinWorkflowsTool {
 
 // --- rustre-fuzz-sanitizers extra parsers -----------------------------------
 
-/// Parse the first ASan crash report from text via `parse_asan_output`.
+/// Parse the first `ASan` crash report from text via `parse_asan_output`.
 
 impl FuzzSanParseAsanOutputTool {
     #[must_use]
@@ -18735,7 +18735,7 @@ impl ToolHandler for FuzzSanParseAsanOutputTool {
     }
 }
 
-/// Parse all UBSan violations from text via `parse_ubsan_output`.
+/// Parse all `UBSan` violations from text via `parse_ubsan_output`.
 
 impl FuzzSanParseUbsanOutputTool {
     #[must_use]
@@ -19295,7 +19295,7 @@ fn ds_extract_bytes(args: &Value, hex_key: &str, arr_key: &str) -> Result<Vec<u8
     Err(McpError::InvalidParams(format!("missing '{hex_key}' or '{arr_key}'")))
 }
 
-/// Weighted similarity score in [0.0,1.0] between two SemanticSignatures computed from raw bytes.
+/// Weighted similarity score in [0.0,1.0] between two `SemanticSignatures` computed from raw bytes.
 
 impl DiffSemanticMatcherSimilarityTool {
     #[must_use]
@@ -19332,7 +19332,7 @@ impl ToolHandler for DiffSemanticMatcherSimilarityTool {
     }
 }
 
-/// Test whether two SemanticSignatures (from raw bytes) are semantically equivalent (similarity > 0.85).
+/// Test whether two `SemanticSignatures` (from raw bytes) are semantically equivalent (similarity > 0.85).
 
 impl DiffSemanticMatcherAreEquivalentTool {
     #[must_use]
@@ -19369,7 +19369,7 @@ impl ToolHandler for DiffSemanticMatcherAreEquivalentTool {
     }
 }
 
-/// Detailed FunctionDiff between two function byte streams (calls/constants added/removed).
+/// Detailed `FunctionDiff` between two function byte streams (calls/constants added/removed).
 
 impl DiffSemanticDifferDiffFunctionPairTool {
     #[must_use]
@@ -19814,7 +19814,7 @@ impl ToolHandler for DiffExportsTool {
 
 // â”€â”€â”€ demangle_dispatch / demangle_classify / demangle_itanium_native â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/// Auto-detect language and demangle, returning full DemangleResult metadata.
+/// Auto-detect language and demangle, returning full `DemangleResult` metadata.
 
 impl DemangleDispatchTool {
     #[must_use]
@@ -20433,7 +20433,7 @@ impl ToolHandler for LoaderAndroidVerifyDexChecksumTool {
 // â”€â”€â”€ rustre-flirt-gen â€” PatternGenerator wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Expose `rustre_flirt_gen::PatternGenerator::new()` â€” returns the default
-/// (initial_length, crc_length) pair used by the FLIRT pattern generator.
+/// (`initial_length`, `crc_length`) pair used by the FLIRT pattern generator.
 
 impl FlirtGenPatternGeneratorNewTool {
     #[must_use]
@@ -20693,7 +20693,7 @@ impl ToolHandler for FlirtApplyCrc16Tool {
     }
 }
 
-/// Project FLIRT matches into the minimal LibraryMark list (feature-K).
+/// Project FLIRT matches into the minimal `LibraryMark` list (feature-K).
 
 impl FlirtApplyLibraryMarksFromMatchesTool {
     #[must_use]
@@ -20904,7 +20904,7 @@ impl ToolHandler for PeEditorCertificateHeaderTool {
     }
 }
 
-/// Wraps `rustre_pe_editor::PatchSet::new` â€” construct an empty PatchSet.
+/// Wraps `rustre_pe_editor::PatchSet::new` â€” construct an empty `PatchSet`.
 
 impl PeEditorPatchSetNewTool {
     #[must_use]
@@ -24702,7 +24702,7 @@ impl ToolHandler for DebugWindowsExceptionNameTool {
 
 // --- rustre-script-python: PythonTypeStubs wire tools ---
 
-/// Return the names of stubs in the standard RustRE Python API registry.
+/// Return the names of stubs in the standard `RustRE` Python API registry.
 
 impl ScriptPythonStubsStandardNamesTool {
     #[must_use]
@@ -26734,13 +26734,13 @@ impl ToolHandler for SyscallsLinuxParamNewTool {
     }
 }
 
-/// Decode open() flags bitmask.
+/// Decode `open()` flags bitmask.
 
 /// Decode mmap prot bitmask.
 
 /// Decode mmap flags bitmask.
 
-/// Look up an x86_64 syscall entry by number.
+/// Look up an `x86_64` syscall entry by number.
 
 /// aarch64 syscall name lookup.
 
@@ -26750,7 +26750,7 @@ impl ToolHandler for SyscallsLinuxParamNewTool {
 
 /// Format mmap args.
 
-/// Format open() flags (u64 variant).
+/// Format `open()` flags (u64 variant).
 
 /// Format signal delivery event.
 
@@ -26758,7 +26758,7 @@ impl ToolHandler for SyscallsLinuxParamNewTool {
 
 /// Extended hex dump.
 
-/// IntWidth bits.
+/// `IntWidth` bits.
 
 impl DecompilerExprIntWidthBitsTool {
     #[must_use]
@@ -26799,7 +26799,7 @@ impl ToolHandler for DecompilerExprIntWidthBitsTool {
     }
 }
 
-/// IntWidth bytes.
+/// `IntWidth` bytes.
 
 impl DecompilerExprIntWidthBytesTool {
     #[must_use]
@@ -27150,7 +27150,7 @@ impl ToolHandler for HexPatternAlternationParseTool {
     }
 }
 
-/// Build a MaskedPattern from a pattern string and return bytes/mask hex.
+/// Build a `MaskedPattern` from a pattern string and return bytes/mask hex.
 
 impl HexPatternMaskedFromStrTool {
     #[must_use]
@@ -28288,7 +28288,7 @@ impl ToolHandler for ForensicsFsMemFsNodeV2FileSizeTool {
     }
 }
 
-/// Build an empty `MemoryFs` and report root inode / is_dir.
+/// Build an empty `MemoryFs` and report root inode / `is_dir`.
 
 impl ForensicsFsMemoryFsNewRootTool {
     #[must_use]
@@ -30904,7 +30904,7 @@ impl ToolHandler for YaraRuleSetRuleCountWireTool {
     }
 }
 
-/// Match a pipe-delimited AlternationPattern at a given offset in a byte buffer.
+/// Match a pipe-delimited `AlternationPattern` at a given offset in a byte buffer.
 
 impl HexPatternAlternationMatchesTool {
     #[must_use]
@@ -30961,7 +30961,7 @@ impl ToolHandler for HexPatternAlternationMatchesTool {
     }
 }
 
-/// Search all matches of a pattern (via MaskedPattern) in a byte buffer.
+/// Search all matches of a pattern (via `MaskedPattern`) in a byte buffer.
 
 impl HexPatternMaskedSearchTool {
     #[must_use]
@@ -31711,27 +31711,27 @@ impl ToolHandler for FlirtApplyDemoSigsCountWireTool {
     }
 }
 
-/// FlirtPattern::new + pattern_len.
+/// `FlirtPattern::new` + `pattern_len`.
 
-/// FlirtPattern::matches against provided data.
+/// `FlirtPattern::matches` against provided data.
 
-/// FlirtPattern::from_pattern_str.
+/// `FlirtPattern::from_pattern_str`.
 
-/// FlirtSignature::from_flirt_pattern.
+/// `FlirtSignature::from_flirt_pattern`.
 
-/// FlirtSignature::matches_at.
+/// `FlirtSignature::matches_at`.
 
-/// WildcardPattern::from_signature + prefix length.
+/// `WildcardPattern::from_signature` + prefix length.
 
-/// FlirtSigDb add + count.
+/// `FlirtSigDb` add + count.
 
-/// FlirtApplier::scan_bytes against demo db.
+/// `FlirtApplier::scan_bytes` against demo db.
 
-/// AhoCorasickIndex::build + is_built.
+/// `AhoCorasickIndex::build` + `is_built`.
 
-/// FlirtApplier::match_count using demo db.
+/// `FlirtApplier::match_count` using demo db.
 
-/// resolve_renames from list of matches.
+/// `resolve_renames` from list of matches.
 
 /// Build an ADB CLOSE wire message via `rustre_adb::make_close`.
 
@@ -31807,7 +31807,7 @@ impl ToolHandler for AdbParseFeaturesTool {
     }
 }
 
-/// Query the global XrefDatabase for all cross-references pointing TO an address.
+/// Query the global `XrefDatabase` for all cross-references pointing TO an address.
 
 impl AnalysisXrefGlobalToTool {
     #[must_use]
@@ -31843,7 +31843,7 @@ impl ToolHandler for AnalysisXrefGlobalToTool {
     }
 }
 
-/// Query the global XrefDatabase for all cross-references originating FROM an address.
+/// Query the global `XrefDatabase` for all cross-references originating FROM an address.
 
 impl AnalysisXrefGlobalFromTool {
     #[must_use]
@@ -32586,7 +32586,7 @@ impl ToolHandler for PythonScriptPyValueNoneTypeNameTool {
     }
 }
 
-/// Return the initial step_count of a freshly constructed `PythonEngine`.
+/// Return the initial `step_count` of a freshly constructed `PythonEngine`.
 
 impl PythonScriptEngineInitialStepCountTool {
     #[must_use]
@@ -32615,7 +32615,7 @@ impl ToolHandler for PythonScriptEngineInitialStepCountTool {
 
 // â”€â”€â”€ rustre-analysis wire wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/// Compute total_items() on a zeroed AnalysisResult for the given kind.
+/// Compute `total_items()` on a zeroed `AnalysisResult` for the given kind.
 
 impl AnalysisResultZeroTotalItemsTool {
     #[must_use]
@@ -32642,7 +32642,7 @@ impl ToolHandler for AnalysisResultZeroTotalItemsTool {
     }
 }
 
-/// Wrap FunctionBoundaryAnalysis::scan_call_targets over raw bytes.
+/// Wrap `FunctionBoundaryAnalysis::scan_call_targets` over raw bytes.
 
 impl AnalysisScanCallTargetsTool {
     #[must_use]
@@ -33432,7 +33432,7 @@ impl ToolHandler for CodeviewSymbolFilterCountTool {
     }
 }
 
-/// Expose rustre_analysis_vtable::is_itanium_mangled as an MCP tool.
+/// Expose `rustre_analysis_vtable::is_itanium_mangled` as an MCP tool.
 
 impl VtableIsItaniumMangledTool {
     #[must_use]
@@ -33460,7 +33460,7 @@ impl ToolHandler for VtableIsItaniumMangledTool {
     }
 }
 
-/// Expose rustre_analysis_vtable::is_msvc_mangled as an MCP tool.
+/// Expose `rustre_analysis_vtable::is_msvc_mangled` as an MCP tool.
 
 impl VtableIsMsvcMangledTool {
     #[must_use]
@@ -33765,11 +33765,11 @@ pub(crate) fn parse_xref_kind_str_axr(s: &str) -> Option<rustre_analysis_xref::X
 
 /// Load a binary and detect function boundaries.
 
-/// Return default DecompOptions summary.
+/// Return default `DecompOptions` summary.
 
-/// Build a SymbolMap and resolve a batch of addresses.
+/// Build a `SymbolMap` and resolve a batch of addresses.
 
-/// Lift a single mnemonic+operands via callconv_bridge.
+/// Lift a single mnemonic+operands via `callconv_bridge`.
 
 /// Batch-classify identifiers as C reserved keywords.
 
@@ -33845,7 +33845,7 @@ pub(crate) fn script_write_helper_new(
 
 /// Build a sharing group with member orgs.
 
-/// List supported IoC types for the MISP provider.
+/// List supported `IoC` types for the MISP provider.
 
 /// Describe a `MispDistributionLevel` (value + display text).
 
@@ -33886,7 +33886,7 @@ pub(crate) fn script_write_helper_new(
 
 /// Classify a device state string and return online/auth flags.
 
-/// Build an AdbMessage from raw fields; returns crc32/magic/hex.
+/// Build an `AdbMessage` from raw fields; returns crc32/magic/hex.
 
 /// Verify the CRC32 of an ADB message payload against a claimed value.
 
@@ -33968,43 +33968,43 @@ pub(crate) fn hp_parse_bytes(v: &Value) -> Result<Vec<u8>, McpError> {
 
 /// Wrap `LruLiftCache::new(cap)` and report initial state.
 
-/// Compute stats.success_rate/cache_hit_rate from raw counters.
+/// Compute `stats.success_rate/cache_hit_rate` from raw counters.
 
-/// Merge two LiftStats via `LiftStats::merge`.
+/// Merge two `LiftStats` via `LiftStats::merge`.
 
-/// Report an empty LiftDiff's is_empty/diff_count.
+/// Report an empty `LiftDiff`'s `is_empty/diff_count`.
 
-/// Display each LiftLevel variant using its Display impl.
+/// Display each `LiftLevel` variant using its Display impl.
 
-/// Construct an X86Lifter and report its bitness.
+/// Construct an `X86Lifter` and report its bitness.
 
-/// Construct an Arm64Lifter (unit struct) — reports success.
+/// Construct an `Arm64Lifter` (unit struct) — reports success.
 
-/// Build a LiftMetadata with hash/version/notes and return summary bits.
+/// Build a `LiftMetadata` with hash/version/notes and return summary bits.
 
 /// Address map empty round-trip: build, probe get/contains/addresses.
 
 // ─── rustre-il-lift: 10 additional wrappers ────────────────────────────────
 
-/// LiftFilter::terminators over an empty slice.
+/// `LiftFilter::terminators` over an empty slice.
 
-/// LiftFilter::with_side_effects over an empty slice.
+/// `LiftFilter::with_side_effects` over an empty slice.
 
-/// LiftFilter::at_level over an empty slice for a chosen level.
+/// `LiftFilter::at_level` over an empty slice for a chosen level.
 
-/// LiftFilter::count_stubs over an empty slice.
+/// `LiftFilter::count_stubs` over an empty slice.
 
-/// LiftFilter::partition_by_effects on an empty slice.
+/// `LiftFilter::partition_by_effects` on an empty slice.
 
-/// LiftReport::from_result summary over an empty LiftResult.
+/// `LiftReport::from_result` summary over an empty `LiftResult`.
 
-/// LifterRegistry::with_defaults length and arch names.
+/// `LifterRegistry::with_defaults` length and arch names.
 
-/// LifterRegistry::supports probe against defaults for a given arch.
+/// `LifterRegistry::supports` probe against defaults for a given arch.
 
-/// PartialLiftResultBuilder new + snapshot with no items.
+/// `PartialLiftResultBuilder` new + snapshot with no items.
 
-/// IlPipeline::new stage count is zero and stage_names empty.
+/// `IlPipeline::new` stage count is zero and `stage_names` empty.
 
 // ─── rustre-script-rhai extra wrappers ──────────────────────────────────────
 
@@ -34065,7 +34065,7 @@ pub(crate) fn _mem_prov_from_hex(buf_hex: &str, base: u64) -> Result<(rustre_mem
 
 /// Report defaults for `analysis::LoopBoundAnalysis::new(default_bound)`.
 
-/// Report loop_count on an empty `LoopBoundAnalysis`.
+/// Report `loop_count` on an empty `LoopBoundAnalysis`.
 
 /// Report `state_merger::hash_constraints` for a Const-only constraint set.
 

@@ -1,4 +1,4 @@
-//! FIX F regression: triage_entropy_packing_indicators must not falsely report
+//! FIX F regression: `triage_entropy_packing_indicators` must not falsely report
 //! "Few imports" on cargo-zyphora.exe which has 106 imports.
 
 #[tokio::test]

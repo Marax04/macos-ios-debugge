@@ -554,9 +554,9 @@ fn capstone_arch_mode(arch: &str, bits: u32) -> Option<(capstone::arch::ArchOper
 }
 
 /// Disassemble `count` instructions starting at `start_va` from `slice`.
-/// Dispatches to iced-x86 for x86/x86_64, Capstone for everything else.
+/// Dispatches to iced-x86 for `x86/x86_64`, Capstone for everything else.
 /// Each instruction record carries `addr`, `bytes_hex`, `text`, `length`,
-/// plus best-effort semantic fields (regs_read / regs_written / eflags) and
+/// plus best-effort semantic fields (`regs_read` / `regs_written` / eflags) and
 /// inline call-target / branch-target annotations (`call_target`).
 #[must_use]
 pub fn disassemble_multi_arch(

@@ -172,7 +172,7 @@ impl ToolHandler for InferTypesPathTool {
     }
 }
 
-/// Coarse mapping of a decompiler-printed type string to (size_bytes, signed).
+/// Coarse mapping of a decompiler-printed type string to (`size_bytes`, signed).
 fn type_str_to_size_sign(s: &str) -> (usize, bool) {
     let t = s.trim().to_ascii_lowercase();
     if t.contains('*') || t.contains("ptr") || t.contains("ref") {

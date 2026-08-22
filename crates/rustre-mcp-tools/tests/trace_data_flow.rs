@@ -1,4 +1,4 @@
-//! Smoke-test the new analysis_trace_data_flow_path handler against
+//! Smoke-test the new `analysis_trace_data_flow_path` handler against
 //! a real binary on disk.
 use serde_json::json;
 use rustre_mcp_tools::wire_tools::AnalysisTraceDataFlowPathTool;

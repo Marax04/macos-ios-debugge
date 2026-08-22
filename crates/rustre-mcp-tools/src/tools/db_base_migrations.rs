@@ -1,5 +1,5 @@
 //! MCP wrappers for the rustre-db_base_migrations crate.
-//! Extracted from wire_tools.rs by workflow_split_wire_tools.
+//! Extracted from `wire_tools.rs` by `workflow_split_wire_tools`.
 
 use rustre_mcp_server::{ToolDefinition, ToolHandler};
 
