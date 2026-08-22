@@ -1,9 +1,9 @@
 //! blitz2: deep adversarial tests for rustre-analysis-vtable.
 //!
 //! Focuses on the public API in `lib.rs`: Section, Vtable/VtableEntry,
-//! VtableDetector, ItaniumRttiDecoder, MsvcRttiDecoder, VtableDatabase,
-//! PureVirtualDetector, AbstractClassInference, MultipleInheritanceLayout,
-//! VtableScanner, VtableSlotAnnotator, VtableComparer, VtableStats,
+//! `VtableDetector`, `ItaniumRttiDecoder`, `MsvcRttiDecoder`, `VtableDatabase`,
+//! `PureVirtualDetector`, `AbstractClassInference`, `MultipleInheritanceLayout`,
+//! `VtableScanner`, `VtableSlotAnnotator`, `VtableComparer`, `VtableStats`,
 //! and demangler helpers.
 
 use std::collections::{HashMap, HashSet};
@@ -16,10 +16,10 @@ use rustre_analysis_vtable::*;
 
 struct Lcg(u64);
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self(0xDEAD_BEEF_CAFE_BABE)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)

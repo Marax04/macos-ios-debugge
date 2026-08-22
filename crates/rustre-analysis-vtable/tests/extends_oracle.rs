@@ -30,7 +30,7 @@ fn oracle(a: &Vtable, b: &Vtable) -> bool {
 
 struct Lcg(u64);
 impl Lcg {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         self.0 ^ (self.0 >> 33)
     }

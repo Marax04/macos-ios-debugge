@@ -291,14 +291,13 @@ impl InheritanceGraph {
                     let depth = self
                         .classes
                         .get(name)
-                        .map(|node| {
+                        .map_or(0, |node| {
                             node.bases
                                 .iter()
                                 .map(|b| 1 + memo.get(b.as_str()).copied().unwrap_or(0))
                                 .max()
                                 .unwrap_or(0)
-                        })
-                        .unwrap_or(0);
+                        });
                     memo.insert(name, depth);
                 }
             }

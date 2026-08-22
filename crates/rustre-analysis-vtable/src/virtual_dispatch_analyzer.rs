@@ -692,8 +692,7 @@ impl VirtualDispatchAnalyzer {
                     hierarchy
                         .nodes
                         .get(primary)
-                        .map(|n| n.children.iter().any(|ch| ch == c) || n.parents.iter().any(|p| p == c))
-                        .unwrap_or(false)
+                        .is_some_and(|n| n.children.iter().any(|ch| ch == c) || n.parents.iter().any(|p| p == c))
                 });
 
                 let severity = if related {
@@ -891,7 +890,7 @@ mod tests {
 
     // ── Regressions (graph-algorithm hardening pass) ──────────────────────────
 
-    /// compute_depths had no visited set: a cycle among non-root nodes
+    /// `compute_depths` had no visited set: a cycle among non-root nodes
     /// reachable from a root looped forever (A→B→C→B…), and diamonds
     /// re-enqueued nodes exponentially.
     #[test]
@@ -932,8 +931,8 @@ mod tests {
         assert_eq!(h.nodes["D"].depth, 1);
     }
 
-    /// roots / bfs_order / infer_hierarchy / detect_confusion previously
-    /// leaked HashMap iteration order into their output.
+    /// roots / `bfs_order` / `infer_hierarchy` / `detect_confusion` previously
+    /// leaked `HashMap` iteration order into their output.
     #[test]
     fn regress_hierarchy_output_deterministic() {
         let build = || {
@@ -986,8 +985,8 @@ mod tests {
         assert_eq!(r1[0].2, vec!["Beta", "Mid", "Zeta"]);
     }
 
-    /// find_slot_for_callee: "first match" is now lowest vtable VA, not
-    /// whichever HashMap bucket iterated first.
+    /// `find_slot_for_callee`: "first match" is now lowest vtable VA, not
+    /// whichever `HashMap` bucket iterated first.
     #[test]
     fn regress_find_slot_for_callee_deterministic() {
         let mut a = VirtualDispatchAnalyzer::new();
@@ -997,8 +996,8 @@ mod tests {
         assert_eq!(a.find_slot_for_callee(0xAAAA), Some((0x2000, 1)));
     }
 
-    /// ptr_size == 0 (caller-controlled config) previously hit a divide-by-zero
-    /// panic in DispatchSite::new and resolve_site.
+    /// `ptr_size` == 0 (caller-controlled config) previously hit a divide-by-zero
+    /// panic in `DispatchSite::new` and `resolve_site`.
     #[test]
     fn regress_zero_ptr_size_no_panic() {
         let site = DispatchSite::new(0x1000, 16, 0);

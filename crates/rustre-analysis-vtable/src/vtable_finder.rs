@@ -76,7 +76,7 @@ impl SectionInfo {
         addr >= self.va_start && addr < self.va_end
     }
     #[must_use]
-    pub fn file_offset_of(&self, addr: Addr) -> Option<usize> {
+    pub const fn file_offset_of(&self, addr: Addr) -> Option<usize> {
         if self.contains(addr) {
             self.file_offset.checked_add((addr - self.va_start) as usize)
         } else {
@@ -362,26 +362,20 @@ impl<'a> VtableFinder<'a> {
         let ptr_sz = self.img.bitness.ptr_size() as Addr;
 
         // ── MSVC: at vt_va - ptr_sz there is a pointer to a COL ──────────────
-        if self.config.check_msvc_rtti && vt_va >= ptr_sz {
-            if let Some(col_va) = self.img.read_addr_at_va(vt_va - ptr_sz) {
-                if self.img.is_data_pointer(col_va) {
-                    if let Some(name) = try_read_msvc_type_descriptor(self.img, col_va) {
+        if self.config.check_msvc_rtti && vt_va >= ptr_sz
+            && let Some(col_va) = self.img.read_addr_at_va(vt_va - ptr_sz)
+                && self.img.is_data_pointer(col_va)
+                    && let Some(name) = try_read_msvc_type_descriptor(self.img, col_va) {
                         return (Some(col_va), Some(name), RttiKind::Msvc);
                     }
-                }
-            }
-        }
 
         // ── Itanium: vt_va - 2*ptr_sz is offset-to-top, vt_va - ptr_sz is typeinfo ptr ──
-        if self.config.check_itanium_rtti && vt_va >= 2 * ptr_sz {
-            if let Some(ti_va) = self.img.read_addr_at_va(vt_va - ptr_sz) {
-                if self.img.is_data_pointer(ti_va) {
-                    if let Some(name) = try_read_itanium_typeinfo(self.img, ti_va) {
+        if self.config.check_itanium_rtti && vt_va >= 2 * ptr_sz
+            && let Some(ti_va) = self.img.read_addr_at_va(vt_va - ptr_sz)
+                && self.img.is_data_pointer(ti_va)
+                    && let Some(name) = try_read_itanium_typeinfo(self.img, ti_va) {
                         return (Some(ti_va), Some(name), RttiKind::Itanium);
                     }
-                }
-            }
-        }
 
         (None, None, RttiKind::None)
     }

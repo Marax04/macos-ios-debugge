@@ -8,10 +8,10 @@ use rustre_analysis_vtable::rtti_parser::{MemRegion, RttiParser, RttiParserConfi
 /// A tiny synthetic 32-bit MSVC RTTI image.
 ///
 /// Layout (all VAs absolute, since 32-bit RTTI references are absolute):
-///   0x1000 COL      : sig=0, vtable_offset=0, cd_offset=0, td=0x2000, ch=0x3000
-///   0x2000 TypeDesc : vftable ptr, spare ptr, then the decorated name at +8
-///   0x3000 Hierarchy: sig=0, attributes=0, num_bases=1, array=0x4000
-///   0x4000 BaseArray: [0x5000]
+///   0x1000 COL      : sig=0, `vtable_offset=0`, `cd_offset=0`, td=0x2000, ch=0x3000
+///   0x2000 `TypeDesc` : vftable ptr, spare ptr, then the decorated name at +8
+///   0x3000 Hierarchy: sig=0, attributes=0, `num_bases=1`, array=0x4000
+///   0x4000 `BaseArray`: [0x5000]
 ///   0x5000 BCD      : td=0x2000, contained=0, mdisp=8, pdisp=-1, vdisp=0, attr=0
 const BASE: u64 = 0x1000;
 const COL_VA: u64 = 0x1000;

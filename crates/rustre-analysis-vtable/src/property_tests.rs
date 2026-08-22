@@ -120,8 +120,7 @@ fn oracle_depth(spec: &[(String, Vec<String>)], start: &str) -> usize {
     fn go(edges: &HashMap<&str, &Vec<String>>, name: &str) -> usize {
         edges
             .get(name)
-            .map(|bs| bs.iter().map(|b| 1 + go(edges, b)).max().unwrap_or(0))
-            .unwrap_or(0)
+            .map_or(0, |bs| bs.iter().map(|b| 1 + go(edges, b)).max().unwrap_or(0))
     }
     go(&edges, start)
 }
@@ -230,7 +229,7 @@ fn prop_cyclic_input_terminates() {
     }
 }
 
-/// Ordered outputs must not depend on insertion order (HashMap iteration order
+/// Ordered outputs must not depend on insertion order (`HashMap` iteration order
 /// must never leak into results).
 #[test]
 fn prop_ordered_output_is_insertion_order_independent() {

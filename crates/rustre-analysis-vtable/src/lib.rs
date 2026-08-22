@@ -200,8 +200,8 @@ pub enum RttiAbi {
 /// Shared test-only PRNG for the crate's fuzz/property tests.
 ///
 /// One definition instead of the five byte-identical `XorShift` copies the
-/// test modules used to carry (msvc_rtti, rtti_parser, rtti_recovery,
-/// vtable_finder, vtable_integrity) plus inheritance_grapher's free fn. Raw
+/// test modules used to carry (`msvc_rtti`, `rtti_parser`, `rtti_recovery`,
+/// `vtable_finder`, `vtable_integrity`) plus `inheritance_grapher`'s free fn. Raw
 /// tuple constructor and no zero-guard, exactly like every former copy, so no
 /// test's random sequence changes. (`property_tests::Rng` is a DIFFERENT
 /// algorithm — xorshift64* with extra helpers — and stays separate.)
@@ -1447,7 +1447,7 @@ impl VtableScanner {
                     // otherwise the run of slots would have started earlier.
                     let has_rtti_prefix = start_i >= step && {
                         let prefix = read_ptr(data, start_i - step, self.ptr_size);
-                        prefix >= 0x1000 && prefix % (self.ptr_size as u64) == 0
+                        prefix >= 0x1000 && prefix.is_multiple_of(self.ptr_size as u64)
                     };
                     let base_conf = if has_rtti_prefix { 0.85f32 } else { 0.60f32 };
                     let slot_bonus = f32::from(u8::try_from(slot_count.min(10)).unwrap_or(10)) * 0.02f32;

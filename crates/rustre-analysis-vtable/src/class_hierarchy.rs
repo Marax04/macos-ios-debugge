@@ -402,7 +402,7 @@ pub fn to_json_hierarchy(hierarchy: &ReconstructedHierarchy) -> JsonHierarchy {
             confidence: c.confidence,
             bases: c.bases.clone(),
             derived: c.derived.clone(),
-            kind: kinds.get(&c.id).map(std::string::ToString::to_string).unwrap_or_else(|| "Unknown".to_string()),
+            kind: kinds.get(&c.id).map_or_else(|| "Unknown".to_string(), std::string::ToString::to_string),
             dispatch_table: jdispatch,
         }
     }).collect();

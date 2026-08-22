@@ -719,7 +719,7 @@ mod tests {
 
     // ── Regressions (graph-algorithm hardening pass) ──────────────────────────
 
-    /// resolve_virtual_method was recursive with no cycle guard: a cyclic
+    /// `resolve_virtual_method` was recursive with no cycle guard: a cyclic
     /// (corrupt-RTTI) hierarchy recursed forever, and a deep chain overflowed
     /// the native stack.
     #[test]
@@ -747,7 +747,7 @@ mod tests {
         assert!(g.is_subclass_of("C0", &format!("C{N}")));
     }
 
-    /// resolve_virtual_method must skip a pure entry and fall through to a base
+    /// `resolve_virtual_method` must skip a pure entry and fall through to a base
     /// implementation (previous semantics, preserved by the iterative rewrite).
     #[test]
     fn regress_resolve_virtual_method_pure_falls_through_to_base() {
@@ -777,7 +777,7 @@ mod tests {
         assert_eq!(g.resolve_virtual_method("D", 0).unwrap().function_addr, 0x1111);
     }
 
-    /// all_ancestors / all_descendants / roots / find_diamonds returned
+    /// `all_ancestors` / `all_descendants` / roots / `find_diamonds` returned
     /// HashMap/HashSet iteration order — nondeterministic across runs.
     /// Now: BFS discovery order (ancestors/descendants) and sorted (roots,
     /// diamonds).
@@ -825,7 +825,7 @@ mod tests {
         );
     }
 
-    /// single_inheritance_chain already had a cycle guard — pin it.
+    /// `single_inheritance_chain` already had a cycle guard — pin it.
     #[test]
     fn regress_single_inheritance_chain_cycle_returns_none() {
         let mut g = ClassHierarchyGraph::new();
@@ -835,7 +835,7 @@ mod tests {
     }
 
     /// Re-registering a class duplicated its edges and left stale reverse
-    /// edges; add_class now replaces the class's edge set.
+    /// edges; `add_class` now replaces the class's edge set.
     #[test]
     fn regress_add_class_twice_no_duplicate_edges() {
         let mut g = ClassHierarchyGraph::new();

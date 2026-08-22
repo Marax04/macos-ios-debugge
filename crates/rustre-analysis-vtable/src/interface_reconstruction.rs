@@ -253,9 +253,7 @@ impl InterfaceReconstructor {
         });
 
         let (method_name, owner_class) = demangled
-            .as_deref()
-            .map(split_qualified)
-            .unwrap_or_else(|| (format!("slot_{slot}"), None));
+            .as_deref().map_or_else(|| (format!("slot_{slot}"), None), split_qualified);
 
         let kind = if is_pure_addr || is_pure_name {
             MethodKind::PureVirtual

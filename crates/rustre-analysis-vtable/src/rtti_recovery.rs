@@ -650,14 +650,14 @@ mod tests {
     }
 
     /// Two RTTI structures sharing one demangled name must resolve
-    /// DETERMINISTICALLY, not by HashMap iteration order.
+    /// DETERMINISTICALLY, not by `HashMap` iteration order.
     ///
     /// `reconstruct_hierarchy` re-keys a `HashMap<u64, RttiClass>` (keyed by
-    /// rtti_va) onto class NAME, so name collisions — COMDAT folding, template
+    /// `rtti_va`) onto class NAME, so name collisions — COMDAT folding, template
     /// instantiations, RTTI duplicated across translation units — make the
-    /// `insert` last-writer-wins. Iterating `.values()` raw let RandomState
+    /// `insert` last-writer-wins. Iterating `.values()` raw let `RandomState`
     /// decide the winner, so the same binary could yield different hierarchies
-    /// on two runs. Sorting by rtti_va makes the highest VA win, every time.
+    /// on two runs. Sorting by `rtti_va` makes the highest VA win, every time.
     #[test]
     fn reconstruct_hierarchy_is_deterministic_under_name_collision() {
         let mk = |va: u64, name: &str, bases: Vec<u64>| RttiClass {

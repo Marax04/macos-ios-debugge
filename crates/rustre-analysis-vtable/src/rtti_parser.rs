@@ -69,7 +69,7 @@ impl MemRegion {
 
     /// Return `true` if the region contains `va`.
     #[must_use]
-    pub fn contains(&self, va: u64) -> bool {
+    pub const fn contains(&self, va: u64) -> bool {
         va >= self.base_va && va < self.end_va()
     }
 
@@ -643,8 +643,8 @@ impl RttiParser {
         };
 
         // Try to read a base typeinfo pointer at +2*ps (si_class_type_info).
-        if let Some(base_ptr) = self.read_ptr(ti_va.wrapping_add(2 * ps)) {
-            if base_ptr != 0 && self.is_readable(base_ptr) {
+        if let Some(base_ptr) = self.read_ptr(ti_va.wrapping_add(2 * ps))
+            && base_ptr != 0 && self.is_readable(base_ptr) {
                 let base_entry = GccBaseEntry {
                     typeinfo_va: base_ptr,
                     offset_flags: BaseOffsetFlags(0),
@@ -653,7 +653,6 @@ impl RttiParser {
                 gcc_rtti.bases.push(base_entry);
                 gcc_rtti.is_single_inheritance = true;
             }
-        }
 
         // Try vmi_class_type_info: flags at +2*ps (u32), count at +2*ps+4 (u32).
         if let (Some(flags), Some(count)) = (
@@ -673,8 +672,7 @@ impl RttiParser {
                     if let Some(bti_va) = self.read_ptr(entry_off) {
                         let raw_flags = self
                             .read_u32(entry_off.wrapping_add(ps))
-                            .map(|v| i64::from(v))
-                            .unwrap_or(0);
+                            .map_or(0, |v| i64::from(v));
                         let entry = GccBaseEntry {
                             typeinfo_va: bti_va,
                             offset_flags: BaseOffsetFlags(raw_flags),
@@ -767,19 +765,16 @@ fn demangle_simple(s: &str) -> String {
             while i < bytes.len() && bytes[i].is_ascii_digit() {
                 i += 1;
             }
-            if let Ok(len_str) = std::str::from_utf8(&bytes[start..i]) {
-                if let Ok(len) = len_str.parse::<usize>() {
-                    if let Some(end) = i.checked_add(len) {
-                        if end <= bytes.len() {
+            if let Ok(len_str) = std::str::from_utf8(&bytes[start..i])
+                && let Ok(len) = len_str.parse::<usize>()
+                    && let Some(end) = i.checked_add(len)
+                        && end <= bytes.len() {
                             result.push_str(
                                 std::str::from_utf8(&bytes[i..end]).unwrap_or("?"),
                             );
                             i = end;
                             continue;
                         }
-                    }
-                }
-            }
         }
         i += 1;
     }
@@ -801,19 +796,16 @@ fn demangle_nested(s: &str) -> String {
             while i < bytes.len() && bytes[i].is_ascii_digit() {
                 i += 1;
             }
-            if let Ok(len_str) = std::str::from_utf8(&bytes[start..i]) {
-                if let Ok(len) = len_str.parse::<usize>() {
-                    if let Some(end) = i.checked_add(len) {
-                        if end <= bytes.len() {
+            if let Ok(len_str) = std::str::from_utf8(&bytes[start..i])
+                && let Ok(len) = len_str.parse::<usize>()
+                    && let Some(end) = i.checked_add(len)
+                        && end <= bytes.len() {
                             if let Ok(part) = std::str::from_utf8(&bytes[i..end]) {
                                 parts.push(part.to_string());
                             }
                             i = end;
                             continue;
                         }
-                    }
-                }
-            }
         }
         i += 1;
     }

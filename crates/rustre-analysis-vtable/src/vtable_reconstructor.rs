@@ -191,7 +191,7 @@ impl ReconstructedHierarchy {
                     let depth = self
                         .classes
                         .get(id)
-                        .map(|node| {
+                        .map_or(0, |node| {
                             node.bases
                                 .iter()
                                 // A base still on the stack is part of a cycle:
@@ -200,8 +200,7 @@ impl ReconstructedHierarchy {
                                 .map(|b| 1 + memo.get(b).copied().unwrap_or(0))
                                 .max()
                                 .unwrap_or(0)
-                        })
-                        .unwrap_or(0);
+                        });
                     memo.insert(id, depth);
                 }
             }

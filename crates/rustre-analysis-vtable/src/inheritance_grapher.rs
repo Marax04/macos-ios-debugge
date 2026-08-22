@@ -212,15 +212,13 @@ impl InheritanceGrapher {
     fn get_or_create_node(&mut self, name: &str, direct: Option<&RttiInfo>) -> NodeIndex {
         if let Some(&idx) = self.name_to_node.get(name) {
             // Upgrade an inferred node to a direct one if we now have RTTI.
-            if let Some(rtti) = direct {
-                if let Some(w) = self.graph.node_weight_mut(idx) {
-                    if !w.is_direct {
+            if let Some(rtti) = direct
+                && let Some(w) = self.graph.node_weight_mut(idx)
+                    && !w.is_direct {
                         w.is_direct = true;
                         w.abi = rtti.abi.clone();
                         w.rtti_address = rtti.rtti_address;
                     }
-                }
-            }
             return idx;
         }
         let node = match direct {
@@ -852,7 +850,7 @@ mod tests {
 
     // ── Regressions & property tests (graph-algorithm hardening pass) ────────
 
-    /// dfs_cycle used native recursion: a 200k-deep inheritance chain
+    /// `dfs_cycle` used native recursion: a 200k-deep inheritance chain
     /// overflowed the thread stack. Now iterative.
     #[test]
     fn regress_has_cycle_deep_chain_no_stack_overflow() {
@@ -929,7 +927,7 @@ mod tests {
         r
     }
 
-    /// Differential test: has_cycle / ancestors / descendants / inherits_from
+    /// Differential test: `has_cycle` / ancestors / descendants / `inherits_from`
     /// vs brute-force oracles on hundreds of random graphs.
     #[test]
     fn property_random_graphs_vs_oracles() {
@@ -1001,7 +999,7 @@ mod tests {
         }
     }
 
-    /// depth_map must terminate and be consistent on cyclic graphs.
+    /// `depth_map` must terminate and be consistent on cyclic graphs.
     #[test]
     fn regress_depth_map_terminates_on_cycle() {
         let list = vec![
