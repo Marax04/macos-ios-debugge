@@ -117,6 +117,32 @@ pub struct DbiHeader {
     pub padding: u32,
 }
 
+/// Infallible little-endian readers used by the record parsers below.
+///
+/// They replace the `slice.try_into().unwrap()` idiom: `try_into` on a slice of
+/// statically-unknown length yields a `Result`, and the `unwrap` made every
+/// parser a *documented panic path* even though the length had just been
+/// checked. `first_chunk` proves the length to the type system instead, so a
+/// truncated or maliciously short DBI record can no longer reach a panic;
+/// the caller's own bounds check remains the only error path.
+fn le_u16_at(s: &[u8], off: usize) -> Option<u16> {
+    s.get(off..)
+        .and_then(|t| t.first_chunk::<2>())
+        .map(|b| u16::from_le_bytes(*b))
+}
+
+/// Little-endian `u32` at `off`, or `None` when fewer than 4 bytes remain.
+fn le_u32_at(s: &[u8], off: usize) -> Option<u32> {
+    s.get(off..)
+        .and_then(|t| t.first_chunk::<4>())
+        .map(|b| u32::from_le_bytes(*b))
+}
+
+/// Little-endian `i32` at `off`, or `None` when fewer than 4 bytes remain.
+fn le_i32_at(s: &[u8], off: usize) -> Option<i32> {
+    le_u32_at(s, off).map(u32::cast_signed)
+}
+
 impl DbiHeader {
     /// On-disk size of the DBI header in bytes.
     pub const SIZE: usize = 64;
@@ -128,17 +154,14 @@ impl DbiHeader {
         if data.len() < Self::SIZE {
             return Err(DbiError::UnexpectedEof { offset: 0, needed: Self::SIZE });
         }
-        let r = |off: usize, n: usize| -> DbiResult<&[u8]> {
-            data.get(off..off + n).ok_or(DbiError::UnexpectedEof { offset: off, needed: n })
-        };
         let u16_at = |off: usize| -> DbiResult<u16> {
-            Ok(u16::from_le_bytes(r(off, 2)?.try_into().unwrap()))
+            le_u16_at(data, off).ok_or(DbiError::UnexpectedEof { offset: off, needed: 2 })
         };
         let u32_at = |off: usize| -> DbiResult<u32> {
-            Ok(u32::from_le_bytes(r(off, 4)?.try_into().unwrap()))
+            le_u32_at(data, off).ok_or(DbiError::UnexpectedEof { offset: off, needed: 4 })
         };
         let i32_at = |off: usize| -> DbiResult<i32> {
-            Ok(i32::from_le_bytes(r(off, 4)?.try_into().unwrap()))
+            le_i32_at(data, off).ok_or(DbiError::UnexpectedEof { offset: off, needed: 4 })
         };
 
         let signature = u32_at(0)?;
@@ -257,12 +280,12 @@ impl ModInfo {
         let slice = &data[offset..];
 
         let u16_at = |off: usize| -> DbiResult<u16> {
-            let b = slice.get(off..off + 2).ok_or(DbiError::UnexpectedEof { offset: offset + off, needed: 2 })?;
-            Ok(u16::from_le_bytes(b.try_into().unwrap()))
+            le_u16_at(slice, off)
+                .ok_or(DbiError::UnexpectedEof { offset: offset + off, needed: 2 })
         };
         let u32_at = |off: usize| -> DbiResult<u32> {
-            let b = slice.get(off..off + 4).ok_or(DbiError::UnexpectedEof { offset: offset + off, needed: 4 })?;
-            Ok(u32::from_le_bytes(b.try_into().unwrap()))
+            le_u32_at(slice, off)
+                .ok_or(DbiError::UnexpectedEof { offset: offset + off, needed: 4 })
         };
 
         let unused1 = u32_at(0)?;
@@ -366,8 +389,8 @@ impl SectionContrib {
     pub fn parse(data: &[u8], offset: usize) -> DbiResult<Self> {
         let s = data.get(offset..offset + Self::SIZE)
             .ok_or(DbiError::UnexpectedEof { offset, needed: Self::SIZE })?;
-        let u16_at = |o: usize| u16::from_le_bytes(s[o..o+2].try_into().unwrap());
-        let u32_at = |o: usize| u32::from_le_bytes(s[o..o+4].try_into().unwrap());
+        let u16_at = |o: usize| le_u16_at(s, o).unwrap_or(0);
+        let u32_at = |o: usize| le_u32_at(s, o).unwrap_or(0);
         Ok(Self {
             section: u16_at(0),
             padding1: u16_at(2),
@@ -435,8 +458,8 @@ impl SectionMapEntry {
     pub fn parse(data: &[u8], offset: usize) -> DbiResult<Self> {
         let s = data.get(offset..offset + Self::SIZE)
             .ok_or(DbiError::UnexpectedEof { offset, needed: Self::SIZE })?;
-        let u16_at = |o: usize| u16::from_le_bytes(s[o..o+2].try_into().unwrap());
-        let u32_at = |o: usize| u32::from_le_bytes(s[o..o+4].try_into().unwrap());
+        let u16_at = |o: usize| le_u16_at(s, o).unwrap_or(0);
+        let u32_at = |o: usize| le_u32_at(s, o).unwrap_or(0);
         Ok(Self {
             flags: u16_at(0),
             ovl: u16_at(2),
@@ -467,6 +490,10 @@ pub struct DbiReader {
     /// Maps module index → module name.
     pub module_index: HashMap<usize, String>,
 }
+
+/// Version stamp of the `Ver60` section-contribution sub-stream, whose records
+/// carry 4 trailing bytes the older layout does not.
+const SC_VERSION_V2: u32 = 0xF131_51E4;
 
 impl DbiReader {
     /// Parse the DBI stream from raw bytes.
@@ -503,12 +530,8 @@ impl DbiReader {
         // substream reads every record after the first 4 bytes too far left,
         // splicing adjacent entries together.
         if sec_contrib_end > cursor + 4 {
-            let version = u32::from_le_bytes(
-                data.get(cursor..cursor + 4)
-                    .ok_or(DbiError::UnexpectedEof { offset: cursor, needed: 4 })?
-                    .try_into().unwrap()
-            );
-            const SC_VERSION_V2: u32 = 0xF131_51E4;
+            let version = le_u32_at(data, cursor)
+                .ok_or(DbiError::UnexpectedEof { offset: cursor, needed: 4 })?;
             let stride = if version == SC_VERSION_V2 {
                 SectionContrib::SIZE + 4
             } else {
@@ -531,16 +554,10 @@ impl DbiReader {
         let sec_map_end = cursor + usize::try_from(header.section_map_size.max(0)).unwrap_or(0);
         let mut section_map = Vec::new();
         if sec_map_end > cursor + 4 {
-            let count = u16::from_le_bytes(
-                data.get(cursor..cursor + 2)
-                    .ok_or(DbiError::UnexpectedEof { offset: cursor, needed: 2 })?
-                    .try_into().unwrap()
-            ) as usize;
-            let _log_count = u16::from_le_bytes(
-                data.get(cursor + 2..cursor + 4)
-                    .ok_or(DbiError::UnexpectedEof { offset: cursor + 2, needed: 2 })?
-                    .try_into().unwrap()
-            );
+            let count = le_u16_at(data, cursor)
+                .ok_or(DbiError::UnexpectedEof { offset: cursor, needed: 2 })? as usize;
+            let _log_count = le_u16_at(data, cursor + 2)
+                .ok_or(DbiError::UnexpectedEof { offset: cursor + 2, needed: 2 })?;
             let mut sec_map_cursor = cursor + 4;
             for _ in 0..count {
                 if sec_map_cursor + SectionMapEntry::SIZE > sec_map_end {

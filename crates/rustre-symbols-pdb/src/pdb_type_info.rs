@@ -210,13 +210,22 @@ const fn sign_extended_bits(v: i64) -> u64 {
 /// [`TpiError::Truncated`] if the value runs past the buffer;
 /// [`TpiError::UnknownLeaf`] for an unrecognized numeric tag.
 pub fn read_numeric_leaf(data: &[u8], pos: usize) -> Result<(u64, usize), TpiError> {
-    if pos + 2 > data.len() {
+    // `checked_add`, not `pos + 2`: release builds have overflow-checks OFF, so
+    // a wrapped sum would make `pos + 2 > data.len()` read *false* for a `pos`
+    // near `usize::MAX`, and the indexing below would then panic. The checked
+    // form turns that into the Truncated error it was always meant to be.
+    let Some(kind) = pos
+        .checked_add(2)
+        .filter(|end| *end <= data.len())
+        .and_then(|_| data.get(pos..))
+        .and_then(|t| t.first_chunk::<2>())
+        .map(|b| u16::from_le_bytes(*b))
+    else {
         return Err(TpiError::Truncated {
             offset: pos,
             needed: 2,
         });
-    }
-    let kind = u16::from_le_bytes([data[pos], data[pos + 1]]);
+    };
     if kind < leaf::LF_NUMERIC {
         return Ok((u64::from(kind), 2));
     }
@@ -267,7 +276,14 @@ pub fn read_numeric_leaf(data: &[u8], pos: usize) -> Result<(u64, usize), TpiErr
         }
         leaf::LF_QUADWORD | leaf::LF_UQUADWORD => {
             need(data, pos + 2, 8)?;
-            let v = u64::from_le_bytes(data[pos + 2..pos + 10].try_into().unwrap());
+            let v = data
+                .get(pos + 2..)
+                .and_then(|t| t.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
+                .ok_or(TpiError::Truncated {
+                    offset: pos + 2,
+                    needed: 8,
+                })?;
             Ok((v, 10))
         }
         // Floating-point and wide leaves: the value is not representable in a
@@ -1551,6 +1567,19 @@ impl fmt::Display for TpiStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `pos + 2` used to be an unchecked add. Release builds compile with
+    /// overflow-checks OFF, so for a `pos` near `usize::MAX` the sum WRAPS to a
+    /// small number, the `> data.len()` guard reads false, and the function
+    /// then indexes `data[pos]` and panics. A wrapped bounds check is worse
+    /// than no bounds check: it *looks* validated. Reverting the guard to
+    /// `pos + 2 > data.len()` makes this test abort with an index panic.
+    #[test]
+    fn numeric_leaf_wrapping_offset_errors_instead_of_panicking() {
+        let data = [0u8, 0, 0, 0];
+        let r = read_numeric_leaf(&data, usize::MAX - 1);
+        assert!(matches!(r, Err(TpiError::Truncated { .. })), "got {r:?}");
+    }
 
     // --- Primitive types ---
 

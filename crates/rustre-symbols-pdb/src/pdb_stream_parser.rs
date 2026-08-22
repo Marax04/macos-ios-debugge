@@ -81,7 +81,7 @@ impl MsfSuperblock {
     ///
     /// # Errors
     /// [`PdbError::CorruptData`] when any field is out of range.
-    pub fn validate(&self) -> Result<()> {
+    pub const fn validate(&self) -> Result<()> {
         if !self.is_valid_block_size() {
             return Err(PdbError::CorruptData);
         }
