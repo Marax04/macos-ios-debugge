@@ -19,8 +19,8 @@ use std::sync::Arc;
 // ── seeded LCG ───────────────────────────────────────────────────────────────
 struct Lcg(u64);
 impl Lcg {
-    fn new() -> Self { Self(0xDEAD_BEEF_CAFE_BABE) }
-    fn next_u64(&mut self) -> u64 {
+    const fn new() -> Self { Self(0xDEAD_BEEF_CAFE_BABE) }
+    const fn next_u64(&mut self) -> u64 {
         self.0 = self.0
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);

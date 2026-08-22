@@ -1198,7 +1198,7 @@ mod tests {
 
     // ---- ExceptionHandler ----
 
-    /// A fat EH section: kind byte, then a 24-bit DataSize that includes the
+    /// A fat EH section: kind byte, then a 24-bit `DataSize` that includes the
     /// 4-byte header, then `n` clauses of 24 bytes.
     fn fat_eh_section(kind: u8, clauses: usize) -> Vec<u8> {
         let total = 4 + clauses * 24;

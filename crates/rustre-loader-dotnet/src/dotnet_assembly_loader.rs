@@ -378,7 +378,7 @@ mod tests {
         v.extend_from_slice(&0u32.to_le_bytes()); // reserved
         v.extend_from_slice(&(ver_len as u32).to_le_bytes()); // version length
         v.extend(ver_bytes.iter().copied());
-        v.extend(std::iter::repeat(0u8).take(ver_len - ver_bytes.len())); // padding
+        v.extend(std::iter::repeat_n(0u8, ver_len - ver_bytes.len())); // padding
         v.extend_from_slice(&0u16.to_le_bytes()); // flags
         v.extend_from_slice(&0u16.to_le_bytes()); // num_streams
         v

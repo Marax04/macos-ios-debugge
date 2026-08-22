@@ -1,6 +1,6 @@
 //! Adversarial blitz tests (round 2) for rustre-loader-wasm.
 //!
-//! Focuses on LEB128 decoder edge cases, WasmParser malformed/truncated/oversized
+//! Focuses on LEB128 decoder edge cases, `WasmParser` malformed/truncated/oversized
 //! inputs, value-type round-trips, security analyzers, and threaded stress.
 
 use rustre_loader_wasm::wasm_security::*;
@@ -47,10 +47,10 @@ fn header() -> Vec<u8> {
 
 struct Lcg(u64);
 impl Lcg {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self(seed)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
@@ -642,7 +642,7 @@ fn wasm_error_display_distinct() {
         WasmError::InvalidUtf8,
         WasmError::SectionTooLarge(1000),
     ];
-    let strs: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
+    let strs: Vec<String> = errs.iter().map(std::string::ToString::to_string).collect();
     for i in 0..strs.len() {
         for j in (i + 1)..strs.len() {
             assert_ne!(strs[i], strs[j]);

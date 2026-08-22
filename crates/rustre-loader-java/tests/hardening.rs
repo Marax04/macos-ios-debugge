@@ -2,7 +2,7 @@
 //!
 //! These cover the two defect classes audited across the loader crates:
 //!
-//! * **Allocation DoS** — a count field read straight out of the input used as
+//! * **Allocation `DoS`** — a count field read straight out of the input used as
 //!   `Vec::with_capacity` without being bounded by the bytes that remain. A JVM
 //!   `lookupswitch` carries a 32-bit `npairs`, so a handful of bytes could
 //!   otherwise request tens of gigabytes.

@@ -14,7 +14,7 @@ use rustre_loader_macho::{
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -68,7 +68,7 @@ fn minimal_macho64() -> Vec<u8> {
     b
 }
 
-/// Minimal fat binary wrapping one x86_64 slice.
+/// Minimal fat binary wrapping one `x86_64` slice.
 fn minimal_fat() -> Vec<u8> {
     let slice = minimal_macho64();
     let mut b = Vec::new();
@@ -95,7 +95,7 @@ fn random_noise_never_panics() {
     }
 }
 
-/// Random bytes behind valid MH_MAGIC_64 / MH_MAGIC / FAT_MAGIC front doors.
+/// Random bytes behind valid `MH_MAGIC_64` / `MH_MAGIC` / `FAT_MAGIC` front doors.
 #[test]
 fn valid_magic_random_body_never_panics() {
     let magics: &[[u8; 4]] = &[

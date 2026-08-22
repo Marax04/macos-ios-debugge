@@ -907,7 +907,7 @@ mod tests {
         let m = simple_module();
         let cg = CallGraph::build(&m);
         // func 1 (index 1) calls func 0
-        assert!(cg.callees.get(&1).map(|s| s.contains(&0)).unwrap_or(false));
+        assert!(cg.callees.get(&1).is_some_and(|s| s.contains(&0)));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Blitz2 deep adversarial suite for `rustre-loader-elf`.
 //!
-//! Focused on: arm_exidx, gnu_hash, versioning, ElfInfo parser, and threaded
+//! Focused on: `arm_exidx`, `gnu_hash`, versioning, `ElfInfo` parser, and threaded
 //! Send/Sync stress over public types.
 
 use rustre_loader_elf::{

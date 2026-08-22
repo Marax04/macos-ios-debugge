@@ -563,7 +563,7 @@ fn genesis_region_display_multi() {
     let s = r.to_string();
     assert!(s.contains("JP"));
     assert!(s.contains("US"));
-    assert!(s.contains("|"));
+    assert!(s.contains('|'));
 }
 
 #[test]

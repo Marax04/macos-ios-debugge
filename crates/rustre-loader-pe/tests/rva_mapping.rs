@@ -14,7 +14,7 @@
 
 use rustre_loader_pe::imports::RvaSection;
 
-fn sec(virtual_address: u32, virtual_size: u32, raw_size: u32, raw_offset: u32) -> RvaSection {
+const fn sec(virtual_address: u32, virtual_size: u32, raw_size: u32, raw_offset: u32) -> RvaSection {
     RvaSection { virtual_address, virtual_size, raw_size, raw_offset }
 }
 

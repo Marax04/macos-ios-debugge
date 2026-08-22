@@ -574,7 +574,7 @@ pub(crate) mod tests {
         v
     }
 
-    pub(crate) fn make_typedef(ns_idx: u32, name_idx: u32, flags: u32, extends: u32) -> TypeDefRow {
+    pub fn make_typedef(ns_idx: u32, name_idx: u32, flags: u32, extends: u32) -> TypeDefRow {
         TypeDefRow {
             flags,
             type_name: name_idx,

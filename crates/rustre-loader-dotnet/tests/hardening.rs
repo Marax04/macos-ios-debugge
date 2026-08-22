@@ -7,7 +7,7 @@ use rustre_loader_dotnet::dotnet_method_loader::LocalVarSig;
 use rustre_loader_dotnet::dotnet_type_system::{decode_method_sig, decode_type_sig};
 use rustre_loader_dotnet::{parse_tables_stream, read_method_sig, read_type_sig, TypeSig};
 
-/// Encode the 4-byte CLR compressed uint 0x1FFF_FFFF (the maximum).
+/// Encode the 4-byte CLR compressed uint `0x1FFF_FFFF` (the maximum).
 const MAX_CUINT: [u8; 4] = [0xDF, 0xFF, 0xFF, 0xFF];
 
 // ── Alloc-DoS: #~ tables stream row counts ───────────────────────────────────

@@ -537,7 +537,7 @@ mod tests {
         // "ABCD" encoded as UTF-16LE
         let data: Vec<u8> = "ABCD"
             .encode_utf16()
-            .flat_map(|c| c.to_le_bytes())
+            .flat_map(u16::to_le_bytes)
             .collect();
         let strings = scan_utf16le(&data, 4);
         assert_eq!(strings.len(), 1);
@@ -550,10 +550,10 @@ mod tests {
         // "hello\0\0world" in UTF-16LE (null word terminates)
         let mut data: Vec<u8> = "hello"
             .encode_utf16()
-            .flat_map(|c| c.to_le_bytes())
+            .flat_map(u16::to_le_bytes)
             .collect();
         data.extend_from_slice(&[0x00, 0x00]); // null terminator
-        data.extend("worldXY".encode_utf16().flat_map(|c| c.to_le_bytes()));
+        data.extend("worldXY".encode_utf16().flat_map(u16::to_le_bytes));
         let strings = scan_utf16le(&data, 4);
         assert_eq!(strings.len(), 2);
         assert_eq!(strings[0].value, "hello");
@@ -565,7 +565,7 @@ mod tests {
         let mut data = b"ASCII_STRING\x00".to_vec();
         let utf16: Vec<u8> = "WIDE_STR"
             .encode_utf16()
-            .flat_map(|c| c.to_le_bytes())
+            .flat_map(u16::to_le_bytes)
             .collect();
         data.extend_from_slice(&utf16);
 

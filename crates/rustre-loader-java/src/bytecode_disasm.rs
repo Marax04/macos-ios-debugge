@@ -597,10 +597,7 @@ impl BcDisassembler {
                 // silently in release. Widen to i64 so the range is always exact.
                 let count = usize::try_from((i64::from(high) - i64::from(low) + 1).max(0))
                     .unwrap_or(0);
-                let total = match count.checked_mul(4).and_then(|n| n.checked_add(12)) {
-                    Some(t) => t,
-                    None => return None,
-                };
+                let total = count.checked_mul(4).and_then(|n| n.checked_add(12))?;
                 if base + total > code.len() { return None; }
                 let mut offsets = Vec::with_capacity(count);
                 for k in 0..count {
@@ -622,10 +619,7 @@ impl BcDisassembler {
                 if base + 8 > code.len() { return None; }
                 let default = i32!((base - pc));
                 let npairs  = usize::try_from(i32!((base - pc + 4)).max(0)).unwrap_or(0);
-                let total = match npairs.checked_mul(8).and_then(|n| n.checked_add(8)) {
-                    Some(t) => t,
-                    None => return None,
-                };
+                let total = npairs.checked_mul(8).and_then(|n| n.checked_add(8))?;
                 if base + total > code.len() { return None; }
                 let mut pairs = Vec::with_capacity(npairs);
                 for k in 0..npairs {
