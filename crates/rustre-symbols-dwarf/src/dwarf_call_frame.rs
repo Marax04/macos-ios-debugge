@@ -298,7 +298,12 @@ impl Cie {
         let section_offset = *pos;
         let (length, is_64bit) = read_frame_length(data, pos)?;
         if length == 0 { return None; }
-        let end = *pos + length as usize;
+        // `length` is an attacker-controlled file field. `*pos + length`
+        // WRAPS in release (overflow-checks off), yielding a SMALL `end`
+        // that is then used as the decode bound AND written back to the
+        // cursor, rewinding the parse below the entry it just consumed.
+        let end = usize::try_from(length).ok().and_then(|l| pos.checked_add(l))?;
+        if end > data.len() { return None; }
         let offset_size = if is_64bit { 8usize } else { 4 };
 
         let cie_id = if is_64bit {
@@ -455,7 +460,12 @@ impl Fde {
         let section_offset = *pos;
         let (length, is_64bit) = read_frame_length(data, pos)?;
         if length == 0 { return None; }
-        let end = *pos + length as usize;
+        // `length` is an attacker-controlled file field. `*pos + length`
+        // WRAPS in release (overflow-checks off), yielding a SMALL `end`
+        // that is then used as the decode bound AND written back to the
+        // cursor, rewinding the parse below the entry it just consumed.
+        let end = usize::try_from(length).ok().and_then(|l| pos.checked_add(l))?;
+        if end > data.len() { return None; }
         if is_64bit { if *pos + 8 > data.len() { return None; } *pos += 8; }
         else        { if *pos + 4 > data.len() { return None; } *pos += 4; }
 
@@ -837,7 +847,9 @@ impl CfiSection {
                 Some(v) => v, None => break,
             };
             if length == 0 { break; }
-            let end = pos + length as usize;
+            // Checked for the same reason: a wrapped `end` PASSES the
+            // `end > data.len()` test below and then rewinds `pos`.
+            let Some(end) = usize::try_from(length).ok().and_then(|l| pos.checked_add(l)) else { break };
             if end > data.len() { break; }
             let offset_size = if is_64bit { 8usize } else { 4 };
             if pos + offset_size > data.len() { break; }
@@ -1031,5 +1043,60 @@ mod tests {
         let row = table.row_for_pc(0x1000).unwrap();
         // Initial CFA = r7+8
         assert!(matches!(row.cfa, CfaRule::RegisterAndOffset { reg: 7, .. }));
+    }
+}
+
+#[cfg(test)]
+mod frame_length_wrap_tests {
+    use super::*;
+
+    /// A 64-bit-format CFI entry whose `length` is chosen so that
+    /// `pos + length as usize` WRAPS around usize.
+    fn wrapping_entry() -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes()); // 64-bit format marker
+        v.extend_from_slice(&(u64::MAX - 8).to_le_bytes()); // length: pos + length wraps
+        v.extend_from_slice(&0u64.to_le_bytes()); // cie_id == 0 -> CIE in .eh_frame
+        v.resize(64, 0);
+        v
+    }
+
+    /// `end = *pos + length as usize` overflows (release builds have
+    /// overflow-checks OFF), so `end` becomes a SMALL number instead of a huge
+    /// one. It is then used both as the instruction-decode bound and as the
+    /// cursor (`*pos = end`), which REWINDS the parse below the entry it just
+    /// consumed. A length that cannot fit the section must be rejected.
+    #[test]
+    fn cie_parse_rejects_wrapping_length() {
+        let data = wrapping_entry();
+        let mut pos = 0usize;
+        assert!(
+            Cie::parse(&data, &mut pos, true).is_none(),
+            "Cie::parse accepted a length whose end offset overflows usize"
+        );
+    }
+
+    /// The section scanner has the same shape, and there the wrapped `end`
+    /// slips past an explicit bound test: `if end > data.len() { break; }`
+    /// PASSES because `end` wrapped small. Nothing may be recovered from it.
+    #[test]
+    fn cfi_section_parse_rejects_wrapping_length() {
+        let data = wrapping_entry();
+        let section = CfiSection::parse(&data, true);
+        assert_eq!(
+            (section.cies.len(), section.fdes.len()),
+            (0, 0),
+            "CfiSection::parse accepted an entry with an overflowing length"
+        );
+    }
+
+    /// The cursor must never move backwards: a rewind is what turns the
+    /// wrapped `end` into a non-terminating scan on some inputs.
+    #[test]
+    fn cie_parse_never_rewinds_cursor() {
+        let data = wrapping_entry();
+        let mut pos = 0usize;
+        let _ = Cie::parse(&data, &mut pos, true);
+        assert!(pos >= 12, "cursor rewound to {pos}, below the entry header it consumed");
     }
 }
