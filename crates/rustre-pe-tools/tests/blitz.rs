@@ -489,7 +489,7 @@ fn extract_ascii_high_min_len_filters_all() {
 fn extract_utf16_finds_strings() {
     // "ABCD" in UTF-16LE
     let mut data = Vec::new();
-    for &c in &[b'A', b'B', b'C', b'D'] {
+    for &c in b"ABCD" {
         data.push(c);
         data.push(0);
     }
@@ -719,7 +719,7 @@ fn pe_builder_x86_section_data_present() {
     let bytes = b.build();
     let pe = PeFile::parse(&bytes).unwrap();
     let t = pe.section_by_name(".text").unwrap();
-    assert!(t.data.iter().any(|&b| b == 0xAA));
+    assert!(t.data.contains(&0xAA));
 }
 
 #[test]
