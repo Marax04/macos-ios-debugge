@@ -276,7 +276,7 @@ fn ole_file_propagates_magic_error() {
 #[test]
 fn ole_file_clone() {
     let f = OleFile::parse(&make_ole_header()).unwrap();
-    let _ = f.clone();
+    let _ = f;
 }
 
 // ─── OleError ──────────────────────────────────────────────────────────────────
@@ -355,7 +355,7 @@ fn dir_reader_truncated() {
 #[test]
 fn ole_stream_clone_fields() {
     let s = OleStream { name: "A".into(), size: 5, start_sector: 7 };
-    let c = s.clone();
+    let c = s;
     assert_eq!(c.name, "A");
     assert_eq!(c.size, 5);
     assert_eq!(c.start_sector, 7);

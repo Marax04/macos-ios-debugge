@@ -66,7 +66,7 @@ impl PdfString {
             let words: Vec<u16> = self.bytes[2..].chunks(2)
                 .map(|c| if c.len() == 2 { (u16::from(c[0]) << 8) | u16::from(c[1]) } else { 0 })
                 .collect();
-            String::from_utf16_lossy(&words).to_string()
+            String::from_utf16_lossy(&words)
         } else {
             String::from_utf8_lossy(&self.bytes).to_string()
         }

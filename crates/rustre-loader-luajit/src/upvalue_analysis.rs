@@ -561,7 +561,7 @@ mod tests {
             num_upvalues: upvalues.len() as u8,
             is_vararg: false,
             instructions: instrs,
-            upvalues: upvalues.clone(),
+            upvalues: upvalues,
             kgc: vec![],
             kn: vec![],
             constants: vec![],

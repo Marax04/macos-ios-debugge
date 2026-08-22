@@ -948,7 +948,7 @@ fn t82_firmware_info_analyse_empty() {
 #[test]
 fn t83_firmware_info_analyse_uboot() {
     let h = make_uboot_header(4, 0x1000, 0x1004, "boot");
-    let mut d = h.clone();
+    let mut d = h;
     d.extend_from_slice(&[1, 2, 3, 4]);
     let info = FirmwareInfo::analyse(&d, 0);
     assert_eq!(info.kind, FirmwareKind::UBoot);

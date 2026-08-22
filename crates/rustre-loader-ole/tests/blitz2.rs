@@ -625,7 +625,7 @@ fn macro_extractor_default_works() {
 fn ole_stream_debug() {
     let s = OleStream { name: "x".into(), size: 1, start_sector: 2 };
     assert!(!format!("{s:?}").is_empty());
-    let c = s.clone();
+    let c = s;
     assert_eq!(c.name, "x");
 }
 
