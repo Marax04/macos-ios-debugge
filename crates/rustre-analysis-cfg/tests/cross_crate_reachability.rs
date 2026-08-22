@@ -5,12 +5,12 @@
 //!
 //! Implementations under test (each bridged to its documented semantics):
 //!   1. rustre-analysis-cfg   `ControlFlowGraph::reachable_from`
-//!      (start-inclusive BFS over CfgEdges)
+//!      (start-inclusive BFS over `CfgEdges`)
 //!   2. rustre-analysis-xref  `xref_query::CallGraph::reachable_from` /
 //!      `can_reach` (start-inclusive BFS) and
 //!      `xref_query::TransitiveClosure::compute` (topo-sweep / fixpoint,
 //!      self-inclusive) — also oracle-fuzzed in-crate (soundness fuzz in
-//!      xref_query's tests), re-checked here against the shared oracle.
+//!      `xref_query`'s tests), re-checked here against the shared oracle.
 //!   3. rustre-analysis-xref  `transitive_closure` module (orphaned
 //!      Floyd-Warshall `TransitiveClosure`, `BfsReachability`,
 //!      `ReachabilitySet`) — FW `reachable_from`/`can_reach` exclude self
@@ -20,7 +20,7 @@
 //!      slices; union of levels = strict reachability, origin excluded,
 //!      hops capped at 10 — always enough for n ≤ 10 nodes).
 //!
-//! Style follows tests/cross_crate_scc.rs (same XorShift, same graph
+//! Style follows `tests/cross_crate_scc.rs` (same `XorShift`, same graph
 //! generator, same oracle matrix).
 
 use rustre_analysis_cfg::{
@@ -33,17 +33,17 @@ use rustre_analysis_xref::xref_query::TransitiveClosure as QClosure;
 use rustre_core::address::Address;
 use std::collections::{BTreeSet, HashMap};
 
-fn addr(i: usize) -> u64 {
+const fn addr(i: usize) -> u64 {
     0x1000 + (i as u64) * 8
 }
 
-fn to_index(a: u64) -> usize {
+const fn to_index(a: u64) -> usize {
     ((a - 0x1000) / 8) as usize
 }
 
 struct XorShift(u64);
 impl XorShift {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;

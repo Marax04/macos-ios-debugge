@@ -15,7 +15,7 @@
 //!     `h dom n` iff every entry->n path contains `h`; `n -> h` is a back edge
 //!     iff `h dom n`; body = {h} + {v : v reaches n avoiding h}. Depth of an
 //!     address = how many loop bodies contain it; `max_loop_depth` = the max.
-//!   * `cyclomatic_complexity` = E - N + 2P (McCabe).
+//!   * `cyclomatic_complexity` = E - N + 2P (`McCabe`).
 //!
 //! ## Two questions this oracle exists to settle
 //!
@@ -41,13 +41,13 @@ use rustre_core::address::Address;
 use rustre_il_llil::LlilInstruction;
 use std::collections::{HashMap, HashSet};
 
-fn a(v: usize) -> Address {
+const fn a(v: usize) -> Address {
     Address::new(v as u64)
 }
 
 struct XorShift(u64);
 impl XorShift {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;
@@ -383,7 +383,7 @@ fn reachable_self_loop_is_counted_as_a_loop() {
 }
 
 /// Pins the resolution of the P question as an explicit, separate statement:
-/// on a graph with two weakly-connected components the true McCabe value
+/// on a graph with two weakly-connected components the true `McCabe` value
 /// `E - N + 2P` is NOT what `compute` returns; it returns the P = 1 form.
 #[test]
 fn cyclomatic_complexity_hard_codes_p_equals_one() {

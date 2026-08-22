@@ -1,11 +1,11 @@
 //! Exhaustive blitz test suite for rustre-analysis-cfg.
 //!
-//! Targets the public surface: analyze_cfg/try_analyze_cfg, DominatorTree,
-//! PostDominatorTree, NaturalLoop, ReducibilityTest, CfgScc, DominanceFrontier,
-//! CfgMetrics, CfgStats (via DotPrinter), cfg_to_dot/json, edges (FlowEdgeKind,
-//! classify_terminator, compute_leaders, split_basic_blocks),
-//! jump_table (decode_*, SwitchBound, SwitchStatement),
-//! lengauer_tarjan (compute_lt, LtDomTree).
+//! Targets the public surface: `analyze_cfg/try_analyze_cfg`, `DominatorTree`,
+//! `PostDominatorTree`, `NaturalLoop`, `ReducibilityTest`, `CfgScc`, `DominanceFrontier`,
+//! `CfgMetrics`, `CfgStats` (via `DotPrinter`), `cfg_to_dot/json`, edges (`FlowEdgeKind`,
+//! `classify_terminator`, `compute_leaders`, `split_basic_blocks`),
+//! `jump_table` (decode_*, `SwitchBound`, `SwitchStatement`),
+//! `lengauer_tarjan` (`compute_lt`, `LtDomTree`).
 
 use rustre_analysis_cfg::{
     BasicBlock, CfgDotPrinter, CfgEdge, CfgError, CfgMetrics, CfgScc,
@@ -24,16 +24,16 @@ use std::collections::HashMap;
 
 // ───────────────────────── helpers ─────────────────────────
 
-fn a(v: u64) -> Address {
+const fn a(v: u64) -> Address {
     Address::new(v)
 }
-fn nop() -> LlilInstruction {
+const fn nop() -> LlilInstruction {
     LlilInstruction::Nop
 }
-fn ret() -> LlilInstruction {
+const fn ret() -> LlilInstruction {
     LlilInstruction::Ret
 }
-fn jmp(v: u64) -> LlilInstruction {
+const fn jmp(v: u64) -> LlilInstruction {
     LlilInstruction::JumpDest {
         dest: llil_const(v, Size::QWord),
     }

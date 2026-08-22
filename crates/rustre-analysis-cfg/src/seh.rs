@@ -490,14 +490,14 @@ mod tests {
     /// An arm64 `.pdata` must not be decoded into entries that do not exist.
     ///
     /// `.pdata` exists on ARM64 Windows too, but its `RUNTIME_FUNCTION` is
-    /// **8 bytes** (BeginAddress + UnwindData), not the 12 of x64
+    /// **8 bytes** (`BeginAddress` + `UnwindData`), not the 12 of x64
     /// (Begin/End/UnwindInfoAddress). This parser strides by 12 unconditionally
     /// and cannot know the machine — it only receives bytes.
     ///
     /// Read that way, each "entry" straddles two real records: the second
-    /// record's BeginAddress lands in the `end_address` slot and so on. The
+    /// record's `BeginAddress` lands in the `end_address` slot and so on. The
     /// giveaway is that the invariant `begin < end` — which holds for every
-    /// RUNTIME_FUNCTION in a valid x64 table, since a function has non-zero
+    /// `RUNTIME_FUNCTION` in a valid x64 table, since a function has non-zero
     /// length — is violated. Silently returning those as functions is worse
     /// than returning none: callers cannot tell them from real ones.
     #[test]
@@ -559,7 +559,7 @@ mod tests {
         assert!(find_runtime_function(&t, 0x2000).is_none());
     }
 
-    /// Build a minimal image with UNWIND_INFO at 0x3000 with EHANDLER flag,
+    /// Build a minimal image with `UNWIND_INFO` at 0x3000 with EHANDLER flag,
     /// 2 unwind codes, handler RVA and a C scope table right after.
     fn image_with_c_scope() -> Vec<u8> {
         let mut img = vec![0u8; 0x4000];
@@ -666,7 +666,7 @@ mod tests {
         assert!(parse_c_scope_table(&img, 0).is_none());
     }
 
-    /// Build an image containing a FuncInfo with one try block, one catch(...)
+    /// Build an image containing a `FuncInfo` with one try block, one catch(...)
     /// handler, and an IP-to-state map.
     fn image_with_funcinfo() -> Vec<u8> {
         let mut img = vec![0u8; 0x1000];

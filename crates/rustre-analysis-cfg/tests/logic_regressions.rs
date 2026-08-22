@@ -14,7 +14,7 @@ use rustre_analysis_cfg::post_dominator::FullPostDomTree;
 use rustre_analysis_cfg::{BasicBlock, CfgEdge, DominatorTree, EdgeKind};
 use rustre_core::address::Address;
 
-fn a(n: u64) -> Address {
+const fn a(n: u64) -> Address {
     Address(n)
 }
 

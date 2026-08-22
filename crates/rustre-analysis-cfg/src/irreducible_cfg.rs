@@ -596,8 +596,8 @@ impl T1T2Reducer {
                 }
             });
 
-            if let Some(pred) = unique_pred {
-                if pred != node {
+            if let Some(pred) = unique_pred
+                && pred != node {
                     // Merge `node` into `pred`: rehome all of `node`'s
                     // successors (and their predecessor entries) onto `pred`.
                     if let Some(node_succs) = adj.remove(&node) {
@@ -633,7 +633,6 @@ impl T1T2Reducer {
 
                     worklist.push_back(pred);
                 }
-            }
         }
 
         adj.len() == 1

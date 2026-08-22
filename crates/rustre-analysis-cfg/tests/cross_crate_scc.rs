@@ -10,10 +10,10 @@
 //!   3. rustre-analysis-xref  `xref_query::CallGraph::strongly_connected_components`
 //!      (Address-keyed Tarjan)
 //!   4. rustre-analysis-fn    `recursive_detection::tarjan_sccs`
-//!      (petgraph::algo::tarjan_scc over NodeIndex)
+//!      (`petgraph::algo::tarjan_scc` over `NodeIndex`)
 //!
-//! Style follows tests/cross_crate_dominators.rs and rustre-analysis-xref's
-//! in-crate soundness_fuzz.rs.
+//! Style follows `tests/cross_crate_dominators.rs` and rustre-analysis-xref's
+//! in-crate `soundness_fuzz.rs`.
 
 use rustre_analysis_cfg::{
     BasicBlock, CfgEdge, CfgScc, ControlFlowGraph, DominatorTree, EdgeKind, PostDominatorTree,
@@ -24,17 +24,17 @@ use rustre_analysis_xref::xref_query::CallGraph as QCallGraph;
 use rustre_core::address::Address;
 use std::collections::{BTreeSet, HashMap};
 
-fn addr(i: usize) -> u64 {
+const fn addr(i: usize) -> u64 {
     0x1000 + (i as u64) * 8
 }
 
-fn to_index(a: u64) -> usize {
+const fn to_index(a: u64) -> usize {
     ((a - 0x1000) / 8) as usize
 }
 
 struct XorShift(u64);
 impl XorShift {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;

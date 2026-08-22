@@ -25,13 +25,13 @@ use rustre_analysis_cfg::{
 use rustre_core::address::Address;
 use std::collections::{HashMap, HashSet};
 
-fn a(v: usize) -> Address {
+const fn a(v: usize) -> Address {
     Address::new(v as u64)
 }
 
 struct XorShift(u64);
 impl XorShift {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;

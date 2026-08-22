@@ -2891,7 +2891,7 @@ mod tests {
     /// Build a 3-block "diamond" function: entry branches to true/false, both
     /// fall into a join/exit block.
     ///
-    ///   0x1000 (entry/branch): CondJump true=0x1008 false=0x100c
+    ///   0x1000 (entry/branch): `CondJump` true=0x1008 false=0x100c
     ///   0x1008 (true arm):     Nop  → falls to 0x100c  (join)
     ///   0x100c (join/exit):    Ret
     #[test]

@@ -16,13 +16,13 @@ use rustre_analysis_cfg::{BasicBlock, CfgEdge, DominatorTree, EdgeKind, PostDomi
 use rustre_core::address::Address;
 use std::collections::HashMap;
 
-fn a(v: u64) -> Address {
+const fn a(v: u64) -> Address {
     Address::new(v)
 }
 
 struct XorShift(u64);
 impl XorShift {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;
@@ -261,7 +261,7 @@ fn post_dominators_match_path_enumeration_oracle() {
     }
 }
 
-/// Any dependence on HashMap iteration order would be a defect in itself.
+/// Any dependence on `HashMap` iteration order would be a defect in itself.
 #[test]
 fn dominator_and_postdominator_results_are_deterministic() {
     let mut rng = XorShift(0x2222_3333_4444_5555);

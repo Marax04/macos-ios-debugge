@@ -1383,7 +1383,7 @@ mod tests {
     fn simple_while_cfg() -> Cfg {
         let mut cfg = Cfg::new(0);
         for i in 0..4 {
-            cfg.add_block(BasicBlock::new(i, i as u64 * 4, i as u64 * 4 + 4));
+            cfg.add_block(BasicBlock::new(i, u64::from(i) * 4, u64::from(i) * 4 + 4));
         }
         cfg.add_edge(0, 1);
         cfg.add_edge(1, 2); // enter body
@@ -1397,7 +1397,7 @@ mod tests {
     fn simple_do_while_cfg() -> Cfg {
         let mut cfg = Cfg::new(0);
         for i in 0..4 {
-            cfg.add_block(BasicBlock::new(i, i as u64 * 4, i as u64 * 4 + 4));
+            cfg.add_block(BasicBlock::new(i, u64::from(i) * 4, u64::from(i) * 4 + 4));
         }
         cfg.add_edge(0, 1);
         cfg.add_edge(1, 2);
@@ -1410,7 +1410,7 @@ mod tests {
     fn nested_loops_cfg() -> Cfg {
         let mut cfg = Cfg::new(0);
         for i in 0..6 {
-            cfg.add_block(BasicBlock::new(i, i as u64 * 4, i as u64 * 4 + 4));
+            cfg.add_block(BasicBlock::new(i, u64::from(i) * 4, u64::from(i) * 4 + 4));
         }
         // Outer loop: 1 (header) ← 4 (latch)
         // Inner loop: 2 (header) ← 3 (latch)
@@ -1625,7 +1625,7 @@ mod tests {
         let n: u32 = 200_000;
         let mut cfg = Cfg::new(0);
         for i in 0..=n {
-            cfg.add_block(BasicBlock::new(i, i as u64 * 4, i as u64 * 4 + 4));
+            cfg.add_block(BasicBlock::new(i, u64::from(i) * 4, u64::from(i) * 4 + 4));
         }
         for i in 0..n {
             cfg.add_edge(i, i + 1);

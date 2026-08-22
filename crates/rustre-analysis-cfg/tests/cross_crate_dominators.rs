@@ -10,13 +10,13 @@ use rustre_analysis_cfg::{BasicBlock, CfgEdge, DominatorTree, EdgeKind};
 use rustre_core::address::Address;
 use std::collections::{HashMap, HashSet, VecDeque};
 
-fn a(v: u64) -> Address {
+const fn a(v: u64) -> Address {
     Address::new(v)
 }
 
 struct XorShift(u64);
 impl XorShift {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 7;

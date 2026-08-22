@@ -229,7 +229,7 @@ mod tests {
     /// exercised via a predecessor that is NOT the block itself.
     ///
     /// CFG shape:
-    ///   0x500 (Entry) --> 0x510 (LoopHeader)
+    ///   0x500 (Entry) --> 0x510 (`LoopHeader`)
     ///   0x510 --> 0x520
     ///   0x520 --(true, back-edge)--> 0x510
     ///   0x520 --(false)--> 0x530 (Exit)

@@ -1,8 +1,8 @@
 //! Blitz2: deep adversarial test suite for rustre-analysis-cfg.
 //!
-//! Covers analyze_cfg, try_analyze_cfg, DominatorTree, PostDominatorTree,
-//! find_natural_loops, CfgStats, CfgDotPrinter, cyclomatic_complexity,
-//! find_back_edges, is_reducible, FlowEdgeKind, EdgeKind hash/eq consistency,
+//! Covers `analyze_cfg`, `try_analyze_cfg`, `DominatorTree`, `PostDominatorTree`,
+//! `find_natural_loops`, `CfgStats`, `CfgDotPrinter`, `cyclomatic_complexity`,
+//! `find_back_edges`, `is_reducible`, `FlowEdgeKind`, `EdgeKind` hash/eq consistency,
 //! plus seeded-LCG fuzzing on the analyzer.
 
 use rustre_analysis_cfg::edges::{FlowEdge, FlowEdgeKind};
@@ -18,16 +18,16 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 // ───── helpers ─────────────────────────────────────────────────────────────
 
-fn a(v: u64) -> Address {
+const fn a(v: u64) -> Address {
     Address::new(v)
 }
-fn nop() -> LlilInstruction {
+const fn nop() -> LlilInstruction {
     LlilInstruction::Nop
 }
-fn ret() -> LlilInstruction {
+const fn ret() -> LlilInstruction {
     LlilInstruction::Ret
 }
-fn jmp(v: u64) -> LlilInstruction {
+const fn jmp(v: u64) -> LlilInstruction {
     LlilInstruction::JumpDest {
         dest: llil_const(v, Size::QWord),
     }
@@ -49,10 +49,10 @@ fn hash<T: Hash>(t: &T) -> u64 {
 // A simple seeded LCG (no rand crate).
 struct Lcg(u64);
 impl Lcg {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self(seed)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
