@@ -482,7 +482,7 @@ impl StabsToDwarf {
         // Cache the decoded type in the shared TypeDatabase keyed by its
         // synthetic per-converter index so later lookups can resolve named
         // references without re-decoding the same descriptor.
-        let next_idx = self.type_db.len() as i32;
+        let next_idx = i32::try_from(self.type_db.len()).unwrap_or(i32::MAX);
         self.type_db.insert(
             crate::stabs_type_decoder::TypeId::simple(next_idx),
             stab_type.clone(),
@@ -719,7 +719,9 @@ fn encode_fbreg_location(offset: i32) -> Vec<u8> {
 /// Encode a `DW_OP_reg(n)` for n < 32, or `DW_OP_regx` for larger register numbers
 fn encode_reg_location(reg: u32) -> Vec<u8> {
     if reg < 32 {
-        vec![0x50 + reg as u8] // DW_OP_reg0..DW_OP_reg31
+        // `reg < 32` on this branch, so the conversion cannot fail; the
+        // fallback exists only so no value can be silently narrowed.
+        vec![0x50 + u8::try_from(reg).unwrap_or(0)] // DW_OP_reg0..DW_OP_reg31
     } else {
         let mut v = vec![0x90u8]; // DW_OP_regx
         encode_uleb128(u64::from(reg), &mut v);

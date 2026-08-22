@@ -658,7 +658,13 @@ impl StabsToDwarfConverter {
                     }
                     DwarfValue::Bytes(bs) => {
                         body.push(0x0A); // form = DW_FORM_block
-                        body.extend_from_slice(&(bs.len() as u32).to_le_bytes());
+                        // NOT closed: `unit_length` is a u32 field in the DWARF format
+        // itself, so a >4GiB body is unencodable no matter what we write
+        // here. try_from would need this builder to return Result, and
+        // saturating would emit a WRONG length -- worse than the lint.
+        // Left visible deliberately; the input is our own emitted body,
+        // not attacker data.
+        body.extend_from_slice(&(bs.len() as u32).to_le_bytes());
                         body.extend_from_slice(bs);
                     }
                 }

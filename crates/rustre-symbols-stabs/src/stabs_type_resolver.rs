@@ -339,7 +339,9 @@ impl<'a> Parser<'a> {
     /// Parse a type reference of the form  (file,id)  or just  id
     fn parse_type_ref(&mut self) -> Result<TypeRef, String> {
         if self.eat_char('(') {
-            let file = self.parse_u32()? as u16;
+            // Saturate rather than narrow: `as u16` would alias file 65537
+            // onto file 1 and attach the type to the wrong compilation unit.
+            let file = u16::try_from(self.parse_u32()?).unwrap_or(u16::MAX);
             self.expect(',')?;
             let id = self.parse_u32()?;
             self.expect(')')?;

@@ -945,8 +945,9 @@ mod tests {
         // Strings: 0="" 1="foo.c" 7="bar:F(0,1)" 17="" (fun end marker)
         let strs = build_stabstr(&["", "foo.c", "bar:F(0,1)", ""]);
         let offset_foo_c = 1u32;
-        let offset_bar = 1 + "foo.c".len() as u32 + 1;
-        let offset_empty_end = offset_bar + "bar:F(0,1)".len() as u32 + 1;
+        let offset_bar = 1 + u32::try_from("foo.c".len()).expect("literal fits") + 1;
+        let offset_empty_end =
+            offset_bar + u32::try_from("bar:F(0,1)".len()).expect("literal fits") + 1;
 
         let stab_entries = vec![
             (offset_foo_c, N_SO, 0, 0, 0u32),    // source file
