@@ -97,7 +97,7 @@ impl Instruction {
     }
     /// Encoded byte size of this instruction.
     #[must_use] 
-    pub fn byte_size(&self) -> usize {
+    pub const fn byte_size(&self) -> usize {
         encoded_size(&self.opcode)
     }
 }
@@ -537,6 +537,7 @@ impl<'a> MethodBodyDecoder<'a> {
 pub struct MethodBodyEncoder;
 
 impl MethodBodyEncoder {
+    #[must_use]
     pub fn encode(body: &MethodBody) -> Vec<u8> {
         let mut code = Vec::new();
         for instr in &body.instructions {
@@ -830,6 +831,7 @@ impl MethodBodyEditor {
     }
 
     /// Encode back to bytes.
+    #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         MethodBodyEncoder::encode(&self.body)
     }
@@ -860,7 +862,7 @@ impl MethodBodyEditor {
     }
 
     /// Set max stack size.
-    pub fn set_max_stack(&mut self, n: u16) {
+    pub const fn set_max_stack(&mut self, n: u16) {
         self.body.max_stack = n;
     }
 

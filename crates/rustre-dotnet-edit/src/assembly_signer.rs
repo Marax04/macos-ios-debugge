@@ -37,7 +37,7 @@ pub struct StrongNamePublicKey {
 
 impl StrongNamePublicKey {
     /// Parse a .NET public key blob.
-    /// Format: 4-byte sig_alg + 4-byte hash_alg + 4-byte blob_length + PUBLICKEYBLOB
+    /// Format: 4-byte `sig_alg` + 4-byte `hash_alg` + 4-byte `blob_length` + PUBLICKEYBLOB
     pub fn from_blob(data: &[u8]) -> Result<Self> {
         if data.len() < 32 { bail!("public key blob too short: {} bytes", data.len()); }
         let sig_alg = u32::from_le_bytes(data[0..4].try_into().unwrap());
@@ -57,7 +57,8 @@ impl StrongNamePublicKey {
         Ok(Self { sig_alg, hash_alg, modulus, exponent: pubexp, raw_blob: data.to_vec() })
     }
 
-    /// Compute the 8-byte public key token (last 8 bytes of SHA1(public_key_blob), reversed).
+    /// Compute the 8-byte public key token (last 8 bytes of `SHA1(public_key_blob)`, reversed).
+    #[must_use]
     pub fn token(&self) -> [u8; 8] {
         let hash = sha1_digest(&self.raw_blob);
         let mut tok = [0u8; 8];
@@ -67,12 +68,14 @@ impl StrongNamePublicKey {
     }
 
     /// Format the token as a hex string (e.g., "b77a5c561934e089").
+    #[must_use]
     pub fn token_hex(&self) -> String {
         self.token().iter().map(|b| format!("{b:02x}")).collect()
     }
 
     /// Key size in bits.
-    pub fn key_bits(&self) -> usize { self.modulus.len() * 8 }
+    #[must_use]
+    pub const fn key_bits(&self) -> usize { self.modulus.len() * 8 }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,10 +227,12 @@ impl AssemblySigner {
     }
 
     /// Whether the assembly currently has a valid strong-name signature.
-    pub fn is_signed(&self) -> bool { self.cli_flags & CLI_FLAG_STRONG_NAME_SIGNED != 0 }
+    #[must_use]
+    pub const fn is_signed(&self) -> bool { self.cli_flags & CLI_FLAG_STRONG_NAME_SIGNED != 0 }
 
     /// Whether the assembly has a strong-name slot (even if delay-signed).
-    pub fn has_strong_name_slot(&self) -> bool { self.sn_rva != 0 && self.sn_size != 0 }
+    #[must_use]
+    pub const fn has_strong_name_slot(&self) -> bool { self.sn_rva != 0 && self.sn_size != 0 }
 
     /// Strip strong-name signature: zero the signature bytes and clear the flag.
     pub fn strip_strong_name(&mut self) -> Result<()> {
@@ -241,7 +246,7 @@ impl AssemblySigner {
         Ok(())
     }
 
-    /// Set or clear the STRONG_NAME_SIGNED flag without touching the signature bytes.
+    /// Set or clear the `STRONG_NAME_SIGNED` flag without touching the signature bytes.
     pub fn set_signed_flag(&mut self, signed: bool) {
         if signed { self.cli_flags |= CLI_FLAG_STRONG_NAME_SIGNED; }
         else { self.cli_flags &= !CLI_FLAG_STRONG_NAME_SIGNED; }
@@ -285,6 +290,7 @@ impl AssemblySigner {
     }
 
     /// Produce signing info summary without a live public key (uses existing SN slot).
+    #[must_use]
     pub fn signing_info(&self) -> SigningInfo {
         SigningInfo {
             public_key_token: String::new(), // caller must fill via read_public_key
@@ -324,12 +330,15 @@ impl AssemblySigner {
     }
 
     /// Consume and return the modified PE bytes.
+    #[must_use]
     pub fn into_bytes(self) -> Vec<u8> { self.data }
 
     /// Return a reference to the current PE bytes.
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] { &self.data }
 
     /// Report CLI flags in human-readable form.
+    #[must_use]
     pub fn flags_description(&self) -> Vec<&'static str> {
         let mut out = Vec::new();
         if self.cli_flags & CLI_FLAG_ILONLY != 0 { out.push("IL_ONLY"); }
@@ -367,7 +376,7 @@ fn compute_pe_checksum(data: &[u8], checksum_offset: usize) -> u32 {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Prepare an assembly for delay signing: allocate SN slot of `key_size` bytes,
-/// zero it, and set the delay-signed state (no STRONG_NAME_SIGNED flag).
+/// zero it, and set the delay-signed state (no `STRONG_NAME_SIGNED` flag).
 pub fn prepare_delay_sign(data: &mut Vec<u8>, _key_size_bytes: u32) -> Result<u32> {
     let pe_off = pe_offset(data)?;
     let (cli_rva, _) = cli_header_rva(data, pe_off)?;
@@ -390,6 +399,7 @@ pub fn prepare_delay_sign(data: &mut Vec<u8>, _key_size_bytes: u32) -> Result<u3
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Compute the public key token from a full public key blob.
+#[must_use]
 pub fn public_key_token(pk_blob: &[u8]) -> [u8; 8] {
     let hash = sha1_digest(pk_blob);
     let mut tok = [0u8; 8];
@@ -399,6 +409,7 @@ pub fn public_key_token(pk_blob: &[u8]) -> [u8; 8] {
 }
 
 /// Format a token as lowercase hex string.
+#[must_use]
 pub fn format_token(tok: &[u8; 8]) -> String {
     tok.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -448,7 +459,7 @@ impl BigUint {
         out
     }
 
-    fn is_zero(&self) -> bool { self.0.is_empty() }
+    const fn is_zero(&self) -> bool { self.0.is_empty() }
     fn is_one(&self) -> bool { self.0.len() == 1 && self.0[0] == 1 }
 
     fn mul(&self, other: &Self) -> Self {
@@ -566,6 +577,7 @@ impl BigUint {
 
 /// Verify a strong-name signature.
 /// `public_key`: parsed public key; `hash`: SHA-1 of the assembly; `signature`: the SN slot bytes.
+#[must_use]
 pub fn verify_strong_name(public_key: &StrongNamePublicKey, hash: &[u8; 20], signature: &[u8]) -> bool {
     if public_key.modulus.len() != signature.len() { return false; }
     // RSA: m = s^e mod n

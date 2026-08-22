@@ -356,7 +356,7 @@ pub fn peephole_arithmetic(instrs: &mut Vec<CilInstruction>) -> usize {
         let op = instrs[i + 1].opcode.clone();
 
         match (maybe_const, op.as_str()) {
-            (Some(0), "add") | (Some(0), "sub") => {
+            (Some(0), "add" | "sub") => {
                 // `ldc.i4 0; add/sub` — neutral; just remove both
                 instrs.drain(i..i + 2);
                 changed += 1;

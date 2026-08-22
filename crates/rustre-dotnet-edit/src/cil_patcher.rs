@@ -127,7 +127,7 @@ pub struct PatchResult {
 impl PatchResult {
     /// Returns `true` if all operations were applied without errors.
     #[must_use]
-    pub fn is_success(&self) -> bool {
+    pub const fn is_success(&self) -> bool {
         self.validation_errors.is_empty()
     }
 }
@@ -159,7 +159,8 @@ pub struct CilPatcher {
 
 impl CilPatcher {
     /// Create a new `CilPatcher` with sensible defaults.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             verify_old_bytes: true,
             auto_fix_branches: true,
@@ -416,7 +417,8 @@ pub fn take_code_slice(code: &[u8], n: usize) -> Vec<u8> {
 }
 
 /// Determine whether a byte is a CIL prefix opcode (0xFE).
-pub fn is_prefix_opcode(b: u8) -> bool {
+#[must_use]
+pub const fn is_prefix_opcode(b: u8) -> bool {
     b == 0xFE
 }
 

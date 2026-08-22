@@ -461,13 +461,13 @@ impl ResourceEditor {
 
     /// Number of resources.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.resources.len()
     }
 
     /// Returns `true` if there are no resources.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.resources.is_empty()
     }
 
@@ -505,7 +505,7 @@ impl ResourceEditor {
 
     /// Whether any resource has been modified.
     #[must_use]
-    pub fn has_changes(&self) -> bool {
+    pub const fn has_changes(&self) -> bool {
         !self.changes.is_empty()
     }
 

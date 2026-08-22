@@ -86,7 +86,7 @@ impl PatchEntry {
 
     /// Return the number of bytes this patch modifies.
     #[must_use]
-    pub fn patch_size(&self) -> usize {
+    pub const fn patch_size(&self) -> usize {
         self.new_bytes.len()
     }
 
@@ -158,13 +158,13 @@ impl PatchSet {
 
     /// Number of patches in this set.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Returns `true` if there are no patches.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
@@ -240,7 +240,7 @@ impl MethodRedirection {
     }
 
     /// Mark this redirection as applied.
-    pub fn mark_applied(&mut self) {
+    pub const fn mark_applied(&mut self) {
         self.applied = true;
     }
 
@@ -328,7 +328,7 @@ pub struct ClassInjector {
     pub namespace: String,
     /// Name of the new class.
     pub class_name: String,
-    /// TypeDef flags (e.g. 0x00000101 = public sealed).
+    /// `TypeDef` flags (e.g. 0x00000101 = public sealed).
     pub flags: u32,
     /// Base type name (empty for `System.Object`).
     pub base_type: String,
@@ -460,12 +460,12 @@ impl AttributeEditor {
 
     /// Number of queued edits.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.edits.len()
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.edits.is_empty()
     }
 

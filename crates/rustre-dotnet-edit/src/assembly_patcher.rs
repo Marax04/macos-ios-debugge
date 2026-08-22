@@ -6,8 +6,8 @@
 //! `PatchVerifier`, and `StrongNameResign` helpers and collects results into a
 //! `PatchReport`.
 //!
-//! For the richer queued-spec pipeline (ForceReturnTrue/False, InjectPrologue,
-//! CorFlags, CilOptimizer integration) see [`crate::dotnet_patcher`].
+//! For the richer queued-spec pipeline (ForceReturnTrue/False, `InjectPrologue`,
+//! `CorFlags`, `CilOptimizer` integration) see [`crate::dotnet_patcher`].
 
 use crate::{AssemblyEditor, IlPatch, NewTypeDescriptor};
 pub use crate::{EditError, NewMethodDescriptor};

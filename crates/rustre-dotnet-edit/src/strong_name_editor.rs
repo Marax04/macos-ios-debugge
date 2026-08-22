@@ -224,7 +224,7 @@ impl StrongNameEditor {
 
     // ── CLI header helpers ───────────────────────────────────────────────
 
-    fn optional_header_start(&self, pe_off: usize) -> Result<usize> {
+    const fn optional_header_start(&self, pe_off: usize) -> Result<usize> {
         Ok(pe_off + 24)
     }
 
@@ -455,23 +455,23 @@ pub fn strip_signature(data: &mut Vec<u8>) -> std::result::Result<(), StrongName
 
 // ─── CorFlagsEditor ──────────────────────────────────────────────────────────
 
-/// A helper for reading / writing the CorFlags word directly.
+/// A helper for reading / writing the `CorFlags` word directly.
 pub struct CorFlagsEditor<'a> {
     editor: &'a mut StrongNameEditor,
 }
 
 impl<'a> CorFlagsEditor<'a> {
     /// Wrap an existing `StrongNameEditor`.
-    pub fn new(editor: &'a mut StrongNameEditor) -> Self {
+    pub const fn new(editor: &'a mut StrongNameEditor) -> Self {
         Self { editor }
     }
 
-    /// Read the current CorFlags value.
+    /// Read the current `CorFlags` value.
     pub fn read_cor_flags(&self) -> Result<u32> {
         Ok(self.editor.parse_header()?.cor_flags)
     }
 
-    /// Write a new CorFlags value.
+    /// Write a new `CorFlags` value.
     pub fn write_cor_flags(&mut self, flags: u32) -> Result<()> {
         let h = self.editor.parse_header()?;
         self.editor.write_u32(h.cli_header_offset + 16, flags)

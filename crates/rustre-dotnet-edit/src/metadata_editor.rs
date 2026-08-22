@@ -467,6 +467,7 @@ impl MetadataTables {
     pub fn find_type_ref(&self, ns: &str, name: &str) -> Option<&TypeRefRow> {
         self.type_refs.iter().find(|t| t.namespace == ns && t.name == name)
     }
+    #[must_use]
     pub fn class_layout_of(&self, type_rid: u32) -> Option<&ClassLayoutRow> {
         self.class_layouts.iter().find(|cl| cl.parent == type_rid)
     }
@@ -507,7 +508,8 @@ pub struct MetadataEditor {
 }
 
 impl MetadataEditor {
-    pub fn new(tables: MetadataTables) -> Self {
+    #[must_use]
+    pub const fn new(tables: MetadataTables) -> Self {
         Self { tables, pending: vec![] }
     }
 
@@ -625,7 +627,7 @@ impl MetadataEditor {
         Ok(log)
     }
 
-    /// Rename all occurrences of a type (TypeDef + TypeRef).
+    /// Rename all occurrences of a type (`TypeDef` + `TypeRef`).
     pub fn rename_type_everywhere(&mut self, old_ns: &str, old_name: &str, new_ns: &str, new_name: &str) -> usize {
         let mut count = 0;
         for td in &mut self.tables.type_defs {
@@ -659,8 +661,8 @@ impl MetadataEditor {
         count
     }
 
-    /// Strip const ObfuscationAttribute and SuppressMessageAttribute custom attributes.
-    pub fn strip_obfuscation_attributes(&mut self) -> usize {
+    /// Strip const `ObfuscationAttribute` and `SuppressMessageAttribute` custom attributes.
+    pub const fn strip_obfuscation_attributes(&mut self) -> usize {
         let before = self.tables.custom_attributes.len();
         // Mark by examining the constructor token's parent name — heuristic
         // (requires caller to cross-reference; here we just remove known attribute refs).
@@ -691,7 +693,8 @@ impl MetadataEditor {
     }
 
     /// Summarise the assembly.
-    pub fn summary(&self) -> MetadataSummary {
+    #[must_use]
+    pub const fn summary(&self) -> MetadataSummary {
         MetadataSummary {
             type_count: self.tables.type_defs.len(),
             method_count: self.tables.method_defs.len(),
@@ -715,7 +718,8 @@ impl MetadataEditor {
         counts.into_iter().filter(|(_, v)| *v > 1).map(|(k, _)| k.to_owned()).collect()
     }
 
-    /// Validate structural integrity (method_list ordering, etc.).
+    /// Validate structural integrity (`method_list` ordering, etc.).
+    #[must_use]
     pub fn validate(&self) -> Vec<String> {
         let mut errors = Vec::new();
         let mut prev_method = 0u32;
@@ -810,6 +814,7 @@ impl MetadataHeader {
         Ok(Self { signature: sig, major_version: major, minor_version: minor, version_string: version_str, streams })
     }
 
+    #[must_use]
     pub fn find_stream(&self, name: &str) -> Option<&StreamHeader> {
         self.streams.iter().find(|s| s.name == name)
     }

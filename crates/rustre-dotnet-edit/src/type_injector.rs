@@ -278,13 +278,13 @@ impl InjectedType {
 
     /// Number of fields.
     #[must_use]
-    pub fn field_count(&self) -> usize {
+    pub const fn field_count(&self) -> usize {
         self.fields.len()
     }
 
     /// Number of methods.
     #[must_use]
-    pub fn method_count(&self) -> usize {
+    pub const fn method_count(&self) -> usize {
         self.methods.len()
     }
 }
@@ -333,13 +333,13 @@ impl InjectionPlan {
 
     /// Number of types in the plan.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.types.len()
     }
 
     /// Returns `true` if there are no types in the plan.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.types.is_empty()
     }
 
@@ -548,19 +548,19 @@ impl TypeInjector {
         self.injected.len()
     }
 
-    /// Accumulated TypeDef rows.
+    /// Accumulated `TypeDef` rows.
     #[must_use]
     pub fn typedef_rows(&self) -> &[TypeDefRowData] {
         &self.typedef_rows
     }
 
-    /// Accumulated FieldDef rows.
+    /// Accumulated `FieldDef` rows.
     #[must_use]
     pub fn fielddef_rows(&self) -> &[FieldDefRowData] {
         &self.fielddef_rows
     }
 
-    /// Accumulated MethodDef rows.
+    /// Accumulated `MethodDef` rows.
     #[must_use]
     pub fn methoddef_rows(&self) -> &[MethodDefRowData] {
         &self.methoddef_rows
@@ -574,7 +574,7 @@ impl TypeInjector {
         self.methoddef_rows.clear();
     }
 
-    /// Serialize all TypeDef rows to a compact binary representation
+    /// Serialize all `TypeDef` rows to a compact binary representation
     /// (suitable for comparison / diffing, not a real metadata stream).
     #[must_use]
     pub fn serialize_typedef_rows(&self) -> Vec<u8> {
@@ -660,7 +660,7 @@ impl TypeBuilder {
 
     /// Set as interface.
     #[must_use]
-    pub fn interface(mut self) -> Self {
+    pub const fn interface(mut self) -> Self {
         self.semantics = TypeSemantics::Interface.bits();
         self.extra_flags |= 0x00000080; // Abstract
         self

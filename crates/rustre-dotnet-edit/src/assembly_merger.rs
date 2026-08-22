@@ -94,7 +94,7 @@ impl MergeConflict {
 
     /// Returns `true` if the conflict is fatal (will abort the merge).
     #[must_use]
-    pub fn is_fatal(&self) -> bool {
+    pub const fn is_fatal(&self) -> bool {
         self.resolution.is_fatal()
     }
 }
@@ -182,7 +182,7 @@ impl MergeConfig {
 
     /// Enable internalisation of merged types.
     #[must_use]
-    pub fn with_internalize(mut self) -> Self {
+    pub const fn with_internalize(mut self) -> Self {
         self.internalize = true;
         self
     }
@@ -271,6 +271,7 @@ impl AssemblyMerger {
     // -- conflict detection -------------------------------------------------
 
     /// Detect all conflicts between the primary assembly and each secondary.
+    #[must_use]
     pub fn detect_conflicts(&self) -> Vec<MergeConflict> {
         let mut conflicts = Vec::new();
         let primary_name = &self.config.main_assembly;
@@ -338,6 +339,7 @@ impl AssemblyMerger {
     /// for specific conflict types.
     ///
     /// Returns pairs of `(conflict, chosen_resolution)`.
+    #[must_use]
     pub fn resolve_conflicts(
         &self,
         conflicts: &[MergeConflict],
@@ -427,6 +429,7 @@ impl AssemblyMerger {
     // -- full merge analysis -----------------------------------------------
 
     /// Run the full merge analysis and produce a `MergeReport`.
+    #[must_use]
     pub fn analyse(&self) -> MergeReport {
         let conflicts = self.detect_conflicts();
         let override_map: HashMap<ConflictType, ConflictResolution> = HashMap::new();
@@ -458,7 +461,7 @@ impl AssemblyMerger {
                         c.conflict_type == ConflictType::TypeNameCollision
                             && c.secondary_assembly == *secondary_name
                     })
-                    .flat_map(|c| c.description.split('\'').nth(1).map(std::borrow::ToOwned::to_owned))
+                    .filter_map(|c| c.description.split('\'').nth(1).map(std::borrow::ToOwned::to_owned))
                     .collect();
                 for t in &sec.types {
                     if !conflicting.contains(t) {
@@ -494,12 +497,13 @@ impl AssemblyMerger {
     }
 
     /// Returns all type names that can be safely merged (no conflicts).
+    #[must_use]
     pub fn safe_merge_types(&self) -> Vec<String> {
         let conflicts = self.detect_conflicts();
         let conflicting: HashSet<String> = conflicts
             .iter()
             .filter(|c| c.conflict_type == ConflictType::TypeNameCollision)
-            .flat_map(|c| {
+            .filter_map(|c| {
                 // Extract type name from description: "Type 'X' exists in both ..."
                 c.description
                     .split('\'')
