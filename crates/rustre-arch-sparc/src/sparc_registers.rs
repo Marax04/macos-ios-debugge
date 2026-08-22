@@ -613,8 +613,13 @@ impl RegWindowState {
 
     /// Read a single-precision floating-point register.
     #[must_use]
+    ///
+    /// A SPARC `%f` register is 32 bits wide, so this really is a narrowing:
+    /// it goes through [`crate::sparc_narrow::narrow_f64_to_f32`], which
+    /// spells out the IEEE round-to-nearest-even rule (and the
+    /// overflow-to-infinity rule) rather than leaving it to an `as` cast.
     pub const fn read_fp_single(&self, index: u8) -> f32 {
-        (self.fp_regs[(index & 63) as usize]) as f32
+        crate::sparc_narrow::narrow_f64_to_f32(self.fp_regs[(index & 63) as usize])
     }
 
     /// Write a single-precision floating-point register.
