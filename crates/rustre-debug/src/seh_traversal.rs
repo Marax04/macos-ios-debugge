@@ -698,20 +698,37 @@ pub fn parse_pe_file(data: &[u8]) -> Result<SehIndex, SehError> {
         }
         let name = &data[sh..sh + 8];
         if name.starts_with(b".pdata") {
+            // IMAGE_SECTION_HEADER field offsets, from the PE/COFF spec:
+            //   +8  Misc.VirtualSize   +12 VirtualAddress
+            //   +16 SizeOfRawData      +20 PointerToRawData
+            //
+            // `virtual_size` used to be read from +16 — the same field as
+            // `raw_size` — which made the `min()` below a tautology and left the
+            // clamp it exists to provide inoperative. A linker pads
+            // SizeOfRawData up to FileAlignment (512 bytes), so for a `.pdata`
+            // holding a non-multiple of 12 bytes of RUNTIME_FUNCTION entries the
+            // padding was walked as if it were entries.
             let virtual_size =
+                u32::from_le_bytes(data[sh + 8..sh + 12].try_into().unwrap()) as usize;
+            let virtual_address =
+                u32::from_le_bytes(data[sh + 12..sh + 16].try_into().unwrap());
+            let raw_size =
                 u32::from_le_bytes(data[sh + 16..sh + 20].try_into().unwrap()) as usize;
             let raw_offset =
                 u32::from_le_bytes(data[sh + 20..sh + 24].try_into().unwrap()) as usize;
-            let raw_size =
-                u32::from_le_bytes(data[sh + 16..sh + 20].try_into().unwrap()) as usize;
-            let virtual_address =
-                u32::from_le_bytes(data[sh + 12..sh + 16].try_into().unwrap());
             pdata_file_offset = Some(raw_offset);
-            pdata_size = Some(virtual_size.min(raw_size));
+            // Object files and some producers leave VirtualSize at 0; there the
+            // raw size is the only length available, so clamping to 0 would
+            // report "no unwind data" for a section that has it.
+            pdata_size = Some(if virtual_size == 0 {
+                raw_size
+            } else {
+                virtual_size.min(raw_size)
+            });
             // For a flat file: RVA → file offset = RVA - virtual_address + raw_offset
             let va_off = virtual_address as usize;
-            let ro = raw_offset;
-            return parse_pdata(data, raw_offset, pdata_size.unwrap(), format, move |rva| {
+            let ro = pdata_file_offset.expect("just assigned");
+            return parse_pdata(data, ro, pdata_size.expect("just assigned"), format, move |rva| {
                 let rva = rva as usize;
                 if rva >= va_off {
                     ro + (rva - va_off)
@@ -730,6 +747,78 @@ pub fn parse_pe_file(data: &[u8]) -> Result<SehIndex, SehError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A `.pdata` whose `SizeOfRawData` is padded up to FileAlignment while
+    /// `VirtualSize` names the real length.
+    ///
+    /// This is the regression test for the section-header field mix-up: both
+    /// `virtual_size` and `raw_size` were read from +16 (`SizeOfRawData`), so
+    /// `virtual_size.min(raw_size)` could never clamp anything and the 500 bytes
+    /// of padding after the single real entry were walked as 41 further
+    /// `RUNTIME_FUNCTION`s. The padding here is deliberately made of
+    /// *well-formed* entries pointing at the same valid `UNWIND_INFO`, so the
+    /// old behaviour produces extra entries rather than an error — an error
+    /// would have been the easy failure to notice.
+    fn make_padded_pdata_pe() -> Vec<u8> {
+        const VIRTUAL_SIZE: u32 = 12; // exactly one RUNTIME_FUNCTION
+        const RAW_SIZE: u32 = 512; // padded up to FileAlignment
+        const PDATA_RVA: u32 = 0x1000;
+        const PDATA_RAW: u32 = 0x400;
+        const UNWIND_RVA: u32 = 0x1100;
+
+        let mut buf = vec![0u8; 0x800];
+        buf[0..2].copy_from_slice(b"MZ");
+        buf[60..64].copy_from_slice(&0x80u32.to_le_bytes()); // e_lfanew
+        buf[0x80..0x84].copy_from_slice(b"PE\0\0");
+
+        let coff = 0x84usize;
+        buf[coff..coff + 2].copy_from_slice(&0x8664u16.to_le_bytes()); // IMAGE_FILE_MACHINE_AMD64
+        buf[coff + 2..coff + 4].copy_from_slice(&1u16.to_le_bytes()); // NumberOfSections
+        buf[coff + 16..coff + 18].copy_from_slice(&0xF0u16.to_le_bytes()); // SizeOfOptionalHeader
+
+        let opt_start = coff + 20;
+        buf[opt_start..opt_start + 2].copy_from_slice(&0x020bu16.to_le_bytes()); // PE32+
+
+        // Section header: name, +8 VirtualSize, +12 VirtualAddress,
+        // +16 SizeOfRawData, +20 PointerToRawData.
+        let sh = opt_start + 0xF0;
+        buf[sh..sh + 6].copy_from_slice(b".pdata");
+        buf[sh + 8..sh + 12].copy_from_slice(&VIRTUAL_SIZE.to_le_bytes());
+        buf[sh + 12..sh + 16].copy_from_slice(&PDATA_RVA.to_le_bytes());
+        buf[sh + 16..sh + 20].copy_from_slice(&RAW_SIZE.to_le_bytes());
+        buf[sh + 20..sh + 24].copy_from_slice(&PDATA_RAW.to_le_bytes());
+
+        // The one real entry, plus padding shaped like valid entries.
+        let n = (RAW_SIZE / 12) as usize;
+        for i in 0..n {
+            let e = PDATA_RAW as usize + i * 12;
+            let begin = 0x2000u32 + (i as u32) * 0x100;
+            buf[e..e + 4].copy_from_slice(&begin.to_le_bytes());
+            buf[e + 4..e + 8].copy_from_slice(&(begin + 0x50).to_le_bytes());
+            buf[e + 8..e + 12].copy_from_slice(&UNWIND_RVA.to_le_bytes());
+        }
+
+        // UNWIND_INFO at RVA 0x1100 → file 0x1100 - 0x1000 + 0x400 = 0x500.
+        let uw = (UNWIND_RVA - PDATA_RVA + PDATA_RAW) as usize;
+        buf[uw] = 0x01; // version 1, no flags
+        buf[uw + 1] = 0x08; // size_of_prolog
+        buf[uw + 2] = 0x00; // count_of_codes
+        buf[uw + 3] = 0x00;
+        buf
+    }
+
+    #[test]
+    fn padded_pdata_is_clamped_to_virtual_size() {
+        let pe = make_padded_pdata_pe();
+        let index = parse_pe_file(&pe).expect("the PE is well formed");
+        assert_eq!(
+            index.entries.len(),
+            1,
+            "VirtualSize (12) names one RUNTIME_FUNCTION; the 500 padding bytes \
+             of SizeOfRawData must not be walked as 41 more"
+        );
+        assert_eq!(index.entries[0].begin_address, 0x2000);
+    }
 
     /// Build minimal .pdata + `UNWIND_INFO` bytes for a function with no handler.
     fn make_nhandler_pdata() -> (Vec<u8>, usize, usize) {
