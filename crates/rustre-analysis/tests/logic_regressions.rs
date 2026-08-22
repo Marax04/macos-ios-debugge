@@ -211,7 +211,7 @@ fn one_tainted_format_call_yields_one_finding() {
 }
 
 /// A genuinely distinct finding at the same address must survive: `sprintf` is
-/// flagged as an unconditional BufferOverflow, which is not the same defect as
+/// flagged as an unconditional `BufferOverflow`, which is not the same defect as
 /// a tainted format string.
 #[test]
 fn distinct_vulnerability_types_at_one_address_are_kept() {
