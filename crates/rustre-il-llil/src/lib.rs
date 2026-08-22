@@ -5353,7 +5353,7 @@ mod tests {
     /// This crate contains FOUR evaluators of the same IL — `fold_expr`
     /// (lib.rs:2109), `LlilInterpreter::eval_expr` (lib.rs:3113), a second
     /// `eval_expr` over `LlilMachineState` (lib.rs:4355), and
-    /// `llil_interpreter::eval_expr` (llil_interpreter.rs:896). Duplication of
+    /// `llil_interpreter::eval_expr` (`llil_interpreter.rs:896`). Duplication of
     /// this kind is where nearly every real defect in this repo has lived: on
     /// 2026-07-23 alone, two `decode_pushm_popm`, two `eliminate_dead_stores`
     /// and three `sign_extend` copies each diverged, and the shift-count class
@@ -5466,7 +5466,7 @@ mod tests {
     ///
     /// `LlilExpr` carries four dual pairs — `AddT`/`Add{}`, `SubT`/`Sub{}`,
     /// `MulT`/`Mul{}`, `ShlT`/`Shl{}` — with the struct ones documented as
-    /// "Equivalent to AddT". `eval_expr` handled both; `fold_expr` handled only
+    /// "Equivalent to `AddT`". `eval_expr` handled both; `fold_expr` handled only
     /// the tuple ones, so struct-form constants were never folded and two
     /// identical programs optimised differently depending on their producer's
     /// choice of spelling. Found 2026-07-23 by comparing the two evaluators.
@@ -9394,12 +9394,12 @@ pub mod validate {
     /// `64u32 - u32::try_from(size.bits()).unwrap_or(64)` UNDERFLOWED for any of
     /// them — its only guard was against the conversion failing, which never
     /// happens. Both sibling copies of this primitive in rustre-il-passes
-    /// (lib.rs:1749, constant_propagation.rs:608) already had the `bits >= N`
+    /// (lib.rs:1749, `constant_propagation.rs:608`) already had the `bits >= N`
     /// early return; this one did not. Found 2026-07-23 by comparing the three.
     ///
     /// HONESTY NOTE — the value assertions below CANNOT fail in release, and a
     /// revert-check proved it: with overflow checks off, `64 - 128` wraps to
-    /// 4_294_967_232, Rust then masks the shift amount by the type width, and
+    /// `4_294_967_232`, Rust then masks the shift amount by the type width, and
     /// every vector size happens to be a multiple of 64 apart, so the masked
     /// shift is exactly 0 — an identity, which is what the fix returns anyway.
     /// The old code was ACCIDENTALLY correct in release and panicked only in
