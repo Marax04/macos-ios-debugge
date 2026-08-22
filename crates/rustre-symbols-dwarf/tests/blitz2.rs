@@ -101,7 +101,7 @@ fn uleb_roundtrip_50_deterministic() {
 fn sleb_roundtrip_50_deterministic() {
     let mut lcg = Lcg::new();
     for _ in 0..50 {
-        let n = lcg.next() as i64;
+        let n = lcg.next().cast_signed();
         let enc = enc_sleb(n);
         let mut pos = 0;
         let dec = ab::read_sleb128(&enc, &mut pos).expect("decode");

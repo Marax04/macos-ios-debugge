@@ -762,13 +762,13 @@ fn apply_cfa_insns(insns: &[CfaInsn], current: &mut UnwindRow,
                 table.rows.push(std::mem::replace(current, row));
             }
             CfaInsn::DefCfa { reg, offset } => {
-                current.cfa = CfaRule::RegisterAndOffset { reg: *reg, offset: *offset as i64 };
+                current.cfa = CfaRule::RegisterAndOffset { reg: *reg, offset: (*offset).cast_signed() };
             }
             CfaInsn::DefCfaRegister(reg) => {
                 if let CfaRule::RegisterAndOffset { reg: ref mut r, .. } = current.cfa { *r = *reg; }
             }
             CfaInsn::DefCfaOffset(off) => {
-                if let CfaRule::RegisterAndOffset { offset: ref mut o, .. } = current.cfa { *o = *off as i64; }
+                if let CfaRule::RegisterAndOffset { offset: ref mut o, .. } = current.cfa { *o = (*off).cast_signed(); }
             }
             CfaInsn::DefCfaOffsetSf(off) => {
                 if let CfaRule::RegisterAndOffset { offset: ref mut o, .. } = current.cfa { *o = *off * data_align; }
@@ -780,13 +780,13 @@ fn apply_cfa_insns(insns: &[CfaInsn], current: &mut UnwindRow,
             CfaInsn::Undefined(r) => { current.registers.insert(*r, RegRule::Undefined); }
             CfaInsn::SameValue(r) => { current.registers.insert(*r, RegRule::SameValue); }
             CfaInsn::Offset { reg, offset } => {
-                current.registers.insert(*reg, RegRule::Offset(*offset as i64 * data_align));
+                current.registers.insert(*reg, RegRule::Offset((*offset).cast_signed() * data_align));
             }
             CfaInsn::OffsetSf { reg, offset } => {
                 current.registers.insert(*reg, RegRule::Offset(*offset * data_align));
             }
             CfaInsn::ValOffset { reg, offset } => {
-                current.registers.insert(*reg, RegRule::ValOffset(*offset as i64 * data_align));
+                current.registers.insert(*reg, RegRule::ValOffset((*offset).cast_signed() * data_align));
             }
             CfaInsn::ValOffsetSf { reg, offset } => {
                 current.registers.insert(*reg, RegRule::ValOffset(*offset * data_align));

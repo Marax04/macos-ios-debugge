@@ -324,7 +324,7 @@ impl StateMachine {
         // `.max(1)`: StateMachine::new is public, so a caller can supply 0 directly.
         let line_range = u64::from(self.line_range).max(1);
         let op_advance = adjusted / line_range;
-        let line_inc = (adjusted % line_range) as i64 + i64::from(self.line_base);
+        let line_inc = (adjusted % line_range).cast_signed() + i64::from(self.line_base);
         let mips = u64::from(self.maximum_ops_per_insn.max(1));
         let addr_inc = u64::from(self.minimum_instruction_length)
             * ((self.register.address /* op_index not tracked here */ + op_advance) / mips);
@@ -340,7 +340,7 @@ impl StateMachine {
         match op {
             LineOp::Special { addr_inc, line_inc } => {
                 self.register.address = self.register.address.wrapping_add(*addr_inc);
-                self.register.line = (self.register.line as i64 + line_inc) as u64;
+                self.register.line = (self.register.line as i64 + line_inc).cast_unsigned() as u64;
                 let row = self.register.clone();
                 self.register.reset_row_fields(self.default_is_stmt);
                 (Some(row), false)
@@ -355,7 +355,7 @@ impl StateMachine {
                 (None, false)
             }
             LineOp::AdvanceLine(delta) => {
-                self.register.line = (self.register.line as i64 + delta) as u64;
+                self.register.line = (self.register.line as i64 + delta).cast_unsigned() as u64;
                 (None, false)
             }
             LineOp::SetFile(f) => { self.register.file = *f; (None, false) }
@@ -530,7 +530,7 @@ fn read_form_value(
         // DW_FORM_strx / DW_FORM_udata — index or plain unsigned.
         0x1a | 0x0f => read_uleb128(data, pos).map(FormValue::Uint),
         // DW_FORM_sdata.
-        0x0d => read_sleb128(data, pos).map(|v| FormValue::Uint(v as u64)),
+        0x0d => read_sleb128(data, pos).map(|v| FormValue::Uint(v.cast_unsigned())),
         // DW_FORM_strx1..4 and DW_FORM_data1/2/4/8.
         0x25 | 0x0b => uint(data, pos, 1).map(FormValue::Uint),
         0x26 | 0x05 => uint(data, pos, 2).map(FormValue::Uint),
@@ -709,7 +709,7 @@ impl LineProgram {
             if pos < data.len() { let v = data[pos]; pos += 1; v } else { return Err("eof"); }
         } else { 1 };
         let default_is_stmt = if pos < data.len() { let v = data[pos] != 0; pos += 1; v } else { return Err("eof"); };
-        let line_base = if pos < data.len() { let v = data[pos] as i8; pos += 1; v } else { return Err("eof"); };
+        let line_base = if pos < data.len() { let v = data[pos].cast_signed(); pos += 1; v } else { return Err("eof"); };
         let line_range = if pos < data.len() { let v = data[pos]; pos += 1; v } else { return Err("eof"); };
         let opcode_base = if pos < data.len() { let v = data[pos]; pos += 1; v } else { return Err("eof"); };
         // `line_range` is a divisor in the special-opcode and DW_LNS_const_add_pc

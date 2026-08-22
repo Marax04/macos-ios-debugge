@@ -854,7 +854,7 @@ mod tests {
         // -1 as i8 = 0xFF, wrapped to u64 = 0xFFFFFFFFFFFFFFFF
         assert_eq!(
             eval(&[DW_OP_CONST1S, 0xFF]),
-            LocationResult::Address((-1i64) as u64)
+            LocationResult::Address((-1i64).cast_unsigned())
         );
     }
 
@@ -961,7 +961,7 @@ mod tests {
     #[test]
     fn test_neg() {
         let result = eval(&[DW_OP_LIT0 + 1, DW_OP_NEG]);
-        assert_eq!(result, LocationResult::Address((-1i64) as u64));
+        assert_eq!(result, LocationResult::Address((-1i64).cast_unsigned()));
     }
 
     #[test]

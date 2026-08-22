@@ -425,14 +425,14 @@ pub fn parse_location_expr(expr: &[u8], addr_size: u8) -> Result<Vec<LocationOp>
             }
             DW_OP_DEREF => LocationOp::Deref,
             DW_OP_CONST1U => LocationOp::Const(i64::from(read_u8(expr, &mut off)?)),
-            DW_OP_CONST1S => LocationOp::Const(i64::from(read_u8(expr, &mut off)? as i8)),
+            DW_OP_CONST1S => LocationOp::Const(i64::from(read_u8(expr, &mut off)?.cast_signed())),
             DW_OP_CONST2U => LocationOp::Const(i64::from(read_u16_le(expr, &mut off)?)),
-            DW_OP_CONST2S => LocationOp::Const(i64::from(read_u16_le(expr, &mut off)? as i16)),
+            DW_OP_CONST2S => LocationOp::Const(i64::from(read_u16_le(expr, &mut off)?.cast_signed())),
             DW_OP_CONST4U => LocationOp::Const(i64::from(read_u32_le(expr, &mut off)?)),
-            DW_OP_CONST4S => LocationOp::Const(i64::from(read_u32_le(expr, &mut off)? as i32)),
-            DW_OP_CONST8U => LocationOp::Const(read_u64_le(expr, &mut off)? as i64),
-            DW_OP_CONST8S => LocationOp::Const(read_u64_le(expr, &mut off)? as i64),
-            DW_OP_CONSTU => LocationOp::Const(read_uleb128(expr, &mut off)? as i64),
+            DW_OP_CONST4S => LocationOp::Const(i64::from(read_u32_le(expr, &mut off)?.cast_signed())),
+            DW_OP_CONST8U => LocationOp::Const(read_u64_le(expr, &mut off)?.cast_signed()),
+            DW_OP_CONST8S => LocationOp::Const(read_u64_le(expr, &mut off)?.cast_signed()),
+            DW_OP_CONSTU => LocationOp::Const(read_uleb128(expr, &mut off)?.cast_signed()),
             DW_OP_CONSTS => LocationOp::Const(read_sleb128(expr, &mut off)?),
             DW_OP_DUP => LocationOp::Dup,
             DW_OP_DROP => LocationOp::Drop,
@@ -457,11 +457,11 @@ pub fn parse_location_expr(expr: &[u8], addr_size: u8) -> Result<Vec<LocationOp>
             DW_OP_SHRA => LocationOp::Shra,
             DW_OP_XOR => LocationOp::Xor,
             DW_OP_SKIP => {
-                let d = read_u16_le(expr, &mut off)? as i16;
+                let d = read_u16_le(expr, &mut off)?.cast_signed();
                 LocationOp::Skip(d)
             }
             DW_OP_BRA => {
-                let d = read_u16_le(expr, &mut off)? as i16;
+                let d = read_u16_le(expr, &mut off)?.cast_signed();
                 LocationOp::Bra(d)
             }
             DW_OP_EQ => LocationOp::Eq,
@@ -638,7 +638,7 @@ pub fn evaluate_location(
             return Err(LocationError::LimitExceeded);
         }
         match &ops[i] {
-            LocationOp::Addr(a) => stack.push(*a as i64),
+            LocationOp::Addr(a) => stack.push((*a).cast_signed()),
             LocationOp::Const(v) => stack.push(*v),
             LocationOp::Lit(n) => stack.push(i64::from(*n)),
             LocationOp::Dup => {
@@ -704,13 +704,13 @@ pub fn evaluate_location(
             LocationOp::Plus => { let b = pop!(); let a = pop!(); stack.push(a.wrapping_add(b)); }
             LocationOp::PlusUconst(u) => {
                 let a = pop!();
-                stack.push(a.wrapping_add(*u as i64));
+                stack.push(a.wrapping_add((*u).cast_signed()));
             }
             LocationOp::Shl => { let b = pop!(); let a = pop!(); stack.push(a.wrapping_shl(b as u32 & 63)); }
             LocationOp::Shr => {
                 let b = pop!();
                 let a = pop!();
-                stack.push(((a as u64).wrapping_shr(b as u32 & 63)) as i64);
+                stack.push((a.cast_unsigned().wrapping_shr(b as u32 & 63)).cast_signed());
             }
             LocationOp::Shra => { let b = pop!(); let a = pop!(); stack.push(a.wrapping_shr(b as u32 & 63)); }
             LocationOp::Xor => { let b = pop!(); let a = pop!(); stack.push(a ^ b); }
@@ -738,22 +738,22 @@ pub fn evaluate_location(
                 // who inspect `stack` post-mortem can see the live snapshot,
                 // then return the register handle as the location.
                 let val = ctx.registers.get(*r as usize).copied().unwrap_or(0);
-                stack.push(val as i64);
+                stack.push(val.cast_signed());
                 // Reg means value IS in the register — return immediately
                 return Ok(LocationResult::Register(*r));
             }
             LocationOp::BReg(r, off) => {
-                let base = ctx.registers.get(*r as usize).copied().unwrap_or(0) as i64;
+                let base = ctx.registers.get(*r as usize).copied().unwrap_or(0).cast_signed();
                 stack.push(base.wrapping_add(*off));
             }
             LocationOp::FbReg(off) => {
-                stack.push(ctx.frame_base as i64 + off);
+                stack.push(ctx.frame_base.cast_signed() + off);
             }
             LocationOp::CallFrameCfa => {
-                stack.push(ctx.cfa as i64);
+                stack.push(ctx.cfa.cast_signed());
             }
             LocationOp::PushObjectAddress => {
-                stack.push(ctx.object_address as i64);
+                stack.push(ctx.object_address.cast_signed());
             }
             LocationOp::StackValue => {
                 let top = stack.last().copied().unwrap_or(0);
@@ -775,7 +775,7 @@ pub fn evaluate_location(
     }
 
     if let Some(&top) = stack.last() {
-        Ok(LocationResult::Address(top as u64))
+        Ok(LocationResult::Address(top.cast_unsigned()))
     } else {
         Ok(LocationResult::Unknown)
     }

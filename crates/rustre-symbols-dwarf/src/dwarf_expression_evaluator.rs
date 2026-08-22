@@ -384,7 +384,7 @@ impl DwarfExprEvaluator {
             // ── Address push ─────────────────────────────────────────────────
             DW_OP_ADDR => {
                 let addr = if self.addr_size == 8 {
-                    read_u64_le(expr, off)? as i64
+                    read_u64_le(expr, off)?.cast_signed()
                 } else {
                     i64::from(read_u32_le(expr, off)?)
                 };
@@ -393,14 +393,14 @@ impl DwarfExprEvaluator {
 
             // ── Constant pushes ───────────────────────────────────────────────
             DW_OP_CONST1U => stack.push(i64::from(read_u8(expr, off)?)),
-            DW_OP_CONST1S => stack.push(i64::from(read_u8(expr, off)? as i8)),
+            DW_OP_CONST1S => stack.push(i64::from(read_u8(expr, off)?.cast_signed())),
             DW_OP_CONST2U => stack.push(i64::from(read_u16_le(expr, off)?)),
-            DW_OP_CONST2S => stack.push(i64::from(read_u16_le(expr, off)? as i16)),
+            DW_OP_CONST2S => stack.push(i64::from(read_u16_le(expr, off)?.cast_signed())),
             DW_OP_CONST4U => stack.push(i64::from(read_u32_le(expr, off)?)),
-            DW_OP_CONST4S => stack.push(i64::from(read_u32_le(expr, off)? as i32)),
-            DW_OP_CONST8U => stack.push(read_u64_le(expr, off)? as i64),
-            DW_OP_CONST8S => stack.push(read_u64_le(expr, off)? as i64),
-            DW_OP_CONSTU => stack.push(read_uleb128(expr, off)? as i64),
+            DW_OP_CONST4S => stack.push(i64::from(read_u32_le(expr, off)?.cast_signed())),
+            DW_OP_CONST8U => stack.push(read_u64_le(expr, off)?.cast_signed()),
+            DW_OP_CONST8S => stack.push(read_u64_le(expr, off)?.cast_signed()),
+            DW_OP_CONSTU => stack.push(read_uleb128(expr, off)?.cast_signed()),
             DW_OP_CONSTS => stack.push(read_sleb128(expr, off)?),
 
             // ── Lit0..Lit31 ───────────────────────────────────────────────────
@@ -504,7 +504,7 @@ impl DwarfExprEvaluator {
                 stack.push(a.wrapping_add(b));
             }
             DW_OP_PLUS_UCONST => {
-                let addend = read_uleb128(expr, off)? as i64;
+                let addend = read_uleb128(expr, off)?.cast_signed();
                 let a = stack.pop().ok_or(EvalError::StackUnderflow)?;
                 stack.push(a.wrapping_add(addend));
             }
@@ -541,8 +541,8 @@ impl DwarfExprEvaluator {
             }
             DW_OP_SHR => {
                 let b = stack.pop().ok_or(EvalError::StackUnderflow)? as u32;
-                let a = stack.pop().ok_or(EvalError::StackUnderflow)? as u64;
-                stack.push((a >> (b & 63)) as i64);
+                let a = stack.pop().ok_or(EvalError::StackUnderflow)?.cast_unsigned();
+                stack.push((a >> (b & 63)).cast_signed());
             }
             DW_OP_SHRA => {
                 let b = stack.pop().ok_or(EvalError::StackUnderflow)? as u32;
@@ -584,8 +584,8 @@ impl DwarfExprEvaluator {
 
             // ── Control flow ──────────────────────────────────────────────────
             DW_OP_SKIP => {
-                let delta = read_u16_le(expr, off)? as i16;
-                let new_off = (*off as isize)
+                let delta = read_u16_le(expr, off)?.cast_signed();
+                let new_off = (*off).cast_signed()
                     .checked_add(isize::from(delta))
                     .and_then(|v| usize::try_from(v).ok())
                     .ok_or(EvalError::OutOfBounds)?;
@@ -595,10 +595,10 @@ impl DwarfExprEvaluator {
                 *off = new_off;
             }
             DW_OP_BRA => {
-                let delta = read_u16_le(expr, off)? as i16;
+                let delta = read_u16_le(expr, off)?.cast_signed();
                 let cond = stack.pop().ok_or(EvalError::StackUnderflow)?;
                 if cond != 0 {
-                    let new_off = (*off as isize)
+                    let new_off = (*off).cast_signed()
                         .checked_add(isize::from(delta))
                         .and_then(|v| usize::try_from(v).ok())
                         .ok_or(EvalError::OutOfBounds)?;
@@ -626,7 +626,7 @@ impl DwarfExprEvaluator {
                 // DW_OP_piece consumes the location it describes; leaving it on
                 // the stack corrupted every subsequent piece.
                 let loc = match stack.pop() {
-                    Some(v) => OpResult::Address(v as u64),
+                    Some(v) => OpResult::Address(v.cast_unsigned()),
                     None => OpResult::Unknown,
                 };
                 pieces.push(PieceLocation {
@@ -711,7 +711,7 @@ pub fn location_expression(
         return Ok(stack.top().map_or(OpResult::Unknown, OpResult::Value));
     }
     if let Some(addr) = stack.top() {
-        return Ok(OpResult::Address(addr as u64));
+        return Ok(OpResult::Address(addr.cast_unsigned()));
     }
     Ok(OpResult::Unknown)
 }
@@ -791,7 +791,7 @@ mod tests {
     #[test]
     fn const1s_negative() {
         let r = eval(&[DW_OP_CONST1S, 0xfe]).unwrap();
-        assert_eq!(r, OpResult::Address((-2i64) as u64));
+        assert_eq!(r, OpResult::Address((-2i64).cast_unsigned()));
     }
 
     #[test]
@@ -812,7 +812,7 @@ mod tests {
     fn consts_negative() {
         let mut e = vec![DW_OP_CONSTS];
         e.extend(sleb(-16));
-        assert_eq!(eval(&e).unwrap(), OpResult::Address((-16i64) as u64));
+        assert_eq!(eval(&e).unwrap(), OpResult::Address((-16i64).cast_unsigned()));
     }
 
     #[test]
@@ -840,7 +840,7 @@ mod tests {
         e.extend(sleb(-8));
         assert_eq!(
             eval_with_regs(&e, &regs).unwrap(),
-            OpResult::Address(0x100u64.wrapping_add((-8i64) as u64))
+            OpResult::Address(0x100u64.wrapping_add((-8i64).cast_unsigned()))
         );
     }
 
@@ -970,7 +970,7 @@ mod tests {
     #[test]
     fn neg_op() {
         let expr = [DW_OP_LIT0 + 5, DW_OP_NEG];
-        assert_eq!(eval(&expr).unwrap(), OpResult::Address((-5i64) as u64));
+        assert_eq!(eval(&expr).unwrap(), OpResult::Address((-5i64).cast_unsigned()));
     }
 
     #[test]
