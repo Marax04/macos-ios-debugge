@@ -1883,6 +1883,48 @@ impl AppleDebugger {
             .map_err(|e| DebugError::Os(format!("image at {base:#x}: {e}")))
     }
 
+    /// The image's entry point, read from its load commands.
+    ///
+    /// The counterpart of [`Self::image_size_from_segments`], reading the same
+    /// bytes for the other field `ModuleInfo` carries. It exists because the
+    /// module list used to hard-code `entry_point: None` with the note "the
+    /// reply carries no entry point; inventing one would be confident
+    /// wrongness". That is true of the RSP reply and beside the point for the
+    /// field: the entry point does not have to be invented, it can be
+    /// **measured** from the image — which is exactly what the sibling method
+    /// already does, two lines away, for `size`.
+    ///
+    /// `parse_mach_o_entry_offset` handles both forms (`LC_MAIN`'s offset and
+    /// `LC_UNIXTHREAD`'s absolute thread state, the latter resolved against the
+    /// header's `cputype` because the flavour tags collide between
+    /// architectures) and returns an offset from the base; `ModuleInfo::entry_point`
+    /// is absolute, like the Windows and Linux backends', so the base goes back
+    /// on here.
+    ///
+    /// Returns `None` — never a guess — for an image that is not a 64-bit
+    /// Mach-O, that carries neither entry-point form, or whose header cannot be
+    /// read. A wrong entry point is worse than no entry point, because a caller
+    /// cannot tell that it is wrong.
+    fn entry_point_from_load_commands(&self, base: u64) -> Option<u64> {
+        use crate::macho_image_size::{
+            MACH_HEADER_64_SIZE, MH_MAGIC_64, parse_mach_o_entry_offset,
+        };
+        /// Same bound, for the same reason, as [`Self::image_size_from_segments`]:
+        /// `sizeofcmds` is target-controlled and must not drive a huge read.
+        const MAX_LOAD_COMMANDS: usize = 1 << 20;
+
+        let header = self.read_exactly(base, MACH_HEADER_64_SIZE).ok()?;
+        if u32::from_le_bytes(header[0..4].try_into().ok()?) != MH_MAGIC_64 {
+            return None;
+        }
+        let sizeofcmds = u32::from_le_bytes(header[20..24].try_into().ok()?) as usize;
+        if sizeofcmds > MAX_LOAD_COMMANDS {
+            return None;
+        }
+        let buf = self.read_exactly(base, MACH_HEADER_64_SIZE + sizeofcmds).ok()?;
+        parse_mach_o_entry_offset(&buf, base).and_then(|off| base.checked_add(off))
+    }
+
     /// Size of the mapped VM region that CONTAINS `base`.
     ///
     /// Kept as the explicit fallback of [`Self::image_size_from_segments`] for
@@ -3852,9 +3894,14 @@ impl Debugger for AppleDebugger {
                 path,
                 base: Address::new(base),
                 size,
-                // The reply carries no entry point; inventing one would be the
-                // exact kind of confident wrongness this repo punishes.
-                entry_point: None,
+                // The RSP reply carries no entry point — but it does not have
+                // to: the entry point is READ from the image's load commands,
+                // from the same bytes `size` above is measured from. The
+                // previous note ("inventing one would be confident wrongness")
+                // was right about inventing and wrong about the alternative,
+                // which is measuring. Still `None` when the image carries
+                // neither `LC_MAIN` nor a usable `LC_UNIXTHREAD`.
+                entry_point: self.entry_point_from_load_commands(base).map(Address::new),
                 is_main: filetype == Some(2), // MH_EXECUTE
             });
         }

@@ -510,6 +510,21 @@ pub fn require_full_write(addr: u64, wrote: usize, wanted: usize) -> Result<(), 
     Ok(())
 }
 
+// The crate's own sources, embedded at build time by `build.rs`.
+//
+// Several guards in this file scan the source text of the three backends rather
+// than the compiled slice, because a build can only see its own `cfg` branch —
+// a defect present on Linux and macOS is invisible to a Windows build unless the
+// text is read. That makes this test infrastructure, and it is gated as such:
+// ungated, the static was reported dead in every non-test build.
+//
+// It was also placed BETWEEN the doc comment below and the function it
+// documents, so the `# Errors` section attached to this `include!` instead of to
+// `require_full_read` — the "unused doc comment" warning was the symptom, and
+// the real cost was a public function silently losing its documentation.
+#[cfg(test)]
+include!(concat!(env!("OUT_DIR"), "/embedded_sources.rs"));
+
 /// The read counterpart of [`require_full_write`].
 ///
 /// Added with the AArch64 trap-length fix: `set_breakpoint` now saves
@@ -520,8 +535,6 @@ pub fn require_full_write(addr: u64, wrote: usize, wanted: usize) -> Result<(), 
 ///
 /// # Errors
 /// Returns [`DebugError::MemoryError`] when fewer bytes were read than asked for.
-include!(concat!(env!("OUT_DIR"), "/embedded_sources.rs"));
-
 pub fn require_full_read(addr: u64, read: usize, wanted: usize) -> Result<(), DebugError> {
     if read < wanted {
         return Err(DebugError::MemoryError(
