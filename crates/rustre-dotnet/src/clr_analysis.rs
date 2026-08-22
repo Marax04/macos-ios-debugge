@@ -310,6 +310,12 @@ impl<'a> PeReader<'a> {
 
     fn cstr_at(&self, off: usize, max: usize) -> String {
         if off >= self.data.len() { return String::new(); }
+        // `max` is attacker-controlled (e.g. the metadata-root `version_len` field is a
+        // raw u32 read from the image). Clamp it to what is actually left in the buffer,
+        // otherwise an unterminated string makes `position` return `None` and the
+        // `unwrap_or(max)` fallback slices past the end of `data`, panicking.
+        let avail = self.data.len() - off;
+        let max = max.min(avail);
         let end = self.data[off..].iter().take(max).position(|&b| b == 0).unwrap_or(max);
         String::from_utf8_lossy(&self.data[off..off + end]).into_owned()
     }
@@ -569,6 +575,23 @@ mod tests {
         assert!(flags.is_strongly_named());
         assert!(!flags.is_32bit());
         assert!(!flags.has_native_entrypoint());
+    }
+
+    #[test]
+    fn test_cstr_at_unterminated_max_beyond_buffer() {
+        // Regression: `max` comes from the image (metadata-root `version_len`, a raw u32).
+        // With no NUL terminator in range, the old code fell back to `end = max` and
+        // sliced `data[off..off + max]`, panicking. It must clamp to the buffer instead.
+        let data = [b'A'; 8];
+        let r = PeReader::new(&data);
+        assert_eq!(r.cstr_at(4, 0xFFFF_FFFF), "AAAA");
+        assert_eq!(r.cstr_at(0, usize::MAX), "AAAAAAAA");
+        // Terminated strings keep the old behaviour.
+        let term = [b'h', b'i', 0, b'x'];
+        let r2 = PeReader::new(&term);
+        assert_eq!(r2.cstr_at(0, 64), "hi");
+        // Out-of-range offset still yields the empty string.
+        assert_eq!(r2.cstr_at(99, 8), "");
     }
 
     #[test]
