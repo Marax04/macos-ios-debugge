@@ -177,7 +177,7 @@ impl IATEntry {
     }
 
     #[must_use]
-    pub fn terminator(rva: u32) -> Self {
+    pub const fn terminator(rva: u32) -> Self {
         Self {
             rva,
             pointer: FunctionPointer::null(),

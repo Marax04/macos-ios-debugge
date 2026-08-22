@@ -73,7 +73,7 @@ impl SectionLayout {
 
     /// Raw size aligned up to `file_align`.
     #[must_use]
-    pub fn aligned_raw_size(virtual_size: u32, file_align: u32) -> u32 {
+    pub const fn aligned_raw_size(virtual_size: u32, file_align: u32) -> u32 {
         align_up(virtual_size, file_align)
     }
 }
@@ -457,7 +457,7 @@ mod tests {
         assert_eq!(align_up(0, 0x1000), 0);
         assert_eq!(align_up(5, 0), 5);
         // u32::MAX + 0xFFF would wrap; the result must stay >= the input's page.
-        assert_eq!(align_up(u32::MAX, 0x1000), u32::MAX & !0xFFF);
+        assert_eq!(align_up(u32::MAX, 0x1000), !0xFFF);
     }
 
     fn make_section(name: &str, va: u32, raw_off: u32, raw_size: u32,

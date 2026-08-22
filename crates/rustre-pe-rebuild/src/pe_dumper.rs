@@ -281,14 +281,33 @@ impl PeDumper {
         ctx: &PeContext,
         changes: &mut Vec<String>,
     ) -> Result<Vec<u8>, DumpError> {
+        // `section_table_off` is `e_lfanew + 24 + SizeOfOptionalHeader`, and
+        // `file_alignment` is any power of two >= 512 the file cares to name --
+        // neither is bounded by `data.len()`. Both the addition and the
+        // alignment therefore have to saturate rather than wrap.
         let header_end = align_up(
-            u32::try_from(ctx.section_table_off).unwrap_or(u32::MAX)
-                + u32::try_from(ctx.sections.len()).unwrap_or(u32::MAX) * 40,
+            u32::try_from(ctx.section_table_off)
+                .unwrap_or(u32::MAX)
+                .saturating_add(
+                    u32::try_from(ctx.sections.len())
+                        .unwrap_or(u32::MAX)
+                        .saturating_mul(40),
+                ),
             ctx.file_alignment,
         );
 
+        if header_end as usize > data.len() {
+            return Err(DumpError::HeaderPastEndOfImage {
+                header_end,
+                len: data.len(),
+            });
+        }
+
         // Build the new on-disk layout
         let mut disk_offset = header_end;
+        // `header_end <= data.len()` is proven immediately above; slicing
+        // `data[..header_end]` unguarded used to panic on any image whose
+        // SizeOfOptionalHeader or FileAlignment pushed the header past the end.
         let mut new_data: Vec<u8> = data[..header_end as usize].to_vec();
         // Ensure new_data is exactly header_end in size
         new_data.resize(header_end as usize, 0u8);
@@ -571,6 +590,9 @@ pub enum DumpError {
     BadElfanew(u32),
     BadPeSignature(u32),
     LiveMemoryUnavailable,
+    /// The declared header region (`section_table_off + n_sections * 40`,
+    /// aligned up to `FileAlignment`) runs past the end of the buffer.
+    HeaderPastEndOfImage { header_end: u32, len: usize },
     Custom(String),
 }
 
@@ -582,6 +604,10 @@ impl std::fmt::Display for DumpError {
             Self::BadElfanew(v) => write!(f, "bad e_lfanew: {v:#x}"),
             Self::BadPeSignature(v) => write!(f, "bad PE signature: {v:#010x}"),
             Self::LiveMemoryUnavailable => write!(f, "live memory access not available in this build"),
+            Self::HeaderPastEndOfImage { header_end, len } => write!(
+                f,
+                "declared header end {header_end:#x} is past the end of the {len}-byte image"
+            ),
             Self::Custom(msg) => write!(f, "{msg}"),
         }
     }
@@ -790,5 +816,64 @@ mod tests {
         let dumper = PeDumper::new(DumpOptions::default());
         let result = dumper.dump_from_memory(DumpSource::RawBytes(pe)).unwrap();
         assert!(!result.fixed_pe.is_empty());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hostile-header regression tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod hostile_header_tests {
+    use super::{PeContext, PeDumper};
+
+    /// Minimal PE whose `SizeOfOptionalHeader` and `FileAlignment` are chosen
+    /// by the attacker. The buffer stays small on purpose.
+    fn crafted_pe(oh_size: u16, file_alignment: u32, total: usize) -> Vec<u8> {
+        let e_lfanew: u32 = 0x40;
+        let mut pe = vec![0u8; total];
+        pe[0] = b'M';
+        pe[1] = b'Z';
+        pe[60..64].copy_from_slice(&e_lfanew.to_le_bytes());
+        let nt = e_lfanew as usize;
+        pe[nt..nt + 4].copy_from_slice(b"PE\0\0");
+        // COFF: NumberOfSections = 0, SizeOfOptionalHeader = oh_size
+        pe[nt + 20..nt + 22].copy_from_slice(&oh_size.to_le_bytes());
+        let opt = nt + 24;
+        pe[opt..opt + 2].copy_from_slice(&0x010Bu16.to_le_bytes()); // PE32
+        pe[opt + 32..opt + 36].copy_from_slice(&0x1000u32.to_le_bytes()); // SectionAlignment
+        pe[opt + 36..opt + 40].copy_from_slice(&file_alignment.to_le_bytes());
+        pe
+    }
+
+    #[test]
+    fn oversized_optional_header_is_rejected_not_panicked() {
+        // SizeOfOptionalHeader = 0xFFFF pushes section_table_off to ~0x1_0057,
+        // far past this 512-byte buffer. `data[..header_end]` used to panic.
+        let pe = crafted_pe(0xFFFF, 0x200, 512);
+        let ctx = PeContext::parse(&pe).expect("header parse should still succeed");
+        let mut changes = Vec::new();
+        let r = PeDumper::realign_sections(&pe, &ctx, &mut changes);
+        assert!(r.is_err(), "expected a typed error, got Ok");
+    }
+
+    #[test]
+    fn huge_file_alignment_is_rejected_not_panicked() {
+        // 0x8000_0000 is a power of two >= 512, so it survives sanitisation and
+        // aligns header_end up to 2 GiB.
+        let pe = crafted_pe(0xE0, 0x8000_0000, 1024);
+        let ctx = PeContext::parse(&pe).expect("header parse should still succeed");
+        assert_eq!(ctx.file_alignment, 0x8000_0000);
+        let mut changes = Vec::new();
+        let r = PeDumper::realign_sections(&pe, &ctx, &mut changes);
+        assert!(r.is_err(), "expected a typed error, got Ok");
+    }
+
+    #[test]
+    fn well_formed_header_still_realigns() {
+        let pe = crafted_pe(0xE0, 0x200, 0x2000);
+        let ctx = PeContext::parse(&pe).expect("parse");
+        let mut changes = Vec::new();
+        assert!(PeDumper::realign_sections(&pe, &ctx, &mut changes).is_ok());
     }
 }

@@ -806,7 +806,7 @@ pub struct ExportEntry {
 impl ExportEntry {
     /// Create a named export.
     #[must_use]
-    pub fn named(name: String, ordinal: u32, rva: u32) -> Self {
+    pub const fn named(name: String, ordinal: u32, rva: u32) -> Self {
         Self {
             ordinal,
             name,
@@ -818,7 +818,7 @@ impl ExportEntry {
 
     /// Create an ordinal-only export.
     #[must_use]
-    pub fn ordinal_only(ordinal: u32, rva: u32) -> Self {
+    pub const fn ordinal_only(ordinal: u32, rva: u32) -> Self {
         Self {
             ordinal,
             name: String::new(),
@@ -830,7 +830,7 @@ impl ExportEntry {
 
     /// Create a forwarder export.
     #[must_use]
-    pub fn forwarder(name: String, ordinal: u32, target: String) -> Self {
+    pub const fn forwarder(name: String, ordinal: u32, target: String) -> Self {
         Self {
             ordinal,
             name,
@@ -842,7 +842,7 @@ impl ExportEntry {
 
     /// Returns `true` if the export has a name.
     #[must_use]
-    pub fn has_name(&self) -> bool {
+    pub const fn has_name(&self) -> bool {
         !self.name.is_empty()
     }
 }
@@ -873,7 +873,7 @@ pub struct ExportRebuilder {
 impl ExportRebuilder {
     /// Create an export rebuilder for the given DLL name and ordinal base.
     #[must_use]
-    pub fn new(dll_name: String, ordinal_base: u32) -> Self {
+    pub const fn new(dll_name: String, ordinal_base: u32) -> Self {
         Self {
             dll_name,
             ordinal_base,
@@ -888,7 +888,7 @@ impl ExportRebuilder {
 
     /// Number of exports.
     #[must_use]
-    pub fn export_count(&self) -> usize {
+    pub const fn export_count(&self) -> usize {
         self.entries.len()
     }
 
@@ -908,24 +908,22 @@ impl ExportRebuilder {
         let mut sorted = self.entries.clone();
         sorted.sort_by_key(|e| e.ordinal);
 
-        if let Some(first) = sorted.first() {
-            if first.ordinal < self.ordinal_base {
+        if let Some(first) = sorted.first()
+            && first.ordinal < self.ordinal_base {
                 return Err(RebuildError::ExportCorrupt(format!(
                     "export ordinal {} is below ordinal_base {}",
                     first.ordinal, self.ordinal_base
                 )));
             }
-        }
 
         let n_functions = sorted
             .last()
-            .map(|e| {
+            .map_or(0, |e| {
                 e.ordinal
                     .checked_sub(self.ordinal_base)
                     .and_then(|d| d.checked_add(1))
                     .unwrap_or(u32::MAX)
-            })
-            .unwrap_or(0) as usize;
+            }) as usize;
         let named: Vec<&ExportEntry> = sorted.iter().filter(|e| e.has_name()).collect();
         let n_names = named.len();
 
@@ -1039,7 +1037,7 @@ pub struct OepDetector {
 impl OepDetector {
     /// Create a new detector.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             candidates: Vec::new(),
         }
@@ -1159,7 +1157,7 @@ pub struct OverlayInfo {
 impl OverlayInfo {
     /// Returns `true` if the overlay is non-empty.
     #[must_use]
-    pub fn has_overlay(&self) -> bool {
+    pub const fn has_overlay(&self) -> bool {
         self.length > 0
     }
 }
@@ -1393,7 +1391,7 @@ pub struct PeRebuilder {
 impl PeRebuilder {
     /// Create a new rebuilder with the given configuration.
     #[must_use]
-    pub fn new(config: RebuildConfig) -> Self {
+    pub const fn new(config: RebuildConfig) -> Self {
         Self {
             config,
             sections: vec![],
@@ -1423,7 +1421,7 @@ impl PeRebuilder {
     pub fn virtual_end(&self) -> u32 {
         self.sections
             .iter()
-            .map(|s| s.virtual_end())
+            .map(RebuildSection::virtual_end)
             .max()
             .unwrap_or(0)
     }
@@ -1501,7 +1499,7 @@ impl PeRebuilder {
         }
 
         let mut warnings: Vec<String> = Vec::new();
-        let mut rebuilder = PeRebuilder::new(config);
+        let mut rebuilder = Self::new(config);
 
         match PeFile::parse(data) {
             Ok(pe) => {
@@ -1542,7 +1540,7 @@ impl PeRebuilder {
 
     /// Align `value` up to the next multiple of `align`.
     #[must_use]
-    pub fn align_up(value: u32, align: u32) -> u32 {
+    pub const fn align_up(value: u32, align: u32) -> u32 {
         if align == 0 {
             return value;
         }
@@ -1558,13 +1556,13 @@ impl PeRebuilder {
 
     /// Reference to the current rebuild configuration.
     #[must_use]
-    pub fn config(&self) -> &RebuildConfig {
+    pub const fn config(&self) -> &RebuildConfig {
         &self.config
     }
 
     /// Number of sections currently registered with this rebuilder.
     #[must_use]
-    pub fn section_count(&self) -> usize {
+    pub const fn section_count(&self) -> usize {
         self.sections.len()
     }
 
@@ -1702,13 +1700,13 @@ pub struct IatRegion {
 impl IatRegion {
     /// Number of pointer-sized slots in this region.
     #[must_use]
-    pub fn slot_count(&self) -> usize {
+    pub const fn slot_count(&self) -> usize {
         self.entries.len()
     }
 
     /// Returns `true` if this region contains at least one entry.
     #[must_use]
-    pub fn is_non_empty(&self) -> bool {
+    pub const fn is_non_empty(&self) -> bool {
         !self.entries.is_empty()
     }
 }
@@ -2158,7 +2156,7 @@ pub struct IatRebuildResult {
 impl IatRebuildResult {
     /// Total number of IAT slots found across all regions.
     #[must_use]
-    pub fn total_entries(&self) -> usize {
+    pub const fn total_entries(&self) -> usize {
         self.entries.len()
     }
 
@@ -3485,7 +3483,7 @@ mod tests {
         dump[7] = 0xE5;
         let candidates = detect_oep_heuristics(&dump, 0x1000);
         // First should be the highest confidence.
-        assert!(candidates[0].confidence >= candidates.last().map(|c| c.confidence).unwrap_or(0.0));
+        assert!(candidates[0].confidence >= candidates.last().map_or(0.0, |c| c.confidence));
     }
 
     #[test]
@@ -3662,7 +3660,7 @@ impl LoadedModule {
 
     /// Return `true` when `addr` falls within this module's image range.
     #[must_use]
-    pub fn contains(&self, addr: u64) -> bool {
+    pub const fn contains(&self, addr: u64) -> bool {
         addr >= self.base && addr < self.base.saturating_add(self.size)
     }
 }
@@ -3689,7 +3687,7 @@ impl IatRebuilder {
 
     /// Create a new [`IatRebuilder`] for a 64-bit image dump.
     #[must_use]
-    pub fn new_x64(process_memory: Vec<u8>, image_base: u64, modules: Vec<LoadedModule>) -> Self {
+    pub const fn new_x64(process_memory: Vec<u8>, image_base: u64, modules: Vec<LoadedModule>) -> Self {
         Self {
             process_memory,
             image_base,
@@ -3701,7 +3699,7 @@ impl IatRebuilder {
 
     /// Create a new [`IatRebuilder`] for a 32-bit image dump.
     #[must_use]
-    pub fn new_x86(process_memory: Vec<u8>, image_base: u64, modules: Vec<LoadedModule>) -> Self {
+    pub const fn new_x86(process_memory: Vec<u8>, image_base: u64, modules: Vec<LoadedModule>) -> Self {
         Self {
             process_memory,
             image_base,
@@ -3878,7 +3876,7 @@ impl IatRebuilder {
 
             // Function hint+name entries
             let mut func_offs: Vec<u32> = Vec::new();
-            for entry in funcs.iter() {
+            for entry in funcs {
                 let off = data_base + name_blob.len() as u32;
                 func_offs.push(off);
                 if let Some(ord) = entry.ordinal {
@@ -4248,8 +4246,7 @@ impl IatRebuilder {
         // Determine output file size.
         let last = sections.iter().max_by_key(|s| s.raw_offset + s.raw_size);
         let file_size = last
-            .map(|s| align_up(s.raw_offset + s.raw_size, file_alignment))
-            .unwrap_or(size);
+            .map_or(size, |s| align_up(s.raw_offset + s.raw_size, file_alignment));
         let file_size = file_size.max(sec_table_off + num_sections * 40);
 
         let mut out = vec![0u8; file_size];
@@ -4294,7 +4291,7 @@ impl IatRebuilder {
 
 /// Round `value` up to the nearest multiple of `align` (must be a power of two
 /// or a standard PE alignment value).
-fn align_up(value: usize, align: usize) -> usize {
+const fn align_up(value: usize, align: usize) -> usize {
     if align == 0 {
         return value;
     }
@@ -4448,7 +4445,7 @@ mod iat_rebuilder_tests {
         let pe = minimal_pe32();
         let mut rebuilder = IatRebuilder::new_x86(pe, 0x0040_0000, vec![]);
         let result = rebuilder.fix_pe_checksum();
-        assert!(result.is_ok(), "checksum calculation failed: {:?}", result);
+        assert!(result.is_ok(), "checksum calculation failed: {result:?}");
         let checksum = result.unwrap();
         assert_ne!(
             checksum, 0,
@@ -4492,8 +4489,7 @@ mod iat_rebuilder_tests {
         let oep = rebuilder.find_oep_heuristic();
         assert!(
             oep.contains(&(0x0040_0000 + 0x1000)),
-            "expected AEP-derived OEP candidate: {:?}",
-            oep
+            "expected AEP-derived OEP candidate: {oep:?}"
         );
     }
 
@@ -4511,8 +4507,7 @@ mod iat_rebuilder_tests {
         let oep = rebuilder.find_oep_heuristic();
         assert!(
             oep.contains(&(0x0040_0000 + 0x20)),
-            "should detect PUSHAD+CALL pattern: {:?}",
-            oep
+            "should detect PUSHAD+CALL pattern: {oep:?}"
         );
     }
 
