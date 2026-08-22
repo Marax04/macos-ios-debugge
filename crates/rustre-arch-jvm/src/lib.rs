@@ -122,28 +122,23 @@ const fn need(bytes: &[u8], n: usize) -> Result<(), JvmDecodeError> {
 }
 
 fn u16be(bytes: &[u8], off: usize) -> u16 {
-    match bytes.get(off..off + 2) {
-        Some(s) => u16::from_be_bytes([s[0], s[1]]),
-        None => {
-            // Callers must guard with need() first; if we get here it's a bug.
-            // Return 0 rather than panicking so any future misuse is detectable.
-            0
-        }
-    }
+    // Callers must guard with need() first; if we get here it's a bug.
+    // Return 0 rather than panicking so any future misuse is detectable.
+    bytes
+        .get(off..off + 2)
+        .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
 }
 
 fn i16be(bytes: &[u8], off: usize) -> i16 {
-    match bytes.get(off..off + 2) {
-        Some(s) => i16::from_be_bytes([s[0], s[1]]),
-        None => 0,
-    }
+    bytes
+        .get(off..off + 2)
+        .map_or(0, |s| i16::from_be_bytes([s[0], s[1]]))
 }
 
 fn i32be(bytes: &[u8], off: usize) -> i32 {
-    match bytes.get(off..off + 4) {
-        Some(s) => i32::from_be_bytes([s[0], s[1], s[2], s[3]]),
-        None => 0,
-    }
+    bytes
+        .get(off..off + 4)
+        .map_or(0, |s| i32::from_be_bytes([s[0], s[1], s[2], s[3]]))
 }
 
 fn ok(

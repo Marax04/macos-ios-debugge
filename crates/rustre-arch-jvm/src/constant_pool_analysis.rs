@@ -853,7 +853,7 @@ mod tests {
     #[test]
     fn test_cp_long_two_slots() {
         let mut cp = ConstantPool::new();
-        cp.insert(1, CpEntry::Long(1234567890));
+        cp.insert(1, CpEntry::Long(1_234_567_890));
         assert!(matches!(cp.get(2), Some(CpEntry::Wide)));
     }
 

@@ -211,8 +211,10 @@ impl VerifierState {
         if idx >= self.locals.len() {
             self.locals.resize(idx + 1, TypeInfo::Unknown);
         }
-        self.locals[idx] = t.clone();
-        if t.is_wide() && idx + 1 < self.locals.len() {
+        // Read the width before the move so `t` is consumed rather than cloned.
+        let wide = t.is_wide();
+        self.locals[idx] = t;
+        if wide && idx + 1 < self.locals.len() {
             self.locals[idx + 1] = TypeInfo::Top;
         }
     }
@@ -411,7 +413,9 @@ impl JvmBytecodeVerifier {
             0x15..=0x19 => { let idx = u8at!(1) as usize; let t = st.get_local(idx)?; st.push(t); (2, vec![]) }
             0x2A..=0x2D => { // aload_0..3
                 let idx = (op - 0x2A) as usize;
-                let t = st.get_local(idx).unwrap_or(TypeInfo::Reference("java/lang/Object".into()));
+                let t = st
+                    .get_local(idx)
+                    .unwrap_or_else(|_| TypeInfo::Reference("java/lang/Object".into()));
                 st.push(t);
                 (1, vec![])
             }

@@ -185,14 +185,16 @@ impl StackFrameSimulator {
 
         for (pc, opcode, operands) in opcodes {
             self.frames.insert(*pc, frame.clone());
-            if let Err(e) = self.simulate_one(&mut frame, *pc, *opcode, operands) {
+            if let Err(e) = Self::simulate_one(&mut frame, *pc, *opcode, operands) {
                 self.errors.push(e);
             }
         }
     }
 
+    /// Associated rather than a method: the transfer function depends only on
+    /// the frame and the opcode, never on simulator state. `simulate` owns the
+    /// `frames` map and the `errors` vector.
     fn simulate_one(
-        &self,
         frame: &mut StackFrame,
         pc: usize,
         opcode: u8,
