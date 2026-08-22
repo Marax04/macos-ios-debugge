@@ -740,7 +740,7 @@ impl VerifierState {
                 Some(b) => format!(" umin={} umax={}", b.umin, b.umax),
                 None => String::new(),
             };
-            out.push_str(&format!("  R{i:2}: {}{}\n", reg.reg_type, bounds_str));
+            let _ = writeln!(out, "  R{i:2}: {}{}", reg.reg_type, bounds_str);
         }
         if !self.stack.is_empty() {
             out.push_str("  Stack:\n");
@@ -752,13 +752,13 @@ impl VerifierState {
                     StackSlotKind::Misc => "misc".to_string(),
                     StackSlotKind::Zero => "zero".to_string(),
                 };
-                out.push_str(&format!("    fp{off:+4}: {desc}\n"));
+                let _ = writeln!(out, "    fp{off:+4}: {desc}");
             }
         }
         if !self.errors.is_empty() {
             out.push_str("  Errors:\n");
             for e in &self.errors {
-                out.push_str(&format!("    ! {e}\n"));
+                let _ = writeln!(out, "    ! {e}");
             }
         }
         out

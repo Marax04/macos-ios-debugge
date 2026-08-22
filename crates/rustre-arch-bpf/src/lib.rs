@@ -7162,8 +7162,8 @@ mod btf_section_tests {
         push_u32(&mut blob, type_len);
         push_u32(&mut blob, str_off);
         push_u32(&mut blob, str_len);
-        blob.extend_from_slice(&types_section);
-        blob.extend_from_slice(&strings_section);
+        blob.extend_from_slice(types_section);
+        blob.extend_from_slice(strings_section);
         blob
     }
 
