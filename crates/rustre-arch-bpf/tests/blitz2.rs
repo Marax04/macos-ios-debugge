@@ -42,8 +42,8 @@ impl Lcg {
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn next_u8(&mut self) -> u8 { numeric::trunc_u64_u8(self.next_u64()) }
-    fn next_u32(&mut self) -> u32 { numeric::low_u32(self.next_u64()) }
+    const fn next_u8(&mut self) -> u8 { numeric::trunc_u64_u8(self.next_u64()) }
+    const fn next_u32(&mut self) -> u32 { numeric::low_u32(self.next_u64()) }
 }
 
 fn hash_of<T: Hash>(t: &T) -> u64 {
@@ -234,8 +234,8 @@ fn disasm_lcg_fuzz_no_panic() {
         // Skip the wide-immediate opcode which needs 16 bytes — this fuzzer
         // only encodes 8-byte instructions.
         if op == 0x18 { op = 0x07; }
-        let dst = (g() as u8) & 0x0f;
-        let src = (g() as u8) & 0x0f;
+        let dst = numeric::trunc_u64_u8(g()) & 0x0f;
+        let src = numeric::trunc_u64_u8(g()) & 0x0f;
         let off = numeric::trunc_u64_i16(g());
         let imm = numeric::trunc_u64_i32(g());
         let bytes = enc(op, dst, src, off, imm);
@@ -402,12 +402,12 @@ fn disasm_neg_op_dst_only() {
 fn disasm_end_be_le_byte_swap() {
     let helpers = known_helpers();
     // Alu | End = 0xd4 (le), Alu | End | src_is_reg(0x08)=0xdc (be)
-    let (i_le, _) = BpfInstruction::decode(&enc(0xd4, 1, 0, 0, 32)).unwrap();
-    let (mne_le, _, _) = disasm_instr(&i_le, &helpers).unwrap();
-    assert_eq!(mne_le, "le32");
-    let (i_be, _) = BpfInstruction::decode(&enc(0xdc, 1, 0, 0, 32)).unwrap();
-    let (mne_be, _, _) = disasm_instr(&i_be, &helpers).unwrap();
-    assert_eq!(mne_be, "be32");
+    let (little_endian, _) = BpfInstruction::decode(&enc(0xd4, 1, 0, 0, 32)).unwrap();
+    let (mnemonic_le, _, _) = disasm_instr(&little_endian, &helpers).unwrap();
+    assert_eq!(mnemonic_le, "le32");
+    let (big_endian, _) = BpfInstruction::decode(&enc(0xdc, 1, 0, 0, 32)).unwrap();
+    let (mnemonic_be, _, _) = disasm_instr(&big_endian, &helpers).unwrap();
+    assert_eq!(mnemonic_be, "be32");
 }
 
 #[test]
@@ -755,12 +755,12 @@ fn analyzer_kprobe_hint_via_helper_4() {
 #[test]
 fn analyzer_map_fd_tracked_across_lddw() {
     let mut bytes = Vec::new();
-    bytes.extend(enc_lddw(1, 0xc0ffee));
+    bytes.extend(enc_lddw(1, 0x00c0_ffee));
     bytes.extend(enc(0x85, 0, 0, 0, 2)); // map_update
     bytes.extend(enc(0x95, 0, 0, 0, 0));
     let r = BpfProgramAnalyzer::analyze(&bytes);
     assert_eq!(r.map_accesses.len(), 1);
-    assert_eq!(r.map_accesses[0].map_fd, 0xc0ffee);
+    assert_eq!(r.map_accesses[0].map_fd, 0x00c0_ffee);
     assert_eq!(r.map_accesses[0].operation, MapOp::Update);
 }
 

@@ -417,7 +417,7 @@ fn jvm_decode_error_display() {
 
 fn utf8_entry(s: &str) -> Vec<u8> {
     let mut v = vec![1u8];
-    v.extend_from_slice(&(s.len() as u16).to_be_bytes());
+    v.extend_from_slice(&u16::try_from(s.len()).expect("test fixture string fits in a JVM u16 length").to_be_bytes());
     v.extend_from_slice(s.as_bytes());
     v
 }
