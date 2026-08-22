@@ -114,7 +114,7 @@ fn leb128_u32_128() {
 
 #[test]
 fn leb128_u32_max() {
-    let bytes = unsigned_leb128(u32::MAX as u64);
+    let bytes = unsigned_leb128(u64::from(u32::MAX));
     let mut d = Leb128Decoder::new(&bytes);
     assert_eq!(d.read_u32().unwrap(), u32::MAX);
 }
@@ -145,14 +145,14 @@ fn leb128_i32_negative_one() {
 
 #[test]
 fn leb128_i32_min() {
-    let bytes = signed_leb128(i32::MIN as i64);
+    let bytes = signed_leb128(i64::from(i32::MIN));
     let mut d = Leb128Decoder::new(&bytes);
     assert_eq!(d.read_i32().unwrap(), i32::MIN);
 }
 
 #[test]
 fn leb128_i32_max() {
-    let bytes = signed_leb128(i32::MAX as i64);
+    let bytes = signed_leb128(i64::from(i32::MAX));
     let mut d = Leb128Decoder::new(&bytes);
     assert_eq!(d.read_i32().unwrap(), i32::MAX);
 }

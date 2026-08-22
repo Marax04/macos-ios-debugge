@@ -643,7 +643,7 @@ fn threaded_prel31_roundtrip_send_sync() {
     for t in 0..4u32 {
         handles.push(thread::spawn(move || {
             let mut g = {
-                let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE ^ (t as u64);
+                let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE ^ u64::from(t);
                 move || {
                     s = s
                         .wrapping_mul(6_364_136_223_846_793_005)

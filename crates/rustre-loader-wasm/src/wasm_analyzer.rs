@@ -886,9 +886,9 @@ mod tests {
 
         AnalysisModuleBuilder::new()
             .import("env", "external_fn")
-            .func(Some("inner"), call_0.clone())
-            .func(Some("exported_fn"), call_1.clone())
-            .func(None, nop_body.clone()) // dead
+            .func(Some("inner"), call_0)
+            .func(Some("exported_fn"), call_1)
+            .func(None, nop_body) // dead
             .export("exported_fn", import_count + 1)
             .data(Some(0x100), b"Hello, world! This is a test string.".to_vec())
             .build()
