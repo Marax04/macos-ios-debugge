@@ -10,6 +10,7 @@
 //! * [`BpfAnalysis`] — top-level facade.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 use std::fmt;
 
 // ---------------------------------------------------------------------------
@@ -291,8 +292,32 @@ impl HelperCallAnalysis {
         v
     }
 
+    /// Resolve a helper id to its name.
+    ///
+    /// The `match` below is a fast path for the eleven helpers this module
+    /// names as constants; anything it does not know is looked up in
+    /// [`crate::known_helpers`], which has 212 entries. Before that fallback
+    /// existed roughly 95% of real helper calls were reported as
+    /// "unknown_helper" while the full table sat unused in the same crate.
     #[must_use]
-    pub const fn helper_name(id: u32) -> &'static str {
+    pub fn helper_name(id: u32) -> &'static str {
+        match Self::helper_name_fast(id) {
+            "unknown_helper" => Self::helper_name_from_table(id),
+            known => known,
+        }
+    }
+
+    /// The full 212-entry table, built once and shared.
+    fn helper_name_from_table(id: u32) -> &'static str {
+        static TABLE: OnceLock<HashMap<i32, &'static str>> = OnceLock::new();
+        i32::try_from(id)
+            .ok()
+            .and_then(|k| TABLE.get_or_init(crate::known_helpers).get(&k).copied())
+            .unwrap_or("unknown_helper")
+    }
+
+    #[must_use]
+    const fn helper_name_fast(id: u32) -> &'static str {
         match id {
             BPF_HELPER_MAP_LOOKUP_ELEM => "bpf_map_lookup_elem",
             BPF_HELPER_MAP_UPDATE_ELEM => "bpf_map_update_elem",
@@ -709,6 +734,30 @@ impl BpfAnalysis {
 
 #[cfg(test)]
 mod tests {
+
+    /// helper_name used to be an 11-entry const match that answered
+    /// "unknown_helper" for everything else, while a 212-entry table lived in
+    /// crate::known_helpers. These ids are all absent from the fast path.
+    #[test]
+    fn helper_name_falls_back_to_the_full_table() {
+        // Fast path still answers.
+        assert_eq!(HelperCallAnalysis::helper_name(1), "bpf_map_lookup_elem");
+
+        // These are only in the big table.
+        for (id, want) in [
+            (15u32, "bpf_get_current_uid_gid"),
+            (22, "bpf_perf_event_read"),
+            (27, "bpf_get_stackid"),
+            (35, "bpf_get_current_task"),
+        ] {
+            let got = HelperCallAnalysis::helper_name(id);
+            assert_eq!(got, want, "helper {id}");
+            assert_ne!(got, "unknown_helper", "helper {id} still unresolved");
+        }
+
+        // A genuinely unknown id is still reported as such.
+        assert_eq!(HelperCallAnalysis::helper_name(u32::MAX), "unknown_helper");
+    }
     use super::*;
 
     fn call_insn(helper: u32) -> [u8; 8] {
