@@ -204,7 +204,7 @@ impl FlirtPattern {
             .map(|(&b, &m)| if m == 0 { None } else { Some(b) })
             .collect();
         let mut pat = Self::new(sig.name.clone(), bytes);
-        pat.lib_name = sig.lib_name.clone();
+        pat.lib_name.clone_from(&sig.lib_name);
         pat.crc_offset = sig.crc_offset;
         pat.crc_len = sig.crc_len;
         pat.crc = sig.crc;
@@ -2844,7 +2844,7 @@ fn decode_sig_trie_inner(
 /// wrong fixed layout; it was removed once every reader stopped using it,
 /// because a constant that names a wrong invariant invites someone to reach for
 /// it again.
-
+///
 /// Parse the v9 .sig fixed header from `raw`.
 ///
 /// Returns `(version, arch, num_functions, pattern_size, lib_name)` on success.
@@ -3615,7 +3615,7 @@ mod fast_scan_tests {
         for i in 0..total {
             if i < prefix_len {
                 // Use a deterministic but varied byte so signatures differ.
-                bytes.push(((idx.wrapping_mul(31).wrapping_add(i).wrapping_mul(17)) & 0xFF) as u8);
+                bytes.push(u8::try_from((idx.wrapping_mul(31).wrapping_add(i).wrapping_mul(17)) & 0xFF).unwrap());
                 mask.push(0xff);
             } else {
                 bytes.push(0x00);
@@ -3649,9 +3649,9 @@ mod fast_scan_tests {
         let mut state: u64 = 0xDEAD_BEEF_CAFE_0001;
         for b in &mut data {
             state = state
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
-            *b = (state >> 33) as u8;
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            *b = u8::try_from((state >> 33) & 0xFF).unwrap();
         }
 
         // -- Fast scanner --

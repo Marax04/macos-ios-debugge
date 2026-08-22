@@ -654,11 +654,11 @@ mod tests {
             make_match(0x1000, "b", "lib", 60, 6),
             make_match(0x2000, "c", "lib", 90, 10),
         ];
-        let resolved = resolver.resolve(matches);
-        assert_eq!(resolved.len(), 2);
-        assert_eq!(resolved[0].address, 0x1000);
-        assert_eq!(resolved[0].function_name, "a");
-        assert_eq!(resolved[1].address, 0x2000);
+        let winners = resolver.resolve(matches);
+        assert_eq!(winners.len(), 2);
+        assert_eq!(winners[0].address, 0x1000);
+        assert_eq!(winners[0].function_name, "a");
+        assert_eq!(winners[1].address, 0x2000);
     }
 
     #[test]

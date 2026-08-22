@@ -556,8 +556,8 @@ mod tests {
             (0x1000u64, "strlen", 12usize, 12usize, false, false),
             (0x2000u64, "memcpy", 14usize, 10usize, true, true),
         ];
-        let scores = scorer.score_batch(&input);
-        assert_eq!(scores.len(), 2);
+        let batch_scores = scorer.score_batch(&input);
+        assert_eq!(batch_scores.len(), 2);
     }
 
     #[test]

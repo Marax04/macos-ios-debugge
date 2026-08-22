@@ -75,8 +75,8 @@ enum Kind {
 fn references(needle: &str) -> (usize, usize, usize) {
     let (mut prod, mut test, mut example) = (0usize, 0usize, 0usize);
 
-    for (path, kind) in sources() {
-        let Ok(text) = std::fs::read_to_string(&path) else { continue };
+    for (src_path, kind) in sources() {
+        let Ok(text) = std::fs::read_to_string(&src_path) else { continue };
 
         // Production files carry inline `#[cfg(test)]` modules. Everything from
         // the first one to end of file is test code, not production — counting

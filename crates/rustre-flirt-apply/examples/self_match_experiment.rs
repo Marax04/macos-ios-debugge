@@ -38,10 +38,10 @@ fn main() {
     };
 
     let opts = rustre_flirt_gen::coff_archive::ArchiveHarvestOptions::default();
-    let (pats, stats) =
+    let (pats, harvest_stats) =
         rustre_flirt_gen::coff_archive::harvest_archive_bytes(&data, &opts).expect("harvest");
     println!("archivio  : {path}");
-    println!("membri    : {}, oggetti {}", stats.members, stats.objects_parsed);
+    println!("membri    : {}, oggetti {}", harvest_stats.members, harvest_stats.objects_parsed);
     println!("pattern   : {}", pats.len());
 
     if pats.is_empty() {

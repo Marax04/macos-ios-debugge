@@ -447,11 +447,11 @@ impl BatchApplier {
             }
             match self.strategy {
                 MergeStrategy::HighestConfidence => {
-                    candidates.sort_by(|a, b| b.1.confidence.cmp(&a.1.confidence));
+                    candidates.sort_by_key(|c| std::cmp::Reverse(c.1.confidence));
                     merged.push(candidates.remove(0).1);
                 }
                 MergeStrategy::PriorityFirst => {
-                    candidates.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.confidence.cmp(&a.1.confidence)));
+                    candidates.sort_by_key(|c| (std::cmp::Reverse(c.0), std::cmp::Reverse(c.1.confidence)));
                     merged.push(candidates.remove(0).1);
                 }
                 MergeStrategy::AllMatches => {
@@ -462,7 +462,7 @@ impl BatchApplier {
                 MergeStrategy::Consensus { min_votes } => {
                     if candidates.len() >= min_votes {
                         // Pick the highest-confidence representative.
-                        candidates.sort_by(|a, b| b.1.confidence.cmp(&a.1.confidence));
+                        candidates.sort_by_key(|c| std::cmp::Reverse(c.1.confidence));
                         merged.push(candidates.remove(0).1);
                     }
                 }

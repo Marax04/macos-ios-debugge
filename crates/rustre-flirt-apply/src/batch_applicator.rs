@@ -158,7 +158,7 @@ impl BatchSummary {
                 identified_functions: n,
                 total_unique_sigs: n,
             }).collect();
-            v.sort_by(|a, b| b.identified_functions.cmp(&a.identified_functions));
+            v.sort_by_key(|e| std::cmp::Reverse(e.identified_functions));
             v
         };
 
@@ -537,10 +537,10 @@ mod tests {
         assert!(summary.coverage_percent > 0.0);
 
         let events = sink.into_events();
-        let rename_events: Vec<_> = events.iter()
+        let rename_events = events.iter()
             .filter(|e| matches!(e, ProgressEvent::FunctionNamed { .. }))
-            .collect();
-        assert_eq!(rename_events.len(), 3);
+            .count();
+        assert_eq!(rename_events, 3);
     }
 
     #[test]

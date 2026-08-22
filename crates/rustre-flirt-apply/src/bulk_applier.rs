@@ -986,9 +986,9 @@ mod tests {
 
     #[test]
     fn report_rename_rate() {
-        let results: Vec<ApplyResult> = (0..4)
+        let results: Vec<ApplyResult> = (0..4u64)
             .map(|i| ApplyResult {
-                address: i as u64 * 0x100,
+                address: i * 0x100,
                 name: format!("fn{i}"),
                 library: "l".to_string(),
                 confidence: 90,
@@ -1069,18 +1069,20 @@ mod tests {
         a.add_pattern(p);
 
         let data = vec![0x55u8, 0x8B, 0xEC, 0x83, 0x00];
-        let mut _renamed = Vec::new();
+        let mut renamed = Vec::new();
         let report = a.apply_to_binary(
             &data,
             0x1000,
             &[0x1000],
             |_| None,
             |addr, name| {
-                _renamed.push((addr, name.to_string()));
+                renamed.push((addr, name.to_string()));
                 true
             },
         );
         assert!(report.renamed <= 1);
+        // The callback must have fired exactly as often as the report claims.
+        assert_eq!(renamed.len(), report.renamed);
     }
 
     #[test]

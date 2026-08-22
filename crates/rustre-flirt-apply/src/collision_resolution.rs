@@ -562,7 +562,7 @@ mod tests {
             make_match(0x2000, "fn2", 85, 12),
         ];
         let mut groups = CollisionResolver::group_collisions(matches);
-        let resolved = resolver.resolve_all(&mut groups, &[0u8; 128], None, 0x1000);
-        assert_eq!(resolved.len(), 2);
+        let winners = resolver.resolve_all(&mut groups, &[0u8; 128], None, 0x1000);
+        assert_eq!(winners.len(), 2);
     }
 }

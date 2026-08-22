@@ -511,7 +511,7 @@ mod tests {
     #[test]
     fn test_parser_read_u32_be() {
         let mut p = SigParser::new(vec![0x01, 0x02, 0x03, 0x04]);
-        assert_eq!(p.read_u32_be().unwrap(), 0x01020304);
+        assert_eq!(p.read_u32_be().unwrap(), 0x0102_0304);
     }
 
     #[test]

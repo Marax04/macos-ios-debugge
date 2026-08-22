@@ -40,11 +40,11 @@ fn a_generated_sig_header_is_readable_by_the_loader() {
     // was broken: generator and loader used to disagree on the layout, so a
     // file written here could not be read there at all.
     let loader = SigFileLoader::new();
-    let loaded = loader
+    let from_disk = loader
         .load_from_bytes(&bytes, None)
         .expect("il loader di flirt-apply deve leggere un .sig scritto da flirt-gen");
-    assert_eq!(loaded.header.lib_name, "testlib");
-    assert_eq!(loaded.header.arch, 75);
+    assert_eq!(from_disk.header.lib_name, "testlib");
+    assert_eq!(from_disk.header.arch, 75);
 }
 
 #[test]

@@ -62,14 +62,14 @@ fn main() {
     let mut written: Vec<(&str, String)> = Vec::new();
 
     let dir = std::env::var("TEMP").unwrap_or_else(|_| ".".to_string());
-    let path = std::path::Path::new(&dir).join("rustre_matrix.pat");
-    rustre_flirt_gen::pat_file_writer::write_pat_file(&pats, "matrix", &path)
+    let out_path = std::path::Path::new(&dir).join("rustre_matrix.pat");
+    rustre_flirt_gen::pat_file_writer::write_pat_file(&pats, "matrix", &out_path)
         .expect("scrittura .pat");
     written.push((
         "gen/pat_file_writer",
-        std::fs::read_to_string(&path).expect("rilettura"),
+        std::fs::read_to_string(&out_path).expect("rilettura"),
     ));
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&out_path);
 
     let mut sw = rustre_flirt::flirt_signature_writer::FlirtSignatureWriter::new("matrix");
     for p in &pats {

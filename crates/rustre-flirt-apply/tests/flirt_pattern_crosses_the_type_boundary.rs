@@ -70,11 +70,11 @@ fn cross(pats: &[FlirtPattern], tag: &str) -> Vec<rustre_flirt_apply::FlirtPatte
     let sig = rustre_flirt_gen::SigWriter::default().build(pats, "crossing");
 
     let dir = std::env::var("TEMP").unwrap_or_else(|_| ".".to_string());
-    let path = std::path::Path::new(&dir).join(format!("rustre_crossing_{tag}.sig"));
-    std::fs::write(&path, &sig).expect("scrittura del .sig temporaneo");
+    let sig_path = std::path::Path::new(&dir).join(format!("rustre_crossing_{tag}.sig"));
+    std::fs::write(&sig_path, &sig).expect("scrittura del .sig temporaneo");
 
-    let sigs = rustre_flirt_apply::load_sig_file(&path).expect("il .sig deve essere leggibile");
-    let _ = std::fs::remove_file(&path);
+    let sigs = rustre_flirt_apply::load_sig_file(&sig_path).expect("il .sig deve essere leggibile");
+    let _ = std::fs::remove_file(&sig_path);
 
     sigs.iter()
         .map(rustre_flirt_apply::FlirtPattern::from_signature)

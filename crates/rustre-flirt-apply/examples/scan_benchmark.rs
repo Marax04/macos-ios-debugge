@@ -59,26 +59,26 @@ fn main() {
             continue;
         };
 
-        let mut scanned = 0usize;
+        let mut byte_total = 0usize;
         let mut hits = 0usize;
         let t = Instant::now();
         for s in &pe.sections {
             if s.characteristics & 0x2000_0000 == 0 || s.data.is_empty() {
                 continue;
             }
-            scanned += s.data.len();
+            byte_total += s.data.len();
             let va = pe.image_base + u64::from(s.virtual_address);
             hits += scanner.scan_fast(&s.data, va).len();
         }
         let secs = t.elapsed().as_secs_f64();
 
-        let mbs = (usize_to_f64(scanned) / (1024.0 * 1024.0)) / secs.max(1e-9);
+        let mbs = (usize_to_f64(byte_total) / (1024.0 * 1024.0)) / secs.max(1e-9);
         let name = std::path::Path::new(path)
             .file_name()
             .map_or_else(|| path.clone(), |s| s.to_string_lossy().into_owned());
         println!(
             "{name:<26} {:>10} {:>7.0} ms {:>9.1} MB/s {hits:>8}",
-            human(scanned),
+            human(byte_total),
             secs * 1000.0,
             mbs
         );

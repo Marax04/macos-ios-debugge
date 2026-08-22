@@ -44,13 +44,13 @@ fn sample_patterns() -> Vec<FlirtPattern> {
 fn main() {
     let pats = sample_patterns();
     let dir = std::env::var("TEMP").unwrap_or_else(|_| ".".to_string());
-    let path = std::path::Path::new(&dir).join("rustre_prod_path.pat");
-    rustre_flirt_gen::pat_file_writer::write_pat_file(&pats, "prod", &path)
+    let out_path = std::path::Path::new(&dir).join("rustre_prod_path.pat");
+    rustre_flirt_gen::pat_file_writer::write_pat_file(&pats, "prod", &out_path)
         .expect("scrittura .pat");
 
     println!("scritti      : {} pattern", pats.len());
 
-    match rustre_flirt_apply::load_pat_file(&path) {
+    match rustre_flirt_apply::load_pat_file(&out_path) {
         Ok(sigs) => {
             println!("load_pat_file: {} firme recuperate", sigs.len());
             for s in &sigs {
@@ -69,9 +69,9 @@ fn main() {
     }
 
     // The canonical parser, for comparison on the same bytes.
-    let text = std::fs::read_to_string(&path).expect("rilettura");
+    let text = std::fs::read_to_string(&out_path).expect("rilettura");
     let (canon, errs) = rustre_flirt::pat_canonical::parse_text(&text);
     println!("pat_canonical: {} pattern, {} errori", canon.len(), errs.len());
 
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&out_path);
 }

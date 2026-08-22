@@ -55,11 +55,11 @@ fn main() {
 
     // Reader B: the public loader that returns the signatures themselves.
     let dir = std::env::var("TEMP").unwrap_or_else(|_| ".".to_string());
-    let path = std::path::Path::new(&dir).join("rustre_two_readers.sig");
-    std::fs::write(&path, &sig).expect("scrittura");
-    match rustre_flirt_apply::load_sig_file(&path) {
+    let sig_path = std::path::Path::new(&dir).join("rustre_two_readers.sig");
+    std::fs::write(&sig_path, &sig).expect("scrittura");
+    match rustre_flirt_apply::load_sig_file(&sig_path) {
         Ok(sigs) => println!("load_sig_file   : {} firme recuperate", sigs.len()),
         Err(e) => println!("load_sig_file   : errore {e:?}"),
     }
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&sig_path);
 }

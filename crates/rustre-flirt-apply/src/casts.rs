@@ -162,41 +162,7 @@ pub fn f64_to_u8(x: f64) -> u8 {
     u8::try_from(mantissa >> right).unwrap_or(u8::MAX)
 }
 
-// ─── In-crate usage / tests (keeps every cast helper wired into a call site) ──
 
-#[cfg(test)]
-mod casts_use {
-    use super::*;
-
-    #[test]
-    fn exercise_all_cast_helpers() {
-        // Integer → Float
-        let _ = u64_to_f64(123);
-        let _ = usize_to_f64(123);
-        let _ = u64_to_f32(123);
-        let _ = usize_to_f32(123);
-        let _ = u32_to_f32(123);
-
-        // Float → Float
-        let _ = f64_to_f32(1.5_f64);
-        let _ = f32_from_f64_bits(1.5_f64);
-
-        // Float → Integer
-        let _ = f64_to_usize(2.0_f64);
-        let _ = f32_to_usize(2.0_f32);
-        let _ = f64_to_u8(2.0_f64);
-        let _ = f32_to_u8(2.0_f32);
-
-        // Integer → Integer
-        let _ = i32_to_u8(42);
-        let _ = u64_to_u8(42);
-        let _ = u64_to_i64(42);
-        let _ = u64_to_usize(42);
-        let _ = usize_to_u32(42);
-        let _ = u128_to_u64(42);
-        let _ = usize_to_u8(42);
-    }
-}
 
 /// Convert an `f32` to `u8`, saturating.
 #[inline]
@@ -254,4 +220,40 @@ pub fn u128_to_u64(x: u128) -> u64 {
 #[must_use]
 pub fn usize_to_u8(x: usize) -> u8 {
     u8::try_from(x.min(255)).unwrap_or(u8::MAX)
+}
+
+// ─── In-crate usage / tests (keeps every cast helper wired into a call site) ──
+
+#[cfg(test)]
+mod casts_use {
+    use super::*;
+
+    #[test]
+    fn exercise_all_cast_helpers() {
+        // Integer → Float
+        let _ = u64_to_f64(123);
+        let _ = usize_to_f64(123);
+        let _ = u64_to_f32(123);
+        let _ = usize_to_f32(123);
+        let _ = u32_to_f32(123);
+
+        // Float → Float
+        let _ = f64_to_f32(1.5_f64);
+        let _ = f32_from_f64_bits(1.5_f64);
+
+        // Float → Integer
+        let _ = f64_to_usize(2.0_f64);
+        let _ = f32_to_usize(2.0_f32);
+        let _ = f64_to_u8(2.0_f64);
+        let _ = f32_to_u8(2.0_f32);
+
+        // Integer → Integer
+        let _ = i32_to_u8(42);
+        let _ = u64_to_u8(42);
+        let _ = u64_to_i64(42);
+        let _ = u64_to_usize(42);
+        let _ = usize_to_u32(42);
+        let _ = u128_to_u64(42);
+        let _ = usize_to_u8(42);
+    }
 }

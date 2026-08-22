@@ -85,22 +85,22 @@ fn scanning_throughput_has_not_collapsed() {
 
     let scanner = rustre_flirt_apply::FlirtScanner::from_sig_bytes(&sig).expect("scanner");
 
-    let mut scanned = 0usize;
+    let mut byte_total = 0usize;
     let t = Instant::now();
     for s in &pe.sections {
         if s.characteristics & 0x2000_0000 == 0 || s.data.is_empty() {
             continue;
         }
-        scanned += s.data.len();
+        byte_total += s.data.len();
         let va = pe.image_base + u64::from(s.virtual_address);
         let _ = scanner.scan_fast(&s.data, va);
     }
     let elapsed = t.elapsed();
 
-    assert!(scanned > 100_000, "solo {scanned} byte scansionati: test vacuo");
+    assert!(byte_total > 100_000, "solo {byte_total} byte scansionati: test vacuo");
 
-    let mbs = (usize_to_f64(scanned) / (1024.0 * 1024.0)) / elapsed.as_secs_f64().max(1e-9);
-    eprintln!("scan: {scanned} byte in {elapsed:?} = {mbs:.1} MB/s");
+    let mbs = (usize_to_f64(byte_total) / (1024.0 * 1024.0)) / elapsed.as_secs_f64().max(1e-9);
+    eprintln!("scan: {byte_total} byte in {elapsed:?} = {mbs:.1} MB/s");
 
     // Measured at 235 MB/s. 10 MB/s is ~23x slower: reachable only by a
     // complexity change, not by a busy machine.
