@@ -1100,7 +1100,7 @@ mod tests {
     #[test]
     fn test_global_var_address_comment() {
         let mut g = GlobalVarDecl::new("uint64_t", "base_addr");
-        g.address_comment = Some(0x140001000);
+        g.address_comment = Some(0x0001_4000_1000);
         let s = g.emit();
         assert!(s.contains("0x140001000"));
     }

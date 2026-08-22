@@ -27,8 +27,8 @@ fn make_lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -706,7 +706,7 @@ fn codegen_const_neg_auto() {
 #[test]
 fn codegen_const_u64_suffix() {
     let g = CodeGenerator::default();
-    let s = g.constant(0x100000, IntWidth::U64);
+    let s = g.constant(0x0010_0000, IntWidth::U64);
     assert!(s.ends_with("ULL"));
 }
 
