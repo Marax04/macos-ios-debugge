@@ -31,6 +31,39 @@ pub mod system_records {
     pub const SECURE: u64 = 9;
     pub const UPCASE: u64 = 10;
     pub const EXTEND: u64 = 11;
+
+    /// The highest reserved record number ($Extend).
+    pub const LAST_RESERVED: u64 = EXTEND;
+
+    /// True if `record_number` is one of the twelve reserved NTFS metafiles.
+    ///
+    /// Records 0..=11 are the fixed system files ($MFT, $MFTMirr, $LogFile,
+    /// $Volume, $AttrDef, `.`, $Bitmap, $Boot, $BadClus, $Secure, $UpCase,
+    /// $Extend); everything above is user data.
+    #[must_use]
+    pub const fn is_reserved(record_number: u64) -> bool {
+        record_number <= LAST_RESERVED
+    }
+
+    /// The conventional name of a reserved record, if it is one.
+    #[must_use]
+    pub const fn name_of(record_number: u64) -> Option<&'static str> {
+        Some(match record_number {
+            MFT => "$MFT",
+            MFT_MIRROR => "$MFTMirr",
+            LOG_FILE => "$LogFile",
+            VOLUME => "$Volume",
+            ATTR_DEF => "$AttrDef",
+            ROOT_DIR => ".",
+            BITMAP => "$Bitmap",
+            BOOT => "$Boot",
+            BAD_CLUS => "$BadClus",
+            SECURE => "$Secure",
+            UPCASE => "$UpCase",
+            EXTEND => "$Extend",
+            _ => return None,
+        })
+    }
 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
@@ -428,6 +461,17 @@ impl MftRecord {
             .map(|f| f.name.as_str())
     }
 
+    /// Best available name for this record.
+    ///
+    /// Reserved metafiles frequently carry no `$FILE_NAME` attribute, so
+    /// `primary_name` returns `None` for them even though their name is
+    /// fixed by record number.  Fall back to the reserved-record table.
+    #[must_use]
+    pub fn display_name(&self) -> Option<&str> {
+        self.primary_name()
+            .or_else(|| system_records::name_of(self.record_number))
+    }
+
     #[must_use] 
     pub fn data_size(&self) -> u64 {
         self.data_attrs
@@ -516,6 +560,11 @@ impl NtfsMftFull {
         self.records.reserve(limit);
 
         for i in 0..limit {
+            // `skip_system_records` was previously declared and never read,
+            // so asking to skip the reserved metafiles silently did nothing.
+            if self.config.skip_system_records && system_records::is_reserved(i as u64) {
+                continue;
+            }
             let offset = i * MFT_RECORD_SIZE;
             let rec_data = &image[offset..offset + MFT_RECORD_SIZE];
             match self.parse_record(i as u64, rec_data) {
@@ -687,7 +736,7 @@ impl NtfsMftFull {
         self.records
             .iter()
             .filter(|r| {
-                r.primary_name()
+                r.display_name()
                     .is_some_and(|n| n.to_lowercase() == lower)
             })
             .collect()
@@ -1039,6 +1088,7 @@ mod tests {
         r.file_names.push(fn_dos);
         r.file_names.push(fn_win32);
         assert_eq!(r.primary_name(), Some("TestFile.txt"));
+        assert_eq!(r.display_name(), Some("TestFile.txt"));
     }
 
     #[test]
@@ -1145,4 +1195,50 @@ mod tests {
         let dr = DataRun { vcn: 0, lcn: 100, cluster_count: 50 };
         assert_eq!(dr.cluster_count, 50);
     }
+    #[test]
+    fn skip_system_records_is_honoured() {
+        // Regression: the config field was declared and never read, so
+        // asking to skip the reserved metafiles did nothing at all.
+        let mut image = vec![0u8; MFT_RECORD_SIZE * 14];
+        for i in 0..14 {
+            let off = i * MFT_RECORD_SIZE;
+            image[off..off + 4].copy_from_slice(b"FILE");
+            image[off + 20..off + 22].copy_from_slice(&56u16.to_le_bytes());
+        }
+        let mut keep = NtfsMftFull::new(MftConfig::default());
+        keep.parse_image(&image).unwrap();
+
+        let mut skip = NtfsMftFull::new(MftConfig { skip_system_records: true, ..MftConfig::default() });
+        skip.parse_image(&image).unwrap();
+
+        assert_eq!(keep.records.len() - skip.records.len(), 12);
+        assert!(skip.records.iter().all(|r| r.record_number > system_records::LAST_RESERVED));
+    }
+
+    #[test]
+    fn reserved_record_names_are_routed() {
+        assert!(system_records::is_reserved(system_records::EXTEND));
+        assert!(!system_records::is_reserved(system_records::EXTEND + 1));
+        assert_eq!(system_records::name_of(system_records::MFT_MIRROR), Some("$MFTMirr"));
+        assert_eq!(system_records::name_of(system_records::BAD_CLUS), Some("$BadClus"));
+        assert_eq!(system_records::name_of(system_records::UPCASE), Some("$UpCase"));
+        assert_eq!(system_records::name_of(12), None);
+    }
+
+    #[test]
+    fn find_by_name_reaches_metafiles_without_filename_attr() {
+        let mut image = vec![0u8; MFT_RECORD_SIZE * 8];
+        for i in 0..8 {
+            let off = i * MFT_RECORD_SIZE;
+            image[off..off + 4].copy_from_slice(b"FILE");
+            image[off + 20..off + 22].copy_from_slice(&56u16.to_le_bytes());
+        }
+        let mut p = NtfsMftFull::new(MftConfig::default());
+        p.parse_image(&image).unwrap();
+        // No record carries a $FILE_NAME attribute, so this only resolves
+        // through the reserved-record table.
+        assert_eq!(p.find_by_name("$Boot").len(), 1);
+        assert_eq!(p.find_by_name("$LogFile").len(), 1);
+    }
+
 }
