@@ -617,7 +617,19 @@ impl Z80State {
                 self.reg8_write(r, n);
                 Ok(if r == 6 { 10 } else { 7 })
             }
-            // Rotate accumulator
+            // Rotate accumulator: RLCA / RRCA / RLA / RRA
+            0x07 | 0x0F | 0x17 | 0x1F => self.execute_rotate_a(op),
+            // EX AF,AF'
+            _ => self.execute_x0_high(op, io),
+        }
+    }
+
+    /// The four accumulator-rotate opcodes of the x=0 block.
+    ///
+    /// Split out of `execute` verbatim so that function stays under the
+    /// `too_many_lines` threshold; `op` is always one of 0x07/0x0F/0x17/0x1F.
+    fn execute_rotate_a(&mut self, op: u8) -> Result<u32, String> {
+        match u16::from(op) {
             0x07 => {
                 // RLCA
                 let c = self.a >> 7;
@@ -656,8 +668,7 @@ impl Z80State {
                 self.set_n(false);
                 Ok(4)
             }
-            // EX AF,AF'
-            _ => self.execute_x0_high(op, io),
+            other => Err(format!("execute_rotate_a: not a rotate opcode 0x{other:02x}")),
         }
     }
 
@@ -1189,6 +1200,78 @@ impl Z80State {
             8
         }
     }
+    /// The ED-prefixed block-transfer opcodes: LDI, LDD, LDIR and LDDR.
+    ///
+    /// Split out of `execute_ed` verbatim so that function stays under the
+    /// `too_many_lines` threshold; `op2` is always 0xA0/0xA8/0xB0/0xB8.
+    fn execute_ed_block(&mut self, op2: u8) -> Result<u32, String> {
+        match op2 {
+            // LDI
+            0xA0 => {
+                let v = self.mem.read8(self.hl());
+                self.mem.write8(self.de(), v);
+                self.set_hl(self.hl().wrapping_add(1));
+                self.set_de(self.de().wrapping_add(1));
+                let bc = self.bc().wrapping_sub(1);
+                self.set_bc(bc);
+                self.set_pv(bc != 0);
+                self.set_h(false);
+                self.set_n(false);
+                Ok(16)
+            }
+            // LDD
+            0xA8 => {
+                let v = self.mem.read8(self.hl());
+                self.mem.write8(self.de(), v);
+                self.set_hl(self.hl().wrapping_sub(1));
+                self.set_de(self.de().wrapping_sub(1));
+                let bc = self.bc().wrapping_sub(1);
+                self.set_bc(bc);
+                self.set_pv(bc != 0);
+                self.set_h(false);
+                self.set_n(false);
+                Ok(16)
+            }
+            // LDIR
+            0xB0 => {
+                loop {
+                    let v = self.mem.read8(self.hl());
+                    self.mem.write8(self.de(), v);
+                    self.set_hl(self.hl().wrapping_add(1));
+                    self.set_de(self.de().wrapping_add(1));
+                    let bc = self.bc().wrapping_sub(1);
+                    self.set_bc(bc);
+                    if bc == 0 {
+                        break;
+                    }
+                }
+                self.set_pv(false);
+                self.set_h(false);
+                self.set_n(false);
+                Ok(21)
+            }
+            // LDDR
+            0xB8 => {
+                loop {
+                    let v = self.mem.read8(self.hl());
+                    self.mem.write8(self.de(), v);
+                    self.set_hl(self.hl().wrapping_sub(1));
+                    self.set_de(self.de().wrapping_sub(1));
+                    let bc = self.bc().wrapping_sub(1);
+                    self.set_bc(bc);
+                    if bc == 0 {
+                        break;
+                    }
+                }
+                self.set_pv(false);
+                self.set_h(false);
+                self.set_n(false);
+                Ok(21)
+            }
+            other => Err(format!("execute_ed_block: not a block opcode 0xED {other:02X}")),
+        }
+    }
+
 
     fn execute_ed(&mut self, op2: u8, io: &mut dyn IoPortHandler) -> Result<u32, String> {
         match op2 {
@@ -1258,68 +1341,8 @@ impl Z80State {
                 io.port_out(self.bc(), self.reg8_read(r));
                 Ok(12)
             }
-            // LDI
-            0xA0 => {
-                let v = self.mem.read8(self.hl());
-                self.mem.write8(self.de(), v);
-                self.set_hl(self.hl().wrapping_add(1));
-                self.set_de(self.de().wrapping_add(1));
-                let bc = self.bc().wrapping_sub(1);
-                self.set_bc(bc);
-                self.set_pv(bc != 0);
-                self.set_h(false);
-                self.set_n(false);
-                Ok(16)
-            }
-            // LDD
-            0xA8 => {
-                let v = self.mem.read8(self.hl());
-                self.mem.write8(self.de(), v);
-                self.set_hl(self.hl().wrapping_sub(1));
-                self.set_de(self.de().wrapping_sub(1));
-                let bc = self.bc().wrapping_sub(1);
-                self.set_bc(bc);
-                self.set_pv(bc != 0);
-                self.set_h(false);
-                self.set_n(false);
-                Ok(16)
-            }
-            // LDIR
-            0xB0 => {
-                loop {
-                    let v = self.mem.read8(self.hl());
-                    self.mem.write8(self.de(), v);
-                    self.set_hl(self.hl().wrapping_add(1));
-                    self.set_de(self.de().wrapping_add(1));
-                    let bc = self.bc().wrapping_sub(1);
-                    self.set_bc(bc);
-                    if bc == 0 {
-                        break;
-                    }
-                }
-                self.set_pv(false);
-                self.set_h(false);
-                self.set_n(false);
-                Ok(21)
-            }
-            // LDDR
-            0xB8 => {
-                loop {
-                    let v = self.mem.read8(self.hl());
-                    self.mem.write8(self.de(), v);
-                    self.set_hl(self.hl().wrapping_sub(1));
-                    self.set_de(self.de().wrapping_sub(1));
-                    let bc = self.bc().wrapping_sub(1);
-                    self.set_bc(bc);
-                    if bc == 0 {
-                        break;
-                    }
-                }
-                self.set_pv(false);
-                self.set_h(false);
-                self.set_n(false);
-                Ok(21)
-            }
+            // Block transfers: LDI / LDD / LDIR / LDDR
+            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_ed_block(op2),
             _ => Err(format!("unimplemented ED opcode 0xED {op2:02X}")),
         }
     }
