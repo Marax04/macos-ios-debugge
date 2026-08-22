@@ -46,6 +46,14 @@ pub enum PpcILExpr {
     Lsr(Box<Self>, u8),
     /// Arithmetic shift right.
     Asr(Box<Self>, u8),
+    /// Logical shift left by the VALUE of another expression (PPC `slw`).
+    LslReg(Box<Self>, Box<Self>),
+    /// Logical shift right by the VALUE of another expression (PPC `srw`).
+    LsrReg(Box<Self>, Box<Self>),
+    /// Arithmetic shift right by the VALUE of another expression (PPC `sraw`).
+    AsrReg(Box<Self>, Box<Self>),
+    /// Count leading zero bits (PPC `cntlzw`).
+    Cntlzw(Box<Self>),
     /// Sign-extend from `width` bits.
     Sext(Box<Self>, u8),
     /// Memory load of `width` bytes at `addr`.
@@ -80,6 +88,10 @@ impl fmt::Display for PpcILExpr {
             Self::Lsr(a, s) => write!(f, "({a} >> {s})"),
             Self::Asr(a, s) => write!(f, "({a} >>s {s})"),
             Self::Sext(a, w) => write!(f, "sext{w}({a})"),
+            Self::LslReg(a, b) => write!(f, "({a} << {b})"),
+            Self::LsrReg(a, b) => write!(f, "({a} >> {b})"),
+            Self::AsrReg(a, b) => write!(f, "({a} >>a {b})"),
+            Self::Cntlzw(a) => write!(f, "cntlzw({a})"),
             Self::Load { width, addr } => write!(f, "mem{width}[{addr}]"),
             Self::LR => write!(f, "LR"),
             Self::CTR => write!(f, "CTR"),
@@ -138,6 +150,18 @@ impl PpcILExpr {
     }
     fn asr(a: Self, s: u8) -> Self {
         Self::Asr(Box::new(a), s)
+    }
+    fn lsl_reg(a: Self, b: Self) -> Self {
+        Self::LslReg(Box::new(a), Box::new(b))
+    }
+    fn lsr_reg(a: Self, b: Self) -> Self {
+        Self::LsrReg(Box::new(a), Box::new(b))
+    }
+    fn asr_reg(a: Self, b: Self) -> Self {
+        Self::AsrReg(Box::new(a), Box::new(b))
+    }
+    fn cntlzw(a: Self) -> Self {
+        Self::Cntlzw(Box::new(a))
     }
     fn sext(a: Self, w: u8) -> Self {
         Self::Sext(Box::new(a), w)
@@ -343,9 +367,11 @@ impl<'a> PpcLifter<'a> {
     /// arms are verbatim. Returns false when `xo` is not in this half.
     fn lift_opcd31_tail(il: &mut Vec<PpcILInsn>, instr: u32, rs: u32, ra: u32, rb: u32, xo: u32) -> bool {
         match xo {
+            // SRAW shifts by the VALUE in rb; srawi (xo 824, below) is the
+            // immediate form that uses the SH field.
             792 => il.push(PpcILInsn::Set {
                 dst: PpcILExpr::reg(ra),
-                value: PpcILExpr::asr(PpcILExpr::reg(rs), u8::try_from(rb & 31).unwrap_or(0)),
+                value: PpcILExpr::asr_reg(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
             }),
             // SRAWI
             824 => {
@@ -373,11 +399,19 @@ impl<'a> PpcLifter<'a> {
                     signed: false,
                 });
             }
-            // LWZX
-            21 => il.push(PpcILInsn::Set {
+            // LWZX is xo 23 (this body used to sit on xo 21, which is ldx).
+            23 => il.push(PpcILInsn::Set {
                 dst: PpcILExpr::reg(rs),
                 value: PpcILExpr::load(
                     4,
+                    PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
+                ),
+            }),
+            // LDX -- 64-bit indexed load, xo 21.
+            21 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(rs),
+                value: PpcILExpr::load(
+                    8,
                     PpcILExpr::add(PpcILExpr::reg(ra), PpcILExpr::reg(rb)),
                 ),
             }),
@@ -476,13 +510,32 @@ impl<'a> PpcLifter<'a> {
             let sh = ((instr >> 11) & 31) as u8;
             let mb = ((instr >> 6) & 31) as u8;
             let me = ((instr >> 1) & 31) as u8;
-            il.push(PpcILInsn::Rlwinm {
-                dst: PpcILExpr::reg(ra),
-                src: PpcILExpr::reg(rs),
-                sh,
-                mb,
-                me,
-            });
+            // Re-raise the two extended mnemonics a compiler actually emits.
+            // PowerPC has no immediate shift-word instruction; assemblers
+            // spell them as rotate-and-mask:
+            //   slwi rA,rS,n  ==  rlwinm rA,rS,n,0,31-n
+            //   srwi rA,rS,n  ==  rlwinm rA,rS,32-n,n,31
+            // Leaving these as an opaque Rlwinm node hides an ordinary shift
+            // from every consumer of the IL.
+            if mb == 0 && me == 31 - sh {
+                il.push(PpcILInsn::Set {
+                    dst: PpcILExpr::reg(ra),
+                    value: PpcILExpr::lsl(PpcILExpr::reg(rs), sh),
+                });
+            } else if me == 31 && mb != 0 && sh == 32 - mb {
+                il.push(PpcILInsn::Set {
+                    dst: PpcILExpr::reg(ra),
+                    value: PpcILExpr::lsr(PpcILExpr::reg(rs), mb),
+                });
+            } else {
+                il.push(PpcILInsn::Rlwinm {
+                    dst: PpcILExpr::reg(ra),
+                    src: PpcILExpr::reg(rs),
+                    sh,
+                    mb,
+                    me,
+                });
+            }
         }
         // ── RLWIMI ────────────────────────────────────────────────────
         20 => {
@@ -821,15 +874,22 @@ impl<'a> PpcLifter<'a> {
                 dst: PpcILExpr::reg(rs),
                 value: PpcILExpr::sub(PpcILExpr::simm(0), PpcILExpr::reg(ra)),
             }),
-            // SLW
-            23 => il.push(PpcILInsn::Set {
+            // SLW -- xo 24, NOT 23 (23 is lwzx, lifted with the loads below).
+            // The shift amount is the VALUE held in rb, not rb's index.
+            24 => il.push(PpcILInsn::Set {
                 dst: PpcILExpr::reg(ra),
-                value: PpcILExpr::lsl(PpcILExpr::reg(rs), (rb & 31) as u8),
+                value: PpcILExpr::lsl_reg(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
             }),
-            // SRW
-            536 | 26 => il.push(PpcILInsn::Set {
+            // SRW -- xo 536 only. xo 26 is cntlzw, which used to share this
+            // arm and was therefore lifted as a right shift.
+            536 => il.push(PpcILInsn::Set {
                 dst: PpcILExpr::reg(ra),
-                value: PpcILExpr::lsr(PpcILExpr::reg(rs), (rb & 31) as u8),
+                value: PpcILExpr::lsr_reg(PpcILExpr::reg(rs), PpcILExpr::reg(rb)),
+            }),
+            // CNTLZW
+            26 => il.push(PpcILInsn::Set {
+                dst: PpcILExpr::reg(ra),
+                value: PpcILExpr::cntlzw(PpcILExpr::reg(rs)),
             }),
             // SRAW
             _ if Self::lift_opcd31_tail(il, instr, rs, ra, rb, xo) => {}
@@ -853,6 +913,64 @@ mod tests {
 
     fn be(v: u32) -> [u8; 4] {
         v.to_be_bytes()
+    }
+
+    /// Encode an opcode-31 (XO form) instruction.
+    fn xo31(rs: u32, ra: u32, rb: u32, xo: u32) -> [u8; 4] {
+        be((31 << 26) | (rs << 21) | (ra << 16) | (rb << 11) | (xo << 1))
+    }
+
+    /// The opcode-31 extended opcodes must map to the instruction the
+    /// DISASSEMBLER decodes them as. Three were crossed over:
+    ///   xo 23 is lwzx, but was lifted as a left shift;
+    ///   xo 24 is slw,  but had no arm at all and fell through to Unlifted;
+    ///   xo 26 is cntlzw, but shared the srw arm and became a right shift.
+    /// The LWZX body also sat on xo 21, which is the 64-bit ldx.
+    #[test]
+    fn opcd31_extended_opcodes_match_the_disassembler() {
+        let l = lifter();
+
+        // xo 24 = slw: a shift, by the VALUE in rb (r5), not by rb's number.
+        let il = l.lift_insn(0, &xo31(3, 4, 5, 24)).unwrap().il;
+        assert!(
+            matches!(&il[0], PpcILInsn::Set { value: PpcILExpr::LslReg(..), .. }),
+            "xo 24 must lift as a register shift left, got {:?}",
+            il[0]
+        );
+
+        // xo 23 = lwzx: a 4-byte load, NOT a shift.
+        let il = l.lift_insn(0, &xo31(3, 4, 5, 23)).unwrap().il;
+        assert!(
+            matches!(&il[0], PpcILInsn::Set { value: PpcILExpr::Load { width: 4, .. }, .. }),
+            "xo 23 must lift as a 4-byte load, got {:?}",
+            il[0]
+        );
+
+        // xo 21 = ldx: the 8-byte form.
+        let il = l.lift_insn(0, &xo31(3, 4, 5, 21)).unwrap().il;
+        assert!(
+            matches!(&il[0], PpcILInsn::Set { value: PpcILExpr::Load { width: 8, .. }, .. }),
+            "xo 21 must lift as an 8-byte load, got {:?}",
+            il[0]
+        );
+
+        // xo 26 = cntlzw, not a right shift.
+        let il = l.lift_insn(0, &xo31(3, 4, 0, 26)).unwrap().il;
+        assert!(
+            matches!(&il[0], PpcILInsn::Set { value: PpcILExpr::Cntlzw(..), .. }),
+            "xo 26 must lift as cntlzw, got {:?}",
+            il[0]
+        );
+
+        // xo 536 = srw and xo 792 = sraw are both register shifts.
+        let il = l.lift_insn(0, &xo31(3, 4, 5, 536)).unwrap().il;
+        assert!(matches!(&il[0], PpcILInsn::Set { value: PpcILExpr::LsrReg(..), .. }));
+        let il = l.lift_insn(0, &xo31(3, 4, 5, 792)).unwrap().il;
+        assert!(matches!(&il[0], PpcILInsn::Set { value: PpcILExpr::AsrReg(..), .. }));
+
+        // xo 824 = srawi keeps the IMMEDIATE form (SH field).
+        let il = l.lift_insn(0, &xo31(3, 4, 5, 824)).unwrap().il;
+        assert!(matches!(&il[0], PpcILInsn::Set { value: PpcILExpr::Asr(..), .. }));
     }
 
     #[test]
@@ -1096,6 +1214,45 @@ mod tests {
         assert!(r.il.iter().any(|i| matches!(i, PpcILInsn::Rlwinm { .. })));
     }
 
+    /// PowerPC has no immediate shift-word instruction: assemblers spell
+    /// `slwi`/`srwi` as `rlwinm`. The lifter re-raises those two encodings so an
+    /// ordinary shift is not hidden behind an opaque rotate-and-mask node.
+    /// This is also what cables `PpcILExpr::lsl` / `lsr`, which had no other
+    /// caller once slw/srw were corrected to shift-by-register.
+    #[test]
+    fn rlwinm_reraises_slwi_and_srwi() {
+        let l = lifter();
+
+        // slwi r5,r3,16  ==  rlwinm r5,r3,16,0,15
+        let shift_left = (21u32 << 26) | (3 << 21) | (5 << 16) | (16 << 11) | (15 << 1);
+        let r = l.lift_insn(0x1000, &be(shift_left)).unwrap();
+        assert!(
+            r.il.iter().any(|i| matches!(
+                i,
+                PpcILInsn::Set { value: PpcILExpr::Lsl(_, 16), .. }
+            )),
+            "slwi must lift as a shift left by 16, got {:?}",
+            r.il
+        );
+
+        // srwi r5,r3,8  ==  rlwinm r5,r3,24,8,31
+        let shift_right = (21u32 << 26) | (3 << 21) | (5 << 16) | (24 << 11) | (8 << 6) | (31 << 1);
+        let r = l.lift_insn(0x1000, &be(shift_right)).unwrap();
+        assert!(
+            r.il.iter().any(|i| matches!(
+                i,
+                PpcILInsn::Set { value: PpcILExpr::Lsr(_, 8), .. }
+            )),
+            "srwi must lift as a shift right by 8, got {:?}",
+            r.il
+        );
+
+        // A genuine rotate-and-mask still lifts as Rlwinm.
+        let rot = (21u32 << 26) | (3 << 21) | (5 << 16) | (4 << 11) | (8 << 6) | (20 << 1);
+        let r = l.lift_insn(0x1000, &be(rot)).unwrap();
+        assert!(r.il.iter().any(|i| matches!(i, PpcILInsn::Rlwinm { .. })));
+    }
+
     #[test]
     fn test_mflr() {
         // MFLR r0 = 0x7C0802A6
@@ -1126,14 +1283,17 @@ mod tests {
 
     #[test]
     fn test_slw() {
-        // SLW: opcd=31, xo=23
+        // SLW: opcd=31, xo=24. This test used to say xo=23 and expect an
+        // immediate Lsl -- both wrong: 23 is lwzx, and slw shifts by the
+        // value held in rb. The crate's own disassembler decodes 24 as slw
+        // and 23 as lwzx.
         let l = lifter();
-        let instr: u32 = (31 << 26) | (3 << 21) | (4 << 16) | (5 << 11) | (23 << 1);
+        let instr: u32 = (31 << 26) | (3 << 21) | (4 << 16) | (5 << 11) | (24 << 1);
         let r = l.lift_insn(0x1000, &be(instr)).unwrap();
         assert!(r.il.iter().any(|i| matches!(
             i,
             PpcILInsn::Set {
-                value: PpcILExpr::Lsl(..),
+                value: PpcILExpr::LslReg(..),
                 ..
             }
         )));
@@ -1148,7 +1308,7 @@ mod tests {
         assert!(r.il.iter().any(|i| matches!(
             i,
             PpcILInsn::Set {
-                value: PpcILExpr::Lsr(..),
+                value: PpcILExpr::LsrReg(..),
                 ..
             }
         )));
@@ -1163,7 +1323,7 @@ mod tests {
         assert!(r.il.iter().any(|i| matches!(
             i,
             PpcILInsn::Set {
-                value: PpcILExpr::Asr(..),
+                value: PpcILExpr::AsrReg(..),
                 ..
             }
         )));
