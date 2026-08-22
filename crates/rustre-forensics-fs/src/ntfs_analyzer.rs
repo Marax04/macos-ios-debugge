@@ -467,12 +467,19 @@ impl MftRecord {
                 Vec::new()
             } else {
                 // Resident: read inline.
-                let content_len =
-                    u32::from_le_bytes(data[pos + 16..pos + 20].try_into().unwrap_or([0u8; 4]))
-                        as usize;
-                let content_off =
-                    u16::from_le_bytes(data[pos + 20..pos + 22].try_into().unwrap_or([0u8; 2]))
-                        as usize;
+                // The loop guard only proves `pos + attr_len <= data.len()`
+                // with `attr_len >= 16`, so the resident-content header at
+                // +16..+22 can lie past the end of a crafted record.  Index
+                // through `get` so a truncated attribute yields an empty
+                // value instead of panicking.
+                let content_len = data
+                    .get(pos + 16..pos + 20)
+                    .and_then(|b| <[u8; 4]>::try_from(b).ok())
+                    .map_or(0usize, |b| u32::from_le_bytes(b) as usize);
+                let content_off = data
+                    .get(pos + 20..pos + 22)
+                    .and_then(|b| <[u8; 2]>::try_from(b).ok())
+                    .map_or(0usize, |b| u16::from_le_bytes(b) as usize);
                 let start = pos + content_off;
                 let end = (start + content_len).min(pos + attr_len);
                 if start <= end && end <= data.len() {
@@ -1460,4 +1467,21 @@ mod tests {
         assert!(s.contains("evil.exe"));
         assert!(s.contains("true"));
     }
+    #[test]
+    fn truncated_resident_attribute_does_not_panic() {
+        // A resident attribute whose declared length (16) stops exactly at the
+        // end of the record: the resident-content header (offsets +16..+22)
+        // then lies past the buffer.  Must return, not panic.
+        let mut data = vec![0u8; 64];
+        data[0..4].copy_from_slice(b"FILE");
+        data[20..22].copy_from_slice(&48u16.to_le_bytes()); // attr_offset
+        data[28..32].copy_from_slice(&64u32.to_le_bytes()); // record_size
+        data[48..52].copy_from_slice(&0x80u32.to_le_bytes()); // $DATA
+        data[52..56].copy_from_slice(&16u32.to_le_bytes()); // attr_len == 16
+        data[56] = 0; // resident
+        data[57] = 0; // name_len
+        let rec = MftRecord::parse(&data, 0).expect("header is well formed");
+        assert!(rec.attributes.len() <= 1);
+    }
+
 }
