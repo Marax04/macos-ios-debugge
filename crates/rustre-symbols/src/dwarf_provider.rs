@@ -1089,6 +1089,17 @@ impl<'a> DwarfParser<'a> {
                 if let Some(v) = dwo {
                     cu.has_split_dwarf = true;
                     cu.dwo_name = v.as_str().map(std::string::ToString::to_string);
+                } else if root.get_attr(DW_AT_GNU_DWO_ID).is_some() {
+                    // A GCC skeleton CU carries `DW_AT_GNU_dwo_id` as well as
+                    // the name, and the name can be absent or in a form this
+                    // reader does not resolve (a `.dwo_name` strx into a
+                    // `.debug_str_offsets` table that was not shipped). Keying
+                    // the flag on the name alone made such a CU look like an
+                    // ordinary, merely empty unit: the caller got zero symbols
+                    // and no `SplitDwarfNotLoaded` signal telling it why.
+                    // `DW_AT_GNU_DWO_ID` was declared for exactly this and was
+                    // referenced nowhere.
+                    cu.has_split_dwarf = true;
                 }
             }
 
@@ -2474,6 +2485,47 @@ mod tests {
         s.debug_info = info;
         s.debug_abbrev = test_abbrev_table();
         s
+    }
+
+    /// A GCC skeleton CU whose root carries only `DW_AT_GNU_dwo_id` — no
+    /// `DW_AT_GNU_dwo_name`. Before `DW_AT_GNU_DWO_ID` was wired into the
+    /// detection it was a declared-but-unreferenced constant, and such a CU came
+    /// back with `has_split_dwarf == false`: indistinguishable from an ordinary
+    /// empty unit, so the caller never learned the debug info lives in a `.dwo`
+    /// it did not load. Dropping the new `else if` makes this assertion fail.
+    #[test]
+    fn skeleton_cu_with_only_dwo_id_is_flagged_as_split_dwarf() {
+        // abbrev: code 1 = DW_TAG_compile_unit, no children, DW_AT_GNU_dwo_id
+        // as DW_FORM_data8.
+        let mut abbrev = Vec::new();
+        abbrev.extend(uleb(1));
+        abbrev.extend(uleb(u64::from(DW_TAG_COMPILE_UNIT)));
+        abbrev.push(0); // no children
+        abbrev.extend(uleb(DW_AT_GNU_DWO_ID));
+        abbrev.extend(uleb(DW_FORM_DATA8));
+        abbrev.extend([0, 0]);
+        abbrev.push(0);
+
+        let mut body = Vec::new();
+        body.extend(uleb(1));
+        body.extend(0x0123_4567_89AB_CDEFu64.to_le_bytes());
+
+        let mut info = Vec::new();
+        let unit_length = 7 + body.len();
+        info.extend(u32::try_from(unit_length).unwrap().to_le_bytes());
+        info.extend(4u16.to_le_bytes());
+        info.extend(0u32.to_le_bytes());
+        info.push(8);
+        info.extend(body);
+
+        let mut s = DwarfSections::new();
+        s.debug_info = info;
+        s.debug_abbrev = abbrev;
+        let cus = DwarfParser::new(&s, false).parse_compile_units().unwrap();
+        assert_eq!(cus.len(), 1);
+        assert!(cus[0].has_split_dwarf, "dwo_id-only skeleton not flagged");
+        // No name was present, so none must be invented.
+        assert!(cus[0].dwo_name.is_none());
     }
 
     #[test]
