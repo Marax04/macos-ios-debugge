@@ -347,11 +347,12 @@ impl Cie {
 
         let code_align = read_uleb128(data, pos)?;
         let data_align = read_sleb128(data, pos)?;
-        let return_addr_reg = read_uleb128(data, pos)? as u32;
+        let return_addr_reg =
+            u32::try_from(read_uleb128(data, pos)?).unwrap_or(u32::MAX);
 
         let mut fde_ptr_encoding = None;
         if augmentation.starts_with('z') {
-            let aug_len = read_uleb128(data, pos)? as usize;
+            let aug_len = usize::try_from(read_uleb128(data, pos)?).ok()?;
             let aug_end = pos.saturating_add(aug_len).min(data.len());
             let mut ap = *pos;
             for ch in augmentation.chars().skip(1) {
@@ -495,7 +496,7 @@ impl Fde {
         };
 
         if cie.augmentation.starts_with('z') {
-            let aug_len = read_uleb128(data, pos)? as usize;
+            let aug_len = usize::try_from(read_uleb128(data, pos)?).ok()?;
             *pos = pos.saturating_add(aug_len).min(data.len());
         }
 

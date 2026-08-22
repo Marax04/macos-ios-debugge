@@ -729,7 +729,7 @@ pub fn read_form_value(
             Some(FormValue::Bytes(b))
         }
         DwForm::Block | DwForm::Exprloc => {
-            let len = read_uleb128(data, pos)? as usize;
+            let len = usize::try_from(read_uleb128(data, pos)?).ok()?;
             // `len` is attacker-controlled up to u64::MAX: `*pos + len` would
             // wrap in release and bypass the bounds check.
             if len > data.len().saturating_sub(*pos) { return None; }

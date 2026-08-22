@@ -416,7 +416,9 @@ impl DwarfExprEvaluator {
                 return Ok(false); // terminates expression
             }
             DW_OP_REGX => {
-                let reg = read_uleb128(expr, off)? as u32;
+                // Saturate: `as u32` would drop the high bits and land an
+                // out-of-range register number on a REAL register.
+                let reg = u32::try_from(read_uleb128(expr, off)?).unwrap_or(u32::MAX);
                 *is_register = Some(reg);
                 stack.push(regs.read(reg));
                 return Ok(false);
@@ -429,7 +431,9 @@ impl DwarfExprEvaluator {
                 stack.push(regs.read(reg).wrapping_add(offset));
             }
             DW_OP_BREGX => {
-                let reg = read_uleb128(expr, off)? as u32;
+                // Saturate: `as u32` would drop the high bits and land an
+                // out-of-range register number on a REAL register.
+                let reg = u32::try_from(read_uleb128(expr, off)?).unwrap_or(u32::MAX);
                 let offset = read_sleb128(expr, off)?;
                 stack.push(regs.read(reg).wrapping_add(offset));
             }

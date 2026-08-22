@@ -474,7 +474,11 @@ pub fn parse_location_expr(expr: &[u8], addr_size: u8) -> Result<Vec<LocationOp>
             o if (DW_OP_REG0..=DW_OP_REG31).contains(&o) => {
                 LocationOp::Reg(u32::from(o - DW_OP_REG0))
             }
-            DW_OP_REGX => LocationOp::Reg(read_uleb128(expr, &mut off)? as u32),
+            // Saturating, not narrowing: a truncated register number would
+            // impersonate a real register.
+            DW_OP_REGX => LocationOp::Reg(
+                u32::try_from(read_uleb128(expr, &mut off)?).unwrap_or(u32::MAX),
+            ),
             // DW_OP_NOP shares opcode 0x96 with DW_OP_BREG31 in the DWARF
             // specification. We treat 0x96 as NOP (no operand consumed) so
             // that NOP bytes are not misinterpreted as BREG31 with a spurious
@@ -492,7 +496,7 @@ pub fn parse_location_expr(expr: &[u8], addr_size: u8) -> Result<Vec<LocationOp>
                 LocationOp::FbReg(o)
             }
             DW_OP_BREGX => {
-                let r = read_uleb128(expr, &mut off)? as u32;
+                let r = u32::try_from(read_uleb128(expr, &mut off)?).unwrap_or(u32::MAX);
                 let o = read_sleb128(expr, &mut off)?;
                 LocationOp::BReg(r, o)
             }
@@ -503,7 +507,10 @@ pub fn parse_location_expr(expr: &[u8], addr_size: u8) -> Result<Vec<LocationOp>
                 LocationOp::BitPiece { size, offset }
             }
             DW_OP_IMPLICIT_VALUE => {
-                let len = read_uleb128(expr, &mut off)? as usize;
+                // A block length that does not fit usize is truncated data,
+                // not a readable block.
+                let len = usize::try_from(read_uleb128(expr, &mut off)?)
+                    .map_err(|_| LocationError::Truncated(off))?;
                 let bytes = expr.get(off..off.saturating_add(len)).unwrap_or(&[]).to_vec();
                 off = off.saturating_add(len);
                 LocationOp::ImplicitValue(bytes)
@@ -548,7 +555,10 @@ pub fn parse_location_expr(expr: &[u8], addr_size: u8) -> Result<Vec<LocationOp>
                 LocationOp::Nop
             }
             DW_OP_GNU_ENTRY_VALUE | DW_OP_ENTRY_VALUE => {
-                let len = read_uleb128(expr, &mut off)? as usize;
+                // A block length that does not fit usize is truncated data,
+                // not a readable block.
+                let len = usize::try_from(read_uleb128(expr, &mut off)?)
+                    .map_err(|_| LocationError::Truncated(off))?;
                 off = off.saturating_add(len);
                 LocationOp::Nop
             }
@@ -721,14 +731,21 @@ pub fn evaluate_location(
             LocationOp::Lt => { let b = pop!(); let a = pop!(); stack.push(i64::from(a < b)); }
             LocationOp::Ne => { let b = pop!(); let a = pop!(); stack.push(i64::from(a != b)); }
             LocationOp::Skip(delta) => {
-                let target = (i as i64 + 1 + i64::from(*delta)) as usize;
+                // A negative target used to wrap to a huge usize and get
+                // clamped to `ops.len()`. try_from makes that explicit and
+                // keeps the behaviour identical: an out-of-range branch ends
+                // the expression rather than jumping backwards.
+                let target = usize::try_from(i as i64 + 1 + i64::from(*delta))
+                    .unwrap_or_else(|_| ops.len());
                 i = target.min(ops.len());
                 continue;
             }
             LocationOp::Bra(delta) => {
                 let cond = pop!();
                 if cond != 0 {
-                    let target = (i as i64 + 1 + i64::from(*delta)) as usize;
+                    // Same clamp-on-out-of-range as DW_OP_skip above.
+                    let target = usize::try_from(i as i64 + 1 + i64::from(*delta))
+                        .unwrap_or_else(|_| ops.len());
                     i = target.min(ops.len());
                     continue;
                 }

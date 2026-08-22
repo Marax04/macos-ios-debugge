@@ -919,8 +919,8 @@ impl LineProgram {
     /// that a direct index is correct.
     #[must_use]
     pub fn resolve_file(&self, file_idx: u64) -> Option<String> {
-        let entry = self.file_names.get(file_idx as usize)?;
-        let dir = self.include_directories.get(entry.dir_index as usize)
+        let entry = self.file_names.get(usize::try_from(file_idx).ok()?)?;
+        let dir = self.include_directories.get(usize::try_from(entry.dir_index).ok()?)
             .map_or("", std::string::String::as_str);
         if dir.is_empty() {
             Some(entry.name.clone())
