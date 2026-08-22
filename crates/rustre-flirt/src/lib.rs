@@ -3469,12 +3469,12 @@ mod tests {
 
         let bytes = &[0x55u8, 0x48, 0x89, 0xE5, 0xC3];
         let addr = Address::new(0x1000);
-        let matches = matcher.match_function(addr, bytes);
+        let hits = matcher.match_function(addr, bytes);
 
-        assert!(!matches.is_empty(), "should have a match");
-        assert_eq!(matches[0].name, "my_func");
-        assert_eq!(matches[0].address, addr);
-        assert!(matches[0].is_public);
+        assert!(!hits.is_empty(), "should have a match");
+        assert_eq!(hits[0].name, "my_func");
+        assert_eq!(hits[0].address, addr);
+        assert!(hits[0].is_public);
     }
 
     #[test]
@@ -3483,9 +3483,9 @@ mod tests {
         matcher.add_library(make_simple_lib());
 
         let bytes = &[0x90u8, 0x48, 0x89, 0xE5, 0xC3];
-        let matches = matcher.match_function(Address::new(0x1000), bytes);
+        let hits = matcher.match_function(Address::new(0x1000), bytes);
         assert!(
-            matches.is_empty(),
+            hits.is_empty(),
             "should have no match on wrong first byte"
         );
     }
@@ -3544,7 +3544,7 @@ mod tests {
             PatternByte::Exact(data[3]),
         ]);
         pat.crc16 = crc;
-        pat.crc_length = (data.len() - 4) as u8;
+        pat.crc_length = u8::try_from(data.len() - 4).expect("test CRC region fits in a u8");
 
         assert!(pat.matches_crc16(data));
     }
@@ -4160,7 +4160,7 @@ mod tests {
     struct FlatView(Vec<u8>);
     impl FlirtByteView for FlatView {
         fn read_bytes(&self, address: Address, len: usize) -> Option<&[u8]> {
-            let off = address.as_u64() as usize;
+            let off = usize::try_from(address.as_u64()).ok()?;
             if off >= self.0.len() {
                 return None;
             }

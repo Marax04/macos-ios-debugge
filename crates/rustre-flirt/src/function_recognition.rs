@@ -948,9 +948,9 @@ mod tests {
 
     #[test]
     fn report_top_libraries() {
-        let results: Vec<RecognitionResult> = (0..5)
+        let results: Vec<RecognitionResult> = (0..5u64)
             .map(|i| RecognitionResult {
-                function_addr: Address::new(i as u64 * 0x100),
+                function_addr: Address::new(i * 0x100),
                 name: format!("fn{i}"),
                 lib: if i < 3 {
                     "libc".to_string()

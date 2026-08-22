@@ -12,7 +12,7 @@ fn lcg_seq(seed: u64, n: usize) -> Vec<u8> {
         s = s
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
-        out.push((s >> 32) as u8);
+        out.push(((s >> 32) & 0xFF) as u8);
     }
     out
 }
@@ -37,7 +37,7 @@ fn crc16_flirt_boundaries() {
 #[test]
 fn crc16_flirt_fuzz_never_panics() {
     for seed in 0..50u64 {
-        let buf = lcg_seq(seed.wrapping_add(0xDEAD_BEEF_CAFE_BABE), 32 + (seed as usize % 256));
+        let buf = lcg_seq(seed.wrapping_add(0xDEAD_BEEF_CAFE_BABE), 32 + usize::try_from(seed % 256).unwrap());
         let c = crc16_flirt(&buf);
         // sanity: a second computation matches
         assert_eq!(c, crc16_flirt(&buf));
@@ -47,7 +47,7 @@ fn crc16_flirt_fuzz_never_panics() {
 #[test]
 fn crc16_ibm_fuzz() {
     for seed in 0..50u64 {
-        let buf = lcg_seq(seed.wrapping_mul(7) ^ 0xCAFE, 17 + seed as usize % 100);
+        let buf = lcg_seq(seed.wrapping_mul(7) ^ 0xCAFE, 17 + usize::try_from(seed % 100).unwrap());
         assert_eq!(crc16_ibm(&buf), crc16_ibm(&buf));
     }
     assert_eq!(crc16_ibm(&[]), 0);
@@ -658,7 +658,7 @@ fn flirt_sig_empty_pattern_never_matches() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "pattern_bytes and mask must have the same length")]
 fn flirt_sig_mismatched_mask_should_panic() {
     let _ = FlirtSig::new("x", vec![1, 2], vec![1]);
 }
@@ -876,7 +876,9 @@ impl FlirtByteView for TestView<'_> {
         if abs < self.base {
             return None;
         }
-        let off = (abs - self.base) as usize;
+        let Ok(off) = usize::try_from(abs - self.base) else {
+            return None;
+        };
         if off >= self.data.len() {
             return None;
         }
