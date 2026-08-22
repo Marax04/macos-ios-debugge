@@ -133,7 +133,7 @@ fn align_up_max_value_no_panic() {
 
 #[test]
 fn pe_error_io_wraps() {
-    let io = std::io::Error::new(std::io::ErrorKind::Other, "boom");
+    let io = std::io::Error::other("boom");
     let e: PeError = io.into();
     assert!(e.to_string().contains("io"));
 }
@@ -789,7 +789,7 @@ fn section_entropy_random_high() {
 #[test]
 fn section_count_byte_empty_zero() {
     let sec = PeSection {
-        name: "".into(),
+        name: String::new(),
         virtual_address: 0,
         virtual_size: 0,
         raw_offset: 0,

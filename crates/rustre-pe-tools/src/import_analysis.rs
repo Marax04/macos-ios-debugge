@@ -934,7 +934,7 @@ mod tests {
     #[test]
     fn test_analyzer_filter() {
         let a = analyzer_with_samples();
-        let high_risk = a.filter(|e| e.is_high_risk());
+        let high_risk = a.filter(super::ImportEntry::is_high_risk);
         assert!(!high_risk.is_empty());
     }
 

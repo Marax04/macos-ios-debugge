@@ -503,7 +503,7 @@ mod tests {
     fn test_shannon_entropy_uniform() {
         let data: Vec<u8> = (0u8..=255).collect();
         let e = shannon_entropy(&data);
-        assert!((e - 8.0).abs() < 0.01, "expected 8.0, got {}", e);
+        assert!((e - 8.0).abs() < 0.01, "expected 8.0, got {e}");
     }
 
     #[test]

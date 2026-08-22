@@ -471,7 +471,7 @@ mod tests {
         let new_cs = calc.patch_checksum(&mut data).unwrap();
         assert_ne!(new_cs, 0);
         let result = calc.calculate(&data).unwrap();
-        assert!(result.is_valid(), "round-trip checksum mismatch: {}", result);
+        assert!(result.is_valid(), "round-trip checksum mismatch: {result}");
     }
 
     #[test]
