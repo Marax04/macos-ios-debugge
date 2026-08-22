@@ -289,7 +289,7 @@ mod tests {
         buf[0..4].copy_from_slice(&base_va.to_le_bytes());
         buf[4..8].copy_from_slice(&(u32::try_from(size).unwrap_or(u32::MAX)).to_le_bytes());
         for (i, &(rtype, offset)) in entries.iter().enumerate() {
-            let raw: u16 = ((rtype as u16) << 12) | (offset & 0x0FFF);
+            let raw: u16 = (u16::from(rtype) << 12) | (offset & 0x0FFF);
             buf[8 + i * 2..8 + i * 2 + 2].copy_from_slice(&raw.to_le_bytes());
         }
         buf

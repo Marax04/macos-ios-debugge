@@ -714,7 +714,7 @@ mod tests {
 
     #[test]
     fn test_is_printable_utf16() {
-        assert!(is_printable_utf16(b'A' as u16));
+        assert!(is_printable_utf16(u16::from(b'A')));
         assert!(is_printable_utf16(0x00A0)); // non-breaking space
         assert!(!is_printable_utf16(0x0000)); // null
         assert!(!is_printable_utf16(0xD800)); // surrogate

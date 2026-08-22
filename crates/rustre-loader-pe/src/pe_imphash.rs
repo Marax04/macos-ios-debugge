@@ -1213,7 +1213,7 @@ mod tests {
         let mut with_ord = base_imports.clone();
         with_ord.push(ordinal);
 
-        let mut with_name = base_imports.clone();
+        let mut with_name = base_imports;
         with_name.push(named);
 
         let cfg = ImphashV2Config { resolve_ws2_32_ordinals: true, ..Default::default() };
@@ -1417,7 +1417,7 @@ mod tests {
         let band0 = imphash.fuzzy.bands[0].clone();
 
         db.insert("somehash", "TestFamily", 85, vec![], None);
-        db.insert_fuzzy(band0.clone(), "somehash");
+        db.insert_fuzzy(band0, "somehash");
 
         let results = db.fuzzy_lookup(&imphash.fuzzy);
         assert!(!results.is_empty());
