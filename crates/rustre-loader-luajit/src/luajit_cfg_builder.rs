@@ -593,12 +593,12 @@ mod tests {
     use super::*;
 
     fn insn(op: u8) -> u32 {
-        op as u32
+        u32::from(op)
     }
 
     fn jmp(op: u8, pc: u32, target: u32) -> u32 {
         let d = (target as i32 - pc as i32 - 1 + 0x8000) as u16;
-        (op as u32) | ((d as u32) << 16)
+        u32::from(op) | (u32::from(d) << 16)
     }
 
     #[test]

@@ -2862,7 +2862,7 @@ mod tests {
         let d: u16 = (0x8000u32 as i32 + (-7i32)) as u16;
         let b = (d >> 8) as u8;
         let c = (d & 0xFF) as u8;
-        let word = 0x29u32 | ((c as u32) << 16) | ((b as u32) << 24);
+        let word = 0x29u32 | (u32::from(c) << 16) | (u32::from(b) << 24);
         let line = LjDisassembler::format_instr(0, LjInstr(word), &LjProto::mock());
         assert!(line.contains("-7"), "got: {line}");
     }

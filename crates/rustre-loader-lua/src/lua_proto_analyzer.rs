@@ -68,10 +68,10 @@ impl ComplexityMetrics {
         m.cyclomatic = (m.branch_count as u32).saturating_add(1);
 
         // Density: instructions per source line.
-        let line_span = proto
+        let line_span = f64::from(proto
             .last_line_defined
             .saturating_sub(proto.line_defined)
-            .max(1) as f64;
+            .max(1));
         m.density = m.insn_count as f64 / line_span;
 
         m
@@ -729,7 +729,7 @@ impl LuaProtoAnalyzer {
             return 0.0;
         }
         let sum: u32 = self.analyses.values().map(|a| a.metrics.cyclomatic).sum();
-        sum as f64 / self.analyses.len() as f64
+        f64::from(sum) / self.analyses.len() as f64
     }
 
     /// Collect all unique string constants across all protos.

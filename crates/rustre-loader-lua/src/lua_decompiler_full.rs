@@ -1687,7 +1687,7 @@ fn simple_lua_hash(data: &[u8]) -> u32 {
     while i > 0 {
         h ^= (h << 5)
             .wrapping_add(h >> 2)
-            .wrapping_add(data[i - 1] as u32);
+            .wrapping_add(u32::from(data[i - 1]));
         i = i.saturating_sub(step);
     }
     h
@@ -1781,7 +1781,7 @@ pub fn byte_entropy(data: &[u8]) -> f64 {
     let mut entropy = 0.0f64;
     for &c in &freq {
         if c > 0 {
-            let p = c as f64 / n;
+            let p = f64::from(c) / n;
             entropy -= p * p.log2();
         }
     }
@@ -1833,7 +1833,7 @@ pub fn be_u32(data: &[u8], off: usize) -> u32 {
 pub fn adler32(data: &[u8]) -> u32 {
     let (mut a, mut b) = (1u32, 0u32);
     for &byte in data {
-        a = (a + byte as u32) % 65521;
+        a = (a + u32::from(byte)) % 65521;
         b = (b + a) % 65521;
     }
     (b << 16) | a

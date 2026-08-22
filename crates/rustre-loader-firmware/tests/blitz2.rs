@@ -54,15 +54,15 @@ fn make_ihex_line(rt: u8, addr: u16, data: &[u8]) -> Vec<u8> {
 fn make_srec_line(rt: char, addr_bytes: usize, addr: u64, data: &[u8]) -> Vec<u8> {
     let bc = (addr_bytes + data.len() + 1) as u8;
     let mut s = format!("S{rt}{bc:02X}");
-    let mut sum: u32 = bc as u32;
+    let mut sum: u32 = u32::from(bc);
     for i in (0..addr_bytes).rev() {
         let b = ((addr >> (i * 8)) & 0xFF) as u8;
         s.push_str(&format!("{b:02X}"));
-        sum += b as u32;
+        sum += u32::from(b);
     }
     for &b in data {
         s.push_str(&format!("{b:02X}"));
-        sum += b as u32;
+        sum += u32::from(b);
     }
     let cs = (!(sum & 0xFF)) as u8;
     s.push_str(&format!("{cs:02X}"));
@@ -176,7 +176,7 @@ fn t06_firmware_kind_predicate_consistency() {
         // Display non-empty
         assert!(!k.to_string().is_empty());
         // Mutually exclusive categories
-        let cnt = k.is_compressed() as u8 + k.is_filesystem() as u8 + k.is_text_format() as u8;
+        let cnt = u8::from(k.is_compressed()) + u8::from(k.is_filesystem()) + u8::from(k.is_text_format());
         assert!(cnt <= 1, "{k:?} in multiple categories");
     }
 }

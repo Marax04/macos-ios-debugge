@@ -566,7 +566,7 @@ mod tests {
     use super::*;
 
     fn make_insn(op: u8, a: u8, c: u8, b: u8) -> u32 {
-        (op as u32) | ((a as u32) << 8) | ((c as u32) << 16) | ((b as u32) << 24)
+        u32::from(op) | (u32::from(a) << 8) | (u32::from(c) << 16) | (u32::from(b) << 24)
     }
 
     fn jmp_insn(pc: u32, target: u32) -> u32 {

@@ -672,7 +672,7 @@ fn read_uleb128(data: &[u8], pos: &mut usize) -> Result<u64> {
         }
         let byte = data[*pos];
         *pos += 1;
-        result |= ((byte & 0x7f) as u64) << shift;
+        result |= u64::from(byte & 0x7f) << shift;
         if byte & 0x80 == 0 {
             break;
         }

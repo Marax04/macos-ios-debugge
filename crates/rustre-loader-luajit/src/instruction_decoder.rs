@@ -930,7 +930,7 @@ mod tests {
     #[test]
     fn test_is_compare_flags() {
         for op in 0x00u8..=0x11 {
-            let instr = decode_instruction(op as u32, 0, 10, None);
+            let instr = decode_instruction(u32::from(op), 0, 10, None);
             assert!(instr.is_compare(), "op 0x{op:02x} should be compare");
         }
     }

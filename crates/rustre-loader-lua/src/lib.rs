@@ -302,9 +302,9 @@ impl<'a> Reader<'a> {
 
     fn read_sized_int(&mut self, size: u8) -> Result<u64, LuaLoaderError> {
         match size {
-            1 => self.read_u8().map(|b| b as u64),
-            2 => self.read_u16().map(|b| b as u64),
-            4 => self.read_u32().map(|b| b as u64),
+            1 => self.read_u8().map(|b| u64::from(b)),
+            2 => self.read_u16().map(|b| u64::from(b)),
+            4 => self.read_u32().map(|b| u64::from(b)),
             8 => self.read_u64(),
             _ => Err(LuaLoaderError::ParseError(format!(
                 "unsupported int size {size}"
@@ -936,7 +936,7 @@ impl LuaProto {
                     if hdr.num_size == 8 {
                         LuaConst::Number(r.read_f64()?)
                     } else {
-                        let v = r.read_u32()? as f64;
+                        let v = f64::from(r.read_u32()?);
                         LuaConst::Number(v)
                     }
                 }
@@ -1600,7 +1600,7 @@ impl UpvalueDesc {
     pub fn from_upvalue(uv: &LuaUpvalue) -> Self {
         Self {
             name: uv.name.clone().unwrap_or_default(),
-            in_stack: uv.in_stack as u8,
+            in_stack: u8::from(uv.in_stack),
             idx: uv.idx,
         }
     }

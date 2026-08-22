@@ -475,7 +475,7 @@ impl<'a> Cursor<'a> {
         } else {
             u32::from_le_bytes(b.try_into().unwrap())
         };
-        Ok(f32::from_bits(bits) as f64)
+        Ok(f64::from(f32::from_bits(bits)))
     }
 
     /// Read a size_t-sized integer (platform-specific).
@@ -490,7 +490,7 @@ impl<'a> Cursor<'a> {
     /// Read a platform int (platform-specific).
     fn read_int(&mut self, size: u8) -> Result<i64, ParseError> {
         match size {
-            4 => Ok(self.read_i32()? as i64),
+            4 => Ok(i64::from(self.read_i32()?)),
             8 => Ok(self.read_i64()?),
             _ => Err(ParseError::Unsupported(format!("int size {size}"))),
         }

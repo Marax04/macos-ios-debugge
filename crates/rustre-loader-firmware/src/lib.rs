@@ -2295,7 +2295,7 @@ mod tests {
     // ── Intel HEX ─────────────────────────────────────────────────────────────
 
     fn ihex_checksum(body: &[u8]) -> u8 {
-        let sum: u32 = body.iter().map(|&b| b as u32).sum();
+        let sum: u32 = body.iter().map(|&b| u32::from(b)).sum();
         ((0x100u32 - (sum & 0xFF)) & 0xFF) as u8
     }
 
@@ -2368,7 +2368,7 @@ mod tests {
     // ── SREC ──────────────────────────────────────────────────────────────────
 
     fn srec_checksum(body: &[u8]) -> u8 {
-        let sum: u32 = body.iter().map(|&b| b as u32).sum();
+        let sum: u32 = body.iter().map(|&b| u32::from(b)).sum();
         (!(sum & 0xFF)) as u8
     }
 

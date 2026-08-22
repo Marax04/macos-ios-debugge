@@ -417,7 +417,7 @@ impl Lua50Proto {
             num_params: 0,
             is_vararg: true,
             max_stack: 4,
-            code: vec![Lua50Instr((op::RETURN as u32) | (1 << 23))],
+            code: vec![Lua50Instr(u32::from(op::RETURN) | (1 << 23))],
             constants: vec![
                 Lua50Const::String("hello".to_string()),
                 Lua50Const::Number(3.14_f64),
@@ -540,20 +540,20 @@ impl<'a> Reader<'a> {
 
     fn read_int(&mut self) -> Option<u64> {
         match self.int_size {
-            1 => self.read_u8().map(|b| b as u64),
+            1 => self.read_u8().map(|b| u64::from(b)),
             2 => {
                 if self.pos + 2 > self.data.len() {
                     return None;
                 }
                 let b: [u8; 2] = self.data[self.pos..self.pos + 2].try_into().ok()?;
                 self.pos += 2;
-                Some(if self.little_endian {
+                Some(u64::from(if self.little_endian {
                     u16::from_le_bytes(b)
                 } else {
                     u16::from_be_bytes(b)
-                } as u64)
+                }))
             }
-            4 => self.read_u32().map(|v| v as u64),
+            4 => self.read_u32().map(|v| u64::from(v)),
             8 => {
                 if self.pos + 8 > self.data.len() {
                     return None;
@@ -596,11 +596,11 @@ impl<'a> Reader<'a> {
             }
             let b: [u8; 4] = self.data[self.pos..self.pos + 4].try_into().ok()?;
             self.pos += 4;
-            Some(f32::from_bits(if self.little_endian {
+            Some(f64::from(f32::from_bits(if self.little_endian {
                 u32::from_le_bytes(b)
             } else {
                 u32::from_be_bytes(b)
-            }) as f64)
+            })))
         } else {
             None
         }
@@ -821,7 +821,7 @@ mod tests {
     #[test]
     fn instr_opcode_extraction() {
         // Encode RETURN (27) as opcode in bits 0-5.
-        let raw = op::RETURN as u32;
+        let raw = u32::from(op::RETURN);
         let instr = Lua50Instr(raw);
         assert_eq!(instr.opcode(), op::RETURN);
         assert_eq!(instr.mnemonic(), "RETURN");
@@ -830,7 +830,7 @@ mod tests {
     #[test]
     fn instr_abc_fields() {
         // Build instruction: op=ADD, A=5, B=3, C=4
-        let raw = (op::ADD as u32) | (5 << 6) | (4 << 14) | (3 << 23);
+        let raw = u32::from(op::ADD) | (5 << 6) | (4 << 14) | (3 << 23);
         let instr = Lua50Instr(raw);
         assert_eq!(instr.opcode(), op::ADD);
         assert_eq!(instr.a(), 5);
@@ -842,7 +842,7 @@ mod tests {
     fn instr_bx() {
         // LOADK A=1 Bx=7
         let bx: u32 = 7;
-        let raw = (op::LOADK as u32) | (1 << 6) | (bx << 14);
+        let raw = u32::from(op::LOADK) | (1 << 6) | (bx << 14);
         let instr = Lua50Instr(raw);
         assert_eq!(instr.bx(), 7);
         assert!(instr.uses_bx());
@@ -852,7 +852,7 @@ mod tests {
     fn instr_sbx_zero() {
         // JMP sBx=0  → Bx = 131_071
         let bx: u32 = 131_071;
-        let raw = (op::JMP as u32) | (bx << 14);
+        let raw = u32::from(op::JMP) | (bx << 14);
         let instr = Lua50Instr(raw);
         assert_eq!(instr.sbx(), 0);
         assert!(instr.uses_sbx());
@@ -862,26 +862,26 @@ mod tests {
     fn instr_sbx_positive() {
         // JMP sBx=5 → Bx = 131_071+5 = 131_076
         let bx: u32 = 131_076;
-        let raw = (op::JMP as u32) | (bx << 14);
+        let raw = u32::from(op::JMP) | (bx << 14);
         let instr = Lua50Instr(raw);
         assert_eq!(instr.sbx(), 5);
     }
 
     #[test]
     fn instr_is_jump_jmp() {
-        let instr = Lua50Instr(op::JMP as u32);
+        let instr = Lua50Instr(u32::from(op::JMP));
         assert!(instr.is_jump());
     }
 
     #[test]
     fn instr_is_jump_add_false() {
-        let instr = Lua50Instr(op::ADD as u32);
+        let instr = Lua50Instr(u32::from(op::ADD));
         assert!(!instr.is_jump());
     }
 
     #[test]
     fn instr_display_abc() {
-        let raw = (op::MOVE as u32) | (1 << 6) | (2 << 23);
+        let raw = u32::from(op::MOVE) | (1 << 6) | (2 << 23);
         let s = Lua50Instr(raw).to_string();
         assert!(s.contains("MOVE"));
         assert!(s.contains("A=1"));
@@ -1039,7 +1039,7 @@ mod tests {
         write_u8(&mut v, 2);
         // code: 1 instruction (RETURN)
         write_int(&mut v, 1);
-        let ret_instr: u32 = op::RETURN as u32 | (1 << 23);
+        let ret_instr: u32 = u32::from(op::RETURN) | (1 << 23);
         v.extend_from_slice(&ret_instr.to_le_bytes());
         // constants: 0
         write_int(&mut v, 0);

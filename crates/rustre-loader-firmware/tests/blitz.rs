@@ -28,7 +28,7 @@ fn make_uboot_header(load: u32, entry: u32, arch_byte: u8, name: &[u8]) -> Vec<u
 }
 
 fn ihex_checksum(body: &[u8]) -> u8 {
-    let sum: u32 = body.iter().map(|&b| b as u32).sum();
+    let sum: u32 = body.iter().map(|&b| u32::from(b)).sum();
     ((0x100u32 - (sum & 0xFF)) & 0xFF) as u8
 }
 
@@ -50,7 +50,7 @@ fn make_ihex_line(addr: u16, record_type: u8, data: &[u8]) -> Vec<u8> {
 }
 
 fn srec_checksum(body: &[u8]) -> u8 {
-    let sum: u32 = body.iter().map(|&b| b as u32).sum();
+    let sum: u32 = body.iter().map(|&b| u32::from(b)).sum();
     (!(sum & 0xFF)) as u8
 }
 

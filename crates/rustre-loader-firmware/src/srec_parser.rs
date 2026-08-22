@@ -680,9 +680,9 @@ mod tests {
         let mut sum: u32 = byte_count as u32;
         let ah = (addr >> 8) as u8;
         let al = addr as u8;
-        sum += ah as u32 + al as u32;
+        sum += u32::from(ah) + u32::from(al);
         for &b in data {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         let cs = (!(sum & 0xFF)) as u8;
         let mut line = format!("S1{byte_count:02X}{addr:04X}");
@@ -704,10 +704,10 @@ mod tests {
             addr as u8,
         ];
         for &b in &ab {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         for &b in data {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         let cs = (!(sum & 0xFF)) as u8;
         let mut line = format!("S3{byte_count:02X}{addr:08X}");
@@ -720,8 +720,8 @@ mod tests {
 
     fn make_s9(addr: u16) -> Vec<u8> {
         let byte_count = 3u8;
-        let mut sum: u32 = byte_count as u32;
-        sum += (addr >> 8) as u32 + (addr & 0xFF) as u32;
+        let mut sum: u32 = u32::from(byte_count);
+        sum += u32::from(addr >> 8) + u32::from(addr & 0xFF);
         let cs = (!(sum & 0xFF)) as u8;
         format!("S9{byte_count:02X}{addr:04X}{cs:02X}").into_bytes()
     }
