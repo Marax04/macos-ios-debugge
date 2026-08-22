@@ -136,7 +136,7 @@ impl HlilType {
             Self::Array { elem, count } => format!("{}[{count}]", elem.c_name()),
             Self::Struct(name) => format!("struct {name}"),
             Self::Function { ret, params } => {
-                let params_str: Vec<String> = params.iter().map(HlilType::c_name).collect();
+                let params_str: Vec<String> = params.iter().map(Self::c_name).collect();
                 format!("{} (*)({})", ret.c_name(), params_str.join(", "))
             }
             _ => "unknown_t".to_string(),
@@ -157,7 +157,7 @@ impl fmt::Display for HlilType {
 /// Infers types for HLIL variables based on usage context.
 #[derive(Debug, Default)]
 pub struct HlilTypeRecovery {
-    /// Inferred types: variable_name → type.
+    /// Inferred types: `variable_name` → type.
     pub types: HashMap<String, HlilType>,
     pub inference_log: Vec<String>,
 }
@@ -268,7 +268,7 @@ impl HlilVariableNaming {
     fn apply_to_code_capped(&self, code: &str, cap: usize) -> String {
         let mut result = code.to_string();
         let mut sorted: Vec<(&String, &String)> = self.renames.iter().collect();
-        sorted.sort_by(|(a, _), (b, _)| a.cmp(b));
+        sorted.sort_by_key(|(a, _)| *a);
         for (old, new) in sorted.into_iter().take(cap) {
             result = result.replace(old.as_str(), new.as_str());
         }

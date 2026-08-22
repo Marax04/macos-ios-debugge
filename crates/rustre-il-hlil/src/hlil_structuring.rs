@@ -119,12 +119,11 @@ fn for_each_child_mut(e: &mut HlilExpr, f: &mut impl FnMut(&mut HlilExpr)) {
 
 /// Replace every read of variable `name` in `e` with `rep` (deep).
 fn subst_var(e: &mut HlilExpr, name: &str, rep: &HlilExpr) {
-    if let HlilExpr::Var { var } = e {
-        if var.name == name {
+    if let HlilExpr::Var { var } = e
+        && var.name == name {
             *e = rep.clone();
             return;
         }
-    }
     for_each_child_mut(e, &mut |c| subst_var(c, name, rep));
 }
 
@@ -143,11 +142,10 @@ fn count_reads_expr(e: &HlilExpr, name: &str) -> usize {
 
 /// Whether `name`'s address is ever taken anywhere in `e`.
 fn address_taken_expr(e: &HlilExpr, name: &str) -> bool {
-    if let HlilExpr::AddressOf { var } = e {
-        if var.name == name {
+    if let HlilExpr::AddressOf { var } = e
+        && var.name == name {
             return true;
         }
-    }
     let mut found = false;
     let mut e2 = e.clone();
     for_each_child_mut(&mut e2, &mut |c| found |= address_taken_expr(c, name));
@@ -418,15 +416,11 @@ pub fn fold_flags(stmts: &mut Vec<HlilStatement>) -> usize {
             dest: HlilExpr::Var { var },
             src,
         } = &stmts[i]
-        {
-            if is_comparison(src) && src.is_pure() {
-                if let HlilStatement::If { cond, .. } = &stmts[i + 1] {
-                    if let Some(folded) = fold_flag_cond(cond, &var.name, src) {
+            && is_comparison(src) && src.is_pure()
+                && let HlilStatement::If { cond, .. } = &stmts[i + 1]
+                    && let Some(folded) = fold_flag_cond(cond, &var.name, src) {
                         fold = Some((var.name.clone(), folded));
                     }
-                }
-            }
-        }
         if let Some((flag, folded)) = fold {
             if let HlilStatement::If { cond, .. } = &mut stmts[i + 1] {
                 *cond = folded;
@@ -452,7 +446,7 @@ pub fn fold_flags(stmts: &mut Vec<HlilStatement>) -> usize {
 fn probe_enabled() -> bool {
     matches!(
         std::env::var("RUSTRE_HLIL_DEBUG").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("1" | "true")
     )
 }
 
@@ -462,7 +456,7 @@ fn probe_enabled() -> bool {
 fn sf_expr_enabled() -> bool {
     matches!(
         std::env::var("RUSTRE_HLIL_SFEXPR").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("1" | "true")
     )
 }
 
@@ -571,7 +565,7 @@ fn zf_only_on_temp(cond: &HlilExpr, temp: &str) -> Option<HlilExpr> {
 fn zf_temp_enabled() -> bool {
     !matches!(
         std::env::var("RUSTRE_HLIL_ZFTEMP").as_deref(),
-        Ok("0") | Ok("false")
+        Ok("0" | "false")
     )
 }
 
@@ -627,7 +621,7 @@ fn zf_combo_to_cmp(cond: &HlilExpr, a: &HlilExpr, b: &HlilExpr) -> Option<HlilEx
 fn class_b_enabled() -> bool {
     matches!(
         std::env::var("RUSTRE_HLIL_SKIPINNOCUOUS").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("1" | "true")
     )
 }
 
@@ -640,7 +634,7 @@ fn class_b_enabled() -> bool {
 fn cmov_fold_enabled() -> bool {
     !matches!(
         std::env::var("RUSTRE_HLIL_CMOVFOLD").as_deref(),
-        Ok("0") | Ok("false")
+        Ok("0" | "false")
     )
 }
 
@@ -648,7 +642,7 @@ fn cmov_fold_enabled() -> bool {
 fn test_flags_enabled() -> bool {
     matches!(
         std::env::var("RUSTRE_HLIL_TESTFLAGS").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("1" | "true")
     )
 }
 
@@ -1127,11 +1121,10 @@ fn collect_var_names_in_order(stmts: &[HlilStatement], out: &mut Vec<String>) {
         {
             collect_var_names_in_order(std::slice::from_ref(init), out);
         }
-        if let HlilStatement::VarDeclare { var, .. } | HlilStatement::VarDecl { var, .. } = s {
-            if !out.contains(&var.name) {
+        if let HlilStatement::VarDeclare { var, .. } | HlilStatement::VarDecl { var, .. } = s
+            && !out.contains(&var.name) {
                 out.push(var.name.clone());
             }
-        }
         for e in stmt_exprs(s) {
             expr_names(e, out);
         }
@@ -1183,11 +1176,9 @@ fn rename_in_stmts(stmts: &mut [HlilStatement], map: &HashMap<String, String>) {
     for s in stmts {
         if let HlilStatement::VarDeclare { var, .. }
         | HlilStatement::VarDecl { var, .. } = s
-        {
-            if let Some(n) = map.get(&var.name) {
+            && let Some(n) = map.get(&var.name) {
                 var.name = n.clone();
             }
-        }
         if let HlilStatement::AssignUnpack { dests, .. } = s {
             for v in dests {
                 if let Some(n) = map.get(&v.name) {
@@ -1396,11 +1387,10 @@ fn ensure_locals_cover_body(func: &mut HlilFunction) {
 /// Prima occorrenza della variabile `name` nel corpo, per riusarne il TIPO.
 fn find_var_in_body(stmts: &[HlilStatement], name: &str) -> Option<HlilVar> {
     fn in_expr(e: &HlilExpr, name: &str) -> Option<HlilVar> {
-        if let HlilExpr::Var { var } | HlilExpr::AddressOf { var } = e {
-            if var.name == name {
+        if let HlilExpr::Var { var } | HlilExpr::AddressOf { var } = e
+            && var.name == name {
                 return Some(var.clone());
             }
-        }
         let mut e2 = e.clone();
         let mut found = None;
         for_each_child_mut(&mut e2, &mut |c| {
@@ -1447,11 +1437,10 @@ fn label_matches(label: &str, addr: Address) -> bool {
 fn count_gotos_to(stmts: &[HlilStatement], label: &str) -> usize {
     let mut n = 0;
     for s in stmts {
-        if let HlilStatement::Goto(a) = s {
-            if label_matches(label, *a) {
+        if let HlilStatement::Goto(a) = s
+            && label_matches(label, *a) {
                 n += 1;
             }
-        }
         if let HlilStatement::For {
             init: Some(init), ..
         } = s
@@ -1486,16 +1475,14 @@ fn collect_labels(stmts: &[HlilStatement], out: &mut Vec<String>) {
 /// Return true if any goto in `stmts` (deep) targets one of `labels`.
 fn gotos_to_any(stmts: &[HlilStatement], labels: &[String]) -> bool {
     for s in stmts {
-        if let HlilStatement::Goto(a) = s {
-            if labels.iter().any(|l| label_matches(l, *a)) {
+        if let HlilStatement::Goto(a) = s
+            && labels.iter().any(|l| label_matches(l, *a)) {
                 return true;
             }
-        }
-        if let HlilStatement::For { init: Some(init), .. } = s {
-            if gotos_to_any(std::slice::from_ref(init), labels) {
+        if let HlilStatement::For { init: Some(init), .. } = s
+            && gotos_to_any(std::slice::from_ref(init), labels) {
                 return true;
             }
-        }
         for body in stmt_bodies(s) {
             if gotos_to_any(body, labels) {
                 return true;
@@ -1671,8 +1658,8 @@ fn structure_block(stmts: &mut Vec<HlilStatement>) -> usize {
 
     // (a) `while (1) { if (c) break; rest }` → `while (!c) { rest }`
     for s in stmts.iter_mut() {
-        if let HlilStatement::While { cond, body } = s {
-            if is_const_true(cond) && !body.is_empty() {
+        if let HlilStatement::While { cond, body } = s
+            && is_const_true(cond) && !body.is_empty() {
                 let head_is_guard = matches!(
                     &body[0],
                     HlilStatement::If { cond: _, then_body, else_body }
@@ -1688,7 +1675,6 @@ fn structure_block(stmts: &mut Vec<HlilStatement>) -> usize {
                     changed += 1;
                 }
             }
-        }
     }
 
     // (b) forward goto: `if (c) goto T; S…; label T:` → `if (!c) { S… } label T:`
@@ -1734,11 +1720,10 @@ fn structure_block(stmts: &mut Vec<HlilStatement>) -> usize {
                     );
                     // Remove the label when nothing else targets it.
                     let label_idx = i + 1;
-                    if let HlilStatement::Label(l) = stmts[label_idx].clone() {
-                        if count_gotos_to(stmts, &l) == 0 {
+                    if let HlilStatement::Label(l) = stmts[label_idx].clone()
+                        && count_gotos_to(stmts, &l) == 0 {
                             stmts.remove(label_idx);
                         }
-                    }
                     changed += 1;
                     continue;
                 }
@@ -1754,7 +1739,7 @@ fn structure_block(stmts: &mut Vec<HlilStatement>) -> usize {
         stmts,
         matches!(
             std::env::var("RUSTRE_HLIL_BAREGOTO").as_deref(),
-            Ok("1") | Ok("true")
+            Ok("1" | "true")
         ),
     );
 
@@ -2350,13 +2335,13 @@ const FLAG_NAMES: [&str; 6] = [
 ///   `JUMPOUT`    7 -> 7          (invariato)
 ///   dati materializzati 7937 -> 7937 (invariato)
 ///   chiamate distinte perse: **0** in **0** file
-///   comportamento: 15 AGREE / 4 LINK_FAIL, IDENTICO funzione per funzione
+///   comportamento: 15 AGREE / 4 `LINK_FAIL`, IDENTICO funzione per funzione
 ///                  su tutte e 19 le funzioni confrontabili
 /// Nessun contatore peggiorato: e' il motivo per cui e' default-ON.
 fn flag_dce_enabled() -> bool {
     !matches!(
         std::env::var("RUSTRE_HLIL_FLAGDCE").as_deref(),
-        Ok("0") | Ok("false")
+        Ok("0" | "false")
     )
 }
 
@@ -2416,7 +2401,7 @@ fn all_flags_live(live: &mut std::collections::BTreeSet<String>) {
 ///   dati               7943 -> 7826     (−117, VERIFICATI coerenti)
 ///   chiamate di coda perse  0 -> **0**  (la parita' del §103 non si tocca)
 ///   `path A`                            0 differenze
-///   comportamento      15 AGREE / 4 LINK_FAIL, **19 su 19 identiche**
+///   comportamento      15 AGREE / 4 `LINK_FAIL`, **19 su 19 identiche**
 ///
 /// I 117 dati in meno sono l'unico contatore in calo, ed e' la classe che in
 /// questa sessione ha nascosto una perdita reale tre volte. Verificato uno per
@@ -2430,7 +2415,7 @@ fn all_flags_live(live: &mut std::collections::BTreeSet<String>) {
 fn reach_fixpoint_enabled() -> bool {
     !matches!(
         std::env::var("RUSTRE_HLIL_REACH").as_deref(),
-        Ok("0") | Ok("false")
+        Ok("0" | "false")
     )
 }
 
@@ -2588,7 +2573,7 @@ fn has_goto_or_label(stmts: &[HlilStatement]) -> bool {
 fn temp_prop_enabled() -> bool {
     !matches!(
         std::env::var("RUSTRE_HLIL_TEMPPROP").as_deref(),
-        Ok("0") | Ok("false")
+        Ok("0" | "false")
     )
 }
 
@@ -3070,17 +3055,14 @@ pub fn detect_induction_vars(stmts: &mut Vec<HlilStatement>) -> usize {
             }
             // Steal a preceding `ivar = init` as the for-init when adjacent.
             let mut init: Option<Box<HlilStatement>> = None;
-            if i > 0 {
-                if let HlilStatement::Assign {
+            if i > 0
+                && let HlilStatement::Assign {
                     dest: HlilExpr::Var { var },
                     src: init_src,
                 } = &stmts[i - 1]
-                {
-                    if var.name == ivar && init_src.is_pure() {
+                    && var.name == ivar && init_src.is_pure() {
                         init = Some(Box::new(stmts[i - 1].clone()));
                     }
-                }
-            }
             // `For.step` is an expression, so the step is represented by the
             // increment's RHS (`i + 1`-style), matching the For printer.
             let for_stmt = HlilStatement::For {
@@ -3153,11 +3135,10 @@ fn infer_var_type(stmts: &[HlilStatement], name: &str) -> Option<HlilType> {
 }
 
 fn deref_evidence(e: &HlilExpr, name: &str) -> Option<HlilType> {
-    if let HlilExpr::Deref { addr, ty } = e {
-        if matches!(&**addr, HlilExpr::Var { var } if var.name == name) {
+    if let HlilExpr::Deref { addr, ty } = e
+        && matches!(&**addr, HlilExpr::Var { var } if var.name == name) {
             return Some(HlilType::ptr(ty.clone(), 64));
         }
-    }
     let mut found = None;
     let mut e2 = e.clone();
     for_each_child_mut(&mut e2, &mut |c| {
@@ -3171,11 +3152,10 @@ fn deref_evidence(e: &HlilExpr, name: &str) -> Option<HlilType> {
 fn retype_expr(e: &mut HlilExpr, map: &HashMap<String, HlilType>) {
     match e {
         HlilExpr::Var { var } | HlilExpr::AddressOf { var } => {
-            if let Some(t) = map.get(&var.name) {
-                if !known(&var.ty) {
+            if let Some(t) = map.get(&var.name)
+                && !known(&var.ty) {
                     var.ty = t.clone();
                 }
-            }
         }
         _ => {}
     }
@@ -3184,13 +3164,11 @@ fn retype_expr(e: &mut HlilExpr, map: &HashMap<String, HlilType>) {
 
 fn retype_stmts(stmts: &mut [HlilStatement], map: &HashMap<String, HlilType>) {
     for s in stmts {
-        if let HlilStatement::VarDeclare { var, .. } | HlilStatement::VarDecl { var, .. } = s {
-            if let Some(t) = map.get(&var.name) {
-                if !known(&var.ty) {
+        if let HlilStatement::VarDeclare { var, .. } | HlilStatement::VarDecl { var, .. } = s
+            && let Some(t) = map.get(&var.name)
+                && !known(&var.ty) {
                     var.ty = t.clone();
                 }
-            }
-        }
         if let HlilStatement::For {
             init: Some(init), ..
         } = s
@@ -3213,7 +3191,7 @@ fn retype_stmts(stmts: &mut [HlilStatement], map: &HashMap<String, HlilType>) {
 /// `unsigned __int128`: senza quella stampa il tipo allargato non sarebbe
 /// esprimibile.
 pub fn widen_locals_from_128bit_sources(func: &mut HlilFunction) -> usize {
-    if matches!(std::env::var("RUSTRE_INT128").as_deref(), Ok("0") | Ok("false")) {
+    if matches!(std::env::var("RUSTRE_INT128").as_deref(), Ok("0" | "false")) {
         return 0;
     }
     const fn is_128(e: &HlilExpr) -> bool {
@@ -3301,11 +3279,10 @@ pub fn infer_types(func: &mut HlilFunction) -> usize {
     }
     retype_stmts(&mut func.body, &map);
     for l in &mut func.locals {
-        if let Some(t) = map.get(&l.name) {
-            if !known(&l.ty) {
+        if let Some(t) = map.get(&l.name)
+            && !known(&l.ty) {
                 l.ty = t.clone();
             }
-        }
     }
     map.len()
 }
@@ -3408,7 +3385,7 @@ impl StructuringPipeline {
         // PEZZO 4 dello structurer sul CFG, **OPT-IN**: chiude i cicli che la
         // riscrittura testuale non vede (corpo a piu' etichette). Una
         // riscrittura per chiamata ⇒ iterare fino al punto fisso, con tetto.
-        let cfgloop = !matches!(std::env::var("RUSTRE_HLIL_CFGLOOP").as_deref(), Ok("0") | Ok("false"));
+        let cfgloop = !matches!(std::env::var("RUSTRE_HLIL_CFGLOOP").as_deref(), Ok("0" | "false"));
         if cfgloop {
             for _ in 0..64 {
                 if std::env::var("RUSTRE_DBG_CFGLOOP").is_ok_and(|v| v != "0") {
@@ -3582,11 +3559,10 @@ fn structure_loops_from_cfg_con(
     // rifiuto piu' sotto.
     let mut pos_of: std::collections::HashMap<u64, usize> = std::collections::HashMap::new();
     for (i, s) in stmts.iter().enumerate() {
-        if let HlilStatement::Label(l) = s {
-            if let Some(v) = val_label(l) {
+        if let HlilStatement::Label(l) = s
+            && let Some(v) = val_label(l) {
                 pos_of.insert(v, i);
             }
-        }
     }
     if pos_of.is_empty() {
         return 0;
@@ -3745,11 +3721,10 @@ fn structure_loops_from_cfg_con(
             // Misurato su `sub_1400025c0`: tre auto-anelli riscritti
             // (0x140002634/639/698) facevano sparire le tre etichette e la coda
             // che vi saltava. Radice trovata con la sonda `RISCRITTO`.
-            if let HlilStatement::Goto(a) = s {
-                if membri.contains(&a.0) {
+            if let HlilStatement::Goto(a) = s
+                && membri.contains(&a.0) {
                     esterno_entra = true;
                 }
-            }
             let _ = s;
         }
         // Confronto sui TOTALI di funzione: se qualcuno salta a un membro

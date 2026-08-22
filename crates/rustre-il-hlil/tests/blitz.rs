@@ -8,7 +8,7 @@ fn v(name: &str) -> HlilVar {
     HlilVar::new(name, HlilType::i32())
 }
 
-fn cst(v: i64) -> HlilExpr {
+const fn cst(v: i64) -> HlilExpr {
     HlilExpr::Const { value: v, ty: HlilType::i32() }
 }
 

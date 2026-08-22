@@ -565,10 +565,10 @@ mod tests {
 
     /// Variable IDs, names and `ssa_sources` must be IDENTICAL across runs.
     ///
-    /// `recover` walked two HashMaps directly: `ssa_map` when filling each
+    /// `recover` walked two `HashMaps` directly: `ssa_map` when filling each
     /// group's key list, and `base_groups` while handing out `next_id`. Since
     /// `next_id` feeds `RecoveredVar::new(next_id, …)` and
-    /// `ssa_to_var.insert(key, next_id)`, HashMap order decided which variable
+    /// `ssa_to_var.insert(key, next_id)`, `HashMap` order decided which variable
     /// got which id — the same function analysed twice produced a different
     /// SSA→variable mapping, and that reaches the emitted names.
     ///

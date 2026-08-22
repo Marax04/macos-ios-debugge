@@ -786,11 +786,10 @@ pub fn recover_loops(blocks: &[CfgBlock], entry: u32) -> Vec<RecoveredLoop> {
         let id = blocks_with_preds[i].id;
         let succs: Vec<u32> = blocks_with_preds[i].successors.clone();
         for succ in succs {
-            if let Some(target) = blocks_with_preds.iter_mut().find(|b| b.id == succ) {
-                if !target.predecessors.contains(&id) {
+            if let Some(target) = blocks_with_preds.iter_mut().find(|b| b.id == succ)
+                && !target.predecessors.contains(&id) {
                     target.predecessors.push(id);
                 }
-            }
         }
     }
 

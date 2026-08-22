@@ -45,7 +45,7 @@ impl OptimizationResult {
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-/// Create an unknown-type `Int` HlilType for a given bit width.
+/// Create an unknown-type `Int` `HlilType` for a given bit width.
 fn int_ty(bits: usize) -> HlilType {
     HlilType::Int {
         signed: false,
@@ -2270,7 +2270,7 @@ mod tests {
         assert_eq!(ConstantFolding::fold(&neg), c(0xFF, 8));
     }
 
-    /// Finding 8: ConstantFolding must fold expressions nested inside If
+    /// Finding 8: `ConstantFolding` must fold expressions nested inside If
     /// then/else blocks, not just top-level statements.
     #[test]
     fn test_cf_folds_inside_nested_if_block() {
@@ -2293,7 +2293,7 @@ mod tests {
         }
     }
 
-    /// Finding 8: SimplifyConditions must simplify the condition of an If
+    /// Finding 8: `SimplifyConditions` must simplify the condition of an If
     /// nested inside another If/While body.
     #[test]
     fn test_simplify_conditions_fires_on_nested_if() {

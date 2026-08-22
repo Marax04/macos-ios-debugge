@@ -438,12 +438,12 @@ impl HlilExpressionNormalizer {
             SimpleExpr::Add(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { return SimpleExpr::Const(x.wrapping_add(y)) },
             SimpleExpr::Sub(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { return SimpleExpr::Const(x.wrapping_sub(y)) },
             SimpleExpr::Mul(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { return SimpleExpr::Const(x.wrapping_mul(y)) },
-            SimpleExpr::Div(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { if y != 0 { return SimpleExpr::Const(x.wrapping_div(y)); } },
+            SimpleExpr::Div(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) && y != 0 { return SimpleExpr::Const(x.wrapping_div(y)); },
             SimpleExpr::And(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { return SimpleExpr::Const(x & y) },
             SimpleExpr::Or(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { return SimpleExpr::Const(x | y) },
             SimpleExpr::Xor(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { return SimpleExpr::Const(x ^ y) },
-            SimpleExpr::Shl(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { if (0..64).contains(&y) { return SimpleExpr::Const(x.wrapping_shl(y as u32)); } },
-            SimpleExpr::Shr(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) { if (0..64).contains(&y) { return SimpleExpr::Const(x.wrapping_shr(y as u32)); } },
+            SimpleExpr::Shl(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) && (0..64).contains(&y) { return SimpleExpr::Const(x.wrapping_shl(y as u32)); },
+            SimpleExpr::Shr(a, b) => if let (Some(x), Some(y)) = (a.const_val(), b.const_val()) && (0..64).contains(&y) { return SimpleExpr::Const(x.wrapping_shr(y as u32)); },
             SimpleExpr::Neg(e) => {
                 if let Some(v) = e.const_val() {
                     return SimpleExpr::Const(v.wrapping_neg());

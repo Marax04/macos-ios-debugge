@@ -162,7 +162,7 @@ impl HlilType {
     }
 
     /// Convert a [`Size`] to the equivalent unsigned HLIL type.
-    fn from_mlil_size(s: Size) -> Self {
+    const fn from_mlil_size(s: Size) -> Self {
         match s {
             Size::Byte => Self::u8(),
             Size::Word => Self::u16(),
@@ -186,7 +186,7 @@ impl HlilType {
     /// Convert a [`Size`] to the equivalent *signed* HLIL type. Used where the
     /// MLIL operation is signedness-sensitive (`DivS`, `Sar`, `CmpS*`,
     /// `SignExtend`) so the signedness is not erased on lift.
-    fn from_mlil_size_signed(s: Size) -> Self {
+    const fn from_mlil_size_signed(s: Size) -> Self {
         match s {
             Size::Byte => Self::i8(),
             Size::Word => Self::i16(),
@@ -737,7 +737,7 @@ impl HlilExpr {
 fn int128_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("RUSTRE_INT128").as_deref(), Ok("0") | Ok("false"))
+        !matches!(std::env::var("RUSTRE_INT128").as_deref(), Ok("0" | "false"))
     })
 }
 
@@ -746,7 +746,7 @@ fn deref_width_enabled() -> bool {
     *ON.get_or_init(|| {
         !matches!(
             std::env::var("RUSTRE_HLIL_DEREF_WIDTH").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         )
     })
 }
@@ -793,24 +793,24 @@ impl fmt::Display for HlilExpr {
             Self::Add(a, b, _) => write!(f, "({a} + {b})"),
             Self::Sub(a, b, _) => write!(f, "({a} - {b})"),
             Self::Mul(a, b, _) => write!(f, "({a} * {b})"),
-            HlilExpr::Div(a, b, _) | HlilExpr::DivU(a, b) | HlilExpr::DivS(a, b) => write!(f, "({a} / {b})"),
-            HlilExpr::Mod(a, b, _) | HlilExpr::ModU(a, b) | HlilExpr::ModS(a, b) => write!(f, "({a} % {b})"),
+            Self::Div(a, b, _) | Self::DivU(a, b) | Self::DivS(a, b) => write!(f, "({a} / {b})"),
+            Self::Mod(a, b, _) | Self::ModU(a, b) | Self::ModS(a, b) => write!(f, "({a} % {b})"),
             Self::Neg(e, _) => write!(f, "-{e}"),
-            HlilExpr::And(a, b, _) | HlilExpr::BitAnd(a, b) => write!(f, "({a} & {b})"),
-            HlilExpr::Or(a, b, _) | HlilExpr::BitOr(a, b) => write!(f, "({a} | {b})"),
-            HlilExpr::Xor(a, b, _) | HlilExpr::BitXor(a, b) => write!(f, "({a} ^ {b})"),
+            Self::And(a, b, _) | Self::BitAnd(a, b) => write!(f, "({a} & {b})"),
+            Self::Or(a, b, _) | Self::BitOr(a, b) => write!(f, "({a} | {b})"),
+            Self::Xor(a, b, _) | Self::BitXor(a, b) => write!(f, "({a} ^ {b})"),
             Self::Not(e, _) => write!(f, "~{e}"),
             Self::Shl(a, b, _) => write!(f, "({a} << {b})"),
-            HlilExpr::Shr(a, b, _) | HlilExpr::Sar(a, b) => write!(f, "({a} >> {b})"),
+            Self::Shr(a, b, _) | Self::Sar(a, b) => write!(f, "({a} >> {b})"),
             Self::CmpEq(a, b) => write!(f, "({a} == {b})"),
             Self::CmpNe(a, b) => write!(f, "({a} != {b})"),
-            HlilExpr::CmpLt(a, b) | HlilExpr::CmpSlt(a, b) | HlilExpr::CmpUlt(a, b) => write!(f, "({a} < {b})"),
-            HlilExpr::CmpGt(a, b) | HlilExpr::CmpSgt(a, b) | HlilExpr::CmpUgt(a, b) => write!(f, "({a} > {b})"),
-            HlilExpr::CmpLe(a, b) | HlilExpr::CmpSle(a, b) | HlilExpr::CmpUle(a, b) => write!(f, "({a} <= {b})"),
-            HlilExpr::CmpGe(a, b) | HlilExpr::CmpSge(a, b) | HlilExpr::CmpUge(a, b) => write!(f, "({a} >= {b})"),
-            HlilExpr::LogicalAnd(a, b) | HlilExpr::BoolAnd(a, b) => write!(f, "({a} && {b})"),
-            HlilExpr::LogicalOr(a, b) | HlilExpr::BoolOr(a, b) => write!(f, "({a} || {b})"),
-            HlilExpr::LogicalNot(e) | HlilExpr::BoolNot(e) => write!(f, "!{e}"),
+            Self::CmpLt(a, b) | Self::CmpSlt(a, b) | Self::CmpUlt(a, b) => write!(f, "({a} < {b})"),
+            Self::CmpGt(a, b) | Self::CmpSgt(a, b) | Self::CmpUgt(a, b) => write!(f, "({a} > {b})"),
+            Self::CmpLe(a, b) | Self::CmpSle(a, b) | Self::CmpUle(a, b) => write!(f, "({a} <= {b})"),
+            Self::CmpGe(a, b) | Self::CmpSge(a, b) | Self::CmpUge(a, b) => write!(f, "({a} >= {b})"),
+            Self::LogicalAnd(a, b) | Self::BoolAnd(a, b) => write!(f, "({a} && {b})"),
+            Self::LogicalOr(a, b) | Self::BoolOr(a, b) => write!(f, "({a} || {b})"),
+            Self::LogicalNot(e) | Self::BoolNot(e) => write!(f, "!{e}"),
             Self::Cast { expr, to, .. } => write!(f, "({to}){expr}"),
             Self::Call { func, args, .. } => {
                 let arg_str = args
@@ -2512,7 +2512,7 @@ impl MlilToHlilLifter {
             // Misurati 61 bersagli in questa condizione su sample10_cs.
             let end_inclusive = matches!(
                 std::env::var("RUSTRE_HLIL_ENDINCL").as_deref(),
-                Ok("1") | Ok("true")
+                Ok("1" | "true")
             );
             // #6960: se il chiamante ha passato l'estensione REALE, e' quella
             // a decidere — i blocchi la sottostimano.
@@ -2617,7 +2617,7 @@ impl MlilToHlilLifter {
             // grado, non di specie.
             let tail_exit = !matches!(
                 std::env::var("RUSTRE_HLIL_TAILEXIT").as_deref(),
-                Ok("0") | Ok("false")
+                Ok("0" | "false")
             );
             // #6980 — il criterio giusto e' quello che path A usa GIA' e che ha
             // gia' pagato il suo prezzo in misure: `rewrite_hlil_tail_calls`
@@ -3400,7 +3400,7 @@ impl MlilToHlilLifter {
                 // dentro i cast, su 4407 file.
                 let ty = if matches!(
                     std::env::var("RUSTRE_HLIL_STORE_WIDTH").as_deref(),
-                    Ok("0") | Ok("false")
+                    Ok("0" | "false")
                 ) {
                     HlilType::Unknown
                 } else {
@@ -3569,7 +3569,7 @@ impl HlilExpr {
             | Self::SizeOf { .. }
             | Self::Undefined(..) => true,
             Self::Var { .. } | Self::AddressOf { .. } => true,
-            HlilExpr::Deref { .. } | HlilExpr::Call { .. } => false, // memory read — may fault
+            Self::Deref { .. } | Self::Call { .. } => false, // memory read — may fault
             Self::FieldAccess { base, .. } => base.is_pure(),
             Self::Index { base, idx, .. } => base.is_pure() && idx.is_pure(),
             Self::Add(a, b, _)
@@ -7098,7 +7098,7 @@ mod tests {
         );
     }
 
-    /// Finding 1: FNeg must lift to a float-typed Neg, not Undefined.
+    /// Finding 1: `FNeg` must lift to a float-typed Neg, not Undefined.
     #[test]
     fn test_lifter_fneg_becomes_float_neg() {
         let lifted = lift_expr_via_assign(MlilExpr::FNeg(
@@ -7210,8 +7210,8 @@ mod tests {
         ));
     }
 
-    /// Finding 2: SignExtend must cast through the *signed* from-sized type;
-    /// ZeroExtend through the unsigned one. Neither may discard `from`.
+    /// Finding 2: `SignExtend` must cast through the *signed* from-sized type;
+    /// `ZeroExtend` through the unsigned one. Neither may discard `from`.
     #[test]
     fn test_lifter_extend_signedness_and_from_size() {
         let sx = lift_expr_via_assign(MlilExpr::SignExtend {
@@ -7248,7 +7248,7 @@ mod tests {
         }
     }
 
-    /// Finding 3: a TailCall must return the callee's value, not emit a bare
+    /// Finding 3: a `TailCall` must return the callee's value, not emit a bare
     /// call followed by a value-less `return;`.
     #[test]
     fn test_lifter_tailcall_returns_call_value() {
@@ -8394,7 +8394,7 @@ pub mod structuring {
     ///   chiamate distinte perse     **0** in **0** file (erano 6 in 2)
     ///   `JUMPOUT`                   0 -> 0
     ///   dati materializzati         7943 -> 7943 (invariati)
-    ///   comportamento               15 AGREE / 4 LINK_FAIL, IDENTICO
+    ///   comportamento               15 AGREE / 4 `LINK_FAIL`, IDENTICO
     ///                               funzione per funzione (19/19)
     ///   costo: `goto` 8978 -> 9541 (+563), concentrati su C# e Go, cioe' dove
     ///          il flusso e' gia' irriducibile; i cinque bucket C ne prendono
@@ -8406,7 +8406,7 @@ pub mod structuring {
     fn top_test_break_enabled() -> bool {
         !matches!(
             std::env::var("RUSTRE_HLIL_TOPTEST_BREAK").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         )
     }
 
@@ -8571,7 +8571,7 @@ pub mod structuring {
     pub fn dominators(cfg: &StructuringCfg) -> HashMap<u32, u32> {
         if matches!(
             std::env::var("RUSTRE_HLIL_CFG_DELEGATE").as_deref(),
-            Ok("1") | Ok("true")
+            Ok("1" | "true")
         ) {
             return dominators_delegated(cfg);
         }
@@ -8690,7 +8690,7 @@ pub mod structuring {
         const VIRT: u32 = u32::MAX;
         let virt_on = matches!(
             std::env::var("RUSTRE_HLIL_PDOM_VIRT").as_deref(),
-            Ok("1") | Ok("true")
+            Ok("1" | "true")
         );
         let mut rorder: Vec<u32> = Vec::with_capacity(order.len() + 1);
         let mut seen: HashSet<u32> = HashSet::new();
@@ -8905,7 +8905,7 @@ pub mod structuring {
         // l'obiettivo «tutta la catena usata».
         if !matches!(
             std::env::var("RUSTRE_HLIL_LOOPS_DELEGATE").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         ) {
             return detect_natural_loops_delegated(cfg);
         }
@@ -9067,7 +9067,7 @@ pub mod structuring {
         // +0.97% lines.
         let multi = !matches!(
             std::env::var("RUSTRE_HLIL_RELOOP_MULTIEXIT").as_deref(),
-            Ok("0") | Ok("false")
+            Ok("0" | "false")
         );
         let taken = super::HlilVar::new(
             format!("exit_{entry:x}"),
@@ -9251,7 +9251,7 @@ pub mod structuring {
         pending_exits: Vec<u32>,
         /// #6920 (diagnostica): da QUALE ramo di emissione e' partita la
         /// sequenza che sta emettendo il blocco corrente. Serve ad attribuire
-        /// i blocchi che nessun `goto` raggiunge (§89: 324 in sample10_cs).
+        /// i blocchi che nessun `goto` raggiunge (§89: 324 in `sample10_cs`).
         dbg_origine: &'static str,
         dbg_origine_di: HashMap<u32, &'static str>,
         /// How many `switch` bodies enclose the statement being emitted. Inside
@@ -9977,7 +9977,7 @@ pub mod structuring {
         /// * its body is at most `RUSTRE_HLIL_DUP_MAX` statements (default 32),
         ///   so a large tail is still shared via a jump.
         ///
-        /// The default was 8, justified by a cost curve measured on sample10_cs
+        /// The default was 8, justified by a cost curve measured on `sample10_cs`
         /// ALONE, which put the knee at 8 and claimed a ~6% ceiling on removed
         /// gotos. That analysis no longer describes this emitter: re-measured on
         /// the WHOLE corpus (12 binaries, 11144 files) the same binary now drops
@@ -10008,7 +10008,7 @@ pub mod structuring {
         /// `try_duplicate_tail` with an explicit statement budget.
         ///
         /// The forward case needs its OWN, much smaller cap. Measured on
-        /// sample10_cs at the production `DUP_MAX=32`, duplicating forward
+        /// `sample10_cs` at the production `DUP_MAX=32`, duplicating forward
         /// edges removed 143 gotos but added 8914 lines — **62.3 lines per
         /// goto**, essentially as bad as raising `DUP_MAX` itself (70.9), which
         /// is already closed as not worth it. The estimate that predicted ~3
@@ -10189,7 +10189,7 @@ pub mod structuring {
         ///
         /// Tail duplication used to be attempted at ONE site only — inside
         /// `if self.emitted.contains(&c)` in `emit_sequence` — so it ran for
-        /// BACKWARD jumps and never for forward ones. Measured on sample10_cs:
+        /// BACKWARD jumps and never for forward ones. Measured on `sample10_cs`:
         /// **750 forward gotos target a terminating block**, and **none** of
         /// them is a loop header or inside an SCC, i.e. none would hit either
         /// of the two legitimate refusals. Their targets are small (95 of size
@@ -10466,7 +10466,7 @@ pub mod structuring {
             if follow.is_none()
                 && matches!(
                     std::env::var("RUSTRE_HLIL_DEFER").as_deref(),
-                    Ok("1") | Ok("true")
+                    Ok("1" | "true")
                 )
                 && let Some(&p) = self.ipdom.get(&src)
                 && p != src

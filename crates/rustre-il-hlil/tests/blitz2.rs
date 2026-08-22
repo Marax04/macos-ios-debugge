@@ -16,7 +16,7 @@ impl Lcg {
     }
 }
 
-fn cst32(v: i64) -> HlilExpr {
+const fn cst32(v: i64) -> HlilExpr {
     HlilExpr::Const { value: v, ty: HlilType::i32() }
 }
 
