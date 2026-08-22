@@ -59,7 +59,7 @@ pub enum StabType {
     Pointer(Box<Self>),
     /// A reference (C++) to another type
     Reference(Box<Self>),
-    /// Array[low..high] of elem_type
+    /// Array[low..high] of `elem_type`
     Array {
         /// Lower index bound.
         low: i64,
@@ -86,7 +86,7 @@ pub enum StabType {
         /// Enumerators.
         variants: Vec<EnumVariant>,
     },
-    /// Function returning ret_type with given arg types
+    /// Function returning `ret_type` with given arg types
     Function {
         /// Return type.
         ret_type: Box<Self>,
@@ -174,16 +174,16 @@ impl StabType {
 
     /// Returns `true` if this is a pointer type.
     #[must_use]
-    pub fn is_pointer(&self) -> bool { matches!(self, Self::Pointer(_)) }
+    pub const fn is_pointer(&self) -> bool { matches!(self, Self::Pointer(_)) }
     /// Returns `true` if this is a struct/union type.
     #[must_use]
-    pub fn is_struct(&self) -> bool { matches!(self, Self::Struct { .. }) }
+    pub const fn is_struct(&self) -> bool { matches!(self, Self::Struct { .. }) }
     /// Returns `true` if this is an enum type.
     #[must_use]
-    pub fn is_enum(&self) -> bool { matches!(self, Self::Enum { .. }) }
+    pub const fn is_enum(&self) -> bool { matches!(self, Self::Enum { .. }) }
     /// Returns `true` if this is `void`.
     #[must_use]
-    pub fn is_void(&self) -> bool { matches!(self, Self::Void) }
+    pub const fn is_void(&self) -> bool { matches!(self, Self::Void) }
 }
 
 impl fmt::Display for StabType {
@@ -247,7 +247,7 @@ impl StructField {
     pub const fn byte_offset(&self) -> u32 { self.bit_offset / 8 }
     /// Returns `true` if the field is a bitfield (size not byte-aligned).
     #[must_use]
-    pub fn is_bitfield(&self) -> bool { !self.bit_size.is_multiple_of(8) }
+    pub const fn is_bitfield(&self) -> bool { !self.bit_size.is_multiple_of(8) }
 }
 
 /// A decoded enum variant.
@@ -279,7 +279,7 @@ impl TypeId {
     pub const fn simple(index: i32) -> Self { Self { module: 0, index } }
 }
 
-/// Database of all decoded STABS types, keyed by (module, type_index)
+/// Database of all decoded STABS types, keyed by (module, `type_index`)
 #[derive(Debug, Default)]
 pub struct TypeDatabase {
     types: HashMap<TypeId, StabType>,
@@ -353,7 +353,7 @@ struct TypeCursor<'a> {
     s: &'a str,
     pos: usize,
     /// Current recursive-descent nesting depth; bounded by [`MAX_PARSE_DEPTH`]
-    /// so that a hostile descriptor such as 200_000 consecutive `*` cannot
+    /// so that a hostile descriptor such as `200_000` consecutive `*` cannot
     /// overflow the stack.
     depth: u32,
 }
@@ -363,7 +363,7 @@ struct TypeCursor<'a> {
 const MAX_PARSE_DEPTH: u32 = 100;
 
 impl<'a> TypeCursor<'a> {
-    fn new(s: &'a str) -> Self { Self { s, pos: 0, depth: 0 } }
+    const fn new(s: &'a str) -> Self { Self { s, pos: 0, depth: 0 } }
     #[must_use]
     fn remaining(&self) -> &'a str { &self.s[self.pos..] }
     #[must_use]
@@ -757,7 +757,7 @@ mod tests {
             assert_eq!(high, 9);
             assert_eq!(*elem_type, StabType::Int);
         } else {
-            panic!("Expected array, got {:?}", ty);
+            panic!("Expected array, got {ty:?}");
         }
     }
 
@@ -773,7 +773,7 @@ mod tests {
             assert_eq!(fields[1].name, "y");
             assert_eq!(fields[1].bit_offset, 32);
         } else {
-            panic!("Expected struct, got {:?}", ty);
+            panic!("Expected struct, got {ty:?}");
         }
     }
 
@@ -787,7 +787,7 @@ mod tests {
             assert_eq!(variants[2].name, "Blue");
             assert_eq!(variants[2].value, 2);
         } else {
-            panic!("Expected enum, got {:?}", ty);
+            panic!("Expected enum, got {ty:?}");
         }
     }
 
@@ -798,7 +798,7 @@ mod tests {
             assert_eq!(kind, XRefKind::Struct);
             assert_eq!(name, "MyStruct");
         } else {
-            panic!("Expected xref, got {:?}", ty);
+            panic!("Expected xref, got {ty:?}");
         }
     }
 
@@ -808,7 +808,7 @@ mod tests {
         if let StabType::Const(inner) = ty {
             assert_eq!(*inner, StabType::Int);
         } else {
-            panic!("Expected const, got {:?}", ty);
+            panic!("Expected const, got {ty:?}");
         }
     }
 
@@ -848,7 +848,7 @@ mod tests {
     #[test]
     fn test_stab_type_display() {
         let ptr = StabType::Pointer(Box::new(StabType::Int));
-        let s = format!("{}", ptr);
+        let s = format!("{ptr}");
         assert!(s.contains("int"));
     }
 }

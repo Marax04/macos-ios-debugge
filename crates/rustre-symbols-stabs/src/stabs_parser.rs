@@ -51,7 +51,7 @@ impl fmt::Display for RawStab {
 }
 
 impl RawStab {
-    /// Size in bytes of one on-disk stab entry (n_strx + n_type + n_other + n_desc + n_value).
+    /// Size in bytes of one on-disk stab entry (`n_strx` + `n_type` + `n_other` + `n_desc` + `n_value`).
     pub const ENTRY_SIZE: usize = 12;
 
     /// Parse from 12 raw bytes (ELF/Mach-O layout: stroff, type, other, desc, value)
@@ -85,39 +85,39 @@ impl RawStab {
 
 /// Standard STABS `n_type` byte constants (N_* stab types).
 pub mod stab_types {
-    /// N_GSYM — global symbol.
+    /// `N_GSYM` — global symbol.
     pub const N_GSYM: u8  = 0x20;
-    /// N_FUN — function beginning (or end when the name is empty).
+    /// `N_FUN` — function beginning (or end when the name is empty).
     pub const N_FUN: u8   = 0x24;
-    /// N_STSYM — file-scope static symbol (data segment).
+    /// `N_STSYM` — file-scope static symbol (data segment).
     pub const N_STSYM: u8 = 0x26;
-    /// N_LCSYM — file-scope static symbol (BSS segment).
+    /// `N_LCSYM` — file-scope static symbol (BSS segment).
     pub const N_LCSYM: u8 = 0x28;
-    /// N_RSYM — register variable.
+    /// `N_RSYM` — register variable.
     pub const N_RSYM: u8  = 0x40;
-    /// N_SLINE — source line within the current function.
+    /// `N_SLINE` — source line within the current function.
     pub const N_SLINE: u8 = 0x44;
-    /// N_ENSYM — alternate end-of-function marker.
+    /// `N_ENSYM` — alternate end-of-function marker.
     pub const N_ENSYM: u8 = 0x4E;
-    /// N_SO — source file name or directory (starts/ends a compilation unit).
+    /// `N_SO` — source file name or directory (starts/ends a compilation unit).
     pub const N_SO: u8    = 0x64;
-    /// N_LSYM — local (stack) symbol or type definition.
+    /// `N_LSYM` — local (stack) symbol or type definition.
     pub const N_LSYM: u8  = 0x80;
-    /// N_BINCL — begin include file.
+    /// `N_BINCL` — begin include file.
     pub const N_BINCL: u8 = 0x82;
-    /// N_SOL — name of a `#include`d source file.
+    /// `N_SOL` — name of a `#include`d source file.
     pub const N_SOL: u8   = 0x84;
-    /// N_PSYM — function parameter.
+    /// `N_PSYM` — function parameter.
     pub const N_PSYM: u8  = 0xA0;
-    /// N_EINCL — end include file.
+    /// `N_EINCL` — end include file.
     pub const N_EINCL: u8 = 0xA2;
-    /// N_LBRAC — left brace (lexical scope open).
+    /// `N_LBRAC` — left brace (lexical scope open).
     pub const N_LBRAC: u8 = 0xC0;
-    /// N_RBRAC — right brace (lexical scope close).
+    /// `N_RBRAC` — right brace (lexical scope close).
     pub const N_RBRAC: u8 = 0xE0;
-    /// N_BCOMM — begin Fortran common block.
+    /// `N_BCOMM` — begin Fortran common block.
     pub const N_BCOMM: u8 = 0xE2;
-    /// N_ECOMM — end Fortran common block.
+    /// `N_ECOMM` — end Fortran common block.
     pub const N_ECOMM: u8 = 0xE4;
 }
 
@@ -270,7 +270,7 @@ pub struct StaticSymbol {
     pub name: String,
     /// STABS type descriptor string (portion after ':').
     pub type_str: String,
-    /// Address of the symbol (n_value).
+    /// Address of the symbol (`n_value`).
     pub address: u64,
     /// True for `N_LCSYM` (BSS), false for `N_STSYM` (data).
     pub is_bss: bool,
@@ -295,6 +295,7 @@ pub struct CompilationUnit {
 
 impl CompilationUnit {
     /// Join the `N_SO` directory and file name into a full source path.
+    #[must_use]
     pub fn full_path(&self) -> String {
         if self.directory.is_empty() {
             self.filename.clone()
@@ -306,14 +307,17 @@ impl CompilationUnit {
     }
 
     /// Number of parsed functions in this compilation unit.
-    pub fn function_count(&self) -> usize { self.functions.len() }
+    #[must_use]
+    pub const fn function_count(&self) -> usize { self.functions.len() }
 
     /// Find a function by exact name.
+    #[must_use]
     pub fn find_function_by_name(&self, name: &str) -> Option<&ParsedFunction> {
         self.functions.iter().find(|f| f.name == name)
     }
 
     /// Find the function containing `addr` (functions with unknown end match by start only).
+    #[must_use]
     pub fn find_function_at_addr(&self, addr: u64) -> Option<&ParsedFunction> {
         self.functions.iter().find(|f| {
             addr >= f.start_addr && (f.end_addr == 0 || addr < f.end_addr)
@@ -321,6 +325,7 @@ impl CompilationUnit {
     }
 
     /// Total number of `N_SLINE` entries across all functions.
+    #[must_use]
     pub fn total_lines(&self) -> usize {
         self.functions.iter().map(|f| f.lines.len()).sum()
     }
@@ -336,9 +341,11 @@ pub struct StabStringTable {
 
 impl StabStringTable {
     /// Wrap raw `.stabstr` section bytes.
-    pub fn new(data: Vec<u8>) -> Self { StabStringTable { data } }
+    #[must_use]
+    pub const fn new(data: Vec<u8>) -> Self { Self { data } }
 
     /// Look up a string at an *absolute* `.stabstr` offset.
+    #[must_use]
     pub fn get(&self, offset: u32) -> &str {
         crate::cu_strings::read_cstr(&self.data, offset as usize)
     }
@@ -358,9 +365,11 @@ impl StabStringTable {
     }
 
     /// Size of the string table in bytes.
-    pub fn len(&self) -> usize { self.data.len() }
+    #[must_use]
+    pub const fn len(&self) -> usize { self.data.len() }
     /// True if the string table has no data.
-    pub fn is_empty(&self) -> bool { self.data.is_empty() }
+    #[must_use]
+    pub const fn is_empty(&self) -> bool { self.data.is_empty() }
 }
 
 // ── Parser state machine ───────────────────────────────────────────────────────
@@ -387,7 +396,8 @@ pub struct StabsParser {
 
 impl StabsParser {
     /// Create a parser with no compilation units.
-    pub fn new() -> Self { StabsParser { units: Vec::new() } }
+    #[must_use]
+    pub const fn new() -> Self { Self { units: Vec::new() } }
 
     /// Parse an entire .stab section using the provided string table.
     /// `big_endian` controls byte order.
@@ -563,7 +573,7 @@ impl StabsParser {
                 let func = ParsedFunction {
                     name: func_name.to_string(),
                     type_str: type_str.to_string(),
-                    start_addr: raw.value as u64,
+                    start_addr: u64::from(raw.value),
                     end_addr: 0,
                     source_file: cf.clone(),
                     lines: Vec::new(),
@@ -592,7 +602,7 @@ impl StabsParser {
                 if func.source_file.is_empty() {
                     func.source_file = current_file;
                 }
-                func.end_addr = raw.value as u64;
+                func.end_addr = u64::from(raw.value);
                 let mut cu2 = cu;
                 cu2.functions.push(func);
                 cu2
@@ -602,7 +612,7 @@ impl StabsParser {
         let func = ParsedFunction {
             name: func_name.to_string(),
             type_str: type_str.to_string(),
-            start_addr: raw.value as u64,
+            start_addr: u64::from(raw.value),
             end_addr: 0,
             source_file: cf.clone(),
             lines: Vec::new(),
@@ -620,7 +630,7 @@ impl StabsParser {
                 let addr = func.start_addr.saturating_add(u64::from(raw.value));
                 func.lines.push(LineEntry {
                     address: addr,
-                    line: raw.desc as u32,
+                    line: u32::from(raw.desc),
                     file_idx: 0,
                 });
                 ParserState::InFunction { cu, func, current_file, brace_depth }
@@ -682,7 +692,7 @@ impl StabsParser {
                 cu.globals.push(GlobalSymbol {
                     name: sym_name.to_string(),
                     type_str: type_str.to_string(),
-                    address: raw.value as u64,
+                    address: u64::from(raw.value),
                 });
                 ParserState::InCu { cu, current_file }
             }
@@ -697,7 +707,7 @@ impl StabsParser {
                 cu.statics.push(StaticSymbol {
                     name: sym_name.to_string(),
                     type_str: type_str.to_string(),
-                    address: raw.value as u64,
+                    address: u64::from(raw.value),
                     is_bss,
                 });
                 ParserState::InCu { cu, current_file }
@@ -759,11 +769,13 @@ impl StabsParser {
     }
 
     /// Find a function by exact name across all compilation units.
+    #[must_use]
     pub fn find_function_by_name(&self, name: &str) -> Option<&ParsedFunction> {
         self.all_functions().find(|f| f.name == name)
     }
 
     /// Find the function containing `addr` across all compilation units.
+    #[must_use]
     pub fn find_function_at_addr(&self, addr: u64) -> Option<&ParsedFunction> {
         self.all_functions().find(|f| {
             addr >= f.start_addr && (f.end_addr == 0 || addr < f.end_addr)
@@ -771,6 +783,7 @@ impl StabsParser {
     }
 
     /// Map an address to `(source_file, line)` using `N_SLINE` data.
+    #[must_use]
     pub fn line_for_addr(&self, addr: u64) -> Option<(String, u32)> {
         let func = self.find_function_at_addr(addr)?;
         let le = func.line_for_addr(addr)?;
@@ -783,12 +796,15 @@ impl StabsParser {
     }
 
     /// Number of parsed compilation units.
-    pub fn unit_count(&self) -> usize { self.units.len() }
+    #[must_use]
+    pub const fn unit_count(&self) -> usize { self.units.len() }
 
     /// Total number of parsed functions across all compilation units.
+    #[must_use]
     pub fn function_count(&self) -> usize { self.units.iter().map(|u| u.function_count()).sum() }
 
     /// Build address → function name map
+    #[must_use]
     pub fn build_addr_map(&self) -> HashMap<u64, &str> {
         let mut map = HashMap::new();
         for func in self.all_functions() {
@@ -798,6 +814,7 @@ impl StabsParser {
     }
 
     /// Find the CU that contains the given source file name
+    #[must_use]
     pub fn cu_for_file(&self, filename: &str) -> Option<&CompilationUnit> {
         self.units.iter().find(|cu| {
             cu.filename == filename || cu.full_path() == filename
@@ -812,8 +829,9 @@ impl Default for StabsParser {
 // ── Helper: split "name:type" ──────────────────────────────────────────────────
 
 /// Split a stab name string at the first ':' character.
-/// Returns ("name_part", "type_part").
-/// If no ':' is found, returns ("", whole_string).
+/// Returns ("`name_part`", "`type_part`").
+/// If no ':' is found, returns ("", `whole_string`).
+#[must_use]
 pub fn split_name_type(s: &str) -> (&str, &str) {
     // Delegates to the crate-wide `::`-aware splitter so C++ symbols such as
     // `Foo::bar:F(0,1)` are not truncated to `Foo`.
@@ -825,8 +843,10 @@ pub fn split_name_type(s: &str) -> (&str, &str) {
 }
 
 /// Return just the name portion (before ':')
+#[must_use]
 pub fn stab_name(s: &str) -> &str { split_name_type(s).0 }
 /// Return just the type string (after ':')
+#[must_use]
 pub fn stab_type_str(s: &str) -> &str { split_name_type(s).1 }
 
 // ── Continuation-string handling ──────────────────────────────────────────────
@@ -849,6 +869,7 @@ pub fn join_continuations<'a>(parts: impl Iterator<Item = &'a str>) -> String {
 // ── Stab section loader ────────────────────────────────────────────────────────
 
 /// Parse a .stab section (array of 12-byte entries) into raw stabs
+#[must_use]
 pub fn parse_stab_section_raw(data: &[u8], big_endian: bool) -> Vec<RawStab> {
     let count = data.len() / RawStab::ENTRY_SIZE;
     let mut result = Vec::with_capacity(count);

@@ -23,11 +23,13 @@ pub struct TypeRef {
 
 impl TypeRef {
     /// Create a reference from an explicit `(file, id)` pair.
-    pub fn new(file: u16, id: u32) -> Self {
+    #[must_use]
+    pub const fn new(file: u16, id: u32) -> Self {
         Self { file, id }
     }
     /// The "current file" sentinel uses file = 0.
-    pub fn local(id: u32) -> Self {
+    #[must_use]
+    pub const fn local(id: u32) -> Self {
         Self { file: 0, id }
     }
 }
@@ -57,6 +59,7 @@ pub struct StabsMember {
 
 impl StabsMember {
     /// Create a member from its name, type reference, and bit layout.
+    #[must_use]
     pub fn new(name: &str, type_ref: TypeRef, bit_offset: u32, bit_size: u32) -> Self {
         Self {
             name: name.to_string(),
@@ -93,13 +96,13 @@ pub enum StabsType {
     /// Character type (`c` descriptor).
     Char,
     /// Pointer to another type (`*` descriptor).
-    Pointer(Box<StabsType>),
+    Pointer(Box<Self>),
     /// Array type (`a` descriptor).
     Array {
         /// Index type (usually a range descriptor).
-        index: Box<StabsType>,
+        index: Box<Self>,
         /// Element type.
-        element: Box<StabsType>,
+        element: Box<Self>,
     },
     /// Struct type (`s` descriptor).
     Struct {
@@ -129,16 +132,16 @@ pub enum StabsType {
     /// Function type (`f` descriptor).
     Function {
         /// Return type.
-        return_type: Box<StabsType>,
+        return_type: Box<Self>,
         /// Parameter types (STABS rarely encodes these; often empty).
-        params: Vec<StabsType>,
+        params: Vec<Self>,
     },
     /// Named alias for another type.
     Typedef {
         /// Typedef name.
         name: String,
         /// Aliased type.
-        target: Box<StabsType>,
+        target: Box<Self>,
     },
     /// Lazy reference — not yet resolved.
     Reference(TypeRef),
@@ -148,17 +151,18 @@ pub enum StabsType {
 
 impl StabsType {
     /// Byte size of the type, when statically known.
+    #[must_use]
     pub fn byte_size(&self) -> Option<u32> {
         match self {
-            StabsType::Void => Some(0),
-            StabsType::Int { bytes, .. } => Some(*bytes as u32),
-            StabsType::Float { bytes } => Some(*bytes as u32),
-            StabsType::Bool => Some(1),
-            StabsType::Char => Some(1),
-            StabsType::Pointer(_) => Some(8), // assume 64-bit
-            StabsType::Struct { size, .. } | StabsType::Union { size, .. } => Some(*size),
-            StabsType::Enum { .. } => Some(4),
-            StabsType::Array { .. } => {
+            Self::Void => Some(0),
+            Self::Int { bytes, .. } => Some(u32::from(*bytes)),
+            Self::Float { bytes } => Some(u32::from(*bytes)),
+            Self::Bool => Some(1),
+            Self::Char => Some(1),
+            Self::Pointer(_) => Some(8), // assume 64-bit
+            Self::Struct { size, .. } | Self::Union { size, .. } => Some(*size),
+            Self::Enum { .. } => Some(4),
+            Self::Array { .. } => {
                 // Array byte size requires element count from the index range,
                 // which is not stored in StabsType::Array. Return None always.
                 None
@@ -168,24 +172,25 @@ impl StabsType {
     }
 
     /// Short human-readable name for the type (e.g. `i32`, `*char`, `struct Foo`).
+    #[must_use]
     pub fn type_name(&self) -> String {
         match self {
-            StabsType::Void => "void".into(),
-            StabsType::Int { signed, bytes } => {
+            Self::Void => "void".into(),
+            Self::Int { signed, bytes } => {
                 format!("{}{}", if *signed { "i" } else { "u" }, bytes * 8)
             }
-            StabsType::Float { bytes } => format!("f{}", bytes * 8),
-            StabsType::Bool => "bool".into(),
-            StabsType::Char => "char".into(),
-            StabsType::Pointer(inner) => format!("*{}", inner.type_name()),
-            StabsType::Struct { name, .. } => format!("struct {}", name),
-            StabsType::Union { name, .. } => format!("union {}", name),
-            StabsType::Enum { name, .. } => format!("enum {}", name),
-            StabsType::Function { return_type, .. } => format!("fn() -> {}", return_type.type_name()),
-            StabsType::Typedef { name, .. } => name.clone(),
-            StabsType::Array { element, .. } => format!("[{}]", element.type_name()),
-            StabsType::Reference(r) => format!("ref{}", r),
-            StabsType::Unresolved(r) => format!("?{}", r),
+            Self::Float { bytes } => format!("f{}", bytes * 8),
+            Self::Bool => "bool".into(),
+            Self::Char => "char".into(),
+            Self::Pointer(inner) => format!("*{}", inner.type_name()),
+            Self::Struct { name, .. } => format!("struct {name}"),
+            Self::Union { name, .. } => format!("union {name}"),
+            Self::Enum { name, .. } => format!("enum {name}"),
+            Self::Function { return_type, .. } => format!("fn() -> {}", return_type.type_name()),
+            Self::Typedef { name, .. } => name.clone(),
+            Self::Array { element, .. } => format!("[{}]", element.type_name()),
+            Self::Reference(r) => format!("ref{r}"),
+            Self::Unresolved(r) => format!("?{r}"),
         }
     }
 }
@@ -203,6 +208,7 @@ pub struct TypeDb {
 
 impl TypeDb {
     /// Create an empty type database.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -213,16 +219,19 @@ impl TypeDb {
     }
 
     /// Look up a type by reference.
+    #[must_use]
     pub fn get(&self, r: &TypeRef) -> Option<&StabsType> {
         self.types.get(r)
     }
 
     /// Number of registered types.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.types.len()
     }
 
     /// True if no types are registered.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.types.is_empty()
     }
@@ -244,7 +253,7 @@ struct Parser<'a> {
 const MAX_PARSE_DEPTH: u32 = 100;
 
 impl<'a> Parser<'a> {
-    fn new(s: &'a str, file: u16) -> Self {
+    const fn new(s: &'a str, file: u16) -> Self {
         Self { src: s, pos: 0, current_file: file, depth: 0 }
     }
 
@@ -341,7 +350,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse one StabsType starting at current position.
+    /// Parse one `StabsType` starting at current position.
     fn parse_type(&mut self) -> Result<StabsType, String> {
         if self.depth >= MAX_PARSE_DEPTH {
             return Err(String::from("type nesting depth limit exceeded"));
@@ -572,16 +581,17 @@ pub struct StabsTypeResolver {
 
 impl StabsTypeResolver {
     /// Create a resolver with an empty database, scoped to file 0.
+    #[must_use]
     pub fn new() -> Self {
         Self { db: TypeDb::new(), current_file: 0 }
     }
 
     /// Set the file index used to scope unparenthesized type numbers.
-    pub fn set_current_file(&mut self, file: u16) {
+    pub const fn set_current_file(&mut self, file: u16) {
         self.current_file = file;
     }
 
-    /// Register a raw type string under the given TypeRef.
+    /// Register a raw type string under the given `TypeRef`.
     pub fn register(&mut self, tref: TypeRef, type_str: &str) -> Result<(), String> {
         let parsed = parse_type_string(type_str, tref.file)?;
         self.db.insert(tref, parsed);
@@ -685,11 +695,13 @@ impl StabsTypeResolver {
     }
 
     /// Look up a type in the resolved database.
+    #[must_use]
     pub fn lookup(&self, tref: TypeRef) -> Option<&StabsType> {
         self.db.get(&tref)
     }
 
     /// Return a human-readable summary of what is in the db.
+    #[must_use]
     pub fn summary(&self) -> String {
         let mut out = String::new();
         let mut keys: Vec<TypeRef> = self.db.types.keys().copied().collect();
@@ -702,6 +714,7 @@ impl StabsTypeResolver {
     }
 
     /// Count types by variant.
+    #[must_use]
     pub fn count_by_kind(&self) -> HashMap<&'static str, usize> {
         let mut m: HashMap<&'static str, usize> = HashMap::new();
         for t in self.db.types.values() {
@@ -758,7 +771,7 @@ mod tests {
                 assert_eq!(bytes, 1);
                 assert!(signed);
             }
-            other => panic!("expected Int, got {:?}", other),
+            other => panic!("expected Int, got {other:?}"),
         }
     }
 

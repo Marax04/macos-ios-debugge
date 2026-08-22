@@ -364,8 +364,8 @@ pub struct StabsCfParser {
     current_file: Option<String>,
     /// Optimization flags encountered.
     pub opts: Vec<StabsOpt>,
-    /// Count of N_LBRACs dropped because [`MAX_SCOPE_DEPTH`] was reached; their
-    /// matching N_RBRACs are swallowed so the stack stays balanced.
+    /// Count of `N_LBRACs` dropped because [`MAX_SCOPE_DEPTH`] was reached; their
+    /// matching `N_RBRACs` are swallowed so the stack stays balanced.
     suppressed_lbrac: usize,
 }
 

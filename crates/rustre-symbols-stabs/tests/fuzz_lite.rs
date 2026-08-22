@@ -9,7 +9,7 @@ use rustre_symbols_stabs::StabRecord;
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -50,7 +50,7 @@ fn random_noise_never_panics() {
     }
 }
 
-/// Records with extreme n_strx offsets pointing far past the string table.
+/// Records with extreme `n_strx` offsets pointing far past the string table.
 #[test]
 fn out_of_range_string_offsets_never_panic() {
     let mut rng = Rng(0xBEEF_CAFE_1234_5678);

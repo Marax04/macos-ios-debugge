@@ -78,13 +78,13 @@ pub struct Scope {
 impl Scope {
     /// Returns `true` if `offset` falls inside this scope.
     #[must_use]
-    pub fn contains(&self, offset: u64) -> bool {
+    pub const fn contains(&self, offset: u64) -> bool {
         offset >= self.start_offset && offset < self.end_offset
     }
 
     /// Returns the size of this scope in bytes.
     #[must_use]
-    pub fn size(&self) -> u64 {
+    pub const fn size(&self) -> u64 {
         self.end_offset.saturating_sub(self.start_offset)
     }
 }
@@ -276,19 +276,19 @@ impl StabsScopeTracker {
 
     /// Number of closed scopes.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.scopes.len()
     }
 
     /// Returns `true` when no scopes have been closed yet.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.scopes.is_empty()
     }
 
     // ── Private helpers ────────────────────────────────────────────────────────
 
-    fn update_cu_end(&mut self, offset: u64) {
+    const fn update_cu_end(&mut self, offset: u64) {
         if offset > self.cu_end {
             self.cu_end = offset;
         }

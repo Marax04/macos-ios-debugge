@@ -126,24 +126,24 @@ pub struct StabsSourceMapper {
     map: BTreeMap<u64, LineEntry>,
     /// Current compilation unit source file.
     current_so: String,
-    /// Current sub-file (from N_SOL); falls back to `current_so`.
+    /// Current sub-file (from `N_SOL`); falls back to `current_so`.
     current_sol: Option<String>,
     /// Name of the current function.
     current_function: String,
-    /// Absolute base address of the current function (from N_FUN).
+    /// Absolute base address of the current function (from `N_FUN`).
     function_base: u64,
     /// Whether the mapper has been finalised.
     finalised: bool,
-    /// Number of N_SLINE entries processed.
+    /// Number of `N_SLINE` entries processed.
     sline_count: usize,
-    /// Number of N_FUN entries processed.
+    /// Number of `N_FUN` entries processed.
     fun_count: usize,
 }
 
 impl StabsSourceMapper {
     /// Create a new, empty mapper.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             map: BTreeMap::new(),
             current_so: String::new(),
@@ -226,7 +226,7 @@ impl StabsSourceMapper {
     }
 
     /// Mark the mapper as finalised (no more entries).
-    pub fn finalise(&mut self) {
+    pub const fn finalise(&mut self) {
         self.finalised = true;
     }
 

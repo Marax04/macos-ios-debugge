@@ -227,7 +227,7 @@ pub struct TypeDescriptorParser<'a> {
 }
 
 /// Maximum nesting depth accepted by [`TypeDescriptorParser::parse_type`].
-/// A hostile `.stabstr` descriptor of 200_000 consecutive `*` would otherwise
+/// A hostile `.stabstr` descriptor of `200_000` consecutive `*` would otherwise
 /// overflow the stack; real compilers never nest more than a handful of levels.
 const MAX_PARSE_DEPTH: u32 = 100;
 

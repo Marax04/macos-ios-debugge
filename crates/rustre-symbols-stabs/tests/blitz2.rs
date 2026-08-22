@@ -52,8 +52,8 @@ fn t01_stab_type_roundtrip_all_known() {
     ];
     for &v in known {
         let t = StabType::from_u8(v);
-        assert_ne!(t, StabType::Unknown, "byte {:#x} known", v);
-        assert_eq!(t as u8, v, "roundtrip {:#x}", v);
+        assert_ne!(t, StabType::Unknown, "byte {v:#x} known");
+        assert_eq!(t as u8, v, "roundtrip {v:#x}");
         assert!(StabType::name_for(v).is_some());
     }
 }
@@ -257,7 +257,7 @@ fn t18_type_parser_pointer_nested() {
 fn t19_type_parser_unknown_descriptor_safe() {
     let p = StabsTypeParser::new();
     let t = p.parse_descriptor("@#$%").unwrap();
-    let _ = format!("{:?}", t);
+    let _ = format!("{t:?}");
 }
 
 #[test]
@@ -316,7 +316,7 @@ fn t23_type_parser_int_widths() {
             assert_eq!(*width, w);
             assert_eq!(*s2, signed);
         } else {
-            panic!("missing {}", k);
+            panic!("missing {k}");
         }
     }
 }
@@ -535,7 +535,7 @@ fn t40_string_table_intern_roundtrip_50() {
     let mut t = StabsStringTable::new();
     let mut offs = vec![];
     for i in 0..50 {
-        let s = format!("sym_{}", i);
+        let s = format!("sym_{i}");
         let off = t.intern(&s);
         offs.push((s, off));
     }

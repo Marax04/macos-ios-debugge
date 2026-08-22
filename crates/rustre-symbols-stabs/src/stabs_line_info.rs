@@ -311,7 +311,7 @@ impl LineInfoDb {
     ///
     /// The table is sorted here — the single choke point — because
     /// `StabsLineTable::lookup_address` binary-searches via `partition_point`
-    /// and N_SLINE records are not guaranteed to be address-ordered (GCC
+    /// and `N_SLINE` records are not guaranteed to be address-ordered (GCC
     /// reorders them under optimisation). Sorting at each flush site instead
     /// left every table but the last one unsorted.
     pub fn add_table(&mut self, mut table: StabsLineTable) {

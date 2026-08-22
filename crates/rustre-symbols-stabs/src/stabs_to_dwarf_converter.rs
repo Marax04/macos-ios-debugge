@@ -40,17 +40,18 @@ pub enum DwarfEncoding {
 
 impl DwarfEncoding {
     /// Return the numeric `DW_ATE_*` encoding byte.
-    pub fn as_u8(self) -> u8 {
+    #[must_use]
+    pub const fn as_u8(self) -> u8 {
         match self {
-            DwarfEncoding::Address     => 0x01,
-            DwarfEncoding::Boolean     => 0x02,
-            DwarfEncoding::Complex     => 0x03,
-            DwarfEncoding::Float       => 0x04,
-            DwarfEncoding::Signed      => 0x05,
-            DwarfEncoding::SignedChar  => 0x06,
-            DwarfEncoding::Unsigned    => 0x07,
-            DwarfEncoding::UnsignedChar => 0x08,
-            DwarfEncoding::Utf         => 0x10,
+            Self::Address     => 0x01,
+            Self::Boolean     => 0x02,
+            Self::Complex     => 0x03,
+            Self::Float       => 0x04,
+            Self::Signed      => 0x05,
+            Self::SignedChar  => 0x06,
+            Self::Unsigned    => 0x07,
+            Self::UnsignedChar => 0x08,
+            Self::Utf         => 0x10,
         }
     }
 }
@@ -98,24 +99,25 @@ pub enum DwarfTag {
 
 impl DwarfTag {
     /// Return the numeric `DW_TAG_*` value.
-    pub fn as_u16(self) -> u16 {
+    #[must_use]
+    pub const fn as_u16(self) -> u16 {
         match self {
-            DwarfTag::ArrayType       => 0x01,
-            DwarfTag::CompileUnit     => 0x11,
-            DwarfTag::EnumerationType => 0x04,
-            DwarfTag::Enumerator      => 0x28,
-            DwarfTag::FormalParameter => 0x05,
-            DwarfTag::Label           => 0x0A,
-            DwarfTag::LexicalBlock    => 0x0B,
-            DwarfTag::Member          => 0x0D,
-            DwarfTag::PointerType     => 0x0F,
-            DwarfTag::StructureType   => 0x13,
-            DwarfTag::Subprogram      => 0x2E,
-            DwarfTag::SubrangeType    => 0x21,
-            DwarfTag::TypeDef         => 0x16,
-            DwarfTag::UnionType       => 0x17,
-            DwarfTag::Variable        => 0x34,
-            DwarfTag::BaseType        => 0x24,
+            Self::ArrayType       => 0x01,
+            Self::CompileUnit     => 0x11,
+            Self::EnumerationType => 0x04,
+            Self::Enumerator      => 0x28,
+            Self::FormalParameter => 0x05,
+            Self::Label           => 0x0A,
+            Self::LexicalBlock    => 0x0B,
+            Self::Member          => 0x0D,
+            Self::PointerType     => 0x0F,
+            Self::StructureType   => 0x13,
+            Self::Subprogram      => 0x2E,
+            Self::SubrangeType    => 0x21,
+            Self::TypeDef         => 0x16,
+            Self::UnionType       => 0x17,
+            Self::Variable        => 0x34,
+            Self::BaseType        => 0x24,
         }
     }
 }
@@ -165,25 +167,26 @@ pub enum DwarfAt {
 
 impl DwarfAt {
     /// Return the numeric `DW_AT_*` value.
-    pub fn as_u16(self) -> u16 {
+    #[must_use]
+    pub const fn as_u16(self) -> u16 {
         match self {
-            DwarfAt::Name                => 0x03,
-            DwarfAt::ByteSize            => 0x0B,
-            DwarfAt::BitOffset           => 0x0C,
-            DwarfAt::BitSize             => 0x0D,
-            DwarfAt::Language            => 0x13,
-            DwarfAt::LowPc               => 0x11,
-            DwarfAt::HighPc              => 0x12,
-            DwarfAt::Type                => 0x49,
-            DwarfAt::Producer            => 0x25,
-            DwarfAt::Encoding            => 0x3E,
-            DwarfAt::ConstValue          => 0x1C,
-            DwarfAt::DataMemberLocation  => 0x38,
-            DwarfAt::Location            => 0x02,
-            DwarfAt::Accessibility       => 0x32,
-            DwarfAt::CountAttr           => 0x37,
-            DwarfAt::UpperBound          => 0x2F,
-            DwarfAt::LowerBound          => 0x22,
+            Self::Name                => 0x03,
+            Self::ByteSize            => 0x0B,
+            Self::BitOffset           => 0x0C,
+            Self::BitSize             => 0x0D,
+            Self::Language            => 0x13,
+            Self::LowPc               => 0x11,
+            Self::HighPc              => 0x12,
+            Self::Type                => 0x49,
+            Self::Producer            => 0x25,
+            Self::Encoding            => 0x3E,
+            Self::ConstValue          => 0x1C,
+            Self::DataMemberLocation  => 0x38,
+            Self::Location            => 0x02,
+            Self::Accessibility       => 0x32,
+            Self::CountAttr           => 0x37,
+            Self::UpperBound          => 0x2F,
+            Self::LowerBound          => 0x22,
         }
     }
 }
@@ -228,23 +231,28 @@ pub struct DwarfAttr {
 
 impl DwarfAttr {
     /// Create an attribute from a code and value.
-    pub fn new(at: DwarfAt, value: DwarfValue) -> Self {
+    #[must_use]
+    pub const fn new(at: DwarfAt, value: DwarfValue) -> Self {
         Self { at, value }
     }
     /// Convenience constructor for a `DW_AT_name` string attribute.
+    #[must_use]
     pub fn name(s: &str) -> Self {
         Self::new(DwarfAt::Name, DwarfValue::Str(s.to_string()))
     }
     /// Convenience constructor for a `DW_AT_byte_size` attribute.
-    pub fn byte_size(n: u64) -> Self {
+    #[must_use]
+    pub const fn byte_size(n: u64) -> Self {
         Self::new(DwarfAt::ByteSize, DwarfValue::Uint(n))
     }
     /// Convenience constructor for a `DW_AT_low_pc` address attribute.
-    pub fn low_pc(addr: u64) -> Self {
+    #[must_use]
+    pub const fn low_pc(addr: u64) -> Self {
         Self::new(DwarfAt::LowPc, DwarfValue::Addr(addr))
     }
     /// Convenience constructor for a `DW_AT_high_pc` address attribute.
-    pub fn high_pc(addr: u64) -> Self {
+    #[must_use]
+    pub const fn high_pc(addr: u64) -> Self {
         Self::new(DwarfAt::HighPc, DwarfValue::Addr(addr))
     }
 }
@@ -264,27 +272,32 @@ pub struct DwarfDie {
 
 impl DwarfDie {
     /// Create an attribute-less DIE with the given tag.
-    pub fn new(tag: DwarfTag) -> Self {
+    #[must_use]
+    pub const fn new(tag: DwarfTag) -> Self {
         Self { tag, attributes: Vec::new() }
     }
 
     /// Builder-style helper: append an attribute and return the DIE.
+    #[must_use]
     pub fn with_attr(mut self, attr: DwarfAttr) -> Self {
         self.attributes.push(attr);
         self
     }
 
     /// Look up the first attribute with the given code.
+    #[must_use]
     pub fn get_attr(&self, at: DwarfAt) -> Option<&DwarfValue> {
         self.attributes.iter().find(|a| a.at == at).map(|a| &a.value)
     }
 
     /// Return the `DW_AT_name` string, if present.
+    #[must_use]
     pub fn get_name(&self) -> Option<&str> {
         self.get_attr(DwarfAt::Name).and_then(|v| if let DwarfValue::Str(s) = v { Some(s.as_str()) } else { None })
     }
 
     /// Return the `DW_AT_byte_size` value, if present.
+    #[must_use]
     pub fn get_byte_size(&self) -> Option<u64> {
         self.get_attr(DwarfAt::ByteSize).and_then(|v| if let DwarfValue::Uint(n) = v { Some(*n) } else { None })
     }
@@ -300,21 +313,23 @@ pub struct DieTree {
     /// The DIE at this tree node.
     pub root: DwarfDie,
     /// Child subtrees, in emission order.
-    pub children: Vec<DieTree>,
+    pub children: Vec<Self>,
 }
 
 impl DieTree {
     /// Create a leaf tree node wrapping one DIE.
-    pub fn new(die: DwarfDie) -> Self {
+    #[must_use]
+    pub const fn new(die: DwarfDie) -> Self {
         Self { root: die, children: Vec::new() }
     }
 
     /// Append a child subtree.
-    pub fn add_child(&mut self, child: DieTree) {
+    pub fn add_child(&mut self, child: Self) {
         self.children.push(child);
     }
 
     /// Collect all DIEs in depth-first (pre-order) order.
+    #[must_use]
     pub fn depth_first_iter(&self) -> Vec<&DwarfDie> {
         let mut out = vec![&self.root];
         for child in &self.children {
@@ -324,6 +339,7 @@ impl DieTree {
     }
 
     /// Total number of DIEs in this subtree, including the root.
+    #[must_use]
     pub fn count(&self) -> usize {
         1 + self.children.iter().map(|c| c.count()).sum::<usize>()
     }
@@ -334,7 +350,7 @@ impl DieTree {
 // ---------------------------------------------------------------------------
 
 /// A reduced view of a STAB entry used by the converter.
-/// The real stabs_parser module owns the canonical StabEntry; we use a
+/// The real `stabs_parser` module owns the canonical `StabEntry`; we use a
 /// local mirror so this module compiles independently.
 #[derive(Debug, Clone)]
 pub struct StabEntryView {
@@ -352,22 +368,29 @@ pub struct StabEntryView {
 
 impl StabEntryView {
     /// Build a view from raw stab fields plus its resolved string.
+    #[must_use]
     pub fn new(ty: u8, other: u8, desc: u16, value: u32, string: &str) -> Self {
         Self { stab_type_byte: ty, other, desc, value, string: string.to_string() }
     }
 
-    /// N_SO = 0x64, N_FUN = 0x24, N_SLINE = 0x44, etc.
-    pub fn is_fun(&self) -> bool { self.stab_type_byte == 0x24 }
+    /// `N_SO` = 0x64, `N_FUN` = 0x24, `N_SLINE` = 0x44, etc.
+    #[must_use]
+    pub const fn is_fun(&self) -> bool { self.stab_type_byte == 0x24 }
     /// True if this entry is an `N_SO` (source file) stab.
-    pub fn is_so(&self) -> bool  { self.stab_type_byte == 0x64 }
+    #[must_use]
+    pub const fn is_so(&self) -> bool  { self.stab_type_byte == 0x64 }
     /// True if this entry is an `N_SLINE` (source line) stab.
-    pub fn is_sline(&self) -> bool { self.stab_type_byte == 0x44 }
+    #[must_use]
+    pub const fn is_sline(&self) -> bool { self.stab_type_byte == 0x44 }
     /// True if this entry is an `N_GSYM` (global symbol) stab.
-    pub fn is_gsym(&self) -> bool  { self.stab_type_byte == 0x20 }
+    #[must_use]
+    pub const fn is_gsym(&self) -> bool  { self.stab_type_byte == 0x20 }
     /// True if this entry is an `N_LSYM` (local symbol) stab.
-    pub fn is_lsym(&self) -> bool  { self.stab_type_byte == 0x80 }
+    #[must_use]
+    pub const fn is_lsym(&self) -> bool  { self.stab_type_byte == 0x80 }
     /// True if this entry is an `N_PSYM` (parameter) stab.
-    pub fn is_psym(&self) -> bool  { self.stab_type_byte == 0xa0 }
+    #[must_use]
+    pub const fn is_psym(&self) -> bool  { self.stab_type_byte == 0xa0 }
 }
 
 // ---------------------------------------------------------------------------
@@ -379,12 +402,13 @@ pub struct StabsToDwarfConverter {
     type_db: TypeDb,
     /// Next synthetic DIE offset counter (used for Ref attributes)
     next_ref: u32,
-    /// Mapping from TypeRef → allocated DIE offset
+    /// Mapping from `TypeRef` → allocated DIE offset
     type_offsets: HashMap<TypeRef, u32>,
 }
 
 impl StabsToDwarfConverter {
     /// Create a converter over an already-resolved type database.
+    #[must_use]
     pub fn new(type_db: TypeDb) -> Self {
         Self {
             type_db,
@@ -393,7 +417,7 @@ impl StabsToDwarfConverter {
         }
     }
 
-    fn alloc_ref(&mut self) -> u32 {
+    const fn alloc_ref(&mut self) -> u32 {
         let r = self.next_ref;
         self.next_ref += 1;
         r
@@ -427,15 +451,15 @@ impl StabsToDwarfConverter {
                 let fname = crate::stab_name_of(&e.string).to_string();
                 let mut sub = DwarfDie::new(DwarfTag::Subprogram);
                 sub.attributes.push(DwarfAttr::name(&fname));
-                sub.attributes.push(DwarfAttr::low_pc(e.value as u64));
+                sub.attributes.push(DwarfAttr::low_pc(u64::from(e.value)));
                 // scan forward for N_SLINE to find function size
-                let mut max_line_addr = e.value as u64;
+                let mut max_line_addr = u64::from(e.value);
                 let mut j = i + 1;
                 while j < entries.len() {
                     let se = &entries[j];
                     if se.is_fun() || se.is_so() { break; }
                     if se.is_sline() {
-                        max_line_addr = max_line_addr.max(e.value as u64 + se.value as u64);
+                        max_line_addr = max_line_addr.max(u64::from(e.value) + u64::from(se.value));
                     }
                     j += 1;
                 }
@@ -456,7 +480,7 @@ impl StabsToDwarfConverter {
                 let vname = crate::stab_name_of(&e.string).to_string();
                 let mut var = DwarfDie::new(DwarfTag::Variable);
                 var.attributes.push(DwarfAttr::name(&vname));
-                var.attributes.push(DwarfAttr::new(DwarfAt::LowPc, DwarfValue::Addr(e.value as u64)));
+                var.attributes.push(DwarfAttr::new(DwarfAt::LowPc, DwarfValue::Addr(u64::from(e.value))));
                 dies.push(var);
             }
             i += 1;
@@ -468,7 +492,7 @@ impl StabsToDwarfConverter {
         dies
     }
 
-    /// Emit DwarfDies for all types in the TypeDb.
+    /// Emit `DwarfDies` for all types in the `TypeDb`.
     fn emit_type_dies(&mut self) -> Vec<DwarfDie> {
         let mut dies = Vec::new();
         let types: Vec<(TypeRef, StabsType)> = self.type_db.types.iter().map(|(k, v)| (*k, v.clone())).collect();
@@ -486,14 +510,14 @@ impl StabsToDwarfConverter {
         match ty {
             StabsType::Int { signed, bytes } => {
                 let mut die = DwarfDie::new(DwarfTag::BaseType);
-                die.attributes.push(DwarfAttr::byte_size(*bytes as u64));
+                die.attributes.push(DwarfAttr::byte_size(u64::from(*bytes)));
                 let enc = if *signed { DwarfEncoding::Signed } else { DwarfEncoding::Unsigned };
                 die.attributes.push(DwarfAttr::new(DwarfAt::Encoding, DwarfValue::Enc(enc)));
                 Some(die)
             }
             StabsType::Float { bytes } => {
                 let mut die = DwarfDie::new(DwarfTag::BaseType);
-                die.attributes.push(DwarfAttr::byte_size(*bytes as u64));
+                die.attributes.push(DwarfAttr::byte_size(u64::from(*bytes)));
                 die.attributes.push(DwarfAttr::new(DwarfAt::Encoding, DwarfValue::Enc(DwarfEncoding::Float)));
                 Some(die)
             }
@@ -526,7 +550,7 @@ impl StabsToDwarfConverter {
             StabsType::Struct { name, size, members } => {
                 let mut die = DwarfDie::new(DwarfTag::StructureType);
                 if !name.is_empty() { die.attributes.push(DwarfAttr::name(name)); }
-                die.attributes.push(DwarfAttr::byte_size(*size as u64));
+                die.attributes.push(DwarfAttr::byte_size(u64::from(*size)));
                 // Record the member count so callers that don't walk
                 // the child-DIE list still see how wide the aggregate is.
                 die.attributes.push(DwarfAttr::new(
@@ -541,7 +565,7 @@ impl StabsToDwarfConverter {
             StabsType::Union { name, size, .. } => {
                 let mut die = DwarfDie::new(DwarfTag::UnionType);
                 if !name.is_empty() { die.attributes.push(DwarfAttr::name(name)); }
-                die.attributes.push(DwarfAttr::byte_size(*size as u64));
+                die.attributes.push(DwarfAttr::byte_size(u64::from(*size)));
                 Some(die)
             }
             StabsType::Enum { name, variants } => {
@@ -578,7 +602,7 @@ impl StabsToDwarfConverter {
         root
     }
 
-    /// Emit a simplified .debug_info byte stream.
+    /// Emit a simplified .`debug_info` byte stream.
     ///
     /// The format is intentionally simplified:
     ///   - 4-byte unit length (little-endian, excludes the 4 length bytes)
@@ -590,6 +614,7 @@ impl StabsToDwarfConverter {
     /// We use a very simple encoding: each DIE is one byte (tag code) followed
     /// by its string attributes as length-prefixed UTF-8, then a u64 for any
     /// address attribute, terminated by 0x00 (no-more-children sentinel).
+    #[must_use]
     pub fn emit_dwarf_info(dies: &[DwarfDie]) -> Vec<u8> {
         let mut body: Vec<u8> = Vec::new();
         for die in dies {
@@ -625,7 +650,7 @@ impl StabsToDwarfConverter {
                     }
                     DwarfValue::Flag(b) => {
                         body.push(0x19); // form = DW_FORM_flag_present
-                        body.push(*b as u8);
+                        body.push(u8::from(*b));
                     }
                     DwarfValue::Enc(e) => {
                         body.push(0x0B); // form = DW_FORM_data1 (1-byte fixed)

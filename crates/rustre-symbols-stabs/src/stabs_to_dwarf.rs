@@ -185,36 +185,43 @@ pub struct Die {
 
 impl Die {
     /// Create an attribute-less DIE with the given id and tag.
-    pub fn new(id: DieId, tag: u16) -> Self {
-        Die { id, tag, attrs: Vec::new(), children: Vec::new(), parent: None }
+    #[must_use]
+    pub const fn new(id: DieId, tag: u16) -> Self {
+        Self { id, tag, attrs: Vec::new(), children: Vec::new(), parent: None }
     }
 
     /// Look up an attribute value by its `DW_AT_*` code.
+    #[must_use]
     pub fn attr(&self, attr_code: u16) -> Option<&AttrValue> {
         self.attrs.iter().find(|(a, _)| *a == attr_code).map(|(_, v)| v)
     }
 
     /// Return the `DW_AT_name` string, if present.
+    #[must_use]
     pub fn name(&self) -> Option<&str> {
         if let Some(AttrValue::String(s)) = self.attr(dw_at::NAME) { Some(s) } else { None }
     }
 
     /// Return the `DW_AT_low_pc` address, if present.
+    #[must_use]
     pub fn low_pc(&self) -> Option<u64> {
         if let Some(AttrValue::Unsigned(v)) = self.attr(dw_at::LOW_PC) { Some(*v) } else { None }
     }
 
     /// Return the `DW_AT_high_pc` address, if present.
+    #[must_use]
     pub fn high_pc(&self) -> Option<u64> {
         if let Some(AttrValue::Unsigned(v)) = self.attr(dw_at::HIGH_PC) { Some(*v) } else { None }
     }
 
     /// Return the `DW_AT_byte_size` value, if present.
+    #[must_use]
     pub fn byte_size(&self) -> Option<u64> {
         if let Some(AttrValue::Unsigned(v)) = self.attr(dw_at::BYTE_SIZE) { Some(*v) } else { None }
     }
 
     /// True if the DIE carries `DW_AT_external = true`.
+    #[must_use]
     pub fn is_external(&self) -> bool {
         self.attr(dw_at::EXTERNAL) == Some(&AttrValue::Bool(true))
     }
@@ -240,7 +247,8 @@ pub struct DieTree {
 
 impl DieTree {
     /// Create an empty DIE tree.
-    pub fn new() -> Self { DieTree::default() }
+    #[must_use]
+    pub fn new() -> Self { Self::default() }
 
     fn alloc(&mut self, tag: u16) -> DieId {
         let id = DieId(self.next_id);
@@ -260,6 +268,7 @@ impl DieTree {
     }
 
     /// Look up a DIE by id.
+    #[must_use]
     pub fn get(&self, id: DieId) -> Option<&Die> {
         self.dies.get(usize::try_from(id.0).ok()?).filter(|d| d.id == id)
     }
@@ -284,11 +293,14 @@ impl DieTree {
     }
 
     /// Ids of the root DIEs (one per compilation unit).
+    #[must_use]
     pub fn roots(&self) -> &[DieId] { &self.root_ids }
     /// All DIEs in allocation order.
+    #[must_use]
     pub fn all_dies(&self) -> &[Die] { &self.dies }
 
     /// Find every DIE whose `DW_AT_name` equals `name`.
+    #[must_use]
     pub fn find_by_name(&self, name: &str) -> Vec<&Die> {
         self.dies.iter().filter(|d| d.name() == Some(name)).collect()
     }
@@ -306,7 +318,7 @@ impl DieTree {
 
 // ── Converter ─────────────────────────────────────────────────────────────────
 
-/// Converts STABS parsed data into a DieTree
+/// Converts STABS parsed data into a `DieTree`
 pub struct StabsToDwarf {
     /// The DIE tree built so far.
     pub tree: DieTree,
@@ -316,8 +328,9 @@ pub struct StabsToDwarf {
 
 impl StabsToDwarf {
     /// Create a converter with an empty DIE tree and type cache.
+    #[must_use]
     pub fn new() -> Self {
-        StabsToDwarf {
+        Self {
             tree: DieTree::new(),
             type_die_map: HashMap::new(),
             type_db: TypeDatabase::new(),
@@ -341,7 +354,7 @@ impl StabsToDwarf {
         if !cu.directory.is_empty() {
             self.tree.set_attr(cu_id, dw_at::COMP_DIR, AttrValue::String(cu.directory.clone()));
         }
-        self.tree.set_attr(cu_id, dw_at::LANGUAGE, AttrValue::Unsigned(dw_lang::C as u64));
+        self.tree.set_attr(cu_id, dw_at::LANGUAGE, AttrValue::Unsigned(u64::from(dw_lang::C)));
         self.tree.set_attr(cu_id, dw_at::PRODUCER, AttrValue::String("GCC (STABS)".to_string()));
 
         for func in &cu.functions {
@@ -523,7 +536,7 @@ impl StabsToDwarf {
                 let tag = if *is_union { dw_tag::UNION_TYPE } else { dw_tag::STRUCTURE_TYPE };
                 let st_id = self.tree.alloc(tag);
                 self.tree.set_attr(st_id, dw_at::NAME, AttrValue::String(name.clone()));
-                self.tree.set_attr(st_id, dw_at::BYTE_SIZE, AttrValue::Unsigned(*byte_size as u64));
+                self.tree.set_attr(st_id, dw_at::BYTE_SIZE, AttrValue::Unsigned(u64::from(*byte_size)));
                 for field in fields {
                     let m_id = self.emit_member_die(field);
                     self.tree.add_child(st_id, m_id);
@@ -600,13 +613,13 @@ impl StabsToDwarf {
                 // Emit a placeholder; real consumers would resolve this
                 let p_id = self.tree.alloc(dw_tag::BASE_TYPE);
                 self.tree.set_attr(p_id, dw_at::NAME,
-                    AttrValue::String(format!("typeref({},{})", module, index)));
+                    AttrValue::String(format!("typeref({module},{index})")));
                 p_id
             }
 
             _ => {
                 let uk_id = self.tree.alloc(dw_tag::BASE_TYPE);
-                self.tree.set_attr(uk_id, dw_at::NAME, AttrValue::String(format!("unknown({})", key)));
+                self.tree.set_attr(uk_id, dw_at::NAME, AttrValue::String(format!("unknown({key})")));
                 uk_id
             }
         }
@@ -614,12 +627,12 @@ impl StabsToDwarf {
 
     fn emit_base_type(&mut self, name: &str, byte_size: u64, encoding: u8) -> DieId {
         // Deduplicate base types
-        let key = format!("base:{}:{}", name, encoding);
+        let key = format!("base:{name}:{encoding}");
         if let Some(&id) = self.type_die_map.get(&key) { return id; }
         let bt_id = self.tree.alloc(dw_tag::BASE_TYPE);
         self.tree.set_attr(bt_id, dw_at::NAME, AttrValue::String(name.to_string()));
         self.tree.set_attr(bt_id, dw_at::BYTE_SIZE, AttrValue::Unsigned(byte_size));
-        self.tree.set_attr(bt_id, dw_at::ENCODING, AttrValue::Unsigned(encoding as u64));
+        self.tree.set_attr(bt_id, dw_at::ENCODING, AttrValue::Unsigned(u64::from(encoding)));
         self.type_die_map.insert(key, bt_id);
         bt_id
     }
@@ -629,10 +642,10 @@ impl StabsToDwarf {
         self.tree.set_attr(m_id, dw_at::NAME, AttrValue::String(field.name.clone()));
         // DW_AT_data_member_location = byte offset
         let byte_off = field.bit_offset / 8;
-        self.tree.set_attr(m_id, dw_at::DATA_MEMBER_LOCATION, AttrValue::Unsigned(byte_off as u64));
+        self.tree.set_attr(m_id, dw_at::DATA_MEMBER_LOCATION, AttrValue::Unsigned(u64::from(byte_off)));
         if field.is_bitfield() {
-            self.tree.set_attr(m_id, dw_at::BIT_SIZE, AttrValue::Unsigned(field.bit_size as u64));
-            self.tree.set_attr(m_id, dw_at::BIT_OFFSET, AttrValue::Unsigned(field.bit_offset as u64));
+            self.tree.set_attr(m_id, dw_at::BIT_SIZE, AttrValue::Unsigned(u64::from(field.bit_size)));
+            self.tree.set_attr(m_id, dw_at::BIT_OFFSET, AttrValue::Unsigned(u64::from(field.bit_offset)));
         }
         let ft_id = self.emit_type_die(&field.field_type, "");
         self.tree.set_attr(m_id, dw_at::TYPE, AttrValue::Ref(ft_id));
@@ -640,6 +653,7 @@ impl StabsToDwarf {
     }
 
     /// Summary statistics about the generated tree
+    #[must_use]
     pub fn stats(&self) -> ConversionStats {
         let mut stats = ConversionStats::default();
         for die in self.tree.all_dies() {
@@ -685,7 +699,8 @@ pub struct ConversionStats {
 
 impl ConversionStats {
     /// Total DIE count across all categories.
-    pub fn total_dies(&self) -> usize {
+    #[must_use]
+    pub const fn total_dies(&self) -> usize {
         self.compile_units + self.subprograms + self.parameters + self.variables
             + self.base_types + self.struct_types + self.enum_types + self.other
     }
@@ -693,26 +708,26 @@ impl ConversionStats {
 
 // ── DWARF expression helpers ──────────────────────────────────────────────────
 
-/// Encode a DW_OP_fbreg(offset) location expression
+/// Encode a `DW_OP_fbreg(offset)` location expression
 fn encode_fbreg_location(offset: i32) -> Vec<u8> {
     // DW_OP_fbreg = 0x91, followed by SLEB128 offset
     let mut v = vec![0x91u8];
-    encode_sleb128(offset as i64, &mut v);
+    encode_sleb128(i64::from(offset), &mut v);
     v
 }
 
-/// Encode a DW_OP_reg(n) for n < 32, or DW_OP_regx for larger register numbers
+/// Encode a `DW_OP_reg(n)` for n < 32, or `DW_OP_regx` for larger register numbers
 fn encode_reg_location(reg: u32) -> Vec<u8> {
     if reg < 32 {
         vec![0x50 + reg as u8] // DW_OP_reg0..DW_OP_reg31
     } else {
         let mut v = vec![0x90u8]; // DW_OP_regx
-        encode_uleb128(reg as u64, &mut v);
+        encode_uleb128(u64::from(reg), &mut v);
         v
     }
 }
 
-/// Encode a DW_OP_addr(addr) location expression (8-byte address)
+/// Encode a `DW_OP_addr(addr)` location expression (8-byte address)
 fn encode_addr_location(addr: u64) -> Vec<u8> {
     let mut v = vec![0x03u8]; // DW_OP_addr
     v.extend_from_slice(&addr.to_le_bytes());

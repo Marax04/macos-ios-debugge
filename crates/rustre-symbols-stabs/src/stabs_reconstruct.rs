@@ -80,7 +80,7 @@ pub struct StabsReconstructor<'a> {
     /// per file, so (0,5) and (1,5) are different types and keying on `num`
     /// alone made an ordinary cross-file field render as "(recursive)".
     seen: HashSet<TypeRef>,
-    /// Depth guard. `seen` bounds cycles but not depth: a chain of 100_000
+    /// Depth guard. `seen` bounds cycles but not depth: a chain of `100_000`
     /// distinct pointer types would still overflow the stack.
     depth: u32,
     indent: usize,

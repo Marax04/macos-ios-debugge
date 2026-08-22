@@ -1,4 +1,4 @@
-//! Multi-CU `.stabstr` resolution (audit finding 5: N_UNDF / CU-relative n_strx).
+//! Multi-CU `.stabstr` resolution (audit finding 5: `N_UNDF` / CU-relative `n_strx`).
 //!
 //! In a linker-merged `.stab` section each compilation unit is introduced by an
 //! `N_UNDF` header whose `n_value` is the byte size of that CU's `.stabstr`

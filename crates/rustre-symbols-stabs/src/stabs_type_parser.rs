@@ -7,7 +7,7 @@
 //! Supported descriptors
 //! ─────────────────────
 //! - Numeric type references: `(file,id)` and bare integers.
-//! - Built-in range / scalar types: `r`, `b` (bool), `w` (wchar_t).
+//! - Built-in range / scalar types: `r`, `b` (bool), `w` (`wchar_t`).
 //! - Pointer: `*<type>`.
 //! - Array: `a<index_type>;<element_type>`.
 //! - Struct / union: `s<size>{<field>…}` / `u<size>{<field>…}`.
@@ -65,7 +65,7 @@ pub enum StabsType {
     /// Boolean built-in.
     Bool,
     /// Pointer to another type.
-    Pointer(Box<StabsType>),
+    Pointer(Box<Self>),
     /// Array: index range `[lo, hi]` and element type.
     Array {
         /// Lower index bound.
@@ -73,7 +73,7 @@ pub enum StabsType {
         /// Upper index bound.
         index_hi: i64,
         /// Element type.
-        element: Box<StabsType>,
+        element: Box<Self>,
     },
     /// Struct with named fields.
     Struct {
@@ -95,7 +95,7 @@ pub enum StabsType {
         variants: Vec<(String, i64)>,
     },
     /// Function returning `ret`.
-    Function(Box<StabsType>),
+    Function(Box<Self>),
     /// Forward reference or alias to another type id.
     Alias(TypeId),
     /// Type not recognised by this parser (raw descriptor preserved).
@@ -196,7 +196,7 @@ struct Cursor<'a> {
 const MAX_PARSE_DEPTH: u32 = 100;
 
 impl<'a> Cursor<'a> {
-    fn new(src: &'a str) -> Self {
+    const fn new(src: &'a str) -> Self {
         Self { src, pos: 0, depth: 0 }
     }
 
@@ -221,7 +221,7 @@ impl<'a> Cursor<'a> {
         &self.src[self.pos..]
     }
 
-    fn is_empty(&self) -> bool {
+    const fn is_empty(&self) -> bool {
         self.pos >= self.src.len()
     }
 
@@ -250,7 +250,7 @@ impl<'a> Cursor<'a> {
         s.parse::<u32>().map_err(|_| ParseError::InvalidInteger(s.to_owned()))
     }
 
-    /// Parse a TypeId: either `(n,m)` or a bare integer.
+    /// Parse a `TypeId`: either `(n,m)` or a bare integer.
     fn parse_type_id(&mut self) -> Result<TypeId, ParseError> {
         if self.peek() == Some('(') {
             self.advance(); // '('

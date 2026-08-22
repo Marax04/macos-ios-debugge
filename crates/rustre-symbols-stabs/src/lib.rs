@@ -1261,7 +1261,7 @@ impl StabsProvider {
 
         // Sort once so every lookup is O(log n) instead of a linear scan.
         symbols.sort_by_key(|s| s.address);
-        source_map.sort_by(|a, b| a.0.cmp(&b.0));
+        source_map.sort_by_key(|a| a.0);
         let mut name_index = HashMap::with_capacity(symbols.len());
         for (i, s) in symbols.iter().enumerate() {
             name_index.entry(s.name.clone()).or_insert(i);
