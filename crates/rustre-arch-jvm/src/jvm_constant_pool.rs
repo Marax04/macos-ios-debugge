@@ -261,7 +261,11 @@ impl JvmConstantPool {
         let mut pos = 0usize;
         let mut cp_index: u16 = 1;
 
-        while (entries.len() as u16) <= count.saturating_sub(1) && cp_index < count {
+        // Compare in `usize`: narrowing `entries.len()` to `u16` would wrap
+        // instead of ending the loop if a malformed pool ever pushed more than
+        // 65535 entries (Long/Double each push a filler slot as well).
+        let max_entries = usize::from(count.saturating_sub(1));
+        while entries.len() <= max_entries && cp_index < count {
             if pos >= bytes.len() {
                 return Err(CpParseError::Truncated { at: pos });
             }
