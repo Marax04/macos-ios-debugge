@@ -65,6 +65,9 @@ pub enum EditError {
     /// Signing scaffold error.
     #[error("sign error: {0}")]
     SignError(String),
+    /// The bytes at the given offset are not a branch this operation handles.
+    #[error("not a conditional branch at offset {offset}: opcode {opcode:#04x}")]
+    NotAConditionalBranch { offset: usize, opcode: u8 },
     /// I/O error wrapper.
     #[error("io: {0}")]
     Io(#[from] std::io::Error),

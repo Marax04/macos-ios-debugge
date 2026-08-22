@@ -297,7 +297,10 @@ impl PePatcher {
         ))
     }
 
-    /// Overwrite a short jump (0xEB rel8) to invert it (JZ↔JNZ, etc.) or remove it.
+    /// Replace a two-byte short jump with NOPs, removing the branch.
+    ///
+    /// This only *removes* a branch; to flip the sense of a conditional
+    /// jump use [`Self::invert_branch`].
     ///
     /// # Errors
     /// Returns `EditError::PatchOutOfBounds` if out-of-range.
@@ -312,6 +315,77 @@ impl PePatcher {
             bytes,
             PatchKind::KillBranch,
             "kill short jump",
+        ))
+    }
+
+    /// Invert the sense of the conditional jump at `offset` (JZ <-> JNZ).
+    ///
+    /// Handles both encodings: the two-byte short form (`74`/`75 rel8`) and
+    /// the six-byte near form (`0F 84`/`0F 85 rel32`). The branch target is
+    /// left untouched, so only the condition flips.
+    ///
+    /// # Errors
+    /// Returns `EditError::PatchOutOfBounds` if out-of-range, or
+    /// `EditError::NotAConditionalBranch` if the bytes are not a JZ/JNZ.
+    pub fn invert_branch(&mut self, offset: usize) -> Result<u64, EditError> {
+        self.bounds_check(offset, 1)?;
+        let first = self.data[offset];
+        // Short form: 74 <-> 75.
+        let (len, flipped) = match first {
+            opcode::JZ_REL8 => (1usize, opcode::JNZ_REL8),
+            opcode::JNZ_REL8 => (1usize, opcode::JZ_REL8),
+            opcode::TWO_BYTE_PREFIX => {
+                self.bounds_check(offset, 2)?;
+                match self.data[offset + 1] {
+                    opcode::JZ_REL32_PREFIX => (2usize, opcode::JNZ_REL32_PREFIX),
+                    opcode::JNZ_REL32_PREFIX => (2usize, opcode::JZ_REL32_PREFIX),
+                    other => {
+                        return Err(EditError::NotAConditionalBranch {
+                            offset: offset + 1,
+                            opcode: other,
+                        })
+                    }
+                }
+            }
+            other => {
+                return Err(EditError::NotAConditionalBranch {
+                    offset,
+                    opcode: other,
+                })
+            }
+        };
+        // `len` is 1 for the short form (patch byte 0) and 2 for the near
+        // form (patch byte 1, after the 0F prefix).
+        let patch_at = offset + len - 1;
+        let original = vec![self.data[patch_at]];
+        self.data[patch_at] = flipped;
+        Ok(self.record(
+            patch_at,
+            original,
+            vec![flipped],
+            PatchKind::ByteReplace,
+            "invert conditional branch",
+        ))
+    }
+
+    /// Write a return instruction at `offset`.
+    ///
+    /// `far` selects `RETF` (0xCB) instead of the usual near `RET` (0xC3);
+    /// far returns still appear in 16-bit and some driver/thunk code.
+    ///
+    /// # Errors
+    /// Returns `EditError::PatchOutOfBounds` if out-of-range.
+    pub fn write_ret(&mut self, offset: usize, far: bool) -> Result<u64, EditError> {
+        self.bounds_check(offset, 1)?;
+        let byte = if far { opcode::RET_FAR } else { opcode::RET_NEAR };
+        let original = vec![self.data[offset]];
+        self.data[offset] = byte;
+        Ok(self.record(
+            offset,
+            original,
+            vec![byte],
+            PatchKind::ByteReplace,
+            if far { "write far ret" } else { "write near ret" },
         ))
     }
 
@@ -978,4 +1052,58 @@ mod patch_on_known_buffer_tests {
         assert!(err.is_err(), "6+4 > 8 must be rejected");
         assert_eq!(p.bytes(), &original[..], "a refused patch must not write");
     }
+    #[test]
+    fn invert_branch_flips_both_encodings() {
+        // Short form: 74 rel8 <-> 75 rel8, target byte untouched.
+        let mut buf = make_buf(16);
+        buf[4] = opcode::JZ_REL8;
+        buf[5] = 0x20;
+        let mut p = PePatcher::new(buf);
+        p.invert_branch(4).expect("short JZ inverts");
+        assert_eq!(p.bytes()[4], opcode::JNZ_REL8);
+        assert_eq!(p.bytes()[5], 0x20, "branch target must not move");
+        p.invert_branch(4).expect("and back again");
+        assert_eq!(p.bytes()[4], opcode::JZ_REL8);
+
+        // Near form: 0F 84 rel32 <-> 0F 85 rel32.
+        let mut buf = make_buf(16);
+        buf[2] = opcode::TWO_BYTE_PREFIX;
+        buf[3] = opcode::JZ_REL32_PREFIX;
+        buf[4] = 0x11;
+        let mut p = PePatcher::new(buf);
+        p.invert_branch(2).expect("near JZ inverts");
+        assert_eq!(p.bytes()[2], opcode::TWO_BYTE_PREFIX);
+        assert_eq!(p.bytes()[3], opcode::JNZ_REL32_PREFIX);
+        assert_eq!(p.bytes()[4], 0x11, "rel32 must not move");
+    }
+
+    #[test]
+    fn invert_branch_rejects_non_branches() {
+        let mut buf = make_buf(8);
+        buf[0] = opcode::NOP;
+        let mut p = PePatcher::new(buf);
+        let err = p.invert_branch(0).unwrap_err();
+        assert!(matches!(err, EditError::NotAConditionalBranch { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn invert_branch_is_undoable() {
+        let mut buf = make_buf(8);
+        buf[0] = opcode::JNZ_REL8;
+        let mut p = PePatcher::new(buf);
+        p.invert_branch(0).expect("invert");
+        assert_eq!(p.bytes()[0], opcode::JZ_REL8);
+        p.undo().expect("undo");
+        assert_eq!(p.bytes()[0], opcode::JNZ_REL8);
+    }
+
+    #[test]
+    fn write_ret_covers_near_and_far() {
+        let mut p = PePatcher::new(make_buf(8));
+        p.write_ret(0, false).expect("near");
+        assert_eq!(p.bytes()[0], opcode::RET_NEAR);
+        p.write_ret(1, true).expect("far");
+        assert_eq!(p.bytes()[1], opcode::RET_FAR);
+    }
+
 }
