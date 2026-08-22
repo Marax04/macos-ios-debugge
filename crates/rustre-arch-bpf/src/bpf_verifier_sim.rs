@@ -468,6 +468,10 @@ impl VerifierState {
     }
 
     /// Check that a register is readable (not `NOT_INIT`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn check_reg_read(&mut self, reg: u8) -> Result<(), VerifierError> {
         if self.regs[reg as usize].reg_type == RegType::NotInit {
             let e = VerifierError::UninitRegRead { reg };
@@ -479,6 +483,10 @@ impl VerifierState {
     }
 
     /// Check that a pointer register is not potentially NULL before dereference.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn check_not_null(&mut self, reg: u8) -> Result<(), VerifierError> {
         if self.regs[reg as usize].reg_type.may_be_null() {
             let e = VerifierError::NullPtrDeref { reg };
@@ -491,6 +499,10 @@ impl VerifierState {
     /// Simulate ALU operation: `dst_reg` = `dst_reg` OP `src_reg`.
     ///
     /// Only models pointer+scalar arithmetic and scalar+scalar.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn sim_alu64_reg(&mut self, opcode: u8, dst: u8, src: u8) -> Result<(), VerifierError> {
         self.check_reg_read(src)?;
         self.check_reg_read(dst)?;
@@ -538,6 +550,10 @@ impl VerifierState {
     }
 
     /// Simulate a load from memory: dst = *(src + offset).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn sim_ldx(&mut self, dst: u8, src: u8, offset: i16, size: u8) -> Result<(), VerifierError> {
         self.check_reg_read(src)?;
         self.check_not_null(src)?;
@@ -608,6 +624,10 @@ impl VerifierState {
     }
 
     /// Simulate a store to memory: *(dst + offset) = src.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn sim_stx(&mut self, dst: u8, src: u8, offset: i16, _size: u8) -> Result<(), VerifierError> {
         self.check_reg_read(dst)?;
         self.check_reg_read(src)?;
@@ -634,6 +654,10 @@ impl VerifierState {
     }
 
     /// Simulate a `BPF_CALL` to a helper by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn sim_helper_call(&mut self, helper_id: u32) -> Result<(), VerifierError> {
         // R1–R5 are clobbered by the call.
         for r in 1..=5u8 {
@@ -693,6 +717,10 @@ impl VerifierState {
     }
 
     /// Simulate `BPF_EXIT`.  R0 must be initialised.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input is malformed or an index is out of range.
     pub fn sim_exit(&mut self) -> Result<(), VerifierError> {
         self.check_reg_read(0)?;
         Ok(())

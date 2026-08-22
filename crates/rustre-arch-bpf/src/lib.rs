@@ -5465,6 +5465,10 @@ impl BtfSection {
     /// - the magic bytes (`0xEB 0x9F`) are wrong,
     /// - the header-length or section offsets are out of range,
     /// - any type entry is internally truncated.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if an internal invariant is violated.
     pub fn parse(data: &[u8]) -> Result<Self, String> {
         // â"€â"€ 1. Validate magic â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         if data.len() < 2 {
