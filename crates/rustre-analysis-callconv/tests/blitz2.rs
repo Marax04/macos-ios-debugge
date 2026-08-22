@@ -21,11 +21,11 @@ use rustre_analysis_callconv::{
 
 // ---------- helpers ----------
 
-fn lcg_seed() -> u64 {
+const fn lcg_seed() -> u64 {
     0xDEAD_BEEF_CAFE_BABE
 }
 
-fn lcg_step(s: &mut u64) -> u64 {
+const fn lcg_step(s: &mut u64) -> u64 {
     *s = s
         .wrapping_mul(6364136223846793005)
         .wrapping_add(1442695040888963407);

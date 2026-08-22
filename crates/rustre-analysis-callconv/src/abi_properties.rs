@@ -312,7 +312,7 @@ fn prop_lib_and_cc_database_tables_agree() {
 /// Regression (minimised from `prop_lib_and_cc_database_tables_agree`):
 /// AAPCS64's callee-saved set omitted x30 (LR) in `lib.rs::aapcs64()` and
 /// `cc_detector.rs::CcPattern::aapcs64()`, while `cc_database.rs::CC_AAPCS64`
-/// listed it. Under the omission, the canonical AArch64 prologue
+/// listed it. Under the omission, the canonical `AArch64` prologue
 /// `stp x29, x30, [sp, #-16]!` had its x30 save counted as an unexplained
 /// register save instead of a callee-save, depressing the AAPCS64 match score.
 #[test]

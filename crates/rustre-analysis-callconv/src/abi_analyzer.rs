@@ -872,7 +872,7 @@ mod tests {
 
     /// Consistency: every name that `canonicalize` treats as canonical (is a
     /// fixed point of) must be listed in `canonical_names()`, and `canonicalize`
-    /// must be idempotent. `canonical_names()` was missing "riscv_ilp32d" even
+    /// must be idempotent. `canonical_names()` was missing "`riscv_ilp32d`" even
     /// though `canonicalize("riscv_ilp32d")` returns it as canonical.
     #[test]
     fn canonical_names_matches_canonicalize_fixed_points() {
@@ -1112,7 +1112,7 @@ mod variadic_vocabulary {
     ///
     /// They were listed as "known variadic" and scored 0.9 — past the 0.5
     /// threshold — so argument recovery was told to expect a variable tail
-    /// that does not exist. Consuming a va_list is the opposite of declaring
+    /// that does not exist. Consuming a `va_list` is the opposite of declaring
     /// one.
     #[test]
     fn va_list_consumers_are_not_variadic() {

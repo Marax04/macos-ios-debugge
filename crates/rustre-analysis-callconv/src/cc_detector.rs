@@ -881,10 +881,10 @@ mod tests {
         ])
     }
 
-    /// Regression guard for bug #84: cc_detector's aapcs64 caller-saved set
+    /// Regression guard for bug #84: `cc_detector`'s aapcs64 caller-saved set
     /// omitted x16/x17 (IP0/IP1), which AAPCS64 §6.1.1 defines as caller-saved
     /// scratch. Lock the full x0-x17 set so the divergence from the lib.rs and
-    /// calling_convention_detector copies cannot recur.
+    /// `calling_convention_detector` copies cannot recur.
     #[test]
     fn aapcs64_caller_saved_includes_ip0_ip1() {
         let p = CcPattern::aapcs64();

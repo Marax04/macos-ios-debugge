@@ -1252,8 +1252,8 @@ mod tests {
 
             for i in 0..ranges.len() {
                 for j in (i + 1)..ranges.len() {
-                    if ranges[i].overlaps(&ranges[j]) {
-                        if let (Some(pi), Some(pj)) =
+                    if ranges[i].overlaps(&ranges[j])
+                        && let (Some(pi), Some(pj)) =
                             (allocation.get(ranges[i].vreg), allocation.get(ranges[j].vreg))
                         {
                             assert_ne!(
@@ -1262,7 +1262,6 @@ mod tests {
                                 ranges[i], ranges[j]
                             );
                         }
-                    }
                 }
                 // Any assigned register must be within budget.
                 if let Some(p) = allocation.get(ranges[i].vreg) {

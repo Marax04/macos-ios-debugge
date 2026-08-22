@@ -939,7 +939,7 @@ mod tests {
     /// distinct register arguments claim the same parameter slot) — a
     /// collision would mean two real parameters get silently merged into one
     /// slot in the recovered signature. Explored over many randomly generated
-    /// subsets/orders of `MovRegImm` writes to the SysV integer-arg registers.
+    /// subsets/orders of `MovRegImm` writes to the `SysV` integer-arg registers.
     #[test]
     fn prop_register_arg_indices_are_injective() {
         let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];

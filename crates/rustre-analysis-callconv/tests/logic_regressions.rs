@@ -9,7 +9,7 @@ use rustre_analysis_callconv::{
 
 /// Build a convention that differs from the real ones only where this test
 /// cares: the name of the integer return register.
-fn cc(name: &'static str, int_ret_reg: &'static str) -> CallingConvDef {
+const fn cc(name: &'static str, int_ret_reg: &'static str) -> CallingConvDef {
     CallingConvDef {
         name,
         int_arg_regs: &[],
@@ -166,7 +166,7 @@ use rustre_analysis_callconv::return_type_analyzer::{
     ReturnInstr, ReturnInstrKind, ReturnType, ReturnTypeAnalyzer,
 };
 
-fn ins(kind: ReturnInstrKind) -> ReturnInstr {
+const fn ins(kind: ReturnInstrKind) -> ReturnInstr {
     ReturnInstr { address: 0, kind }
 }
 

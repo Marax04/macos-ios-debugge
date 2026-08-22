@@ -3638,9 +3638,9 @@ mod tests {
         assert_eq!(CC_VECTORCALL.float_ret_reg, "xmm0");
     }
 
-    /// Differential guard: the lib.rs `CC_VECTORCALL` and cc_database.rs's
+    /// Differential guard: the lib.rs `CC_VECTORCALL` and `cc_database.rs`'s
     /// `CC_VECTORCALL_X64` are hand-synced duplicates. A prior fix set
-    /// shadow_space=32 in the database copy but left lib.rs at 0 — this test
+    /// `shadow_space=32` in the database copy but left lib.rs at 0 — this test
     /// locks the two copies together so the divergence cannot recur.
     #[test]
     fn cc_vectorcall_lib_matches_database_copy() {
@@ -3655,7 +3655,7 @@ mod tests {
         assert_eq!(CC_VECTORCALL.callee_saved, CC_VECTORCALL_X64.callee_saved);
     }
 
-    /// Differential: lib.rs `aapcs32()` vs cc_database.rs `CC_AAPCS32`/`_VFP`.
+    /// Differential: lib.rs `aapcs32()` vs `cc_database.rs` `CC_AAPCS32`/`_VFP`.
     #[test]
     fn cc_aapcs32_lib_matches_database_copy() {
         let p = aapcs32();
@@ -3673,7 +3673,7 @@ mod tests {
         assert_eq!(u32::from(CC_AAPCS32.shadow_space), p.shadow_space_bytes);
     }
 
-    /// Differential: lib.rs `mips_o32()` vs cc_database.rs `CC_MIPS_O32`.
+    /// Differential: lib.rs `mips_o32()` vs `cc_database.rs` `CC_MIPS_O32`.
     #[test]
     fn cc_mips_o32_lib_matches_database_copy() {
         let p = mips_o32();
@@ -3692,7 +3692,7 @@ mod tests {
         assert!(p.caller_saved.iter().any(|r| r == "t9"));
     }
 
-    /// Differential: lib.rs `riscv64_lp64d()` vs cc_database.rs
+    /// Differential: lib.rs `riscv64_lp64d()` vs `cc_database.rs`
     /// `CC_RISCV64_LP64D` and `CC_RISCV32_ILP32D` (identical register model).
     #[test]
     fn cc_riscv_lib_matches_database_copy() {
