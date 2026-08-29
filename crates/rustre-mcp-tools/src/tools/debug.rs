@@ -465,15 +465,35 @@ impl LiveSession {
     /// defect one level up: the JSON described what we intended to program, so
     /// a slot the backend allocated differently, or a write that failed, still
     /// read back as success.
-    fn live_debug_registers(&self) -> (u64, [u64; 4]) {
-        let Ok(regs) = block_on(self.dbg.get_registers(self.tid)) else {
-            return (0, [0; 4]);
+    /// The debug registers of THIS THREAD, or `None` when they cannot be known.
+    ///
+    /// Two collapses used to live here, both of them iteration 619's defect in
+    /// the layer 619 did not reach. `regs.get("dr7").unwrap_or(0)`, and a whole
+    /// `(0, [0; 4])` when `get_registers` failed. Zero in `DR7` means "no slot
+    /// is enabled", so an unreadable register set — and an architecture with no
+    /// `DR7` at all, which is what the Windows AArch64 reader publishes — both
+    /// came out as "nothing is armed". A caller checking that a watchpoint was
+    /// really removed read `dr7: 0` and was satisfied.
+    ///
+    /// The thread matters too, and the name did not say so. On x86 the debug
+    /// registers are PER-THREAD: the backend arms and disarms every thread,
+    /// which is the whole reason it keeps a `still_armed` list. One thread's
+    /// `DR7` describes the process only when the process has one thread, so the
+    /// callers now publish `dr7_thread` beside the value.
+    fn live_debug_registers(&self) -> Option<(u64, [u64; 4])> {
+        let regs = block_on(self.dbg.get_registers(self.tid)).ok()?;
+        // `Unverifiable` is not `Clean`: an absent DR7 says nothing about what
+        // is armed. Shared with the backends, so the two layers cannot drift.
+        let dr7 = match rustre_debug::debug_register_state(&regs) {
+            rustre_debug::DebugRegisterState::Clean => 0,
+            rustre_debug::DebugRegisterState::Armed(v) => v,
+            rustre_debug::DebugRegisterState::Unverifiable => return None,
         };
         let mut addrs = [0u64; 4];
         for (i, slot) in addrs.iter_mut().enumerate() {
-            *slot = regs.get(&format!("dr{i}")).unwrap_or(0);
+            *slot = regs.get(&format!("dr{i}"))?;
         }
-        (regs.get("dr7").unwrap_or(0), addrs)
+        Some((dr7, addrs))
     }
 
     /// Register a breakpoint address and return its fresh opaque id.
@@ -2871,7 +2891,12 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                         let _ = sess.watchpoints.remove(wp_id);
                         return Err(e);
                     }
-                    let (dr7, dr_addrs) = sess.live_debug_registers();
+                    // `None` means the debug registers could not be read, or
+                    // this architecture has none. Published as null, never as 0.
+                    let live_dr = sess.live_debug_registers();
+                    let dr7 = live_dr.map(|(v, _)| v);
+                    let dr_addrs = live_dr.map_or([0u64; 4], |(_, a)| a);
+                    let dr7_thread = sess.tid.0;
                     Ok(json!({
                         "session_id": session_id,
                         "watchpoint_id": format!("wp_{wp_id}"),
@@ -2879,6 +2904,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                         "size": size,
                         "kind": kind.to_string(),
                         "dr7": dr7,
+                        "dr7_thread": dr7_thread,
                         "dr_addresses": dr_addrs,
                         "active_watchpoints": sess.watchpoints.count(),
                         "live": true,
@@ -2929,12 +2955,14 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                     block_on(sess.dbg.remove_breakpoint(Address::new(addr)))
                         .map_err(|e| anyhow!("remove_breakpoint: {e}"))?;
                     let removed = sess.watchpoints.remove(wp_id).map_err(|e| anyhow!("{e}"))?;
-                    let (dr7, _) = sess.live_debug_registers();
+                    let dr7 = sess.live_debug_registers().map(|(v, _)| v);
+                    let dr7_thread = sess.tid.0;
                     Ok(json!({
                         "session_id": session_id,
                         "removed": format!("wp_{wp_id}"),
                         "addr": removed.address,
                         "dr7": dr7,
+                        "dr7_thread": dr7_thread,
                         "active_watchpoints": sess.watchpoints.count(),
                         "live": true,
                         "source": "Debugger::remove_breakpoint + live OS debug registers"
@@ -3018,7 +3046,8 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                         // `debug.set_watchpoint` published the target's real
                         // one meant two tools in one surface disagreed about
                         // the same session.
-                        "dr7": sess.live_debug_registers().0,
+                        "dr7": sess.live_debug_registers().map(|(v, _)| v),
+                        "dr7_thread": sess.tid.0,
                         "live": true,
                         "source": "rustre_debug::watchpoint_engine::WatchpointEngine::all"
                     }))
@@ -3066,13 +3095,15 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                         block_on(sess.dbg.disable_breakpoint(Address::new(addr)))
                     };
                     r.map_err(|e| anyhow!("{e}"))?;
-                    let (dr7, _) = sess.live_debug_registers();
+                    let dr7 = sess.live_debug_registers().map(|(v, _)| v);
+                    let dr7_thread = sess.tid.0;
                     Ok(json!({
                         "session_id": session_id,
                         "watchpoint_id": format!("wp_{wp_id}"),
                         "addr": addr,
                         "enabled": enabled,
                         "dr7": dr7,
+                        "dr7_thread": dr7_thread,
                         "live": true,
                         "source": "Debugger::enable_breakpoint/disable_breakpoint + live OS debug registers"
                     }))
@@ -5498,6 +5529,44 @@ mod tests {
                 .expect_err("a size that cannot fit in a u8 must be refused, not truncated to 0");
             assert!(format!("{err}").contains("size"));
         }
+    }
+
+    /// An UNREADABLE `dr7` must not be published as `0`, and it is per-THREAD.
+    ///
+    /// `live_debug_registers` is the source of the `dr7` every watchpoint tool
+    /// reports, and it had both halves of iteration 619's defect — in the layer
+    /// 619 did not reach.
+    ///
+    /// `regs.get("dr7").unwrap_or(0)`, and a whole `(0, [0; 4])` when
+    /// `get_registers` fails. Zero in `DR7` means "no slot is enabled", so an
+    /// unreadable register set, and an architecture that has no `DR7` at all —
+    /// the Windows AArch64 reader publishes none — were both published as
+    /// "nothing is armed". A caller checking that a watchpoint was really
+    /// removed reads `dr7: 0` and is satisfied.
+    ///
+    /// It also reads `self.tid` alone. On x86 the debug registers are
+    /// PER-THREAD: the backend arms and disarms every thread, which is why it
+    /// has a `still_armed` list at all. One thread's `DR7` published under a
+    /// bare `dr7` key describes the process only when the process has one
+    /// thread.
+    #[test]
+    fn an_unreadable_dr7_is_not_published_as_zero() {
+        let src: String = include_str!("debug.rs")
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("
+");
+
+        assert!(
+            !src.contains("regs.get(&format!(\"dr{i}\")).unwrap_or(0)")
+                && !src.contains("regs.get(\"dr7\").unwrap_or(0)"),
+            "an absent or unreadable debug register is still published as 0, which reads as              `no slot is enabled` — the same collapse iteration 619 removed from the backends"
+        );
+        assert!(
+            src.contains("dr7_thread"),
+            "the reported dr7 is one THREAD's, and nothing in the reply says which — on x86              the debug registers are per-thread and the backend disarms all of them"
+        );
     }
 
     /// A SHORT read must say it was short, the way a short write already does.

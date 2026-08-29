@@ -68,7 +68,7 @@ e azzerare l'indice sui propri file subito dopo.
 
 | Cosa | Dove | Stato |
 |---|---|---|
-| **iOS non onora `Breakpoint::condition`** | iOS | `condition_allows_stop` compare 5 volte in ciascuno dei tre backend desktop e **0** volte in `apple_debugger.rs`, mentre il tipo documenta «only stop when this evaluates to true». Su iOS un breakpoint condizionale si ferma a ogni hit |
+| ~~**iOS non onora `Breakpoint::condition`**~~ **RITIRATA AL 632 — ERA FALSA** | iOS | Vedi la sezione del 632. iOS non implementa condizioni, pass count né filtro di thread, e i tre **default del trait RIFIUTANO** con `Unsupported` nominando il motivo (`lib.rs:2761/2786/2811`). Non è un fallimento silenzioso: è un **terzo stato dichiarato**. Ora presidiato da `ios_refuses_breakpoint_restrictions_it_could_never_evaluate` |
 | **13 difetti iOS confermati** | iOS | verificati da tre scettici al giro 8, fix mai eseguito per errori API 529; il retry ne ha recuperati 5 |
 | **Cricchetto MCP 172/168** | tutti | **non mio**: dei 172 fabbricatori, **zero** hanno prefisso `debug_`/`linux_`/`macos_`/`ios_`/`win_`. Era 170 al 605. Da riportare al proprietario, **non** da far tacere alzando il soffitto |
 | **PAC nell'unwinder** | Linux ARM | 573 e 591 erano codice morto; il 607 lo legge per primo. **Mai rimisurato in CI** |
@@ -523,6 +523,88 @@ Verificato al 631: **sparita dall'albero condiviso e mai entrata in `main`**.
 È la seconda volta che questa classe emerge e la seconda volta che si chiude da
 sé; resta il motivo per cui la regola «ripristina sempre» è scritta due volte.
 
+
+---
+
+## Iterazione 632 — 2026-08-30
+
+### ⚠ UNA MIA AFFERMAZIONE FALSA, portata avanti per quattro giri
+
+STATUS.md dichiarava dal **618**: «iOS non onora `Breakpoint::condition`;
+`condition_allows_stop` compare 5 volte nei tre backend desktop e 0 in
+`apple_debugger.rs`, quindi su iOS un breakpoint condizionale si ferma a ogni
+hit». **Era falsa**, e l'ho ripetuta nel prompt di ogni giro iOS dal 11 al 14 —
+quattro giri con una lente puntata su un difetto che non esiste.
+
+Un agente del giro 14 l'ha smontata, e l'ho **verificata di persona** prima di
+accettarla: i tre default del trait (`set_breakpoint_condition`,
+`set_breakpoint_thread_filter`, `set_breakpoint_ignore_count`, a `lib.rs:2761 /
+2786 / 2811`) rispondono `Unsupported` **nominando il motivo** — «one attached
+here would never be evaluated». iOS non li implementa, quindi eredita il
+rifiuto. Non c'è nessun fallimento silenzioso: **la difesa funziona**, ed è
+esattamente il «terzo stato» che questo file predica.
+
+Il mio errore di ragionamento: ho contato le occorrenze di
+`condition_allows_stop` e dedotto l'assenza della *capacità* dall'assenza di
+quel *nome*.
+
+Peggio: le tre guardie sorgente di `lib.rs` iterano solo su
+windows/linux/macos, quindi **nessun test copriva il comportamento iOS su quelle
+tre API** — la mia affermazione falsa non era falsificabile da nulla. L'agente ha
+aggiunto la guardia runtime mancante, asserendo sul **valore** (`Err(Unsupported)`
+con la ragione) e non sull'esistenza del metodo: scatta se un domani un setter
+cominciasse a rispondere `Ok(())` senza un gate nel percorso di stop. Per
+misurare il rosso ha **perturbato la produzione al comportamento che STATUS.md
+affermava**, e poi ha ripristinato.
+
+Non ha potuto correggere STATUS.md — fuori dal suo perimetro — e ha lasciato il
+testo corretto. L'ho usato.
+
+### Difetto: un `dr7` illeggibile pubblicato come `0`, ed è di UN THREAD
+
+`live_debug_registers` è la sorgente del `dr7` che ogni strumento sui watchpoint
+riporta, e conteneva **entrambe le metà del difetto del 619**, nello strato che
+il 619 non aveva raggiunto:
+
+- `regs.get("dr7").unwrap_or(0)`, e un intero `(0, [0; 4])` quando
+  `get_registers` fallisce. Zero in `DR7` significa «nessuno slot abilitato»,
+  quindi un set di registri illeggibile — e un'architettura che il `DR7` non ce
+  l'ha affatto, come il lettore AArch64 di Windows — venivano entrambi pubblicati
+  come «nulla è armato». Chi controllava che un watchpoint fosse davvero rimosso
+  leggeva `dr7: 0` ed era soddisfatto.
+- Legge `self.tid` **soltanto**. Su x86 i registri di debug sono **per thread**:
+  il backend arma e disarma ogni thread, ed è il motivo per cui tiene una lista
+  `still_armed`. Il `DR7` di un thread, sotto una chiave `dr7` nuda, descrive il
+  processo solo quando il processo ha un thread solo.
+
+Ora la funzione restituisce `Option`, riusa `debug_register_state` del 619 —
+così i due strati non possono divergere — e i quattro siti pubblicano
+`dr7: null` quando non è conoscibile, più `dr7_thread` accanto al valore.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2116 / 0** |
+| Linux (WSL, `--test-threads=1`) | **2099 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **405 / 1** — il +1 è questo test, l'1 è il cricchetto |
+
+### Superfici esaminate e trovate CORRETTE
+
+- La validazione di `size` sui watchpoint: il backend rifiuta larghezze diverse
+  da 1/2/4/8 **e** gli indirizzi non allineati, con messaggi espliciti.
+- `remove_watchpoint`: disarma l'hardware **prima** e libera l'id solo dopo, col
+  commento che spiega perché l'ordine inverso sembra equivalente e non lo è.
+
+### Giro 14 iOS: 39 agenti, 4 confermati, 4 chiusi
+
+- Un `metype`/`medata` con prefisso `0x` **collassava a un segnale nudo**:
+  `Exception{metype:1,...}` diventava `Signal(11)`. Due lettori della stessa
+  coppia chiave/valore si contraddicevano; ora puntano alla stessa funzione.
+- Un breakpoint all'**ingresso** di una funzione frameless faceva scalare `sp` di
+  0x20 per locali **mai allocate**.
+
 ---
 ---
 
@@ -926,7 +1008,7 @@ dell'MCP, noto e **non mio**, sotto.
 | Windows x86_64 | dopo il merge col lavoro del giro 9 | **2094 / 1** — il rosso rimasto è iOS, non mio (sotto) |
 | Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
-| MCP | Windows | **404 / 1** (631) |
+| MCP | Windows | **405 / 1** (632) |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; **i fix 607/608/609 non sono mai stati rimisurati** |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |
