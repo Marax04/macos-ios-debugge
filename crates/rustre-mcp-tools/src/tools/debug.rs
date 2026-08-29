@@ -1473,7 +1473,16 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     return Ok(json!({
                         "session_id": session_id,
                         "addr": addr,
+                        // `len` is what ARRIVED, under a key that reads like
+                        // what was ASKED. `read_memory` may legitimately return
+                        // fewer bytes — a page boundary, a partially mapped
+                        // region, a target that died mid-call — and the caller
+                        // had no way to see it without remembering their own
+                        // request. The write tool next door already does this
+                        // comparison for them; now both do.
                         "len": bytes.len(),
+                        "requested_len": len,
+                        "complete": bytes.len() == len,
                         "hex": hex,
                         "live": true,
                         "source": "rustre_debug::Debugger::read_memory (live OS backend)"
@@ -5489,6 +5498,45 @@ mod tests {
                 .expect_err("a size that cannot fit in a u8 must be refused, not truncated to 0");
             assert!(format!("{err}").contains("size"));
         }
+    }
+
+    /// A SHORT read must say it was short, the way a short write already does.
+    ///
+    /// `debug.write_memory` reports `"success": bytes_written == data.len()`,
+    /// so a partial write is visible at the reply. Its twin `debug.read_memory`
+    /// reports only `"len": bytes.len()` — the length that ARRIVED, under a key
+    /// that reads like the length that was ASKED for, and with the request's
+    /// own `len` nowhere in the reply.
+    ///
+    /// `read_memory` is allowed to return fewer bytes: a page boundary, a
+    /// partially mapped region, a target that died mid-call. A caller who asked
+    /// for 64 bytes and got 8 sees `len: 8` and a short hex string, and is told
+    /// nothing. To notice, they must remember what they asked and compare —
+    /// which is exactly the comparison the write tool does for them.
+    ///
+    /// The two tools are adjacent in one file and disagreed about whether a
+    /// partial result is worth naming. This is the crate's second defect
+    /// family — logic that drifts between siblings — sitting on top of its
+    /// first: a partial answer presented as a whole one.
+    #[test]
+    fn a_short_read_reports_that_it_was_short() {
+        let src: String = include_str!("debug.rs")
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("
+");
+
+        // The write side already does this; the assertion is anchored on it so
+        // that removing the behaviour there breaks this guard too.
+        assert!(
+            src.contains("bytes_written == data.len()"),
+            "the write tool no longer reports completeness; this guard's premise is gone"
+        );
+        assert!(
+            src.contains("requested_len") && src.contains("\"complete\""),
+            "debug.read_memory does not report the length that was REQUESTED, nor whether              the read was complete, so a short read is indistinguishable from a full one"
+        );
     }
 
     /// A float that a `u64` cannot hold exactly must be REFUSED, not saturated.

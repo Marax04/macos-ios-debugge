@@ -462,6 +462,67 @@ un errore leggibile invece che in un default.
 | Darwin ×2 | **0 errori** |
 | MCP | **403 / 1** — il +1 è questo test, l'1 è il cricchetto |
 
+
+---
+
+## Iterazione 631 — 2026-08-30
+
+### Difetto: una lettura CORTA non diceva di esserlo, mentre la gemella lo fa
+
+`debug.write_memory` riporta `"success": bytes_written == data.len()`, quindi
+una scrittura parziale è visibile nella risposta. La sua gemella
+`debug.read_memory`, **nello stesso file, poche righe più su**, riportava solo
+`"len": bytes.len()` — la lunghezza **arrivata**, sotto una chiave che si legge
+come la lunghezza **chiesta**, e senza il `len` della richiesta da nessuna parte.
+
+`read_memory` può legittimamente restituire meno byte: un bordo di pagina, una
+regione parzialmente mappata, un target morto a metà chiamata. Chi ne chiedeva
+64 e ne riceveva 8 vedeva `len: 8` e una stringa esadecimale corta, e non gli
+veniva detto nulla: per accorgersene doveva ricordare la propria richiesta e fare
+il confronto — cioè esattamente il confronto che lo strumento di scrittura fa
+già per lui.
+
+Due strumenti adiacenti in un solo file, in disaccordo su se valga la pena
+nominare un risultato parziale: la famiglia 2 sopra la famiglia 1. Ora
+`read_memory` pubblica `requested_len` e `complete`.
+
+Il guard è ancorato **anche** sul comportamento del gemello
+(`bytes_written == data.len()`), così se qualcuno togliesse la completezza dal
+lato scrittura questo test se ne accorgerebbe invece di restare verde su una
+premessa svanita.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2116 / 0** |
+| Linux (WSL, `--test-threads=1`) | **2099 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **404 / 1** — il +1 è questo test, l'1 è il cricchetto |
+
+### Giro 13 iOS: 37 agenti, 5 confermati, 5 chiusi
+
+- `DW_FORM_addrx` non veniva mai risolto: l'**indice** finiva nel campo
+  indirizzo, e `low_pc` usciva come `Some(0)` — indistinguibile da un'unità
+  davvero basata a zero. La sezione `__debug_addr` veniva raccolta e **mai
+  letta**. Ora un indice non risolvibile lascia `None`: terzo stato.
+- Uno stop su watchpoint pubblicava un breakpoint **fabbricato** invece del
+  record tracciato: l'evento diceva `hit_count 0` mentre `breakpoints()` diceva
+  2 — lo stesso debugger dava due numeri per lo stesso watchpoint. E una chiave
+  `watch:` senza record veniva riportata come «armata e autentica».
+- Un watchpoint elencato non pubblicava la **larghezza** con cui era stato
+  armato, quindi chi lo riarmava dall'elenco ripiegava su un default.
+
+### Perturbazione altrui, trovata e verificata chiusa
+
+Un agente ha segnalato una **perturbazione ancora attiva** in produzione lasciata
+da un altro: `lldb_ext.rs:866`, `is_accessible()` ridotta a `self.is_mapped()`
+con marcatore `PERTURBAZIONE_TEMPORANEA_RIPRISTINARE`. Ha fatto la cosa giusta —
+l'ha **segnalata senza toccarla**, essendo lavoro non committato altrui.
+Verificato al 631: **sparita dall'albero condiviso e mai entrata in `main`**.
+È la seconda volta che questa classe emerge e la seconda volta che si chiude da
+sé; resta il motivo per cui la regola «ripristina sempre» è scritta due volte.
+
 ---
 ---
 
@@ -865,7 +926,7 @@ dell'MCP, noto e **non mio**, sotto.
 | Windows x86_64 | dopo il merge col lavoro del giro 9 | **2094 / 1** — il rosso rimasto è iOS, non mio (sotto) |
 | Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
-| MCP | Windows | **403 / 1** (630) |
+| MCP | Windows | **404 / 1** (631) |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; **i fix 607/608/609 non sono mai stati rimisurati** |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |
