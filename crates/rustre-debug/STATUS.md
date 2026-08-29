@@ -408,6 +408,60 @@ compile … 1 previous error», senza il testo dell'errore: la riesecuzione con 
 completo ha rivelato che il difetto era **in un altro file**. Un output tagliato
 è una misura che mente per omissione.
 
+
+---
+
+## Iterazione 630 — 2026-08-30
+
+### Audit sistematico: la classe dei guard ancorati a stringa è PULITA
+
+Il problema dell'ancoraggio era emerso **quattro volte** in questa sessione, così
+l'ho spazzato meccanicamente invece di aspettare la quinta.
+
+| Controllo | Esito |
+|---|---|
+| Ancore `item_body` che non esistono più nel sorgente scandito | **0 su 57** |
+| Asserzioni positive che passano SOLO grazie a un commento | **0 su 28** |
+| `include_str!` in `lib.rs` | 294, di cui ~39 filtrati da `code_only` |
+
+E `item_body` è già ben difeso: va in **panic** se l'ancora manca, e **rifiuta**
+un corpo implausibilmente grande — con un commento che spiega perché
+(«il corpo sarebbe tutto ciò che segue l'ancora, e conterrebbe ogni ago che un
+guard potrebbe cercare»). Qualcuno ci aveva già pensato, e bene.
+
+**La prima versione della mia spazzata aveva lo stesso difetto che cercava**:
+appaiava ogni ancora con ogni file incluso dal modulo, senza sapere quale fosse
+davvero scandito, e produceva 17 falsi positivi. Rifatta con l'ambito per
+**funzione di test**, il numero è sceso a zero. Un risultato negativo vale solo
+quanto lo strumento che l'ha prodotto.
+
+### Difetto: un float che un `u64` non può contenere veniva SATURATO
+
+`coerce_u64` accettava qualunque float non negativo con `fract() == 0.0` e poi
+faceva `f as u64`, che in Rust **satura**. `1e30` non ha parte frazionaria,
+quindi passava il controllo e usciva come **`u64::MAX`**.
+
+I chiamanti usano questa funzione per `addr`: una richiesta di leggere memoria a
+`1e30` diventava una richiesta di leggere a **`0xFFFFFFFFFFFFFFFF`**, in
+silenzio, e la risposta parlava di un indirizzo che nessuno aveva chiesto.
+
+**Rosso misurato:** `left: Some(18446744073709551615)  right: None`
+
+Il confine è tracciato a **2^53**, dove un `f64` smette di rappresentare interi
+consecutivi: sopra quella soglia il numero che arriva non è il numero che è
+stato mandato, saturazione o no. Un float che non si può tenere esatto viene
+rifiutato, e gli accessori controllati del 627/629 trasformano quel rifiuto in
+un errore leggibile invece che in un default.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2116 / 0** |
+| Linux (WSL, `--test-threads=1`) | **2099 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **403 / 1** — il +1 è questo test, l'1 è il cricchetto |
+
 ---
 ---
 
@@ -811,7 +865,7 @@ dell'MCP, noto e **non mio**, sotto.
 | Windows x86_64 | dopo il merge col lavoro del giro 9 | **2094 / 1** — il rosso rimasto è iOS, non mio (sotto) |
 | Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
-| MCP | Windows | **402 / 1** (629) |
+| MCP | Windows | **403 / 1** (630) |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; **i fix 607/608/609 non sono mai stati rimisurati** |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |

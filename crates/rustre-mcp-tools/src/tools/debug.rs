@@ -97,10 +97,24 @@ fn coerce_u64(v: &Value) -> Option<u64> {
     if let Some(n) = v.as_u64() {
         return Some(n);
     }
-    if let Some(f) = v.as_f64()
-        && f >= 0.0 && f.fract() == 0.0 {
+    if let Some(f) = v.as_f64() {
+        // `f as u64` SATURATES, and `1e30` has no fractional part — so it used
+        // to pass this test and come out as `u64::MAX`. Callers use this for
+        // `addr`, so a request to read memory at `1e30` became a request to
+        // read at `0xFFFFFFFFFFFFFFFF`, silently, and the reply was about an
+        // address nobody asked for.
+        //
+        // The line is drawn at 2^53, where an `f64` stops representing
+        // consecutive integers at all: above it the number that arrives is not
+        // the number that was sent, saturation or no saturation. A float that
+        // cannot be held exactly is refused, and the checked accessors turn
+        // that into an error the caller can read rather than a default.
+        const EXACT_MAX: f64 = 9_007_199_254_740_992.0; // 2^53
+        if f >= 0.0 && f.fract() == 0.0 && f <= EXACT_MAX {
             return Some(f as u64);
         }
+        return None;
+    }
     let s = v.as_str()?.trim();
     if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
         return u64::from_str_radix(hex, 16).ok();
@@ -5475,6 +5489,39 @@ mod tests {
                 .expect_err("a size that cannot fit in a u8 must be refused, not truncated to 0");
             assert!(format!("{err}").contains("size"));
         }
+    }
+
+    /// A float that a `u64` cannot hold exactly must be REFUSED, not saturated.
+    ///
+    /// `coerce_u64` accepted any non-negative float with `fract() == 0.0` and
+    /// then did `f as u64`, which in Rust SATURATES. `1e30` has no fractional
+    /// part, so it passed the test and came out as `u64::MAX` — and callers use
+    /// this for `addr`. A request to read memory at `1e30` became a request to
+    /// read at `0xFFFFFFFFFFFFFFFF`, silently, and the reply was about an
+    /// address the caller never asked for.
+    ///
+    /// Above 2^53 an `f64` cannot represent consecutive integers at all, so
+    /// even without saturation the number that arrives is not the number that
+    /// was sent. The refusal is drawn there, where exactness ends, rather than
+    /// at `u64::MAX` where only the clipping stops.
+    #[test]
+    fn a_float_a_u64_cannot_hold_exactly_is_refused_not_saturated() {
+        assert_eq!(coerce_u64(&json!(42.0)), Some(42));
+        assert_eq!(coerce_u64(&json!(0.0)), Some(0));
+        // 2^53 is the last integer an f64 represents exactly.
+        assert_eq!(coerce_u64(&json!(9_007_199_254_740_992.0f64)), Some(1u64 << 53));
+
+        assert_eq!(
+            coerce_u64(&json!(1e30f64)),
+            None,
+            "1e30 has no fractional part and `as u64` saturates it to u64::MAX; used as an              addr that reads memory at 0xFFFFFFFFFFFFFFFF and reports on it"
+        );
+        assert_eq!(coerce_u64(&json!(1.8e19f64)), None, "just under u64::MAX is still not exact");
+        assert_eq!(coerce_u64(&json!(-1.0f64)), None);
+        assert_eq!(coerce_u64(&json!(1.5f64)), None, "a real fraction was already refused");
+
+        // Plain integers are untouched: serde hands those to `as_u64` first.
+        assert_eq!(coerce_u64(&json!(u64::MAX)), Some(u64::MAX));
     }
 
     #[test]
