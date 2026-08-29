@@ -221,6 +221,31 @@ fn u64_arg_checked(args: &Value, primary: &str, default: u64) -> anyhow::Result<
     Ok(default)
 }
 
+/// Narrow an argument to a smaller integer, refusing a value that does not fit.
+///
+/// The tools wrote `req_u64(&args, "pid")? as u32`, and `as` WRAPS. A request
+/// for pid `4294967297` therefore attached to pid **1** — a different, live
+/// process, chosen silently, by a tool whose entire job is to be precise about
+/// which process it is talking to. `port: 65536` became port 0. A `tid` above
+/// `u32::MAX` became `ThreadId(0)`, which is the RSP WILDCARD meaning "whatever
+/// thread the stub had selected", so the request acted on some other thread.
+///
+/// None of those is a refusal the caller could see. Each is a different
+/// question, answered as though it were the one asked.
+///
+/// # Errors
+/// When `v` does not fit in `bits`, naming the argument and both numbers.
+fn narrowed_arg(name: &str, v: u64, bits: u32) -> anyhow::Result<u64> {
+    let max = if bits >= 64 { u64::MAX } else { (1u64 << bits) - 1 };
+    if v > max {
+        return Err(anyhow!(
+            "'{name}' is {v}, which does not fit in {bits} bits (max {max}); truncating it would              silently act on {} instead of the value you sent",
+            v & max
+        ));
+    }
+    Ok(v)
+}
+
 /// [`u64_arg_checked`] for a field that must fit in a byte.
 ///
 /// `debug.set_watchpoint` used to write `u64_arg_aliased(&args, "size", 8) as u8`,
@@ -961,7 +986,10 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
             }),
             |args| {
                 let addr = req_str(&args, "addr")?.to_string();
-                let pid = req_u64(&args, "pid")? as u32;
+                // `as` wraps: pid 4294967297 became pid 1, a different live
+                // process, chosen silently by a tool whose job is precision
+                // about which process it is talking to.
+                let pid = u32::try_from(narrowed_arg("pid", req_u64(&args, "pid")?, 32)?)?;
 
                 let sess = attach_live_apple(&addr, pid)?;
                 let tid = sess.tid.0;
@@ -993,7 +1021,10 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 "additionalProperties": false
             }),
             |args| {
-                let pid = req_u64(&args, "pid")? as u32;
+                // `as` wraps: pid 4294967297 became pid 1, a different live
+                // process, chosen silently by a tool whose job is precision
+                // about which process it is talking to.
+                let pid = u32::try_from(narrowed_arg("pid", req_u64(&args, "pid")?, 32)?)?;
 
                 // Attach a real backend to the running pid, or report why not.
                 let sess = attach_live(pid)?;
@@ -1781,7 +1812,9 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
             }),
             |args| {
                 let session_id = req_str(&args, "session_id")?.to_string();
-                let tid = opt_u64(&args, "tid", 1) as u32;
+                // A tid above u32::MAX became ThreadId(0) — the RSP wildcard
+                // "whatever thread the stub had selected".
+                let tid = u32::try_from(narrowed_arg("tid", opt_u64(&args, "tid", 1), 32)?)?;
 
                 if let Some(r) = with_live(&session_id, |sess| {
                     let step_tid = if tid != 1 { rustre_debug::ThreadId(tid) } else { sess.tid };
@@ -2473,7 +2506,8 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                     HeapChunkGraph, HeapLayout, MemoryLayoutError, Ptmalloc2Parser,
                 };
                 let session_id = req_str(&args, "session_id")?.to_string();
-                let word_size = opt_u64(&args, "word_size", 8) as u8;
+                let word_size =
+                    u8::try_from(narrowed_arg("word_size", opt_u64(&args, "word_size", 8), 8)?)?;
 
                 // Live path: walk the real arena via the session's read_memory.
                 if let Some(r) = with_live(&session_id, |sess| {
@@ -4009,13 +4043,16 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 let spec = match kind {
                     "local_pid" => {
                         let pid = args.get("pid").and_then(|v| v.as_u64())
-                            .ok_or_else(|| anyhow!("local_pid requires 'pid'"))? as u32;
+                            .ok_or_else(|| anyhow!("local_pid requires 'pid'"))?;
+                        let pid = u32::try_from(narrowed_arg("pid", pid, 32)?)?;
                         TargetSpec::LocalPid(pid)
                     }
                     "gdb_server" => {
                         let host = req_str(&args, "host")?.to_owned();
                         let port = args.get("port").and_then(|v| v.as_u64())
-                            .ok_or_else(|| anyhow!("gdb_server requires 'port'"))? as u16;
+                            .ok_or_else(|| anyhow!("gdb_server requires 'port'"))?;
+                        // port 65536 silently became port 0.
+                        let port = u16::try_from(narrowed_arg("port", port, 16)?)?;
                         TargetSpec::GdbServer { host, port }
                     }
                     "executable" => {
@@ -4193,14 +4230,16 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 let target = match kind {
                     "process" => {
                         let pid = args.get("pid").and_then(|v| v.as_u64())
-                            .ok_or_else(|| anyhow!("process requires 'pid'"))? as u32;
+                            .ok_or_else(|| anyhow!("process requires 'pid'"))?;
+                        let pid = u32::try_from(narrowed_arg("pid", pid, 32)?)?;
                         let name = opt_str(&args, "process_name", "unknown").to_owned();
                         DebugTarget::Process { pid, process_name: name }
                     }
                     "remote" => {
                         let host = req_str(&args, "host")?.to_owned();
                         let port = args.get("port").and_then(|v| v.as_u64())
-                            .ok_or_else(|| anyhow!("remote requires 'port'"))? as u16;
+                            .ok_or_else(|| anyhow!("remote requires 'port'"))?;
+                        let port = u16::try_from(narrowed_arg("port", port, 16)?)?;
                         DebugTarget::Remote { host, port, arch: arch.clone() }
                     }
                     "core" => {
@@ -5253,6 +5292,64 @@ mod tests {
         assert!(msg.contains("debug.session_list"), "must name the discovery tool: {msg}");
         assert!(msg.contains("debug.launch"), "must name the creation tool: {msg}");
         assert!(msg.contains("no mock fallback"), "must state nothing is faked: {msg}");
+    }
+
+    /// A number too wide for its field must be refused, not wrapped.
+    ///
+    /// `req_u64(&args, "pid")? as u32` wraps, so a request for pid
+    /// `4294967297` attached to pid **1** — a different, live process, chosen
+    /// silently by a tool whose entire purpose is precision about which process
+    /// it is talking to. `port: 65536` became 0. A `tid` above `u32::MAX`
+    /// became `ThreadId(0)`, the RSP wildcard: "whatever thread the stub had
+    /// selected".
+    #[test]
+    fn a_number_too_wide_for_its_field_is_refused_not_wrapped() {
+        assert_eq!(narrowed_arg("pid", 4242, 32).unwrap(), 4242);
+        assert_eq!(narrowed_arg("pid", u64::from(u32::MAX), 32).unwrap(), u64::from(u32::MAX));
+
+        let err = narrowed_arg("pid", 0x1_0000_0001, 32).expect_err("pid must not wrap to 1");
+        let text = format!("{err}");
+        assert!(text.contains("pid"), "must name the argument: {text}");
+        assert!(text.contains('1'), "must show what it would have acted on: {text}");
+
+        assert!(narrowed_arg("port", 65_536, 16).is_err(), "port 65536 must not become 0");
+        assert!(narrowed_arg("port", 65_535, 16).is_ok());
+        assert!(
+            narrowed_arg("tid", 0x1_0000_0000, 32).is_err(),
+            "a tid must not become the wildcard 0"
+        );
+        assert!(narrowed_arg("word_size", 256, 8).is_err());
+
+        // And no tool may go back to a bare `as` on a caller-supplied number.
+        // The needles are BUILT, never written whole, because `include_str!`
+        // pulls in this test module too: spelled literally, the guard matches
+        // its own list and fails forever. The same anchoring trap as a guard
+        // satisfied by its own prose, seen from the other side.
+        // Comments are stripped FIRST. Both occurrences of the defect's shape
+        // in this file are in doc comments — my own prose describing it — and
+        // scanning the raw text made the guard fail on its own explanation.
+        // Same trap as a guard SATISFIED by its own prose, facing the other way.
+        let src: String = include_str!("debug.rs")
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("
+");
+        let src = src.as_str();
+        let as_ = " as ";
+        for bad in [
+            format!("\"pid\")?{as_}u32"),
+            format!("\"tid\", 1){as_}u32"),
+            format!("\"word_size\", 8){as_}u8"),
+            format!("'pid'\"))?{as_}u32"),
+            format!("'port'\"))?{as_}u16"),
+        ] {
+            let bad = bad.as_str();
+            assert!(
+                !src.contains(bad),
+                "a tool still narrows a caller-supplied number with a bare `as`, which wraps: {bad}"
+            );
+        }
     }
 
     /// An argument that is PRESENT but unusable must not become the default.
