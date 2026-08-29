@@ -12242,7 +12242,18 @@ pub ").unwrap_or(decl.len());
         // the quote is followed by a comma, not a paren. Third time this
         // session that a string-anchored assertion has meant something other
         // than intended; `opt_u64(` must exist for the file to compile.
-        let read = src.matches("opt_u64(&args, \"timeout_ms\"").count();
+        // Re-anchored at iteration 629, and NOT weakened. The previous spelling
+        // named the accessor — `opt_u64(&args, "timeout_ms"` — so renaming the
+        // accessor broke a guard whose subject had not changed. That is the
+        // FOURTH time this session a string-anchored assertion has meant
+        // something other than intended, and the comment above already counted
+        // three.
+        //
+        // What the guard is really about is the READ position: in a call the
+        // name is followed by `,` and a default, while in a schema declaration
+        // it is followed by `:`. That distinction survives any rename of the
+        // accessor, which the accessor's own name does not.
+        let read = src.matches("\"timeout_ms\",").count();
         assert!(
             read > 0,
             "`timeout_ms` is declared in {declared} schema(s) and read {read} times: the tool \

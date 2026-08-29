@@ -325,6 +325,89 @@ quando il detach non era riuscito a disarmarli.
 - **La sandbox scarta in silenzio le scritture fuori dal progetto**: un worktree
   è risultato vuoto senza alcun errore.
 
+
+---
+
+## Iterazione 629 — 2026-08-19
+
+### Difetto: gli accessori OPZIONALI davano lo stesso valore ad «assente» e «illeggibile»
+
+Il 627 aveva tolto questa forma da `u64_arg_aliased`, che aveva **2** call site.
+Restava in piedi in `opt_u64` e `opt_str` — cioè negli accessori che i tool
+**usano davvero**, con **11 e 6** siti.
+
+```rust
+fn opt_u64(args, key, default) { args.get(key).and_then(coerce_u64).unwrap_or(default) }
+fn opt_str(args, key, default) { args.get(key).and_then(Value::as_str).unwrap_or(default) }
+```
+
+- `tid: "main"` diventava in silenzio il thread **1**, e il tool riportava su un
+  thread che il chiamante non aveva mai nominato.
+- Il peggiore è `match opt_str(&args, "kind", "write")`: chi manda `kind: 5` si
+  ritrova un watchpoint di **SCRITTURA**, in silenzio, quando magari stava
+  armando una lettura — e il tool risponde successo.
+
+`req_u64` era invece **già corretto**: verificato, non supposto.
+
+**Rosso misurato:** `a tool still reads an optional argument through the
+unchecked accessor, so a value it cannot read becomes the default in silence:
+opt_u64(&args`
+
+**17 siti cablati** su `opt_u64_checked` / `opt_str_checked` — sei `opt_str` e non
+quattro come avevo contato a occhio: il conteggio meccanico ha corretto il mio.
+
+### Regressione CAUSATA DA ME, e come si è chiusa
+
+La rinomina ha fatto diventare rosso
+`tests_extra::a_declared_timeout_is_a_timeout_that_is_read`, un guard di
+**rustre-debug** che scandisce il sorgente **MCP** con `include_str!` su un
+percorso relativo fra crate. Provato che era mio e non preesistente: su `main`
+pulito passa.
+
+Il guard era ancorato al **nome dell'accessore** (`opt_u64(&args, "timeout_ms"`),
+quindi rinominare l'accessore lo ha rotto senza che il suo soggetto cambiasse.
+È la **quarta** volta nella sessione che un'asserzione ancorata a una stringa
+significa altro da ciò che intendeva — e il commento sopra di essa ne contava
+già tre.
+
+Ri-ancorato all'**intento**, non alla grafia: in una chiamata il nome è seguito
+da `,` e da un default, in una dichiarazione di schema da `:`. Quella
+distinzione sopravvive a qualunque rinomina. Il guard **non è stato indebolito**:
+la versione controllata soddisfa il suo intento meglio di prima, perché rifiuta
+anche un valore malformato.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2116 / 0** |
+| Linux (WSL, `--test-threads=1`) | **2099 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **402 / 1** — il +1 è questo test, l'1 è il cricchetto |
+
+### Giro 12 iOS: 42 agenti, 7 confermati, 7 chiusi
+
+Complementare al mio: un agente ha trovato il **gemello lato stub** del difetto
+del 628. Il mio era un argomento del **chiamante** che *wrappava*
+(`4294967297 → 1`); il suo è il pid riportato dallo **stub** via `qProcessInfo`
+che veniva **saturato a 0** con `unwrap_or(0)` — un pid presente reso
+indistinguibile da «nessun processo». Due facce della stessa classe, su due
+sorgenti di dato diverse.
+
+Altri esiti: un `Drop` che riscriveva la memoria del target **senza rilasciare il
+resume parcheggiato**, quindi il pacchetto andava a un processo ancora in
+esecuzione, la stop reply dovuta non arrivava mai e ogni `BRK #0` auto-piantata
+restava in un target vivo; e un `NSNumber` tagged con nibble 6 (double) che
+fabbricava un denormale invece di rifiutare — 60 bit di payload, 56 dopo lo
+shift, segno ed esponente strutturalmente a zero.
+
+### Trappola di misura riportata da un agente
+
+Una prima misura era stata **troncata da `tail -8`** e mostrava solo «could not
+compile … 1 previous error», senza il testo dell'errore: la riesecuzione con log
+completo ha rivelato che il difetto era **in un altro file**. Un output tagliato
+è una misura che mente per omissione.
+
 ---
 ---
 
@@ -728,7 +811,7 @@ dell'MCP, noto e **non mio**, sotto.
 | Windows x86_64 | dopo il merge col lavoro del giro 9 | **2094 / 1** — il rosso rimasto è iOS, non mio (sotto) |
 | Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
-| MCP | Windows | **401 / 1** (628) |
+| MCP | Windows | **402 / 1** (629) |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; **i fix 607/608/609 non sono mai stati rimisurati** |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |

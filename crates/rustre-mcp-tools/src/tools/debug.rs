@@ -221,6 +221,46 @@ fn u64_arg_checked(args: &Value, primary: &str, default: u64) -> anyhow::Result<
     Ok(default)
 }
 
+/// [`opt_u64`], but a value that is PRESENT and unreadable is an ERROR.
+///
+/// `opt_u64` is `args.get(key).and_then(coerce_u64).unwrap_or(default)` — the
+/// same shape iteration 627 removed from `u64_arg_aliased`, still standing in
+/// the accessor that eleven tools actually use. Absent and unreadable get the
+/// same answer, so `tid: "main"` silently becomes thread 1 and the tool reports
+/// on a thread the caller never named.
+///
+/// # Errors
+/// When `key` is present but cannot be read as an unsigned integer.
+fn opt_u64_checked(args: &Value, key: &str, default: u64) -> anyhow::Result<u64> {
+    match args.get(key) {
+        None => Ok(default),
+        Some(raw) => coerce_u64(raw).ok_or_else(|| {
+            anyhow!(
+                "'{key}' is present but cannot be read as an unsigned integer: {raw}.                  Refusing rather than quietly using the default {default}, which would                  answer a question you did not ask."
+            )
+        }),
+    }
+}
+
+/// [`opt_str`], but a value that is PRESENT and not a string is an ERROR.
+///
+/// The worst of the four call sites is `match opt_str_checked(&args, "kind", "write")?`:
+/// a caller who sends `kind: 5` gets a WRITE watchpoint silently, when a read
+/// watchpoint may be exactly what they were trying to arm. The tool then reports
+/// success for the wrong kind of watch.
+///
+/// # Errors
+/// When `key` is present but is not a JSON string.
+fn opt_str_checked<'a>(args: &'a Value, key: &str, default: &'a str) -> anyhow::Result<&'a str> {
+    match args.get(key) {
+        None => Ok(default),
+        Some(Value::String(v)) => Ok(v.as_str()),
+        Some(raw) => Err(anyhow!(
+            "'{key}' is present but is not a string: {raw}. Refusing rather than quietly              using the default {default:?}, which would act on a value you did not send."
+        )),
+    }
+}
+
 /// Narrow an argument to a smaller integer, refusing a value that does not fit.
 ///
 /// The tools wrote `req_u64(&args, "pid")? as u32`, and `as` WRAPS. A request
@@ -1261,7 +1301,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
             |args| {
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let addr = req_u64(&args, "addr")?;
-                let kind_str = opt_str(&args, "kind", "software").to_string();
+                let kind_str = opt_str_checked(&args, "kind", "software")?.to_string();
 
                 if let Some(r) = with_live(&session_id, |sess| {
                     let kind = match kind_str.as_str() {
@@ -1814,7 +1854,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 let session_id = req_str(&args, "session_id")?.to_string();
                 // A tid above u32::MAX became ThreadId(0) — the RSP wildcard
                 // "whatever thread the stub had selected".
-                let tid = u32::try_from(narrowed_arg("tid", opt_u64(&args, "tid", 1), 32)?)?;
+                let tid = u32::try_from(narrowed_arg("tid", opt_u64_checked(&args, "tid", 1)?, 32)?)?;
 
                 if let Some(r) = with_live(&session_id, |sess| {
                     let step_tid = if tid != 1 { rustre_debug::ThreadId(tid) } else { sess.tid };
@@ -2444,9 +2484,9 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
             |args| {
                 let data_hex = req_str(&args, "data_hex")?.to_string();
                 let pattern_str = req_str(&args, "pattern")?.to_string();
-                let kind = opt_str(&args, "kind", "bytes").to_string();
-                let base_addr = opt_u64(&args, "base_addr", 0x1000);
-                let max_results = opt_u64(&args, "max_results", 0) as usize;
+                let kind = opt_str_checked(&args, "kind", "bytes")?.to_string();
+                let base_addr = opt_u64_checked(&args, "base_addr", 0x1000)?;
+                let max_results = opt_u64_checked(&args, "max_results", 0)? as usize;
                 let clean = data_hex.replace(' ', "");
                 let data: Vec<u8> = (0..clean.len() / 2)
                     .filter_map(|i| u8::from_str_radix(&clean[i*2..i*2+2], 16).ok())
@@ -2507,7 +2547,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 };
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let word_size =
-                    u8::try_from(narrowed_arg("word_size", opt_u64(&args, "word_size", 8), 8)?)?;
+                    u8::try_from(narrowed_arg("word_size", opt_u64_checked(&args, "word_size", 8)?, 8)?)?;
 
                 // Live path: walk the real arena via the session's read_memory.
                 if let Some(r) = with_live(&session_id, |sess| {
@@ -2787,7 +2827,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let addr = req_u64(&args, "addr")?;
                 let size = u8_arg_checked(&args, "size", 8)?;
-                let kind = match opt_str(&args, "kind", "write") {
+                let kind = match opt_str_checked(&args, "kind", "write")? {
                     "read" => WatchpointType::Read,
                     "access" | "readwrite" | "read|write" => WatchpointType::Access,
                     "execute" | "exec" => WatchpointType::Execute,
@@ -3044,7 +3084,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let addr = req_u64(&args, "addr")?;
                 let condition = req_str(&args, "condition")?.to_string();
-                let max_hits = opt_u64(&args, "max_hits", 1000);
+                let max_hits = opt_u64_checked(&args, "max_hits", 1000)?;
                 // READ, not merely declared.
                 //
                 // This parameter has been in the schema — "Wall-clock timeout
@@ -3054,7 +3094,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 // then blocked forever anyway. A promise that cannot fail
                 // loudly is this file's most frequent defect; `download_http`
                 // above records the same shape with HTTP redirects.
-                let timeout_ms = opt_u64(&args, "timeout_ms", 30_000);
+                let timeout_ms = opt_u64_checked(&args, "timeout_ms", 30_000)?;
 
                 if let Some(r) = with_live(&session_id, |sess| {
                     // Plant the breakpoint (idempotent at the backend level).
@@ -3194,7 +3234,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 use rustre_debug::codeview::CodeViewProvider;
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let hex = req_str(&args, "bytes_hex")?.replace(char::is_whitespace, "");
-                let image_base = opt_u64(&args, "image_base", 0);
+                let image_base = opt_u64_checked(&args, "image_base", 0)?;
                 let full = args.get("full_section").and_then(Value::as_bool).unwrap_or(false);
                 let bytes = (0..hex.len()).step_by(2)
                     .map(|i| u8::from_str_radix(hex.get(i..i + 2).unwrap_or("zz"), 16))
@@ -3489,7 +3529,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
 
                 if let Some(r) = with_live(&session_id, |sess| {
                     let at_time = if args.get("at_time").is_some() {
-                        opt_u64(&args, "at_time", 0)
+                        opt_u64_checked(&args, "at_time", 0)?
                     } else {
                         u64::MAX
                     };
@@ -3543,7 +3583,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
 
                 if let Some(r) = with_live(&session_id, |sess| {
                     let at_time = if args.get("at_time").is_some() {
-                        opt_u64(&args, "at_time", 0)
+                        opt_u64_checked(&args, "at_time", 0)?
                     } else {
                         u64::MAX
                     };
@@ -3757,7 +3797,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
             |args| {
                 use rustre_debug::time_travel_debug::TracePosition;
                 let session_id = req_str(&args, "session_id")?.to_string();
-                let target = TracePosition::new(req_u64(&args, "sequence")?, opt_u64(&args, "offset", 0));
+                let target = TracePosition::new(req_u64(&args, "sequence")?, opt_u64_checked(&args, "offset", 0)?);
                 if let Some(r) = with_live(&session_id, |sess| {
                     use rustre_debug::time_travel_debug::TtdBackend as _;
                     let st = sess.ttd.seek(target).map_err(|e| anyhow!("seek: {e}"))?;
@@ -3836,7 +3876,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
             }),
             |args| {
                 let session_id = req_str(&args, "session_id")?.to_string();
-                let n = opt_u64(&args, "n", 16) as usize;
+                let n = opt_u64_checked(&args, "n", 16)? as usize;
                 if let Some(r) = with_live(&session_id, |sess| {
                     use rustre_debug::time_travel_debug::TtdBackend as _;
                     let history: Vec<Value> = sess.ttd.recent_history(n).into_iter()
@@ -4232,7 +4272,7 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                         let pid = args.get("pid").and_then(|v| v.as_u64())
                             .ok_or_else(|| anyhow!("process requires 'pid'"))?;
                         let pid = u32::try_from(narrowed_arg("pid", pid, 32)?)?;
-                        let name = opt_str(&args, "process_name", "unknown").to_owned();
+                        let name = opt_str_checked(&args, "process_name", "unknown")?.to_owned();
                         DebugTarget::Process { pid, process_name: name }
                     }
                     "remote" => {
@@ -5292,6 +5332,49 @@ mod tests {
         assert!(msg.contains("debug.session_list"), "must name the discovery tool: {msg}");
         assert!(msg.contains("debug.launch"), "must name the creation tool: {msg}");
         assert!(msg.contains("no mock fallback"), "must state nothing is faked: {msg}");
+    }
+
+    /// An optional argument that is PRESENT and unreadable must not be defaulted.
+    ///
+    /// Iteration 627 removed this shape from `u64_arg_aliased`, which had two
+    /// call sites. It was still standing in `opt_u64` and `opt_str`, which have
+    /// eleven and four — the accessors the tools actually use.
+    ///
+    /// `tid: "main"` became thread 1 and the tool reported on a thread the
+    /// caller never named. Worse, `match opt_str_checked(&args, "kind", "write")?` gave a
+    /// caller who sent `kind: 5` a WRITE watchpoint, silently, when a read watch
+    /// may be exactly what they were arming — and then reported success.
+    #[test]
+    fn an_optional_argument_that_is_present_and_unreadable_is_refused() {
+        assert_eq!(opt_u64_checked(&json!({}), "tid", 1).unwrap(), 1, "absent means default");
+        assert_eq!(opt_u64_checked(&json!({"tid": 7}), "tid", 1).unwrap(), 7);
+        assert_eq!(opt_u64_checked(&json!({"tid": "0x7"}), "tid", 1).unwrap(), 7);
+        for bad in [json!({"tid": "main"}), json!({"tid": -1}), json!({"tid": null})] {
+            let err = opt_u64_checked(&bad, "tid", 1).expect_err("must not become the default");
+            assert!(format!("{err}").contains("tid"));
+        }
+
+        assert_eq!(opt_str_checked(&json!({}), "kind", "write").unwrap(), "write");
+        assert_eq!(opt_str_checked(&json!({"kind": "read"}), "kind", "write").unwrap(), "read");
+        for bad in [json!({"kind": 5}), json!({"kind": true}), json!({"kind": null})] {
+            let err = opt_str_checked(&bad, "kind", "write")
+                .expect_err("a non-string kind must not silently become the default");
+            assert!(format!("{err}").contains("kind"));
+        }
+
+        // And no tool may keep using the unchecked accessors.
+        let src: String = include_str!("debug.rs")
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("
+");
+        for bad in [format!("opt_u64(&{}", "args"), format!("opt_str(&{}", "args")] {
+            assert!(
+                !src.contains(bad.as_str()),
+                "a tool still reads an optional argument through the unchecked accessor,                  so a value it cannot read becomes the default in silence: {bad}"
+            );
+        }
     }
 
     /// A number too wide for its field must be refused, not wrapped.
