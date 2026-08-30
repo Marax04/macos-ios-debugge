@@ -296,7 +296,25 @@ impl WindowsDebugger {
                     tid.0
                 ))
             })?;
-            let dr7 = regs.get("dr7").unwrap_or(0);
+            // An absent `dr7` is not "nothing was armed". Without this, a set
+            // that carries no `dr7` — the AArch64 readers publish none — made
+            // every slot read as disabled, no slot matched, and this answered
+            // `Ok(false)`: a claim about the hardware drawn from a set that
+            // never described it.
+            //
+            // Four lines above, a set that cannot be READ already raises
+            // "it is not known whether a debug register still holds {addr}".
+            // This is the same situation and gets the same answer.
+            let dr7 = match crate::debug_register_state(&regs) {
+                crate::DebugRegisterState::Unverifiable => {
+                    return Err(DebugError::RegisterError(format!(
+                        "thread {}'s registers carry no DR7, so it is not known whether a                          debug register still holds {addr:#x}",
+                        tid.0
+                    )));
+                }
+                crate::DebugRegisterState::Clean => 0,
+                crate::DebugRegisterState::Armed(v) => v,
+            };
             let mut cleared_here = false;
             for slot in 0u8..4 {
                 let name = match slot {

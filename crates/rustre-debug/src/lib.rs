@@ -15207,6 +15207,64 @@ fn ";
         }
     }
 
+    /// The DISARM path must not read an absent `dr7` as "nothing was armed".
+    ///
+    /// Twin of the re-arm defect closed in iteration 641, in the same three
+    /// backends and with the opposite consequence. `disarm_watchpoint_registers`
+    /// read `regs.get("dr7").unwrap_or(0)`, so on a set that carries no `dr7`
+    /// every slot reads as DISABLED, no slot matches the address, and the
+    /// function answers `Ok(false)` — "no debug register held it".
+    ///
+    /// That is a claim about the hardware made from a set that never described
+    /// the hardware. And the file already knows better four lines above: when
+    /// the registers cannot be READ it raises an error saying, in as many
+    /// words, that "it is not known whether a debug register still holds
+    /// {addr}". A set read successfully but carrying no `dr7` is the same
+    /// situation and must give the same answer.
+    ///
+    /// `Ok(false)` is a real answer that must survive: a thread that genuinely
+    /// has no slot on this address is not an error. What must not survive is
+    /// producing it from ignorance.
+    #[test]
+    fn no_disarm_path_reads_an_absent_dr7_as_nothing_armed() {
+        const BACKENDS: [&str; 3] =
+            ["windows_debugger.rs", "linux_debugger.rs", "macos_debugger.rs"];
+        let sources = super::tests_expanded::production_sources();
+        let mut checked = 0usize;
+        let mut offenders: Vec<String> = Vec::new();
+
+        for (name, src) in &sources {
+            if !BACKENDS.iter().any(|b| name.ends_with(b)) {
+                continue;
+            }
+            let code = code_only(src);
+            let body = item_body(
+                &code,
+                "async fn disarm_watchpoint_registers(&self, addr: Address) -> Result<bool, DebugError> {",
+                &["
+    async fn ", "
+    fn ", "
+    pub fn ", "
+    pub async fn "],
+            );
+            checked += 1;
+            if body.contains("get(\"dr7\").unwrap_or(0)") {
+                offenders.push(format!("{name}: reads an absent dr7 as `nothing armed`"));
+            }
+            assert!(
+                body.contains("debug_register_state"),
+                "{name}: the disarm path must classify the set, not assume it"
+            );
+        }
+
+        assert_eq!(
+            checked,
+            BACKENDS.len(),
+            "the guard must reach all three backends, or it silently checks fewer than it claims"
+        );
+        assert!(offenders.is_empty(), "{offenders:#?}");
+    }
+
     /// The re-arm path must not read an ABSENT `dr7` as a clean one.
     ///
     /// `rearm_watchpoints_on_new_threads` exists in all three desktop backends

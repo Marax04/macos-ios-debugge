@@ -1190,6 +1190,57 @@ moduli fratelli non vedono gli item privati l'uno dell'altro. Risolto con
 
 ### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
 
+
+---
+
+## Iterazione 642 — 2026-08-30
+
+Il giro era stato interrotto dallo spegnimento con tre fronti su quattro verdi;
+la suite MCP, lasciata in background, ha poi risposto **407 / 1** e il giro si
+chiude completo. (La riga «IN ALBERO, NON COMMITTATA» che stava qui è superata:
+tenuta a verbale perché lo stato intermedio è esistito davvero.)
+
+### Difetto: il DISARMO leggeva un `dr7` assente come «nessun registro armato»
+
+Gemello del §641, negli stessi tre backend e con conseguenza **opposta**.
+`disarm_watchpoint_registers` leggeva `regs.get("dr7").unwrap_or(0)`: su un
+insieme privo di `dr7` ogni slot risulta disabilitato, nessuno corrisponde
+all'indirizzo, e la funzione risponde `Ok(false)` — «nessun debug register lo
+teneva». È un'affermazione **sull'hardware** ricavata da un insieme che
+l'hardware non l'ha mai descritto.
+
+Il file lo sapeva già **quattro righe più sopra**: quando i registri non si
+riescono a LEGGERE solleva un errore che dice testualmente «it is not known
+whether a debug register still holds {addr}». L'assenza riceve ora la stessa
+risposta.
+
+`Ok(false)` resta una risposta legittima e il test lo sorveglia: un thread che
+davvero non ha slot su quell'indirizzo non è un errore. A non dover
+sopravvivere era **produrla per ignoranza**.
+
+**Rosso misurato:** `linux_debugger.rs: the disarm path must classify the set,
+not assume it`.
+
+### La guardia mi ha corretto due volte, ed entrambe a ragione
+
+1. Errore di sintassi mio: `let ... else` con or-pattern richiede le parentesi.
+2. Dopo il rifiuto avevo lasciato la **rilettura ridondante**
+   `regs.get("dr7").unwrap_or(0)`, e la guardia ha continuato a segnalare tutti
+   e tre i file. **Non l'ho allentata**: ora il valore viene preso dalla
+   classificazione stessa — che è anche la forma già usata nel §641, così i due
+   percorsi si somigliano invece di divergere.
+
+### Misure (parziali)
+
+| Dove | Esito |
+|---|---|
+| Windows | **2124 / 0** |
+| Linux (WSL2 sul PC dell'utente, `--test-threads=1`) | **2107 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **407 / 1** — l'1 è il cricchetto dei fabbricatori, non mio |
+
+### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
+
 ---
 ---
 
