@@ -271,7 +271,16 @@ impl UnwindFrame {
             index: self.index,
             pc: Address::new(self.regs.pc),
             sp: Address::new(self.regs.sp),
-            fp: Some(Address::new(self.regs.fp)),
+            // `None`, not `Some(0)`. This field is an `Option` so it can say
+            // "not known", and zero is exactly that here: either `x29` was
+            // never read into the register bag, or the chain has reached its
+            // conventional null terminator. Either way there is no frame
+            // pointer to report, and `validated_frame_record_step` already
+            // refuses zero as "frame pointer is null" — one half of this file
+            // treating it as impossible while the other handed it out as a
+            // value. The doc above says this crate never invents names; it was
+            // inventing a frame pointer.
+            fp: if self.regs.fp == 0 { None } else { Some(Address::new(self.regs.fp)) },
             function_name: None,
             module: None,
             offset: None,
@@ -1628,6 +1637,53 @@ fn frame_record_step(
 
 #[cfg(test)]
 mod tests {
+
+
+    /// A frame whose pointer is unknown must publish `None`, not `Some(0)`.
+    ///
+    /// `StackFrame::fp` is an `Option<Address>`, and the option exists to say
+    /// "not known". `to_stack_frame` filled it with `Some(Address::new(0))`
+    /// unconditionally, so every frame whose `x29` was never read — and every
+    /// frame at the genuine end of the chain, where the frame pointer is null
+    /// by convention — was published as a frame whose frame pointer IS address
+    /// zero.
+    ///
+    /// Address zero is not a frame pointer. `validated_frame_record_step`
+    /// says so in as many words two hundred lines below, refusing it with
+    /// "frame pointer is null". One half of this file treats zero as
+    /// impossible while the other half hands it to the caller as a value.
+    ///
+    /// The doc two lines above the offending line reads "this crate never
+    /// invents names". It was inventing a frame pointer.
+    #[test]
+    fn a_frame_with_no_frame_pointer_publishes_none() {
+        let with_fp = UnwindFrame {
+            index: 1,
+            regs: Arm64UnwindRegs { pc: 0x1000, sp: 0x7000, fp: 0x7100, lr: None },
+            provenance: FrameProvenance::FramePointerChain,
+        };
+        assert_eq!(
+            with_fp.to_stack_frame().fp.map(|a| a.as_u64()),
+            Some(0x7100),
+            "a real frame pointer must survive unchanged"
+        );
+
+        let without = UnwindFrame {
+            index: 2,
+            regs: Arm64UnwindRegs { pc: 0x1000, sp: 0x7000, fp: 0, lr: None },
+            provenance: FrameProvenance::CompactUnwind,
+        };
+        assert_eq!(
+            without.to_stack_frame().fp,
+            None,
+            "a frame pointer of zero is not a frame pointer: the Option exists to say              `not known`, and this file already refuses zero as implausible elsewhere"
+        );
+
+        // pc and sp are NOT optional and are reported as-is; this fix must not
+        // spread to them.
+        assert_eq!(without.to_stack_frame().pc.as_u64(), 0x1000);
+        assert_eq!(without.to_stack_frame().sp.as_u64(), 0x7000);
+    }
     use super::*;
 
     // -- helpers -----------------------------------------------------------

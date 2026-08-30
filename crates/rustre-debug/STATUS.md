@@ -929,6 +929,80 @@ che lo compila lo verifica.
 
 ### Nessun giro iOS: limite di spesa ancora attivo (§635)
 
+
+---
+
+## Iterazione 638 — 2026-08-30
+
+### Difetto: un frame senza frame pointer veniva pubblicato come `Some(0)`
+
+`UnwindFrame::to_stack_frame` riempiva **incondizionatamente**
+`fp: Some(Address::new(self.regs.fp))`. Ma `crate::StackFrame::fp` è un
+`Option<Address>`, e quell'`Option` esiste **apposta** per dire «non lo so».
+
+Quindi ogni frame il cui `x29` non era mai stato letto — e ogni frame alla fine
+genuina della catena, dove per convenzione il frame pointer è nullo — veniva
+consegnato al chiamante come un frame **il cui frame pointer È l'indirizzo zero**.
+L'indirizzo zero non è un frame pointer.
+
+**La prova era nello stesso file, milletrecento righe più sotto**:
+`validated_frame_record_step` rifiuta `regs.fp == 0` con
+`ImplausibleFrame("frame pointer is null")`. Una metà del file tratta lo zero
+come **impossibile**, l'altra metà lo consegnava come **valore**. Contraddizione
+interna, come al 616 e al 637: non serve alcuna verità esterna per dimostrarla.
+
+E la doc **due righe sopra** la riga incriminata dice testualmente
+*«Symbolication is left to a `FrameSymbolResolver`; this crate never invents
+names.»* Non inventava nomi, e inventava un frame pointer.
+
+**Rosso misurato:** `left: Some(Address(0))  right: None`.
+
+Il test sorveglia anche il contrario, perché la cura non deve dilagare: un frame
+pointer reale (`0x7100`) deve sopravvivere intatto, e `pc`/`sp` — che **non**
+sono opzionali — restano riportati come sono.
+
+### Tre candidati esaminati e trovati NON difetti
+
+Continuando il vaglio delle 49 occorrenze «assenza spacciata per valore» in
+`src/ios/` (aperto al 637, questa è la seconda chiusa):
+
+- **`lldb_ext.rs:105`** — `u8::from_str_radix(rest, 16).unwrap_or(0)`:
+  **irraggiungibile**, protetto a monte da
+  `rest.len() <= 2 && rest.bytes().all(|b| b.is_ascii_hexdigit())`.
+- **`rsp.rs:1325`** — `self.incoming.pop_front().unwrap_or(0)`:
+  **irraggiungibile**, `n = cap.min(self.incoming.len())` limita il ciclo; ed è
+  per giunta codice del mock, non di produzione.
+- **`unwind.rs:222`** (l'`fp` dentro `From<&RegisterSet>`) — qui `unwrap_or(0)`
+  **è onesto**: `validated_frame_record_step` risponde con un rifiuto esplicito
+  e nominato, non con un falso «fine catena». Il difetto non era lì: era a
+  valle, dove lo zero veniva **pubblicato**.
+
+Questa distinzione è il punto del giro: uno stesso `unwrap_or(0)` è innocuo
+finché resta interno a un calcolo che rifiuta lo zero, e diventa un difetto nel
+momento in cui quel valore **esce verso il chiamante** dentro un `Option` che
+avrebbe potuto dire la verità.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2121 / 0** |
+| Linux (WSL2 sul PC dell'utente, `--test-threads=1`) | **2104 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **406 / 1** — l'1 è il cricchetto dei fabbricatori, non mio |
+
+**Il cricchetto si è mosso: 172 → 175 su 2390 tool.** Non è mio e non è il mio
+fix: una modifica in `rustre-debug` non può aggiungere tool all'MCP. Verificato
+come nei giri precedenti — **zero** dei 175 è un tool `debug.*` (l'unica
+corrispondenza in output è il nome file `debug.rs` nel percorso d'errore). La
+salita è lavoro di altri attori sul crate MCP. Resta la regola: **non si chiude
+alzando il tetto**.
+
+### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
+
+Resta in vigore. Ogni agente di fix del workflow muore su «You've hit your
+monthly spend limit»; solo l'utente può rimuoverlo da claude.ai/settings/usage.
+
 ---
 ---
 
