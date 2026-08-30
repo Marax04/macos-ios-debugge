@@ -6608,9 +6608,82 @@ mod tests_expanded {
         for b in &backends {
             assert!(
                 COVERED.contains(&b.as_str()),
-                "`{b}` implements Debugger but no source guard lists it. Every guard that                  encodes a cross-backend invariant must name it, or it will silently miss                  the next family fix — which is precisely what happened in iters 242-246                  and again in 263."
+                "`{b}` implements Debugger but no source guard lists it at all, so a family fix                  can pass it by unnoticed — which is what happened in iters 242-246 and again                  in 263. NOTE the narrower claim: this checks that SOME guard names each                  backend, not that every cross-backend guard does. Measured at iteration 633,                  one site out of eighty-five names the iOS backend; the gap is pinned by                  `the_ios_gap_in_the_cross_backend_guards_is_measured_not_assumed`."
             );
         }
+    }
+
+    /// The cross-backend guards cover THREE backends, and there are four.
+    ///
+    /// `COVERED` asserts that every backend implementing `Debugger` is named by
+    /// some source guard, and its message promises more than that: "Every guard
+    /// that encodes a cross-backend invariant must name it, or it will silently
+    /// miss the next family fix." Measured, that promise is kept by **one** site
+    /// out of eighty-five. Eighty-four iterate over
+    /// windows/linux/macos and say nothing about iOS.
+    ///
+    /// Most of those omissions are RIGHT. iOS is a remote RSP backend: it has no
+    /// `int3` byte to plant, no `DR7` to program, no `ptrace`, no `CONTEXT`. A
+    /// guard about x86 debug registers has no business naming it, and adding it
+    /// to all eighty would be inventing coverage rather than gaining it.
+    ///
+    /// But "mostly right" is not "measured", and the gap has already cost
+    /// something concrete. Iteration 618 recorded, and this file repeated for
+    /// four rounds, that iOS silently ignores breakpoint conditions. It does
+    /// not — the trait defaults refuse with a reason. The claim survived because
+    /// the three guards on those APIs iterate over the desktop three, so nothing
+    /// in the repo could contradict it. An untested backend is not a backend
+    /// that works; it is one nobody can be wrong about out loud.
+    ///
+    /// So the number is pinned rather than the omissions closed. A new
+    /// cross-backend invariant that skips iOS makes this fail, and whoever adds
+    /// it has to decide consciously — which is all that was missing.
+    #[test]
+    fn the_ios_gap_in_the_cross_backend_guards_is_measured_not_assumed() {
+        let src = include_str!("lib.rs");
+
+        // The promise as written is false for eighty sites. It has been
+        // narrowed to what the guard actually checks.
+        // The needle is BUILT, never written whole: `include_str!("lib.rs")`
+        // pulls in this test too, so spelled out it would match itself and the
+        // guard could never go green. Third time in six iterations — 628 and
+        // 629 were the others — that a source guard has caught its own text.
+        let promise = format!("{}{}", "Every guard that", " encodes a cross-backend invariant");
+        assert!(
+            !src.split_whitespace().collect::<Vec<_>>().join(" ")
+                .contains(promise.as_str()),
+            "the COVERED message still promises that every cross-backend guard names every              backend; measured, one site out of eighty-five does"
+        );
+
+        // Count the sites that iterate over two or more backends.
+        let mut total = 0usize;
+        let mut with_ios = 0usize;
+        let mut i = 0;
+        while let Some(open) = src[i..].find('[') {
+            let start = i + open;
+            let Some(close) = src[start..].find(']') else { break };
+            let block = &src[start..start + close];
+            i = start + 1;
+            if block.matches("include_str!(\"").count() >= 2 {
+                total += 1;
+                if block.contains("ios/apple_debugger.rs") {
+                    with_ios += 1;
+                }
+            }
+        }
+        assert!(total >= 60, "the scan found only {total} cross-backend sites; it is not reading them");
+        assert!(
+            // 84, not the 80 an ad-hoc scan reported while this was being
+            // written. That one matched tuple arrays with a regex; this one
+            // counts any bracketed block holding two or more `include_str!`,
+            // which is cruder and catches four more. The number that gets
+            // pinned is the one produced by the instrument that will keep
+            // running — the other was scaffolding, and the two disagreeing is
+            // exactly why the pinned figure has to come from here.
+            total - with_ios <= 84,
+            "{} cross-backend guard sites now omit iOS, up from 80. A new cross-backend              invariant was added without deciding whether it applies to the RSP backend —              decide, then move this number or name the site",
+            total - with_ios
+        );
     }
 
     /// Walk `src/` and return `(file_name, production_source)` for every `.rs`

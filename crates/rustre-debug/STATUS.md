@@ -605,6 +605,71 @@ così i due strati non possono divergere — e i quattro siti pubblicano
 - Un breakpoint all'**ingresso** di una funzione frameless faceva scalare `sp` di
   0x20 per locali **mai allocate**.
 
+
+---
+
+## Iterazione 633 — 2026-08-30
+
+### Difetto: le guardie cross-backend coprono TRE backend, e ce ne sono quattro
+
+Il 632 aveva mostrato che la mia affermazione falsa su iOS era sopravvissuta
+perché **nessun test la poteva contraddire**. Questo round misura quanto è esteso
+quel buco, invece di aspettare la prossima affermazione non falsificabile.
+
+| Misura | Valore |
+|---|---|
+| Siti che iterano su ≥2 backend | **85** |
+| Che nominano iOS | **1** |
+| Che lo omettono | **84** |
+
+E `COVERED` — la lista che dichiara quali backend sono coperti — **nomina**
+`apple_debugger.rs`, con un messaggio che promette: «Every guard that encodes a
+cross-backend invariant must name it». Misurato, quella promessa è mantenuta da
+**un sito su 85**. Ancora una volta una capacità **dichiarata** e non **imposta**.
+
+**La maggior parte di quelle omissioni è giusta.** iOS è un backend RSP remoto:
+non ha un byte `int3` da piantare, non ha `DR7` da programmare, non ha `ptrace`,
+non ha `CONTEXT`. Una guardia sui registri di debug x86 non ha motivo di
+nominarlo, e aggiungerlo a tutte e 84 sarebbe **inventare copertura**, non
+ottenerla.
+
+Ma «per lo più giusto» non è «misurato», e il buco è già costato: il 618 ha
+registrato, e questo file ha ripetuto per quattro giri, che iOS ignora in
+silenzio le condizioni sui breakpoint. Non è vero — i default del trait
+rifiutano con una ragione. L'affermazione è sopravvissuta perché le tre guardie
+su quelle API iterano sui tre desktop. **Un backend non testato non è un backend
+che funziona: è un backend su cui nessuno può essere smentito.**
+
+Quindi il numero è **fissato**, non le omissioni chiuse. Un nuovo invariante
+cross-backend che salti iOS fa fallire il guard, e chi lo aggiunge deve
+decidere consapevolmente — che è tutto ciò che mancava. La frase falsa in
+`COVERED` è stata ristretta a ciò che quel guard davvero controlla.
+
+### Due strumenti, due numeri: 80 contro 84
+
+Il conteggio ad hoc scritto per esplorare diceva **80**; la scansione Rust che
+resta nel test dice **84**. Il primo cercava array di tuple con una regex, il
+secondo conta qualunque blocco fra parentesi quadre con due o più
+`include_str!` — più grezzo, e ne prende quattro in più. **Il numero fissato è
+quello dello strumento che continuerà a girare**: l'altro era impalcatura. Che i
+due divergano è esattamente il motivo per cui la cifra deve venire da lì.
+
+### Terza volta: un guard che pesca il proprio letterale
+
+L'asserzione sulla frase falsa cercava quella frase in `include_str!("lib.rs")`
+— che include anche il test, quindi trovava sé stessa e non poteva mai diventare
+verde. Già successo al 628 e al 629; l'ago va **costruito** a runtime, mai
+scritto per intero. Terza volta in sei iterazioni.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2117 / 0** |
+| Linux (WSL, `--test-threads=1`) | **2100 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **405 / 1** — l'1 è il cricchetto dei fabbricatori |
+
 ---
 ---
 
