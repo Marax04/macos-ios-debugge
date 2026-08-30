@@ -1003,6 +1003,73 @@ alzando il tetto**.
 Resta in vigore. Ogni agente di fix del workflow muore su «You've hit your
 monthly spend limit»; solo l'utente può rimuoverlo da claude.ai/settings/usage.
 
+
+---
+
+## Iterazione 639 — 2026-08-30
+
+### Difetto: `debug.backtrace` non pubblicava affatto il frame pointer
+
+Il backend calcola `StackFrame::fp`, e **tutti e due** i renderer di
+`debug.backtrace` lo scartavano. Un chiamante leggeva `addr` e `sp` ma il frame
+pointer non gli arrivava mai — sulla risposta che si guarda per prima quando
+qualcosa è andato storto.
+
+L'omissione si nascondeva dietro le fixture, che portano un **misto voluto** di
+`Some` e `None`: il dato era costruito correttamente e poi buttato via.
+
+**Rosso misurato:**
+`{"frame":0,"addr":5368713216,"sp":5637040384,"name":"main","module":"target.exe","offset":0}`
+— nessuna chiave `fp`, mentre il frame 0 della fixture ne ha uno noto.
+
+Il campo è **nullable**, e non è un dettaglio: `null` qui è una risposta vera.
+L'unwinder lo produce per un frame il cui `x29` non è mai stato letto e per il
+terminatore nullo che chiude una catena (§638). Serializzarlo come 0
+ricollasserebbe esattamente la distinzione che il backend tiene.
+
+### È questo che rende visibile il §638
+
+Da solo, il fix del 638 restava confinato dentro il crate: correggeva la
+coerenza interna ma **non cambiava nulla di ciò che l'utente vede**, perché il
+campo non usciva. Vale la pena dirlo così: una correzione che nessuno può
+osservare non è ancora un guadagno per chi usa lo strumento.
+
+### Due tentativi miei mi hanno corretto prima di arrivarci
+
+1. **Ancoraggio sbagliato**: ho inserito il test sopra `async fn`, che però è
+   preceduta dal proprio `#[tokio::test]` — la mia funzione si è presa due
+   attributi e quella vicina è rimasta senza. Il compilatore l'ha fermato.
+2. **Rosso VACUO**: il primo test falliva su `missing required field
+   'session_id'`, cioè **prima** dell'asserzione che mi interessava. Un rosso
+   che fallisce per il motivo sbagliato non prova niente.
+
+Dal secondo è uscito un rilievo per un giro futuro: **`debug.session_open`
+restituisce `session_id` come NUMERO, `debug.backtrace` lo pretende come
+STRINGA** (`req_str`). Chi incatena i due tool nel modo ovvio riceve «missing
+required field», messaggio fuorviante: il campo c'era, aveva solo il tipo che
+l'altro tool produce.
+
+### Il guard di prossimità mi ha fermato per la SECONDA volta
+
+`every_source_claim_names_a_call_this_path_really_makes` (§636) è scattato di
+nuovo: il mio commento di nove righe dentro l'oggetto JSON aveva spinto la
+dichiarazione `"source"` oltre le 60 righe dalla chiamata che nomina. Come al
+636 **non l'ho allentato**: la spiegazione lunga sta nel doc comment del test,
+nel corpo bastano due righe.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2121 / 0** |
+| Linux (WSL2 sul PC dell'utente, `--test-threads=1`) | **2104 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **407 / 1** — passati 406 → 407 (il test nuovo); l'1 è il cricchetto |
+
+Il cricchetto resta a **175 su soffitto 168**, non mio, zero tool `debug.*`.
+
+### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
+
 ---
 ---
 

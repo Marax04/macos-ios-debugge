@@ -1637,6 +1637,9 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                             "name": name,
                             "module": f.module,
                             "offset": offset,
+                            // Nullable on purpose: `None` is a real answer,
+                            // and 0 would re-collapse it (see the test).
+                            "fp": f.fp.map(|a| a.as_u64()),
                             "source_file": source_file,
                             "source_line": source_line
                         })
@@ -1693,7 +1696,12 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     "sp": f.sp.as_u64(),
                     "name": f.function_name,
                     "module": f.module,
-                    "offset": f.offset
+                    "offset": f.offset,
+                    // Same field as the live renderer above, and the same
+                    // reason. The sample frames deliberately carry a MIX of
+                    // `Some` and `None`, which made the omission invisible:
+                    // the data was constructed correctly and then discarded.
+                    "fp": f.fp.map(|a| a.as_u64())
                 })).collect();
                 Ok(json!({
                     "session_id": session_id,
@@ -7780,6 +7788,48 @@ mod tests {
     }
 
     // ── debug.session_* smoke tests ───────────────────────────────────────────
+
+    /// `debug.backtrace` must publish the frame pointer, including its absence.
+    ///
+    /// The backend computes `StackFrame::fp` and BOTH renderers in this tool
+    /// dropped it, so a caller reading a backtrace could see `pc` and `sp` but
+    /// never the frame pointer — on the answer people read first when something
+    /// has gone wrong. The omission hid behind fixtures that carry a deliberate
+    /// mix of `Some` and `None`: the data was constructed correctly and then
+    /// discarded.
+    ///
+    /// `null` is a real answer here, not a placeholder. The iOS unwinder
+    /// publishes `None` for a frame whose `x29` was never read and for the
+    /// conventional null terminator that ends a chain (iteration 638), so
+    /// rendering it as 0 would re-collapse the distinction the backend keeps.
+    #[tokio::test]
+    async fn backtrace_publishes_the_frame_pointer_including_its_absence() {
+        let tools = handlers();
+        // A session id that names no live session: this exercises the SAMPLE
+        // renderer, which is the second of the two that dropped `fp`. Note
+        // that `debug.backtrace` takes `session_id` as a STRING (`req_str`)
+        // while `debug.session_open` hands one back as a number — an
+        // inconsistency this test deliberately steps around rather than
+        // depending on.
+        let bt = call_tool(&tools, "debug.backtrace", json!({ "session_id": "no-such-session" })).await;
+        let frames = bt["frames"].as_array().expect("frames array").clone();
+        assert!(frames.len() >= 3, "the sample stack has three frames: {bt}");
+
+        for (i, f) in frames.iter().enumerate() {
+            assert!(
+                f.get("fp").is_some(),
+                "frame {i} must carry an `fp` key even when the value is null: {f}"
+            );
+        }
+        assert_eq!(
+            frames[0]["fp"], json!(0x0000_0001_4FFE_6940_u64),
+            "frame 0 has a known frame pointer and it must be reported: {}", frames[0]
+        );
+        assert_eq!(
+            frames[1]["fp"], json!(null),
+            "frame 1 has NO frame pointer, and that is an answer, not a zero: {}", frames[1]
+        );
+    }
 
     #[tokio::test]
     async fn session_open_and_close() {
