@@ -661,6 +661,30 @@ pub(crate) fn attach_reply_error(reply: &str, pid: ProcessId) -> DebugError {
     }
 }
 
+/// Narrow the pid `qProcessInfo` reports to the 32-bit id the rest of the
+/// crate uses — or refuse.
+///
+/// NOT `unwrap_or(0)`. Zero is this backend's SENTINEL for "no process":
+/// `detach` and `kill` both store it (`self.pid.store(0, Ordering::SeqCst)`),
+/// and `target_pid` gates only on the `attached` flag. So a pid narrowed to
+/// zero while the attach SUCCEEDED was handed back as `Some(ProcessId(0))` —
+/// attached, to the kernel. Two meanings on one constant, and the wrong one
+/// wins precisely when the stub says something unexpected.
+///
+/// `ProcessInfo::pid` is a `u64` because the reply field is parsed as hex of
+/// unbounded width; a pid this crate cannot represent is a pid it cannot
+/// address, so the attach fails rather than proceeding against an invented one.
+///
+/// Zero itself stays a legal INPUT: a stub really reporting pid 0 is a
+/// different claim from a pid that could not be narrowed.
+fn narrow_pid(reported: u64) -> Result<ProcessId, DebugError> {
+    u32::try_from(reported).map(ProcessId).map_err(|_| {
+        DebugError::Os(format!(
+            "qProcessInfo reported pid {reported}, which does not fit a 32-bit process id"
+        ))
+    })
+}
+
 pub(crate) fn rsp_err(context: &str, e: &RspError) -> DebugError {
     match e {
         // EACCES from the stub is a permission problem (SIP, missing
@@ -682,7 +706,7 @@ impl Session {
         let regs = Self::discover_registers(&mut client)?;
         let info = Self::process_info(&mut client)?;
         let arch = TargetArch::from_cpu(info.cputype, info.cpusubtype);
-        let pid = ProcessId(u32::try_from(info.pid).unwrap_or(0));
+        let pid = narrow_pid(info.pid)?;
 
         Ok(Self { client, regs, pid, current_tid: ThreadId(0), arch })
     }
@@ -2922,7 +2946,13 @@ impl Debugger for AppleDebugger {
                 return Err(e);
             }
         };
-        session.pid = ProcessId(u32::try_from(info.pid).unwrap_or(0));
+        session.pid = match narrow_pid(info.pid) {
+            Ok(pid) => pid,
+            Err(e) => {
+                session.abandon_inferior();
+                return Err(e);
+            }
+        };
         session.arch = TargetArch::from_cpu(info.cputype, info.cpusubtype);
 
         let stop = match session.text(&commands::halt_reason(), "?") {
@@ -4070,6 +4100,50 @@ pub fn image_load_address(img: &serde_json::Value) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
+
+
+    /// A pid that does not fit 32 bits must FAIL the attach, not become zero.
+    ///
+    /// Zero is not a spare value in this backend: `detach` and `kill` both
+    /// store it to mean "no process" (`self.pid.store(0, Ordering::SeqCst)`),
+    /// and `target_pid` gates only on the `attached` flag. So the old
+    /// `unwrap_or(0)` produced, on a SUCCESSFUL attach, exactly the pid that
+    /// means "not attached": `target_pid` would have answered
+    /// `Some(ProcessId(0))`, claiming the caller was attached to the kernel.
+    /// Two meanings on one constant, and the wrong one wins precisely when the
+    /// stub says something unexpected.
+    ///
+    /// `ProcessInfo::pid` is a `u64` because the reply field is parsed as hex
+    /// of unbounded width. A pid this crate cannot represent is a pid it cannot
+    /// address, so the attach fails rather than proceeding against an invented
+    /// one.
+    ///
+    /// Two call sites shared the defect — `establish` and the re-attach after
+    /// `launch` — and both go through `narrow_pid` now, so the cure cannot land
+    /// on one and leave the other green.
+    #[test]
+    fn a_pid_too_wide_for_32_bits_is_refused_not_zeroed() {
+        assert_eq!(narrow_pid(1234).unwrap(), ProcessId(1234), "an ordinary pid passes through");
+        assert_eq!(
+            narrow_pid(u64::from(u32::MAX)).unwrap(),
+            ProcessId(u32::MAX),
+            "the widest representable pid is still representable"
+        );
+
+        let err = narrow_pid(u64::from(u32::MAX) + 1).expect_err(
+            "a pid beyond 32 bits must be refused: zero already means `no process` here",
+        );
+        let text = err.to_string();
+        assert!(
+            text.contains("4294967296") && text.contains("32-bit"),
+            "the refusal must name the pid it could not represent, got: {text}"
+        );
+
+        // The sentinel is a legal INPUT and must not be confused with the
+        // refusal: a stub really reporting pid 0 is a different claim from a
+        // pid we could not narrow.
+        assert_eq!(narrow_pid(0).unwrap(), ProcessId(0), "zero is passed through, not refused");
+    }
     use super::*;
 
     /// `step_out` must compare the PC against a DE-PAC-ated return address.

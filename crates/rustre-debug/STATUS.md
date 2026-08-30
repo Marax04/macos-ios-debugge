@@ -1070,6 +1070,63 @@ Il cricchetto resta a **175 su soffitto 168**, non mio, zero tool `debug.*`.
 
 ### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
 
+
+---
+
+## Iterazione 640 — 2026-08-30
+
+### Difetto: un PID non rappresentabile diventava ZERO — che qui significa già «nessun processo»
+
+`establish` e il ri-attacco dopo `launch` narrowavano il pid con
+`u32::try_from(info.pid).unwrap_or(0)`. Ma **lo zero non è un valore libero in
+questo backend**: `detach` e `kill` lo scrivono entrambi
+(`self.pid.store(0, Ordering::SeqCst)`) per dire «nessun processo», e
+`target_pid()` è gatato **solo** sul flag `attached`.
+
+Conseguenza: su un attacco **riuscito**, un pid che non entra in 32 bit veniva
+restituito al chiamante come `Some(ProcessId(0))` — attaccato, al kernel. Due
+significati sulla stessa costante, e vince quello sbagliato proprio quando lo
+stub dice qualcosa di inatteso.
+
+`ProcessInfo::pid` è un `u64` perché il campo della reply è letto come esadecimale
+di larghezza non limitata. Un pid che il crate non sa rappresentare è un pid che
+non sa indirizzare: ora l'attacco **fallisce** invece di procedere su uno inventato.
+
+### Il rosso, misurato in DUE passi per non barare
+
+Un test che chiama una funzione inesistente non è un rosso, è un errore di
+compilazione. Quindi ho prima estratto `narrow_pid` **conservando il
+comportamento vecchio**, e il test ha mostrato il valore realmente prodotto:
+
+```
+a pid beyond 32 bits must be refused: zero already means `no process` here: ProcessId(0)
+```
+
+Poi l'ho fatta rifiutare. Il verde arriva dopo aver visto lo sbaglio, non al
+posto di averlo visto.
+
+### Due punti, non uno
+
+`establish` e il ri-attacco condividevano il difetto e ora passano **entrambi**
+da `narrow_pid`: una correzione su uno solo sarebbe rimasta verde mentendo
+sull'altro (cfr. [[feedback_contare_i_punti]]).
+
+Il test sorveglia anche il verso opposto: un pid 0 **realmente riportato** dallo
+stub deve passare, perché è un'affermazione diversa dal fallimento della
+conversione. Il sentinella è un input legittimo; a essere illegittimo era
+fabbricarlo.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2122 / 0** |
+| Linux (WSL2 sul PC dell'utente, `--test-threads=1`) | **2105 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **407 / 1** — l'1 è il cricchetto dei fabbricatori |
+
+### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
+
 ---
 ---
 
