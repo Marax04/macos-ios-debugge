@@ -2759,6 +2759,22 @@ pub trait Debugger: Send + Sync {
     /// Unwind the call stack for `tid`.
     async fn backtrace(&self, tid: ThreadId) -> Result<Vec<StackFrame>, DebugError>;
 
+    /// How many frames THIS backend's `backtrace` will walk before it stops.
+    ///
+    /// A cap is only useful to a caller if the caller can compare against it,
+    /// and the caps differ: the three desktop backends walk
+    /// [`BACKTRACE_FRAME_CAP`], while the iOS unwinder defaults to 128.
+    /// Iteration 635 published the desktop number and let the layer above
+    /// compare every backend against it, which reported a genuine
+    /// thirty-two-frame iOS stack as truncated — a false alarm about the one
+    /// thing this is for.
+    ///
+    /// Defaulted rather than required, so a backend that walks the common cap
+    /// says nothing and a backend that does not must say so.
+    fn backtrace_frame_cap(&self) -> usize {
+        BACKTRACE_FRAME_CAP
+    }
+
     // ── Breakpoint conditions ────────────────────────────────────────────────
 
     /// Attach a condition to the breakpoint at `addr`, or clear it with `None`.
@@ -15118,6 +15134,40 @@ fn ";
     /// That is the same shape as iteration 315 (a terminator that matched
     /// nothing, sliced to end-of-file) and of iteration 354's vacuous guard,
     /// and it is worse here because it degrades FIVE guards from one place.
+    /// The cap belongs to the BACKEND, not to one global constant.
+    ///
+    /// Iteration 635 published `BACKTRACE_FRAME_CAP` and had the MCP report
+    /// `truncated: frames.len() >= BACKTRACE_FRAME_CAP`. That is right for the
+    /// three desktop backends, which walk 32 — and wrong for iOS, whose
+    /// unwinder defaults to `max_depth: 128`. On an iOS session a genuine
+    /// thirty-two-frame stack was therefore reported as TRUNCATED: a false
+    /// alarm about the very thing the field exists to report honestly.
+    ///
+    /// Mine, from the round before, and the same family as iteration 615: one
+    /// backend's constant taken for every backend's. The cure is the same too —
+    /// ask the thing that knows. `Debugger::backtrace_frame_cap` defaults to
+    /// the desktop value and iOS overrides it with the depth its unwinder
+    /// actually walks.
+    #[test]
+    fn the_backtrace_cap_is_asked_of_the_backend_not_assumed() {
+        let mcp = include_str!("../../rustre-mcp-tools/src/tools/debug.rs");
+        assert!(
+            !mcp.contains("frames.len() >= rustre_debug::BACKTRACE_FRAME_CAP"),
+            "the MCP compares every backend's frame count against the DESKTOP cap, so an              iOS stack of 32 frames is reported truncated when its real limit is 128"
+        );
+        assert!(
+            mcp.contains("backtrace_frame_cap()"),
+            "the MCP must ask the backend for its own cap"
+        );
+
+        // iOS must publish the depth it really walks, not inherit 32.
+        let ios = code_only(include_str!("ios/apple_debugger.rs"));
+        assert!(
+            ios.contains("fn backtrace_frame_cap"),
+            "the iOS backend walks its unwinder's max_depth and does not publish it, so              nothing above can tell its truncation from its completeness"
+        );
+    }
+
     /// A backtrace cut off at the cap must SAY it was cut off.
     ///
     /// All three desktop backends walk `for _ in 0..32` and return a plain

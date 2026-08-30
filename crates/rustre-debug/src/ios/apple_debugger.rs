@@ -3958,6 +3958,16 @@ impl Debugger for AppleDebugger {
 
     // -- stack --------------------------------------------------------------
 
+    /// The depth `AppleUnwinder` actually walks — 128, not the desktop 32.
+    ///
+    /// Published so the layer above can tell this backend's truncation from its
+    /// completeness. Without it a thirty-two-frame stack here was reported as
+    /// cut off, because the caller had only the desktop constant to compare
+    /// against.
+    fn backtrace_frame_cap(&self) -> usize {
+        crate::ios::unwind::AppleUnwinder::new().max_depth()
+    }
+
     async fn backtrace(&self, tid: ThreadId) -> Result<Vec<StackFrame>, DebugError> {
         self.require_arm64("backtrace")?;
         let regs = self.get_registers(tid).await?;

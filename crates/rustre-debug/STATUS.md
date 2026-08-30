@@ -809,6 +809,64 @@ va **letta** prima di usarla, non ricostruita a memoria.
 | Darwin ×2 | **0 errori** |
 | MCP | **406 / 1** — l'1 è il cricchetto dei fabbricatori |
 
+
+---
+
+## Iterazione 636 — 2026-08-30
+
+### Difetto INTRODOTTO DA ME al 635, trovato e chiuso
+
+Il 635 ha pubblicato `BACKTRACE_FRAME_CAP` e ha fatto riportare all'MCP
+`truncated: frames.len() >= BACKTRACE_FRAME_CAP`. È giusto per i tre backend
+desktop, che camminano **32** — ed è **sbagliato per iOS**, il cui unwinder ha
+`max_depth: 128`. Su una sessione iOS uno stack genuino di trentadue frame veniva
+quindi dichiarato **troncato**: un falso allarme proprio sulla cosa che quel
+campo esiste per riportare onestamente.
+
+Mio, del round precedente, e della stessa famiglia del **615**: la costante di un
+backend presa per quella di tutti. E la cura è la stessa — **chiedere a chi lo
+sa**. `Debugger::backtrace_frame_cap()` ha un default (il valore desktop) e iOS
+lo sovrascrive con la profondità che il suo unwinder cammina davvero, ora
+pubblicata da `AppleUnwinder::max_depth()`. L'MCP chiede al backend invece di
+assumere.
+
+Questo chiude anche la metà iOS che il 635 aveva **dichiarato aperta**: il
+difetto del backtrace troncato-e-taciuto non esiste più su nessuno dei quattro
+backend.
+
+**Rosso misurato:** `the MCP compares every backend's frame count against the
+DESKTOP cap, so an iOS stack of 32 frames is reported truncated when its real
+limit is 128`.
+
+### Un guard altrui mi ha fermato, e aveva ragione
+
+`every_source_claim_names_a_call_this_path_really_makes` verifica che una
+dichiarazione `"source"` nella risposta nomini una chiamata fatta **entro 60
+righe**. Il mio commento dentro l'oggetto di risposta aveva allontanato le due
+cose oltre quella finestra.
+
+Non l'ho allentato: la spiegazione che avevo messo lì **duplicava** quella già
+scritta nella doc di `backtrace_frame_cap`, dove è il posto giusto per leggerla.
+Tolta da dove ripeteva, il guard è tornato verde da solo. Un guard sulla
+prossimità è una misura grezza, ma qui ha indicato una prosa fuori posto — che è
+esattamente il tipo di cosa per cui vale la pena averlo.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2119 / 0** |
+| Linux (WSL, `--test-threads=1`) | **2102 / 0** |
+| Darwin ×2 | **0 errori** — l'aarch64 compila l'override iOS |
+| MCP | **406 / 1** — l'1 è il cricchetto dei fabbricatori |
+
+### Nessun giro iOS lanciato
+
+Il limite di spesa mensile è ancora attivo (§635): lanciare `/workflows` produce
+solo agenti che muoiono. Ripartiranno quando l'utente lo rimuove. Il lato
+positivo, per questa iterazione: `src/ios/` non era conteso da nessuno, e questo
+ha reso sicuro toccarlo — cosa che dal giro 11 in poi avevo evitato.
+
 ---
 ---
 

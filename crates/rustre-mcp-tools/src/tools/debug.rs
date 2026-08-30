@@ -1595,6 +1595,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     use rustre_debug::codeview::SymbolProvider;
                     let guard = sess.lock().map_err(|_| anyhow!("session poisoned"))?;
                     let frames = block_on(guard.dbg.backtrace(guard.tid)).map_err(|e| anyhow!("{e}"))?;
+                    let cap = guard.dbg.backtrace_frame_cap();
                     let syms = guard.symbols.as_deref();
                     let json_frames: Vec<Value> = frames.iter().map(|f| {
                         // Enrich frames the backend couldn't name using the
@@ -1643,14 +1644,9 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     return Ok(json!({
                         "session_id": session_id,
                         "frames": json_frames,
-                        // The walk stops at a cap. Handing back the frames and
-                        // nothing else made a stack cut off at the limit
-                        // indistinguishable from one that genuinely ended —
-                        // on the answer people read first when something has
-                        // gone wrong, and precisely in the deep-recursion case
-                        // where a backtrace is worth having.
-                        "frame_cap": rustre_debug::BACKTRACE_FRAME_CAP,
-                        "truncated": frames.len() >= rustre_debug::BACKTRACE_FRAME_CAP,
+                        // Asked of the backend; see `Debugger::backtrace_frame_cap`.
+                        "frame_cap": cap,
+                        "truncated": frames.len() >= cap,
                         "live": true,
                         "source": "rustre_debug::Debugger::backtrace (live OS backend)"
                     }));

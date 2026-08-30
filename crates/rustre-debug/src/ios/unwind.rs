@@ -1208,6 +1208,17 @@ impl AppleUnwinder {
         self
     }
 
+    /// The frame cap this unwinder will walk.
+    ///
+    /// Read by `AppleDebugger::backtrace_frame_cap` so the layer above can
+    /// compare a frame count against the RIGHT number: this one is 128 while
+    /// the desktop backends walk 32, and comparing against the wrong one
+    /// reported complete stacks as truncated.
+    #[must_use]
+    pub const fn max_depth(&self) -> usize {
+        self.max_depth
+    }
+
     /// Override the frame cap (default 128).
     #[must_use]
     pub const fn with_max_depth(mut self, max_depth: usize) -> Self {
