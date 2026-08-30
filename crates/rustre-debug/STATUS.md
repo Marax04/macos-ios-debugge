@@ -670,6 +670,75 @@ scritto per intero. Terza volta in sei iterazioni.
 | Darwin ×2 | **0 errori** |
 | MCP | **405 / 1** — l'1 è il cricchetto dei fabbricatori |
 
+
+---
+
+## Iterazione 634 — 2026-08-30
+
+### Difetto: 11 guardie MCP potevano essere soddisfatte — o battute — dal proprio testo
+
+Tre volte in sei iterazioni (628, 629, 633) un guard ha pescato il **proprio**
+letterale, perché `include_str!("debug.rs")` include anche il modulo di test in
+cui il guard vive. Ogni volta l'avevo aggirato **localmente**, costruendo l'ago a
+runtime o filtrando i commenti. Tre aggiramenti per **un helper mancante**.
+
+Il crate gemello ha `production_sources()` dal **553**, col commento che spiega
+la parte non ovvia: il taglio va fatto al **modulo** di test, non al **primo**
+`#[cfg(test)]`, perché quell'attributo marca anche singoli helper centinaia di
+righe più in su — e tagliare lì una volta nascose un backend vero a una guardia
+che doveva trovarlo. Nell'MCP quell'helper **non esisteva**.
+
+`production_only` ora c'è, e le guardie ci passano. Con il taglio, un ago non
+può più essere trovato dal test che lo cerca.
+
+**Rosso misurato sul valore:** `11 guard(s) scan this file WITHOUT the cut`.
+
+### Quattro tagli prematuri, trovati mentre convertivo
+
+Convertendo è emerso che **quattro** guardie tagliavano già al primo
+`#[cfg(test)]` — esattamente l'errore contro cui il commento del crate gemello
+mette in guardia. Non è un dettaglio di stile: quel taglio nascondeva codice di
+**produzione** alla guardia che doveva ispezionarlo. Sostituiti con l'helper.
+
+### Un'asserzione VACUA, mia, corretta prima di spedire
+
+La prima stesura contava gli `include_str!` **nel codice di produzione** — dove
+per costruzione non ce n'è nessuno, perché ogni guardia vive nel modulo di test
+che il taglio rimuove. Passava misurando **niente**. Riscritta per contare il
+lato test, dove le scansioni stanno davvero: da lì il rosso vero, 11.
+
+E l'eccezione legittima è **nominata**, non allentata: una sola scansione grezza
+resta, quella di questo test, che per misurare le altre deve vedere il file
+intero. Un `raw >= wrapped` sarebbe passato per qualunque numero di guardie non
+protette — ed è la forma di asserzione che questo file continua a trovare nei
+test altrui.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2117 / 0** |
+| Linux (WSL, `--test-threads=1`) | **2100 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **406 / 1** — il +1 è questo test, l'1 è il cricchetto |
+
+### Giri 15 e 16 iOS: 66 agenti, 8 confermati, 8 chiusi
+
+- Un `launch` la cui risposta alla `A` andava in **timeout** lasciava l'inferiore
+  creato e fermo al suo entry point **senza inviare vKill/k/D**, e da lì
+  `kill()`/`detach()` rispondevano `NotAttached` perché la sessione era `None`.
+  Il filo osservato finiva letteralmente in `$A26,0,...` e basta.
+- `memory_maps()` rispondeva **`Ok` con zero regioni** quando lo stub non
+  implementa `qMemoryRegionInfo`: una mappa vuota indistinguibile da un processo
+  senza memoria. Ora è `Unsupported`, come già faceva `modules()`.
+- Un nome di regione con byte **non UTF-8** collassava a `None`: «chiave
+  assente», «payload non esadecimale» e «byte non decodificabili» erano lo stesso
+  valore. E il decoder vecchio usava `filter_map`, che su una cifra non valida
+  avrebbe **accorciato** i byte in silenzio.
+- Un `pc` **presente sul filo** diventava un'assenza, perché `from_snapshot`
+  risolveva per ruolo generico invece che col `role_or_name` che tutto il resto
+  del backend usa.
+
 ---
 ---
 
@@ -1073,7 +1142,7 @@ dell'MCP, noto e **non mio**, sotto.
 | Windows x86_64 | dopo il merge col lavoro del giro 9 | **2094 / 1** — il rosso rimasto è iOS, non mio (sotto) |
 | Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
-| MCP | Windows | **405 / 1** (632) |
+| MCP | Windows | **406 / 1** (634) |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; **i fix 607/608/609 non sono mai stati rimisurati** |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |

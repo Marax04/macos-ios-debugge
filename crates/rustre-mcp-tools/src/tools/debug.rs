@@ -5071,8 +5071,13 @@ mod tests {
     /// those three and nothing else, which is how the bound was chosen.
     #[test]
     fn every_source_claim_names_a_call_this_path_really_makes() {
-        let src = include_str!("debug.rs");
-        let prod = src.split("#[cfg(test)]").next().unwrap_or(src);
+        let src = production_only(include_str!("debug.rs"));
+        // `production_only` has already made this cut, and made it at the test
+        // MODULE. This line cut at the FIRST `#[cfg(test)]`, which also gates
+        // individual helpers far above the module — the very mistake the sister
+        // crate's comment warns about, and it was hiding production code from
+        // the guard that follows.
+        let prod = src.as_str();
         let lines: Vec<&str> = prod.lines().collect();
 
         let mut checked = 0usize;
@@ -5114,8 +5119,13 @@ mod tests {
     /// `let _ =` is not automatically a reason for the silence.
     #[test]
     fn the_launch_failure_message_reports_the_real_kill_outcome() {
-        let src = include_str!("debug.rs");
-        let prod = src.split("#[cfg(test)]").next().unwrap_or(src);
+        let src = production_only(include_str!("debug.rs"));
+        // `production_only` has already made this cut, and made it at the test
+        // MODULE. This line cut at the FIRST `#[cfg(test)]`, which also gates
+        // individual helpers far above the module — the very mistake the sister
+        // crate's comment warns about, and it was hiding production code from
+        // the guard that follows.
+        let prod = src.as_str();
 
         assert!(
             !prod.contains("let _ = block_on(dbg.kill())"),
@@ -5192,8 +5202,13 @@ mod tests {
 
     #[test]
     fn detach_reports_whether_the_watchpoint_registers_were_actually_cleared() {
-        let src = include_str!("debug.rs");
-        let prod = src.split("#[cfg(test)]").next().unwrap_or(src);
+        let src = production_only(include_str!("debug.rs"));
+        // `production_only` has already made this cut, and made it at the test
+        // MODULE. This line cut at the FIRST `#[cfg(test)]`, which also gates
+        // individual helpers far above the module — the very mistake the sister
+        // crate's comment warns about, and it was hiding production code from
+        // the guard that follows.
+        let prod = src.as_str();
 
         assert!(
             !prod.contains(r#"let _ = block_on(guard.dbg.set_register(guard.tid, "dr7", 0))"#),
@@ -5228,9 +5243,14 @@ mod tests {
     /// driven to failure from a unit test without a live target.
     #[test]
     fn the_attach_failure_message_reports_the_real_detach_outcome() {
-        let src = include_str!("debug.rs");
+        let src = production_only(include_str!("debug.rs"));
         // Cut the test module out: it may legitimately mention these strings.
-        let prod = src.split("#[cfg(test)]").next().unwrap_or(src);
+        // `production_only` has already made this cut, and made it at the test
+        // MODULE. This line cut at the FIRST `#[cfg(test)]`, which also gates
+        // individual helpers far above the module — the very mistake the sister
+        // crate's comment warns about, and it was hiding production code from
+        // the guard that follows.
+        let prod = src.as_str();
 
         assert!(
             !prod.contains("let _ = block_on(dbg.detach())"),
@@ -5417,7 +5437,7 @@ mod tests {
         }
 
         // And no tool may keep using the unchecked accessors.
-        let src: String = include_str!("debug.rs")
+        let src: String = production_only(include_str!("debug.rs"))
             .lines()
             .filter(|l| !l.trim_start().starts_with("//"))
             .collect::<Vec<_>>()
@@ -5466,7 +5486,7 @@ mod tests {
         // in this file are in doc comments — my own prose describing it — and
         // scanning the raw text made the guard fail on its own explanation.
         // Same trap as a guard SATISFIED by its own prose, facing the other way.
-        let src: String = include_str!("debug.rs")
+        let src: String = production_only(include_str!("debug.rs"))
             .lines()
             .filter(|l| !l.trim_start().starts_with("//"))
             .collect::<Vec<_>>()
@@ -5531,6 +5551,107 @@ mod tests {
         }
     }
 
+    /// The part of a source file that actually SHIPS: everything above the
+    /// `#[cfg(test)] mod` boundary.
+    ///
+    /// Cutting at the test MODULE and not at the first `#[cfg(test)]` matters,
+    /// and the sister crate learned it the hard way: that attribute also gates
+    /// individual helpers hundreds of lines earlier, and cutting there once hid
+    /// a real backend from a guard that was supposed to find it. So the cut is
+    /// made at a `#[cfg(test)]` whose NEXT line opens a module.
+    ///
+    /// Without this, a guard scanning `production_only(include_str!("debug.rs"))` sees the test
+    /// module it lives in, so a needle written out literally is present in the
+    /// file because the guard looks for it. That happened three times in six
+    /// iterations before this helper existed.
+    fn production_only(src: &str) -> String {
+        let lines: Vec<&str> = src.lines().collect();
+        let cut = lines.iter().enumerate().position(|(i, l)| {
+            l.trim_start().starts_with("#[cfg(test)]")
+                && lines.get(i + 1).is_some_and(|n| {
+                    let n = n.trim_start();
+                    n.starts_with("mod ") || n.starts_with("pub mod ")
+                })
+        });
+        match cut {
+            Some(c) => lines[..c].join("
+"),
+            None => src.to_string(),
+        }
+    }
+
+    /// A source guard must not be able to match its OWN test text.
+    ///
+    /// Eight guards in this file scan `production_only(include_str!("debug.rs"))`, which includes
+    /// the test module they live in. A needle written out literally is therefore
+    /// present in the file by the mere act of looking for it, and the guard
+    /// reports on itself instead of on the production code.
+    ///
+    /// This has bitten three times in six iterations — 628, 629 and 633 — each
+    /// time worked around locally by building the needle at runtime or by
+    /// filtering comments. Three workarounds for one missing helper. The sister
+    /// crate has had `production_sources()` for this since iteration 553, with a
+    /// comment explaining that the cut must be at the test MODULE and not at the
+    /// first `#[cfg(test)]`, because that attribute also gates individual
+    /// helpers hundreds of lines earlier — and cutting there once hid a real
+    /// backend from a guard.
+    ///
+    /// `production_only` is that cut, here. With it a needle cannot be found in
+    /// the test that searches for it, and the three local workarounds become
+    /// belt-and-braces rather than the only thing holding the guards up.
+    #[test]
+    fn a_source_guard_cannot_match_its_own_test_text() {
+        let whole = include_str!("debug.rs");
+        let prod = production_only(whole);
+
+        assert!(prod.len() < whole.len(), "the cut removed nothing — the boundary moved");
+        assert!(
+            prod.contains("fn coerce_u64"),
+            "the cut removed production code; it must stop at the test module, not before"
+        );
+
+        // The property that matters: a phrase that exists ONLY in the test
+        // module must be invisible to a guard.
+        let marker = format!("{}{}", "a_source_guard_cannot_match_", "its_own_test_text");
+        assert!(whole.contains(marker.as_str()), "premise: this test's own name is in the file");
+        assert!(
+            !prod.contains(marker.as_str()),
+            "a name defined only inside the test module survives the cut, so any guard              scanning this file still reports on itself"
+        );
+
+        // And every guard that scans this file must go through the cut.
+        //
+        // The first spelling of this counted raw scans in `prod` — where there
+        // are none by construction, because every guard lives in the test
+        // module the cut removes. It passed while measuring nothing. It counts
+        // the TEST side now, which is where the scans actually are.
+        let tests = &whole[whole.len() - (whole.len() - prod.len())..];
+        let needle = format!("include_str!({}debug.rs{})", '"', '"');
+        let raw = tests.matches(needle.as_str()).count();
+        let wrapped = tests
+            .matches(format!("production_only(include_str!({}debug.rs{}))", '"', '"').as_str())
+            .count();
+        assert!(
+            raw >= 8,
+            "only {raw} scans found in the test module; the split is not doing what it says"
+        );
+        // Exactly ONE raw scan is legitimate: this test, which has to see the
+        // whole file to measure the others. Naming the exception rather than
+        // loosening the comparison — `raw >= wrapped` would have passed for any
+        // number of unguarded scans, which is the shape of assertion this file
+        // keeps finding in other people's tests.
+        assert_eq!(
+            raw - wrapped,
+            1,
+            "{} guard(s) scan this file WITHOUT the cut, beyond the one this test needs.              Each can be satisfied — or defeated — by its own test text; three iterations              were spent on that before the helper existed",
+            raw - wrapped
+        );
+        assert!(
+            tests.contains(format!("let whole = include_str!({}debug.rs{});", '"', '"').as_str()),
+            "the one permitted raw scan is no longer this test's own; the exception has              drifted to some other guard"
+        );
+    }
+
     /// An UNREADABLE `dr7` must not be published as `0`, and it is per-THREAD.
     ///
     /// `live_debug_registers` is the source of the `dr7` every watchpoint tool
@@ -5551,7 +5672,7 @@ mod tests {
     /// thread.
     #[test]
     fn an_unreadable_dr7_is_not_published_as_zero() {
-        let src: String = include_str!("debug.rs")
+        let src: String = production_only(include_str!("debug.rs"))
             .lines()
             .filter(|l| !l.trim_start().starts_with("//"))
             .collect::<Vec<_>>()
@@ -5589,7 +5710,7 @@ mod tests {
     /// first: a partial answer presented as a whole one.
     #[test]
     fn a_short_read_reports_that_it_was_short() {
-        let src: String = include_str!("debug.rs")
+        let src: String = production_only(include_str!("debug.rs"))
             .lines()
             .filter(|l| !l.trim_start().starts_with("//"))
             .collect::<Vec<_>>()
