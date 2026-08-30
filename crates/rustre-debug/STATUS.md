@@ -867,6 +867,68 @@ solo agenti che muoiono. Ripartiranno quando l'utente lo rimuove. Il lato
 positivo, per questa iterazione: `src/ios/` non era conteso da nessuno, e questo
 ha reso sicuro toccarlo — cosa che dal giro 11 in poi avevo evitato.
 
+
+---
+
+## Iterazione 637 — 2026-08-30
+
+### Difetto: uno stop `reason:signal` senza numero diventava il segnale ZERO
+
+`ThreadStopReason::from_parts` si contraddiceva **dentro sé stessa**. Il ramo del
+segnale leggeva `Self::Signal(signo.unwrap_or(0))`, quindi uno stop reply che
+diceva `reason:signal` con un `signo` mancante o non parsabile veniva consegnato
+come **`Signal(0)`**.
+
+Il segnale 0 non è un segnale: in POSIX è la sonda «questo processo esiste?», e
+`kill(pid, 0)` non recapita nulla. Il chiamante riceveva quindi «fermato da un
+segnale che non può essere recapitato», e un crash il cui numero non si era
+letto veniva riportato così.
+
+**La prova stava due rami più sotto, nella stessa funzione**: il ramo di riserva
+scrive `(None, Some(s)) if s != 0 => Self::Signal(s)` — cioè rifiuta lo zero come
+segnale, correttamente. Una contraddizione interna, che come al 616 non ha
+bisogno di alcuna verità esterna per essere dimostrata.
+
+E anche la forma della risposta onesta era già lì: il ramo `exception` risponde
+`Other("exception")` quando il suo dettaglio manca. Ora il ramo `signal` fa lo
+stesso, e i due rami concordano sullo zero.
+
+**Rosso misurato:** `left: Signal(0)  right: Other("signal")`.
+
+### Due superfici esaminate e trovate CORRETTE
+
+- **Chunking delle letture RSP**: `read_memory` rispetta il `PacketSize`
+  negoziato, e c'è già il test
+  `a_read_larger_than_the_packet_size_is_split_into_several_m_packets`.
+- Lo scan della famiglia «assenza spacciata per valore» in `src/ios/` ha trovato
+  **49 occorrenze in produzione**; questa è la prima chiusa e le altre restano
+  da vagliare una a una — la maggior parte sono legittime (un contatore che parte
+  da zero non è un'assenza).
+
+### Nota sull'ambiente, chiesta dall'utente
+
+Le suite Linux girano **davvero su WSL sul PC dell'utente**: kernel
+`6.18.33.2-microsoft-standard-WSL2`, Ubuntu 24.04.4 LTS, host `DESKTOP-DOHAOMH`,
+cargo 1.96.0. La riga «La virtualizzazione annidata non è supportata in questo
+computer» che `wsl.exe` stampa a ogni invocazione è un **avviso**, non un errore.
+
+La prova che sia una compilazione genuinamente diversa e non Windows travestito:
+i conteggi divergono (2103 contro 2120) e `linux_debugger.rs` è
+`#[cfg(target_os = "linux")]` — su Windows **non viene compilato affatto**. È la
+lezione costata dall'iterazione 611: per un file `cfg`-gated, solo la piattaforma
+che lo compila lo verifica.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2120 / 0** |
+| Linux (WSL2 sul PC dell'utente, `--test-threads=1`) | **2103 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **406 / 1** — l'1 è il cricchetto dei fabbricatori |
+
+### Nessun giro iOS: limite di spesa ancora attivo (§635)
+
 ---
 ---
 

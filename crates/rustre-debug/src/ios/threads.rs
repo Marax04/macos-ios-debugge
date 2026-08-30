@@ -218,7 +218,21 @@ impl ThreadStopReason {
             Some("breakpoint") => Self::Breakpoint,
             Some("watchpoint") => Self::Watchpoint,
             Some("trace") => Self::Trace,
-            Some("signal") => Self::Signal(signo.unwrap_or(0)),
+            // Signal 0 is not a signal: in POSIX it is the "does this process
+            // exist" probe, and `kill(pid, 0)` delivers nothing. This arm used
+            // to read `Self::Signal(signo.unwrap_or(0))`, so a `reason:signal`
+            // whose number was missing or unparsable was handed back as a stop
+            // caused by a signal that cannot be delivered.
+            //
+            // The function already contradicted itself about this: the fallback
+            // arm below writes `(None, Some(s)) if s != 0`, refusing zero. Both
+            // arms agree now, and the shape of the honest answer was already
+            // here too — the `exception` arm answers `Other("exception")` when
+            // its detail is missing.
+            Some("signal") => match signo {
+                Some(s) if s != 0 => Self::Signal(s),
+                _ => Self::Other("signal".to_string()),
+            },
             Some("exception") => metype.map_or_else(
                 || Self::Other("exception".to_string()),
                 |metype| Self::Exception { metype, medata: medata.to_vec() },
@@ -665,6 +679,48 @@ impl AppleDebugger {
 
 #[cfg(test)]
 mod tests {
+
+
+    /// A `reason:signal` with no number must not become signal ZERO.
+    ///
+    /// `from_parts` contradicted itself. Its `signal` arm read
+    /// `Self::Signal(signo.unwrap_or(0))`, manufacturing signal 0 when the stub
+    /// sent `reason:signal` without a parsable `signo`. Two arms further down,
+    /// the SAME function writes `(None, Some(s)) if s != 0 => Self::Signal(s)`
+    /// — refusing 0 as a signal, correctly.
+    ///
+    /// Signal 0 is not a signal. In POSIX it is the "does this process exist"
+    /// probe: `kill(pid, 0)` delivers nothing. So the stop a caller was handed
+    /// read as "stopped by a signal that cannot be delivered", and a crash whose
+    /// number failed to parse was reported as one.
+    ///
+    /// The honest answer was already in the function too: the `exception` arm
+    /// answers `Other("exception")` when its detail is missing. The `signal` arm
+    /// now does the same, and both arms agree about zero.
+    #[test]
+    fn a_signal_stop_without_a_number_is_not_signal_zero() {
+        let build: fn(Option<&str>, Option<u32>, Option<u64>, &[u64]) -> ThreadStopReason =
+            ThreadStopReason::from_parts;
+
+        assert_eq!(build(Some("signal"), Some(11), None, &[]), ThreadStopReason::Signal(11));
+
+        assert_eq!(
+            build(Some("signal"), None, None, &[]),
+            ThreadStopReason::Other("signal".to_string()),
+            "a signal stop with no number must say the number is missing, not invent 0 —              signal 0 is the POSIX existence probe and delivers nothing"
+        );
+        assert_eq!(
+            build(Some("signal"), Some(0), None, &[]),
+            ThreadStopReason::Other("signal".to_string()),
+            "the fallback arm of this same function already refuses 0 as a signal; both              arms must agree"
+        );
+
+        // The precedent this follows, unchanged.
+        assert_eq!(
+            build(Some("exception"), None, None, &[]),
+            ThreadStopReason::Other("exception".to_string())
+        );
+    }
     use super::*;
     use crate::ios::apple_debugger::LoopbackFactory;
     use crate::ios::mock_debugserver::{MockDebugserver, MockThread, StopKind};
