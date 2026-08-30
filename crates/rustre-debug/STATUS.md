@@ -1127,6 +1127,69 @@ fabbricarlo.
 
 ### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
 
+
+---
+
+## Iterazione 641 — 2026-08-30
+
+### Difetto: il ri-armamento leggeva un `dr7` ASSENTE come un `dr7` pulito
+
+`rearm_watchpoints_on_new_threads` esiste **identica nei tre backend desktop**, e
+tutte e tre leggevano `regs.get("dr7").unwrap_or(0)`.
+
+L'assenza non è zero. **Verificato alla fonte, non preso dal commento**: il
+lettore AArch64 di Windows (`context_to_register_set`) pubblica **zero** registri
+`dr*` — contati — e quello Linux li omette quando `NT_ARM_HW_WATCH` non è
+leggibile.
+
+Conseguenza: un **successo silenzioso**, la forma che questo crate condanna
+ovunque. `dr7` letto come 0 fa sembrare liberi tutti gli slot, l'armamento
+procede, e la scrittura è controllata **solo** per l'errore di `set_registers` —
+mai riletta — quindi l'indirizzo non finisce in `unarmed` e il chiamante viene
+informato che è sorvegliato mentre nulla lo sorveglia.
+
+### La cura era già nel file, ottanta righe più sopra
+
+`debug_register_state` (lib.rs:1191) classifica in Clean / Armed / **Unverifiable**,
+e la doc di quest'ultimo dice testualmente che da lì non si può concludere nulla —
+«and in particular not that the thread is clean». Il ramo onesto esisteva pure:
+un thread i cui registri non si riescono a **leggere** già estende `unarmed`.
+Ora il ramo `Unverifiable` fa la stessa identica cosa.
+
+### Tre punti, non uno
+
+Tre backend, tre siti. La guardia li conta insieme e **asserisce di averli
+raggiunti tutti e tre** (`checked == BACKENDS.len()`), perché una guardia che
+esamina meno di quanto dichiara è verde per il motivo sbagliato.
+
+**Rosso misurato:** `linux_debugger.rs: the re-arm path must classify the set,
+not assume it`.
+
+### Un percorso ESCLUSO deliberatamente
+
+`set_watchpoint_sized` legge `dr7` **dopo** aver scritto e conta uno slot come
+armato solo se ha attecchito: lì l'assenza fallisce in chiusura, non in apertura,
+quindi è onesta per costruzione e non va toccata. Distinguere i due casi è il
+punto del giro: lo stesso `unwrap_or(0)` è innocuo dove esiste una verifica a
+valle e diventa un difetto dove la decisione è finale.
+
+### Nota di metodo
+
+La guardia vive in `tests_extra` ma `production_sources` sta in `tests_expanded`:
+moduli fratelli non vedono gli item privati l'uno dell'altro. Risolto con
+`pub(super)` sull'helper di test — nessuna modifica alla produzione.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2123 / 0** |
+| Linux (WSL2 sul PC dell'utente, `--test-threads=1`) | **2106 / 0** — il fronte che conta, `linux_debugger.rs` è `cfg`-gated |
+| Darwin ×2 | **0 errori** |
+| MCP | **407 / 1** — l'1 è il cricchetto dei fabbricatori |
+
+### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
+
 ---
 ---
 

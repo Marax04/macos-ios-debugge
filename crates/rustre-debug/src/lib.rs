@@ -6736,7 +6736,7 @@ mod tests_expanded {
     /// Cutting at the test MODULE and not at the first `#[cfg(test)]` matters:
     /// that attribute also gates individual helpers hundreds of lines earlier,
     /// and cutting there once hid a real backend from a sibling guard.
-    fn production_sources() -> Vec<(String, String)> {
+    pub(super) fn production_sources() -> Vec<(String, String)> {
         // Embedded at COMPILE time by `build.rs`, not walked at run time.
         //
         // This used to `read_dir("src")`, which works only when the test binary
@@ -15205,6 +15205,72 @@ fn ";
                 "{name}: backtrace walks a bare literal instead of the published cap, so                  nothing above it can tell a full stack from a truncated one"
             );
         }
+    }
+
+    /// The re-arm path must not read an ABSENT `dr7` as a clean one.
+    ///
+    /// `rearm_watchpoints_on_new_threads` exists in all three desktop backends
+    /// and each one read `regs.get("dr7").unwrap_or(0)`. Absence is not zero
+    /// here: the Windows AArch64 reader publishes no `dr*` register at all
+    /// (verified by counting them in `context_to_register_set`), and the Linux
+    /// one omits them whenever `NT_ARM_HW_WATCH` cannot be read.
+    ///
+    /// The consequence is a SILENT SUCCESS, the shape this crate condemns
+    /// everywhere: `dr7` reads as 0, every slot looks free, the arming proceeds
+    /// and the write-back is checked only for a `set_registers` error — never
+    /// read back — so the address is NOT added to `unarmed` and the caller is
+    /// told it is watched while nothing watches it.
+    ///
+    /// The cure already exists eighty lines above the defect, in the same
+    /// files: `debug_register_state` classifies the set as Clean / Armed /
+    /// Unverifiable, and the doc on `Unverifiable` says in as many words that
+    /// nothing may be concluded from it. The honest branch exists too — a
+    /// thread whose registers cannot be READ already extends `unarmed`.
+    ///
+    /// Three backends, so three points: a cure applied to one would leave the
+    /// other two green while wrong.
+    ///
+    /// Deliberately NOT extended to `set_watchpoint_sized`: that path reads
+    /// `dr7` back after writing and counts a slot as armed only if it took, so
+    /// an absent `dr7` there fails closed rather than open.
+    #[test]
+    fn no_rearm_path_reads_an_absent_dr7_as_a_clean_one() {
+        const BACKENDS: [&str; 3] =
+            ["windows_debugger.rs", "linux_debugger.rs", "macos_debugger.rs"];
+        let sources = super::tests_expanded::production_sources();
+        let mut checked = 0usize;
+        let mut offenders: Vec<String> = Vec::new();
+
+        for (name, src) in &sources {
+            if !BACKENDS.iter().any(|b| name.ends_with(b)) {
+                continue;
+            }
+            let code = code_only(src);
+            let body = item_body(
+                &code,
+                "async fn rearm_watchpoints_on_new_threads(&self) -> Vec<u64> {",
+                &["
+    async fn ", "
+    fn ", "
+    pub fn ", "
+    pub async fn "],
+            );
+            checked += 1;
+            if body.contains("get(\"dr7\").unwrap_or(0)") {
+                offenders.push(format!("{name}: reads an absent dr7 as 0"));
+            }
+            assert!(
+                body.contains("debug_register_state"),
+                "{name}: the re-arm path must classify the set, not assume it"
+            );
+        }
+
+        assert_eq!(
+            checked,
+            BACKENDS.len(),
+            "the guard must reach all three backends, or it silently checks fewer than it claims"
+        );
+        assert!(offenders.is_empty(), "{offenders:#?}");
     }
 
     #[test]

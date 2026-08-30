@@ -486,7 +486,25 @@ impl WindowsDebugger {
                 unarmed.extend(wanted.iter().map(|(a, _, _)| *a));
                 continue;
             };
-            let mut dr7 = regs.get("dr7").unwrap_or(0);
+            // An absent `dr7` is NOT a clean one. The Windows AArch64 reader
+            // publishes no `dr*` register at all and the Linux one omits them
+            // whenever `NT_ARM_HW_WATCH` cannot be read, so `unwrap_or(0)` said
+            // "every slot is free" about a thread nobody had inspected. Arming
+            // then proceeded, and the write-back is checked only for a
+            // `set_registers` error — never read back — so the address never
+            // reached `unarmed` and the caller was told it was watched while
+            // nothing watched it: a silent success.
+            //
+            // Same answer as the branch four lines above, which already treats
+            // a thread whose registers cannot be READ as unwatched.
+            let mut dr7 = match crate::debug_register_state(&regs) {
+                crate::DebugRegisterState::Unverifiable => {
+                    unarmed.extend(wanted.iter().map(|(a, _, _)| *a));
+                    continue;
+                }
+                crate::DebugRegisterState::Clean => 0,
+                crate::DebugRegisterState::Armed(v) => v,
+            };
             let mut changed = false;
             for (addr, kind, size) in &wanted {
                 // Already armed on this thread in some slot? Leave it alone —
