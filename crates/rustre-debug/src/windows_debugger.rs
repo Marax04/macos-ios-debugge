@@ -3918,7 +3918,7 @@ impl crate::Debugger for WindowsDebugger {
             // repeated round-trips for data that cannot change mid-call.
             let mut pdata_cache: std::collections::HashMap<u64, Option<Vec<u8>>> = std::collections::HashMap::new();
             if let Ok(modules) = self.modules().await {
-                for _ in 0..32 {
+                for _ in 0..crate::BACKTRACE_FRAME_CAP {
                     let Some(module) = modules
                         .iter()
                         .find(|m| cur_pc >= m.base.as_u64() && cur_pc < m.base.as_u64() + m.size)

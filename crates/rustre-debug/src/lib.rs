@@ -1025,6 +1025,22 @@ pub fn u64_from_le_prefix(bytes: &[u8]) -> Option<u64> {
     bytes.get(..8).and_then(|b| <[u8; 8]>::try_from(b).ok()).map(u64::from_le_bytes)
 }
 
+/// How many frames a `backtrace` will walk before it stops.
+///
+/// Published, not buried. All three desktop backends walked `for _ in 0..32`
+/// with the number written into the loop, and returned a plain
+/// `Vec<StackFrame>`. A caller handed thirty-two frames could not tell a stack
+/// that genuinely has thirty-two from one the walk abandoned — and neither
+/// could the MCP tool forwarding them, which published `frames` and nothing
+/// else.
+///
+/// For a debugger that is the worst available shape: an incomplete backtrace
+/// presented as a whole one, on the answer people read first when something has
+/// gone wrong. Deep recursion is exactly when a backtrace matters and exactly
+/// when the truncation bites. With the cap public, the layer above can compare
+/// against it and say so.
+pub const BACKTRACE_FRAME_CAP: usize = 32;
+
 /// Validate the return address just read out of a frame before stepping out to it.
 ///
 /// Zero is not a return address. It is what the slot holds at a thread's entry
@@ -6680,7 +6696,18 @@ mod tests_expanded {
             // pinned is the one produced by the instrument that will keep
             // running — the other was scaffolding, and the two disagreeing is
             // exactly why the pinned figure has to come from here.
-            total - with_ios <= 84,
+            // 85 al 635, non 84: la guardia sul tetto del backtrace aggiunta in
+            // quel round itera sui tre desktop e OMETTE iOS — e questo
+            // cricchetto me l'ha impedito finché non l'ho deciso, che è
+            // esattamente il suo scopo, applicato al suo autore.
+            //
+            // La decisione: iOS non usa `BACKTRACE_FRAME_CAP`. Il suo unwinder
+            // ha un `max_depth` proprio e configurabile, quindi l'invariante
+            // «cammina il tetto pubblicato» non lo descrive. Ma il DIFETTO che
+            // quella guardia chiude — un backtrace troncato indistinguibile da
+            // uno completo — esiste anche lì, con una costante diversa.
+            // Dichiarato aperto, non risolto per assimilazione.
+            total - with_ios <= 85,
             "{} cross-backend guard sites now omit iOS, up from 80. A new cross-backend              invariant was added without deciding whether it applies to the RSP backend —              decide, then move this number or name the site",
             total - with_ios
         );
@@ -15091,6 +15118,45 @@ fn ";
     /// That is the same shape as iteration 315 (a terminator that matched
     /// nothing, sliced to end-of-file) and of iteration 354's vacuous guard,
     /// and it is worse here because it degrades FIVE guards from one place.
+    /// A backtrace cut off at the cap must SAY it was cut off.
+    ///
+    /// All three desktop backends walk `for _ in 0..32` and return a plain
+    /// `Vec<StackFrame>`. A caller handed thirty-two frames cannot tell a stack
+    /// that genuinely has thirty-two from one that was truncated, and neither
+    /// can the MCP tool that forwards them: `debug.backtrace` publishes
+    /// `frames` and nothing else.
+    ///
+    /// For a debugger that is the worst shape available. An incomplete
+    /// backtrace presented as a whole one is the confidently-wrong surface this
+    /// crate exists to remove — the same defect as the short read of iteration
+    /// 631, on the answer people actually read first when something has gone
+    /// wrong. Deep recursion is exactly when a backtrace matters and exactly
+    /// when this bites.
+    ///
+    /// The cap is published so the layer above can say so, rather than being a
+    /// number buried in three loops.
+    #[test]
+    fn a_backtrace_cut_off_at_the_cap_says_so() {
+        assert_eq!(crate::BACKTRACE_FRAME_CAP, 32, "the published cap must be the one walked");
+
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let stripped = code_only(src);
+            let body = item_body(
+                &stripped,
+                "async fn backtrace(&self, tid: ThreadId)",
+                &[NEXT_FN, NEXT_ASYNC_FN],
+            );
+            assert!(
+                body.contains("BACKTRACE_FRAME_CAP"),
+                "{name}: backtrace walks a bare literal instead of the published cap, so                  nothing above it can tell a full stack from a truncated one"
+            );
+        }
+    }
+
     #[test]
     fn item_body_refuses_to_return_the_whole_rest_of_the_file() {
         // Normal case: the body stops at the next item.

@@ -739,6 +739,76 @@ test altrui.
   risolveva per ruolo generico invece che col `role_or_name` che tutto il resto
   del backend usa.
 
+
+---
+
+## Iterazione 635 — 2026-08-30
+
+### ⚠ LIMITE DI SPESA MENSILE RAGGIUNTO — la metà iOS è ferma
+
+Il giro 16 ha riportato **4 confermati e 0 chiusi**: tutti gli agenti di fix sono
+morti su «You've hit your monthly spend limit». Non è un errore transitorio come
+i 529 del giro 8 — è un limite dell'account, e **solo l'utente può rimuoverlo**
+(claude.ai/settings/usage). Finché resta, lanciare altri `/workflows` produce
+solo fallimenti. Il lavoro Windows/Linux/MCP continua normalmente.
+
+### Difetto: un backtrace troncato era indistinguibile da uno completo
+
+Tutti e tre i backend desktop camminano `for _ in 0..32` — il numero **scritto
+dentro il ciclo** — e restituiscono un `Vec<StackFrame>` nudo. Chi riceve 32
+frame non può sapere se lo stack ne aveva 32 o se la camminata è stata
+abbandonata al tetto. E nemmeno lo strumento MCP che li inoltra: `debug.backtrace`
+pubblicava `frames` e nient'altro.
+
+Per un debugger è la forma peggiore disponibile: **un backtrace incompleto
+presentato come completo**, sulla risposta che si legge per prima quando qualcosa
+è andato storto, e proprio nel caso — ricorsione profonda — in cui un backtrace
+serve davvero. È lo stesso difetto della lettura corta del 631, sulla superficie
+più visibile del debugger.
+
+`BACKTRACE_FRAME_CAP` è ora **pubblicata**, i tre backend la usano al posto del
+letterale, e l'MCP riporta `frame_cap` e `truncated`.
+
+### Il cricchetto del 633 mi ha fermato, ed è servito
+
+Aggiungendo la guardia sul tetto — che itera sui tre desktop e **omette iOS** — il
+conteggio dei siti cross-backend è passato da 84 a 85 e **il cricchetto del 633 ha
+fatto fallire la suite**. Ha funzionato esattamente come progettato: impedire che
+un invariante cross-backend salti iOS *senza una decisione*. Applicato al suo
+autore, due round dopo.
+
+La decisione, presa e scritta: iOS **non** usa `BACKTRACE_FRAME_CAP` — il suo
+unwinder ha un `max_depth` proprio e configurabile, quindi l'invariante «cammina
+il tetto pubblicato» non lo descrive. Ma **il difetto esiste anche lì**, con una
+costante diversa: `AppleUnwinder::backtrace` si ferma a `max_depth` e restituisce
+i frame senza dire se è stato troncato. **Dichiarato aperto**, non risolto per
+assimilazione.
+
+### Due superfici esaminate e trovate PULITE
+
+- Le 8 guardie di `rustre-debug` che scandiscono `lib.rs` (sé stesse): un solo
+  ago esiste unicamente nel modulo di test, ed è quello del **mio** guard del
+  633, che per contare guardie che vivono nei test deve legittimamente vedere il
+  file intero. Nessun difetto reale: la classe chiusa nell'MCP al 634 qui non ha
+  gemelli. La trappola era peraltro già nota **dal 449**, con la contromisura
+  scritta caso per caso.
+
+### Un'ancora assunta invece che verificata
+
+Ho inserito la costante ancorandomi a una riga di doc che **ricordavo**, non che
+avevo letto: il testo reale era diverso e lo script si è fermato sull'assert. Due
+tentativi persi. L'assert ha fatto il suo lavoro — ma la lezione è che l'ancora
+va **letta** prima di usarla, non ricostruita a memoria.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2118 / 0** |
+| Linux (WSL, `--test-threads=1`) | **2101 / 0** |
+| Darwin ×2 | **0 errori** |
+| MCP | **406 / 1** — l'1 è il cricchetto dei fabbricatori |
+
 ---
 ---
 

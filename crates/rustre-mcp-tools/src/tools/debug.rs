@@ -1643,6 +1643,14 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     return Ok(json!({
                         "session_id": session_id,
                         "frames": json_frames,
+                        // The walk stops at a cap. Handing back the frames and
+                        // nothing else made a stack cut off at the limit
+                        // indistinguishable from one that genuinely ended —
+                        // on the answer people read first when something has
+                        // gone wrong, and precisely in the deep-recursion case
+                        // where a backtrace is worth having.
+                        "frame_cap": rustre_debug::BACKTRACE_FRAME_CAP,
+                        "truncated": frames.len() >= rustre_debug::BACKTRACE_FRAME_CAP,
                         "live": true,
                         "source": "rustre_debug::Debugger::backtrace (live OS backend)"
                     }));
