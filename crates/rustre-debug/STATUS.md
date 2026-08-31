@@ -1241,6 +1241,66 @@ not assume it`.
 
 ### Nessun giro iOS: limite di spesa mensile ancora attivo (§635)
 
+
+---
+
+## Iterazione 643 — 2026-08-31
+
+### ⚠ Direttiva cambiata: iOS/macOS SOSPESO, solo Windows e Linux
+
+Per ordine dell'utente. Dei due target Darwin resta la sola **verifica di
+compilazione**, non lo sviluppo. Il lavoro Linux è ora parallelizzato via
+`/workflows`; Windows lo conduco direttamente.
+
+### Nota d'ambiente: il riavvio ha cancellato worktree e target dir
+
+`wt638` e la sua `CARGO_TARGET_DIR` erano in `%TEMP%` e sono spariti col
+riavvio. **Nulla è andato perso**, perché ogni giro finisce con commit e push:
+`main` era intatto a `5d42762f3`. Ricreato `wt643` sullo stesso commit.
+È la conferma pratica del perché si committa a ogni giro invece che a fine
+sessione.
+
+### Difetto: un campo di TIPO SBAGLIATO veniva riportato come MANCANTE
+
+`req_str` e `req_u64` (`rustre-mcp-tools/src/lib.rs`) rispondevano
+`missing required field '{key}'` in **due situazioni diverse**: campo assente, e
+campo presente con il tipo sbagliato. Per il secondo caso il messaggio non è
+scomodo, è **falso** — il chiamante il campo l'aveva mandato, e sentirselo dire
+mancante lo manda a cercare un argomento che ha già passato.
+
+**Non è ipotetico.** `debug.session_open` restituisce un `session_id` NUMERICO
+mentre ogni altro tool del debugger lo legge come STRINGA (misurato: **50** punti
+di chiamata `req_str`, **39** schemi che lo dichiarano stringa, **3** che lo
+dichiarano numerico). Sono **due sistemi di sessione distinti** che condividono
+il nome del campo — non un'incoerenza, come avevo scritto ieri, ma due famiglie
+ciascuna coerente con sé stessa. Il difetto vero è che incatenarli produceva
+«campo mancante» su un campo appena fornito.
+
+**Rosso misurato:**
+`the field was supplied — calling it missing is false. Got: missing required field 'session_id'`
+
+La cura distingue i due stati, che è la stessa forma dei cinque giri precedenti:
+l'assenza conserva il suo messaggio, il tipo sbagliato ottiene
+`field 'x' must be a string, but a number was supplied` — e nomina anche **cosa**
+è stato mandato. Il test sorveglia **entrambi i versi**: chi dimentica davvero un
+campo deve continuare a sentirsi dire che manca.
+
+### La popolazione, misurata: 24 occorrenze in 13 file
+
+Lo stesso helper di quattro righe è **duplicato in tutto il crate**. Questo giro
+chiude la coppia canonica in `lib.rs`, che serve i 50 punti di chiamata di
+`debug.rs`. Le altre 22 occorrenze in 12 file restano aperte e vanno chiuse
+facendole convergere su un helper solo, non ricopiando la cura 12 volte.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows | **2124 / 0** |
+| Linux (WSL2 sul PC dell'utente, `--test-threads=1`) | **2107 / 0** |
+| Darwin ×2 | **0 errori** (sola compilazione) |
+| MCP | **408 / 1** — passati 407 → 408 (il test nuovo); l'1 è il cricchetto, invariato a 175 |
+
 ---
 ---
 

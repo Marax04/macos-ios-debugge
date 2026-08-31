@@ -5945,18 +5945,56 @@ pub struct McpToolDef {
 // Helpers shared by stub handlers
 // ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬
 
+/// Name the JSON type of a value, for a refusal that tells the caller what it
+/// actually sent.
+fn json_type_name(v: &serde_json::Value) -> &'static str {
+    match v {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "a boolean",
+        serde_json::Value::Number(_) => "a number",
+        serde_json::Value::String(_) => "a string",
+        serde_json::Value::Array(_) => "an array",
+        serde_json::Value::Object(_) => "an object",
+    }
+}
+
 /// Extract a required string field from a JSON object.
+///
+/// An ABSENT field and a field PRESENT with the wrong type are two different
+/// mistakes and get two different answers. Both used to produce
+/// `missing required field '{key}'`, which for the second case is not merely
+/// unhelpful but FALSE: the caller supplied the field, and being told it is
+/// missing sends them looking for an argument they already sent.
+///
+/// It happens for real. `debug.session_open` hands back a NUMERIC session id
+/// while every other debug tool reads `session_id` as a STRING — they are two
+/// different session systems sharing a field name — so chaining them the
+/// obvious way reported a missing field about one that had just been passed.
 fn req_str<'a>(args: &'a serde_json::Value, key: &str) -> AnyhowResult<&'a str> {
-    args.get(key)
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| anyhow!("missing required field '{key}'"))
+    match args.get(key) {
+        None => Err(anyhow!("missing required field '{key}'")),
+        Some(v) => v.as_str().ok_or_else(|| {
+            anyhow!(
+                "field '{key}' must be a string, but {} was supplied",
+                json_type_name(v)
+            )
+        }),
+    }
 }
 
 /// Extract a required integer (u64) field from a JSON object.
+///
+/// Same distinction as [`req_str`]: absent is not the same as wrong-typed.
 fn req_u64(args: &serde_json::Value, key: &str) -> AnyhowResult<u64> {
-    args.get(key)
-        .and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| anyhow!("missing required field '{key}' (integer)"))
+    match args.get(key) {
+        None => Err(anyhow!("missing required field '{key}' (integer)")),
+        Some(v) => v.as_u64().ok_or_else(|| {
+            anyhow!(
+                "field '{key}' must be an integer, but {} was supplied",
+                json_type_name(v)
+            )
+        }),
+    }
 }
 
 /// Extract an optional integer field with a default value.
@@ -7283,6 +7321,64 @@ impl Default for McpToolRegistry {
 
 #[cfg(test)]
 mod mcp_registry_tests {
+
+
+    /// A field that is PRESENT with the wrong type is not a missing field.
+    ///
+    /// `req_str` and `req_u64` both answered `missing required field '{key}'`
+    /// for two different situations: the caller omitted the field, and the
+    /// caller supplied it with the wrong JSON type. The second message is not
+    /// merely unhelpful, it is FALSE — the field was there, and a caller who
+    /// believes it reaches for the argument they already sent.
+    ///
+    /// This is not hypothetical. `debug.session_open` hands back a NUMERIC
+    /// session id while every other debug tool takes `session_id` as a STRING
+    /// (50 `req_str` call sites against 39 string schemas), because they are
+    /// two different session systems that happen to share a field name.
+    /// Chaining them the obvious way produced "missing required field
+    /// 'session_id'" about a field that had just been supplied.
+    ///
+    /// Absence must keep its own message: a caller who forgot the field needs
+    /// to be told that, not lectured about types.
+    #[test]
+    fn a_field_of_the_wrong_type_is_not_reported_as_missing() {
+        use serde_json::json;
+
+        // Absent: the old message is the RIGHT one here and must survive.
+        let absent = json!({});
+        let e = super::req_str(&absent, "session_id").expect_err("absent must fail");
+        let t = e.to_string();
+        assert!(
+            t.contains("missing") && t.contains("session_id"),
+            "an absent field must still say it is missing, got: {t}"
+        );
+
+        // Present, wrong type: must NOT claim the field is missing.
+        let wrong = json!({ "session_id": 42 });
+        let e = super::req_str(&wrong, "session_id").expect_err("a number is not a string");
+        let t = e.to_string();
+        assert!(
+            !t.contains("missing"),
+            "the field was supplied — calling it missing is false. Got: {t}"
+        );
+        assert!(
+            t.contains("session_id") && t.contains("string"),
+            "the refusal must name the field and the type it needed, got: {t}"
+        );
+
+        // The twin helper has the same defect and the same cure.
+        let wrong_int = json!({ "pid": "1234" });
+        let e = super::req_u64(&wrong_int, "pid").expect_err("a string is not an integer");
+        let t = e.to_string();
+        assert!(
+            !t.contains("missing"),
+            "the field was supplied — calling it missing is false. Got: {t}"
+        );
+        assert!(
+            t.contains("pid") && t.contains("integer"),
+            "the refusal must name the field and the type it needed, got: {t}"
+        );
+    }
     use super::*;
 
     fn registry() -> McpToolRegistry {
