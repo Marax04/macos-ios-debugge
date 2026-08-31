@@ -2472,7 +2472,26 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                     let addr_to_id: HashMap<u64, u64> =
                         sess.bp_ids.iter().map(|(id, addr)| (*addr, *id)).collect();
                     let json_bps: Vec<Value> = bps.iter().map(|bp| json!({
-                        "breakpoint_id": addr_to_id.get(&bp.address.as_u64()).map(|id| format!("bp_{id}")),
+                        // A row nobody can name is a row nobody can act on.
+                        // This reversed `bp_ids` alone, and a watchpoint does
+                        // not live in that table — so it appeared here with a
+                        // null id while `debug.watchpoints` gave the same entry
+                        // a perfectly good `wp_N`.
+                        //
+                        // The id is reported under the name the entry answers to
+                        // in ITS OWN tool, so the caller also learns WHICH call
+                        // to make next: `wp_N` goes to remove_watchpoint, `bp_N`
+                        // to remove_breakpoint.
+                        "breakpoint_id": addr_to_id
+                            .get(&bp.address.as_u64())
+                            .map(|id| format!("bp_{id}"))
+                            .or_else(|| {
+                                sess.watchpoints
+                                    .all()
+                                    .iter()
+                                    .find(|w| w.address == bp.address.as_u64())
+                                    .map(|w| format!("wp_{}", w.id))
+                            }),
                         "addr": bp.address.as_u64(),
                         "kind": format!("{:?}", bp.kind),
                         "enabled": bp.enabled,
@@ -7949,6 +7968,44 @@ mod tests {
             "an address before every export is inside none of them, and a name              would be invention"
         );
         assert_eq!(nearest_export_at_or_below(&[], 0x1000), None);
+    }
+
+    /// Every entry `debug.breakpoints` lists must be ADDRESSABLE.
+    ///
+    /// The audit against x64dbg found a watchpoint listed there as
+    /// `{"breakpoint_id": null, "addr": …, "kind": "DataWrite"}`, while
+    /// `debug.watchpoints` gave the same entry a perfectly good `wp_1`. The
+    /// unified list reverses `sess.bp_ids` alone, and a watchpoint does not live
+    /// in that table — so it appears in the listing and cannot be named from it.
+    ///
+    /// A listing whose rows carry no identifier is a listing you can read and
+    /// not act on: the caller sees the watchpoint, and has no handle to remove
+    /// or disable it by. The id is reported under the name the entry answers to
+    /// in ITS OWN tool — `wp_N` for a watchpoint, `bp_N` for a breakpoint — so
+    /// the caller can tell which call to make next rather than guessing.
+    ///
+    /// Guarded on the source, since exercising it needs a live session: the
+    /// listing must consult the watchpoint table, not just the breakpoint one.
+    #[test]
+    fn the_unified_breakpoint_listing_names_every_row() {
+        let src = production_only(include_str!("debug.rs"));
+        let i = src
+            .find("\"debug.breakpoints\",")
+            .expect("the breakpoints tool must exist");
+        // Slice on a CHARACTER boundary, not a byte offset: this file has box
+        // -drawing characters in its section banners, and `i + 3000` landed
+        // inside one — the test panicked on the cut instead of measuring.
+        let end = src[i..].char_indices().map(|(o, _)| i + o).take_while(|o| *o - i < 3000).last().unwrap_or(i);
+        let body = &src[i..end];
+        // Anchor on `sess.watchpoints`, which is contiguous. The first version
+        // looked for `watchpoints.all()` — a string my own formatting had split
+        // across two lines, so the guard matched the NEXT tool's copy 34_000
+        // characters away and reported a failure about the wrong code. The
+        // probe was wrong, not the object.
+        assert!(
+            body.contains("sess.watchpoints"),
+            "the unified listing reverses only `bp_ids`, so a watchpoint is listed              with a null id and cannot be acted on from there"
+        );
     }
 
     /// A tool that reports PROCESS STATE must refuse without a live session,

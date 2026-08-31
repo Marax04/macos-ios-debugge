@@ -3218,3 +3218,179 @@ enorme.
     c'è» come pulito.
 24. **Un agente fallito per errore di server non è un difetto assente**: va
     rilanciato, e finché non lo è va dichiarato aperto (giro 8).
+
+
+---
+
+## WORKFLOW #7 — DE-VACUAZIONE 2 — watchpoint e thread/moduli
+
+Bersagli della campagna di falsificazione: `live_linux_watchpoints.rs`
+(**1 mordente su 11**) e `live_linux_threads_modules.rs` (**1 su 9**). Nove
+guardie nuove in `tests/live_linux_devac_watchpoints.rs`, nessuna delle quali
+costruisce l'attesa dal dato che verifica.
+
+### L'oracolo: la DICHIARAZIONE SCRITTA dal tracee
+
+Ogni fixture apre il file passato in `argv[1]` e scrive, PRIMA di fare il
+lavoro, gli indirizzi dei propri globali (`%p`), quante volte sta per scriverli
+e il `gettid()` di ogni thread che crea. Il debugger non produce nulla di tutto
+questo. `OutputRedirect{stdout:true}` non e' implementato da nessun backend
+(commento a `lib.rs:2449`), quindi lo stdout vero non e' catturabile: il file e'
+lo stdout del programma per altra via, non un ripiego concettuale.
+Secondo oracolo indipendente per gli stessi indirizzi: `nm`. Terzo e quarto:
+`/proc/<pid>/task` e `/proc/<pid>/maps`, letti dal test.
+
+Contatori (7, 4, 2, 0) tutti DIVERSI: il vettore e' un'impronta
+dell'assegnazione indirizzo→nome. Un contatore solo non separa, come gia'
+misurato due volte nel giro #6.
+
+### Le sette mutazioni, misurate
+
+| mutazione | rossi su 9 | quali |
+|---|---|---|
+| `addr_shift` (+8 dall'indirizzo dichiarato) | **2** | conteggi 7,4,2→4,2,0 |
+| `swap` (arma w_beta spacciandolo per w_alpha) | **2** | w_alpha riporta 4 invece di 7 |
+| `cross` (slot 0 riceve l'indirizzo dello slot 1) | **2** | l'istogramma perde w_alpha |
+| `nm_shift` (+0x40 sull'oracolo `nm`) | **1** | i due oracoli divergono |
+| `tid_drop` | **2** | insiemi tid |
+| `tid_add` (tid 999999 inventato) | **2** | insiemi tid |
+| `map_drop` (una mappatura in meno) | **1** | insieme dei path dei moduli |
+
+Ogni guardia e' rossa sotto almeno una mutazione. Pulito: **9/9 verdi, 0 orfani**.
+
+### Tre difetti trovati NEL PROPRIO lavoro, nessuno visibile da un run verde
+
+1. **`swap(0,1)` non incrociava niente.** La prima versione della mutazione
+   `cross` scambiava l'ORDINE di armamento: stesso INSIEME di indirizzi,
+   istogramma identico, guardia verde. L'incrocio vero e' dare allo slot 0
+   l'indirizzo dello slot 1. Misurato: dopo la correzione, 2 rossi.
+2. **Il precondizionamento rubava il rosso alla guardia.** `declared.len()==4`
+   scattava prima delle comparazioni di insieme, quindi `tid_add` falliva sul
+   conteggio e non sull'insieme. Reso `>= 4` — serve solo contro un oracolo
+   VUOTO, che sarebbe sottoinsieme di qualunque cosa — e il morso e' tornato
+   dove deve stare.
+3. **Il test degli orfani non distingueva vivo da zombie.** Un tracee ucciso
+   sul percorso di panic resta visibile a `pgrep` finche' il tracer non lo
+   raccoglie, e il tracer e' un thread di QUESTO binario. Ora lo stato viene
+   letto da `/proc/<pid>/stat`: zombie stampato, vivo = rosso.
+
+### ROSSO MISURATO nel backend: un panic puo' APPENDERE il test successivo
+
+Sotto `tid_add`, le due guardie thread sono andate in panic e la `start()`
+successiva e' rimasta appesa **18 minuti** in `futex_do_wait` con la fixture che
+girava (`ps`: `6547 Rl+ devacthr`). Causa nota e gia' documentata in
+`live_linux_threads_modules.rs`: il loop del debugger reap-a con
+`waitpid(-1, __WALL)`, che e' GLOBALE al processo, e un `LinuxDebugger` di un
+test morto continua a mangiarsi gli stop del figlio successivo. Non corretto nel
+backend (fuori mandato): il test ora avvolge `launch` in un timeout di 30 s e
+spazza la fixture stantia, cosi' l'attesa infinita diventa un fallimento
+leggibile. Dopo la cura: `tid_add` chiude in **2,95 s**, `tid_drop` in **1,46 s**,
+zero orfani.
+
+### Nota di metodo
+
+Due file assegnati erano gia' in modifica da altri agenti (`mtime` di
+`live_linux_threads_modules.rs` a 3 minuti prima dell'inizio): tutto il lavoro
+sta nel file nuovo, nessuno dei due e' stato toccato.
+
+## Giro 653 — un watchpoint era elencato ma non indirizzabile
+
+**Difetto (gap 4 dell'audit x64dbg).** `debug.breakpoints` elenca anche i
+watchpoint, ma reversa SOLO la mappa `addr_to_id` dei breakpoint software:
+per un watchpoint la ricerca fallisce e la riga esce con `breakpoint_id: null`.
+Lo stesso watchpoint, chiesto a `debug.watchpoints`, ha un id valido `wp_1`.
+Era quindi **visibile ma non azionabile** dalla lista unificata: il chiamante lo
+vede e non ha nulla da passare a un tool successivo.
+
+**Rosso misurato PRIMA della cura**, guard `the_unified_breakpoint_listing_names_every_row`:
+> the unified listing reverses only `bp_ids`, so a watchpoint is listed with a
+> null id and cannot be acted on from there
+
+**Cura.** La riga ora ricade su `sess.watchpoints.all()` e riporta `wp_N`.
+Scelta deliberata: ogni id resta nella forma a cui risponde il SUO tool
+(`bp_N` / `wp_N`), così il chiamante impara anche quale chiamata fare dopo,
+invece di ricevere un id ambiguo che una sola delle due famiglie accetta.
+
+### Il guard ha mentito, e questo e' il risultato piu' utile del giro
+
+La prima versione dell'ancora cercava `watchpoints.all()` come stringa
+contigua. Ma la cura e' scritta su due righe (`sess.watchpoints` a capo
+`.all()`), quindi quella stringa **li' non esiste**: il guard ha proseguito e ha
+trovato la copia del tool `debug.watchpoints`, a **34874 caratteri** di distanza,
+riportando un fallimento riferito a codice che non avevo toccato.
+
+Non era un rosso rumoroso: era un rosso **plausibile**, con un messaggio
+sensato su codice reale, che diceva il falso. Se lo avessi creduto avrei
+riscritto qualcosa di gia' corretto — lo stesso schema del giro 650, dove un
+guard ancorato a una finestra di byte fu riancorato a `fn enrich_frame(`.
+
+Riancorato a `sess.watchpoints`, che la formattazione non puo' spezzare, e
+falsificato su quattro punti: ancora nuova presente nella finestra, ancora
+vecchia ASSENTE (che e' la prova della diagnosi), manomissione -> rosso,
+finestra corretta (contiene `addr_to_id`). Il commento nel codice registra che
+quel guard ha gia' mentito una volta, e perche'.
+
+**Regola aggiunta:** un guard testuale non deve mai ancorarsi a una stringa che
+la formattazione del codice puo' spezzare su piu' righe. Se lo fa, non fallisce:
+trova il prossimo simile e accusa l'oggetto sbagliato.
+
+### Suite del giro 653
+
+- **MCP**: 411 passati, 1 fallito. L'unico rosso e' il cricchetto FABRICATOR
+  preesistente (175 su 2390), che non e' mio, non contiene alcun tool `debug.*`
+  e NON va chiuso alzando il tetto. Il guard nuovo risulta `ok`.
+- **Windows**: 2129 passati, 0 falliti.
+- **Darwin** x86_64 e aarch64: entrambi `Finished`, zero errori. Restano due
+  `unused import` sul percorso Apple, che e' sospeso: la regola vieta di
+  zittirli con `#[allow]` e cablarli sarebbe sviluppo iOS, quindi restano.
+- **Linux**: NON conclusa — si e' bloccata. Vedi il giro 654: non e' una
+  regressione di questo giro, e' un difetto preesistente che questa esecuzione
+  ha finalmente colto in flagrante.
+
+---
+
+## Giro 654 — DEADLOCK a tre vie nel backend Linux, letto dal kernel
+
+Il difetto piu' grave trovato oggi, e non e' stato dedotto: e' stato **letto in
+diretta** da `/proc` mentre la suite era ferma.
+
+**Sintomo.** `cargo test -p rustre-debug --lib` sotto WSL non termina. Il segnale
+che distingue «lento» da «bloccato» e' il tempo di CPU: **347 secondi di orologio
+contro `00:00:00` di CPU**. Non stava lavorando piano, non stava lavorando.
+
+**Le tre parti, ognuna verificata:**
+
+| pid/tid | chi e' | stato | dove |
+|---|---|---|---|
+| 7678 | il worker del tracee | **`t`** | `ptrace_stop` — mai ripreso |
+| 7677 | il main del tracee | `S` | `futex_do_wait`, dentro `pthread_join` |
+| 7676 | thread `linux_debugger:` (Tgid 6260) | `S` | `do_wait`, cioe' `waitpid` |
+
+**Causa, in una frase:** `continue_execution` riprende il thread che ha riportato
+lo stop ma lascia il thread APPENA NATO fermo nel suo birth-stop. Il main del
+tracee lo aspetta in `pthread_join` e non arrivera' mai al suo `raise(SIGTRAP)`;
+il debugger aspetta in `waitpid` un evento che nessuno puo' piu' produrre.
+Ognuno dei tre aspetta uno degli altri due.
+
+E' esattamente il modo di fallire che i commenti di `linux_debugger.rs`
+descrivono gia' («an event handed to the caller for a thread that nobody
+resumed, which is how this backend hung before»): la diagnosi era scritta nel
+file, il caso non era chiuso.
+
+**Test colpito:** `a_threads_birth_and_death_both_reach_the_caller`, che usa
+`DYING_THREAD_FIXTURE_C` (pthread_create -> pthread_join -> raise(SIGTRAP)).
+Il suo ciclo e' limitato a 64 giri, quindi il blocco NON e' nel test: e' dentro
+una singola `continue_execution().await`.
+
+**Non e' una regressione del giro 653.** `linux_debugger.rs` non e' toccato dalle
+11:48 e la modifica del 653 e' in `rustre-mcp-tools`. Il workflow #7 lavora solo
+in `tests/`, per regola. La suite Linux era passata prima (2080/0): il difetto e'
+sensibile all'ordine degli eventi e si manifesta sotto carico, che e' il motivo
+per cui e' sopravvissuto a piu' giri verdi.
+
+**Due cure distinte, da non confondere:**
+1. la vera: riprendere OGNI thread fermo, non solo quello che ha riportato lo
+   stop;
+2. la difensiva: dare un timeout a questo test, perche' un blocco diventi un
+   ROSSO con diagnosi invece di fermare l'intera suite per sempre — che e' la
+   regola che il file stesso enuncia e che questo test viola.
