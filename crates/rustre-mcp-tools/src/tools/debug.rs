@@ -1655,59 +1655,18 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     }));
                 }
 
-                let frames: Vec<StackFrame> = vec![
-                    StackFrame {
-                        index: 0,
-                        pc: Address::new(0x0000_0001_4000_1000_u64),
-                        sp: Address::new(0x0000_0001_4FFE_6900_u64),
-                        fp: Some(Address::new(0x0000_0001_4FFE_6940_u64)),
-                        function_name: Some("main".into()),
-                        module: Some("target.exe".into()),
-                        offset: Some(0),
-                        source_file: None,
-                        source_line: None,
-                    },
-                    StackFrame {
-                        index: 1,
-                        pc: Address::new(0x0000_7FFA_BCD1_2345_u64),
-                        sp: Address::new(0x0000_0001_4FFE_6920_u64),
-                        fp: None,
-                        function_name: Some("BaseThreadInitThunk".into()),
-                        module: Some("kernel32.dll".into()),
-                        offset: Some(0x45),
-                        source_file: None,
-                        source_line: None,
-                    },
-                    StackFrame {
-                        index: 2,
-                        pc: Address::new(0x0000_7FFA_BCD1_2300_u64),
-                        sp: Address::new(0x0000_0001_4FFE_6940_u64),
-                        fp: None,
-                        function_name: Some("RtlUserThreadStart".into()),
-                        module: Some("ntdll.dll".into()),
-                        offset: Some(0x20),
-                        source_file: None,
-                        source_line: None,
-                    },
-                ];
-                let json_frames: Vec<Value> = frames.iter().map(|f| json!({
-                    "frame": f.index,
-                    "addr": f.pc.as_u64(),
-                    "sp": f.sp.as_u64(),
-                    "name": f.function_name,
-                    "module": f.module,
-                    "offset": f.offset,
-                    // Same field as the live renderer above, and the same
-                    // reason. The sample frames deliberately carry a MIX of
-                    // `Some` and `None`, which made the omission invisible:
-                    // the data was constructed correctly and then discarded.
-                    "fp": f.fp.map(|a| a.as_u64())
-                })).collect();
-                Ok(json!({
-                    "session_id": session_id,
-                    "frames": json_frames,
-                    "source": "rustre_debug::StackFrame"
-                }))
+                // NO fabricated stack. Without a live session this used to
+                // answer three invented frames — `main`, `BaseThreadInitThunk`,
+                // `RtlUserThreadStart` — with plausible addresses, module names
+                // and a coherent SP chain: indistinguishable from a real
+                // Windows backtrace. It did not even set `live: false`, so a
+                // caller guarding on that field saw nothing rather than a
+                // denial.
+                //
+                // A backtrace is the answer people read FIRST when something has
+                // gone wrong. An invented one is the least doubtable lie this
+                // tool could tell.
+                Err(no_live_session(&session_id))
             },
         ),
 
@@ -2051,14 +2010,10 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                     return r;
                 }
 
-                let tid = rustre_debug::ThreadId(1);
-                Ok(json!({
-                    "session_id": session_id,
-                    "tid": tid.0,
-                    "display": tid.to_string(),
-                    "live": false,
-                    "source": "rustre_debug::ThreadId"
-                }))
+                // NOT `ThreadId(1)`. An invented tid is indistinguishable
+                // from an ordinary one, and it is the thread every register and
+                // stepping call falls back to.
+                Err(no_live_session(&session_id))
             },
         ),
 
@@ -2584,8 +2539,9 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
             "debug.heap_chunks",
             "Walk a ptmalloc2 heap arena in the debugged process and return a chunk graph \
              (nodes + free-list/adjacency edges), ready for a heap visualizer. Live path reads \
-             the real address space via the session; without a live session returns a canned \
-             sample graph.",
+             the real address space via the live session. There is NO sample fallback: \
+             without a live session the call is refused, because an invented arena is \
+             indistinguishable from a real one.",
             json!({
                 "type": "object",
                 "required": ["session_id"],
@@ -2630,24 +2586,11 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                     return r;
                 }
 
-                // Fallback: a small canned two-chunk arena so the tool is always
-                // demonstrable without a live process.
-                let parser = Ptmalloc2Parser::new(8);
-                let mut buf = vec![0u8; 32];
-                buf[8..16].copy_from_slice(&0x21u64.to_le_bytes()); // size 0x20 | PREV_INUSE
-                let c0 = parser.parse_chunk(0x1000, &buf).map_err(|e| anyhow!("{e}"))?;
-                buf[8..16].copy_from_slice(&0x21u64.to_le_bytes());
-                let c1 = parser.parse_chunk(0x1020, &buf).map_err(|e| anyhow!("{e}"))?;
-                let layout = HeapLayout::from_chunks(vec![c0, c1]);
-                let graph = HeapChunkGraph::from_layout(&layout);
-                Ok(json!({
-                    "session_id": session_id,
-                    "allocated_count": layout.allocated_count,
-                    "free_count": layout.free_count,
-                    "graph": graph,
-                    "live": false,
-                    "source": "rustre_debug::memory_layout_view::HeapChunkGraph (sample)"
-                }))
+                // NO canned arena. This used to answer a two-chunk arena at
+                // 0x1000 using the SAME field names as the live path
+                // (`allocated_count`, `free_count`, `graph`), so only the
+                // `live` flag told fiction from fact.
+                Err(no_live_session(&session_id))
             },
         ),
 
@@ -2864,8 +2807,9 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
             "debug.set_watchpoint",
             "Set a hardware data watchpoint (x86 debug registers DR0-DR3) that stops the \
              debugged process when a given address is read/written/executed. Live path programs \
-             the thread's DR0-3/DR7 via the OS backend; without a live session returns the \
-             computed register layout so callers can inspect it.",
+             the thread's DR0-3/DR7 via the OS backend. There is NO offline fallback: \
+             without a live session the call is refused, because a watchpoint id never \
+             written into any thread's debug registers refers to nothing.",
             json!({
                 "type": "object",
                 "required": ["session_id", "addr"],
@@ -7789,46 +7733,90 @@ mod tests {
 
     // ── debug.session_* smoke tests ───────────────────────────────────────────
 
-    /// `debug.backtrace` must publish the frame pointer, including its absence.
+    /// The backtrace renderer must still emit `fp`, and the guarantee now lives
+    /// on the LIVE path only.
     ///
-    /// The backend computes `StackFrame::fp` and BOTH renderers in this tool
-    /// dropped it, so a caller reading a backtrace could see `pc` and `sp` but
-    /// never the frame pointer — on the answer people read first when something
-    /// has gone wrong. The omission hid behind fixtures that carry a deliberate
-    /// mix of `Some` and `None`: the data was constructed correctly and then
-    /// discarded.
+    /// Iteration 643 added `fp` to both renderers and pinned it down through the
+    /// sample path, because that path could be exercised without a process.
+    /// That path is gone: it fabricated a stack (iteration 649), and a test that
+    /// verified a fabrication was verifying fiction.
     ///
-    /// `null` is a real answer here, not a placeholder. The iOS unwinder
-    /// publishes `None` for a frame whose `x29` was never read and for the
-    /// conventional null terminator that ends a chain (iteration 638), so
-    /// rendering it as 0 would re-collapse the distinction the backend keeps.
-    #[tokio::test]
-    async fn backtrace_publishes_the_frame_pointer_including_its_absence() {
-        let tools = handlers();
-        // A session id that names no live session: this exercises the SAMPLE
-        // renderer, which is the second of the two that dropped `fp`. Note
-        // that `debug.backtrace` takes `session_id` as a STRING (`req_str`)
-        // while `debug.session_open` hands one back as a number — an
-        // inconsistency this test deliberately steps around rather than
-        // depending on.
-        let bt = call_tool(&tools, "debug.backtrace", json!({ "session_id": "no-such-session" })).await;
-        let frames = bt["frames"].as_array().expect("frames array").clone();
-        assert!(frames.len() >= 3, "the sample stack has three frames: {bt}");
+    /// What is checked here instead is that the live renderer still carries the
+    /// field, and that it is rendered as a NULLABLE value rather than collapsed
+    /// to 0 — `None` is a real answer, produced for a frame whose `x29` was
+    /// never read and for the null terminator that ends a chain (iteration 638).
+    ///
+    /// This is weaker than the behavioural test it replaces, and saying so
+    /// matters: the behavioural guarantee is now covered only where a real
+    /// process exists.
+    #[test]
+    fn the_backtrace_renderer_still_emits_a_nullable_frame_pointer() {
+        // `production_only` cuts the file at the test module, because the
+        // needles below appear in THIS test's own text too — a source guard
+        // that matches itself is green for the wrong reason. That helper exists
+        // precisely because this trap was hit three times before it was written
+        // (iteration 634), and it has now caught its own author.
+        let src = production_only(include_str!("debug.rs"));
+        let i = src
+            .find("\"debug.backtrace\",")
+            .expect("the backtrace tool must exist");
+        let body = &src[i..(i + 6000).min(src.len())];
+        assert!(
+            body.contains("\"fp\": f.fp.map(|a| a.as_u64())"),
+            "the live renderer must publish `fp` as a nullable field: rendering it              as 0 would re-collapse the distinction the backend keeps"
+        );
+        assert!(
+            !body.contains("f.fp.unwrap_or"),
+            "`fp` must never be unwrapped to a number: absence is an answer here"
+        );
+    }
 
-        for (i, f) in frames.iter().enumerate() {
+
+    /// A tool that reports PROCESS STATE must refuse without a live session,
+    /// never invent it.
+    ///
+    /// `no_live_session` — the honest refusal these tools already share — says
+    /// in as many words: "These tools have no mock fallback: every value they
+    /// return is read from a real process." That claim was FALSE for three of
+    /// them:
+    ///
+    /// - `debug.backtrace` returned three invented frames named `main`,
+    ///   `BaseThreadInitThunk` and `RtlUserThreadStart` — which is exactly what
+    ///   a real Windows stack looks like — and did not even set `live: false`,
+    ///   so a caller checking that field saw nothing rather than a denial.
+    /// - `debug.current_thread` answered `ThreadId(1)`, a tid indistinguishable
+    ///   from an ordinary one.
+    /// - `debug.heap_chunks` answered a canned two-chunk arena at 0x1000 with
+    ///   the same field names the live path uses.
+    ///
+    /// An external audit against x64dbg named this exactly: "a plausible answer
+    /// from those tools does not prove the live path exists". Fabricating state
+    /// is the "absence disguised as an answer" family at its most damaging,
+    /// because the invented value is the one a caller is least able to doubt.
+    ///
+    /// NOT every `live: false` is a fabrication, and this test says so by
+    /// leaving them alone: `debug.evaluate` folding a constant expression and
+    /// `debug.load_symbols` parsing a symbol file do real work that needs no
+    /// process. They do not pretend to describe a running one.
+    #[tokio::test]
+    async fn state_reporting_tools_refuse_instead_of_inventing_a_process() {
+        let tools = handlers();
+        const NO_SESSION: &str = "no-such-session";
+
+        for name in ["debug.backtrace", "debug.current_thread", "debug.heap_chunks"] {
+            // `call_tool_err` returns the refusal text, and panics if the tool
+            // ANSWERS instead — which is exactly the failure being measured.
+            let msg = call_tool_err(&tools, name, json!({
+                "session_id": NO_SESSION,
+                // heap_chunks needs this on the live path; supplying it proves
+                // the refusal is about the SESSION, not a missing argument.
+                "arena_addr": 0x1000
+            })).await;
             assert!(
-                f.get("fp").is_some(),
-                "frame {i} must carry an `fp` key even when the value is null: {f}"
+                msg.contains("no live debug session"),
+                "{name} must refuse by naming the missing session, got: {msg}"
             );
         }
-        assert_eq!(
-            frames[0]["fp"], json!(0x0000_0001_4FFE_6940_u64),
-            "frame 0 has a known frame pointer and it must be reported: {}", frames[0]
-        );
-        assert_eq!(
-            frames[1]["fp"], json!(null),
-            "frame 1 has NO frame pointer, and that is an answer, not a zero: {}", frames[1]
-        );
     }
 
     #[tokio::test]

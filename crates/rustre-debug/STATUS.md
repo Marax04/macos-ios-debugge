@@ -1947,6 +1947,185 @@ stesso difetto (`set_watchpoint` vuole `size`, `read_memory` vuole `len`).
 7. **Verificare TTD/causale/NL sul percorso LIVE**, non solo che i tool
    rispondano.
 
+
+---
+
+## WORKFLOW LINUX #4 — 2026-08-31 — ⭐ RISPONDE ALL'AVVERTIMENTO DELL'AUDIT
+
+5 agenti su 5, zero errori. **Questo giro chiude il buco che l'audit x64dbg aveva
+nominato come piu' grave**: «le famiglie TTD, causale e NL non sono state
+verificate — sono capacita' DICHIARATA, non misurata».
+
+**Ora sono misurate**, su processo vero, e il verdetto e' articolato: la maggior
+parte funziona davvero, e i difetti hanno un nome.
+
+### TTD / esecuzione inversa — 23 test, 20 verdi, 3 difetti
+
+**Cio' che funziona DAVVERO** (non e' piu' capacita' dichiarata):
+registrazione live (40 stati, primo pc == `main`), **`step_backward` che
+restituisce ESATTAMENTE i pc misurati da ptrace** per tutta la traccia
+all'indietro, `AtBeginning` a inizio traccia, `seek` fra due posizioni,
+`reverse_continue` su un pc realmente visitato che atterra su pc **e** sequenza
+giusti, **`who_wrote`/`last_writer` che nominano l'istruzione dentro `main` che
+ha scritto `g`** (0x11 poi 0x22, due pc distinti), copertura dei byte interni
+(`g+1..3` si', `g+4` no), `trace_origin_full`, `retro_print` che rende `rip`/`rsp`
+reali per ogni scrittura.
+
+**I 3 difetti, col rosso misurato:**
+
+1. **`reverse_continue` INVENTA uno stop.** Andando indietro senza colpire nulla
+   restituisce `states[0]` con `stop_reason == "recorded"` — indistinguibile da
+   un hit vero.
+   Rosso: `reverse_continue to an unvisited pc must be distinguishable from a
+   hit; got pc=0x40187a reason="recorded"`.
+   ⚠ La cura esiste gia' **nello stesso modulo**: il ramo senza backend
+   (`simulated_reverse_continue_to_beginning`) dice correttamente «inizio
+   storia». gdb risponde «No more reverse-execution history».
+2. **`reverse_step_over` e' cieco al frame** — aliasato a `step_backward`.
+   Rosso: `reverse_step_over from inside callee must leave [0x401865,0x40187a);
+   it returned 0x401870`. Raggiungibile con cio' che c'e': la registrazione ha
+   ogni pc, basta risalire al primo fuori dal range di `callee`.
+3. **`run_to_previous_call` non cerca alcuna call** — aliasato anch'esso.
+   Rosso: `run_to_previous_call returned 0x404d28, which objdump does not list
+   as a call site`.
+
+### Tracepoint — 16 test, ZERO difetti di logica, ma una CAPACITA' NON CABLATA
+
+Nessun `#[ignore]`: la logica di tracepoint e condizioni e' corretta su stato
+vivo in ogni sua parte. **Il divario e' il cablaggio.**
+
+Verita' interna, coi comandi che la producono:
+- `grep -rn "TracepointSet" src --include=*.rs | grep -v conditional_breakpoint.rs` → **nessun output**
+- `grep -ci "tracepoint" src/linux_debugger.rs` → **0**
+
+| | atteso (gdb `dprintf`) | raggiungibile oggi | ottenuto |
+|---|---|---|---|
+| comando per armarlo | uno | nessuno: `set_breakpoint` + ciclo scritto a mano | ~25 righe per sito |
+| **fermi del tracee su 5 attraversamenti** | **0** | 5 | **5** |
+| rendering da stato vivo | corretto | corretto | corretto, 5/5 distinti |
+
+Cioe': **il contratto del tracepoint e' NON-STOPPING e il backend ferma 5 volte
+su 5.** `Tracepoint`/`TracepointFormat`/`TracepointSet` funzionano, ma nessun
+backend li conosce. Cura scrivibile: `set_tracepoint(addr, format)` sul trait
+piu' un ramo in `condition_allows_stop` (`linux_debugger.rs:~735`) che fa
+`fire_at` e restituisce `false` — l'unico punto che ha gia' registri, `pc`/`sp` e
+il lettore di memoria che una render richiede.
+
+### ⭐ UN AGENTE HA FALSIFICATO I PROPRI TEST, e va imitato
+
+L'agente dei tracepoint ha cambiato **un solo dato** della verita' esterna
+(`22`→`23` fra gli argomenti attesi) e ha misurato: `7 passed; 9 failed`.
+**Nove test su sedici mordono davvero il valore vivo**; i 7 restanti non
+dipendono da quel dato per costruzione (contratto non-stopping, indirizzo mai
+raggiunto, igiene). E' la prova che i test non sono vacui — cfr.
+[[feedback_verde_non_significa_verificato]]. Da fare in ogni giro futuro.
+
+Nota: lo stdout del tracee stesso (`80 75`) e' verita' esterna indipendente —
+1+8+15+22+29 = 75 e la somma dei (x+1) = 80.
+
+
+---
+
+## Iterazione 649 — 2026-08-31 — TRE tool INVENTAVANO lo stato del processo
+
+Nasce dall'avvertimento finale dell'audit x64dbg: «una risposta plausibile da
+quei tool non prova che il percorso live esista». L'utente ha chiesto di
+chiuderlo. Scavando, i tool che fabbricavano erano **tre**, non i due che l'audit
+aveva toccato.
+
+### Il peggiore: `debug.backtrace`
+
+Su una sessione **mai aperta** rispondeva con uno stack completo:
+
+```
+main            @ target.exe   +0
+BaseThreadInitThunk @ kernel32.dll +69
+RtlUserThreadStart  @ ntdll.dll   +32
+```
+
+indirizzi plausibili, offset, catena SP coerente — **indistinguibile da un
+backtrace vero**. E **non impostava nemmeno `live: false`**: il campo mancava,
+quindi chi lo controllava per difendersi non vedeva «falso», non vedeva nulla.
+
+Un backtrace e' la risposta che si legge PER PRIMA quando qualcosa e' andato
+storto. Un backtrace inventato e' la bugia meno dubitabile che questo strumento
+potesse dire.
+
+### Gli altri due
+
+- **`debug.current_thread`** → `ThreadId(1)`, un tid indistinguibile da uno vero,
+  ed e' il thread predefinito su cui ricadono registri e stepping.
+- **`debug.heap_chunks`** → un'arena di due chunk a `0x1000`, con gli **stessi
+  nomi di campo** del percorso vivo.
+
+### ⭐ Il crate si CONTRADDICEVA, e la prova e' nello stesso file
+
+`lib.rs` ha gia' una guardia anti-fabbricazione che verifica che **sei** tool
+rifiutino la sessione mai aperta `sess_001`. `debug.backtrace` **non era nel suo
+elenco** — e quaranta righe piu' sotto `test_debug_backtrace_frames`
+**PRETENDEVA** che `backtrace` fabbricasse per quella stessa sessione.
+
+Un file, due test, richieste opposte.
+
+**Cura**: la guardia canonica ora ne copre **nove** (i tre corretti sono dentro),
+e il test che esigeva la finzione ora verifica il rifiuto. Non e' piu' un mio
+test isolato a sorvegliarli: e' il controllo canonico del crate.
+
+### Le DESCRIZIONI mentivano, ed e' meta' del difetto
+
+`debug.set_watchpoint` era gia' stato corretto nel codice in un giro precedente,
+ma la sua descrizione continuava a promettere «without a live session returns the
+computed register layout». **E' cosi' che l'auditor l'ha classificato come tool
+che fabbrica**: leggendola. Una documentazione che sopravvive alla correzione del
+codice produce diagnosi sbagliate su un sistema sano — e qui l'ha fatto con un
+lettore esperto e attrezzato. Corrette entrambe (`heap_chunks` e
+`set_watchpoint`).
+
+### Cosa NON ho toccato, e perche'
+
+`debug.evaluate` (ripiega su espressioni costanti) e `debug.load_symbols`
+(analizza un file di simboli) riportano anch'essi `live: false`, ma **non
+fabbricano**: fanno lavoro vero che non richiede un processo, e non fingono di
+descriverne uno in esecuzione. Distinguere i due casi e' il punto; togliere anche
+questi sarebbe stato zelo, non rigore.
+
+### Due test miei sono caduti, ed era giusto
+
+Entrambi **verificavano la finzione**:
+1. `test_debug_backtrace_frames` (preesistente) → riscritto per verificare il rifiuto.
+2. `backtrace_publishes_the_frame_pointer_including_its_absence` (mio, §643) →
+   usava il percorso di esempio. Sostituito con un controllo sui sorgenti, che e'
+   **piu' debole**: garantisce che il renderer vivo porti ancora il campo come
+   nullable, non che il valore arrivi giusto al chiamante. **La garanzia
+   comportamentale su `fp` ora esiste solo dove c'e' un processo vero.** Scritto
+   nel doc del test invece che lasciato intendere: una copertura che si
+   indebolisce in silenzio e' il modo tipico in cui una suite smette di
+   sorvegliare.
+
+### ⭐ Un mio guard di 15 giri fa ha colto il suo autore
+
+`a_source_guard_cannot_match_its_own_test_text` (§634) e' scattato sul mio nuovo
+controllo: cercava una stringa che compare **anche nel proprio testo**, quindi
+sarebbe stato verde perfino se il renderer avesse perso il campo. Risolto con
+`production_only`, l'helper scritto apposta al 634 dopo esserci cascato tre
+volte. Queste guardie non proteggono dal codice: proteggono da chi scrive i test.
+
+### Osservazione: un test dipendente dall'ORDINE
+
+`mcp_detach_clears_hardware_watchpoints` e' fallito in un run completo e passa da
+solo e nei run successivi: i test MCP condividono un registro di sessioni globale
+e girano in parallelo. Non e' una mia regressione, ma **un test che dipende
+dall'ordine e' una regressione in attesa**. Annotato come fronte aperto.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| MCP | **409 / 1** — passati 407 → 409, l'1 e' il cricchetto |
+| Windows `--lib` | **2127 / 0** |
+| Linux `--lib` | **2108 / 0** |
+| Darwin x2 | **0 errori** (sola compilazione) |
+
 ---
 ---
 

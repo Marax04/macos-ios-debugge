@@ -7780,6 +7780,23 @@ mod mcp_registry_tests {
                     "data_hex": "DEADBEEF"
                 }),
             ),
+            // Added after three more tools were caught fabricating. The guard
+            // named six and `debug.backtrace` was not among them — while
+            // `test_debug_backtrace_frames`, forty lines below, REQUIRED it to
+            // fabricate for this very same never-opened session. One file, two
+            // tests, opposite demands.
+            (
+                "debug.backtrace",
+                serde_json::json!({"session_id": "sess_001"}),
+            ),
+            (
+                "debug.current_thread",
+                serde_json::json!({"session_id": "sess_001"}),
+            ),
+            (
+                "debug.heap_chunks",
+                serde_json::json!({"session_id": "sess_001", "arena_addr": 0x1000_u64}),
+            ),
         ];
 
         let mut fabricated: Vec<String> = Vec::new();
@@ -7797,18 +7814,32 @@ mod mcp_registry_tests {
         );
     }
 
+    /// `debug.backtrace` must refuse a session that was never opened.
+    ///
+    /// This test used to assert the OPPOSITE: that `sess_001` — a session id
+    /// nothing ever created — returned a non-empty frame list. It was pinning
+    /// down a fabrication: three invented frames named `main`,
+    /// `BaseThreadInitThunk` and `RtlUserThreadStart`, with plausible addresses
+    /// and a coherent SP chain, indistinguishable from a real Windows stack.
+    ///
+    /// The anti-fabrication guard above named six tools and did not name this
+    /// one, so the same file forbade fabrication for six tools and required it
+    /// for a seventh. `debug.backtrace` is in that list now, and this test
+    /// checks the shape of the refusal.
     #[test]
-    fn test_debug_backtrace_frames() {
+    fn debug_backtrace_refuses_a_session_that_was_never_opened() {
         let reg = registry();
-        let v = reg
+        let err = reg
             .call(
                 "debug.backtrace",
                 serde_json::json!({"session_id": "sess_001"}),
             )
-            .unwrap();
-        let frames = v["frames"].as_array().unwrap();
-        assert!(!frames.is_empty());
-        assert_eq!(frames[0]["frame"].as_u64().unwrap(), 0);
+            .expect_err("a backtrace of a session that does not exist must be refused");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("no live debug session"),
+            "the refusal must name the missing session, got: {msg}"
+        );
     }
 
     // ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ kg.* ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬ÃƒÂ¢â€”ÂÃ¢â€šÂ¬
