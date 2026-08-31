@@ -3870,3 +3870,22 @@ alcun `#[ignore]`.
   anche scambiando `rip` con `gs`, e in silenzio se scendessero a zero.
 - Falsificazione dei test nuovi: una mutazione su otto resta verde, e l'agente
   **lo dichiara e spiega perche'** — e' la mutazione dell'ORACOLO, non del dato.
+
+### Nota di precisione sul commit del giro 657
+
+`git add crates/rustre-debug/tests/` ha incluso, oltre alle 4 righe mie, **tutti
+i file di test live accumulati dai workflow #6-#9 e mai committati**: circa
+11.000 righe in 29 file (`live_linux_causal.rs`, `live_linux_multitarget.rs`,
+`live_linux_nl.rs`, `live_linux_falsification.rs`, i sei `devac_*`, i cinque
+`dv3_*`, e le espansioni di `breakpoints`/`load`/`reverse`/`signals`/`invariants`).
+
+Il messaggio del commit descrive solo il lavoro su DWARF 5, quindi **non copre
+cio' che il commit contiene**. Lo scrivo qui perche' il registro sia esatto, e
+non riscrivo la storia per correggerlo.
+
+Il contenuto e' voluto e prezioso — quel lavoro era fuori dal controllo di
+versione e a rischio, come ha gia' dimostrato l'azzeramento di `/tmp` che a un
+agente ha cancellato albero, target dir e backup. Ma «prezioso» non e' lo stesso
+che «dichiarato»: la regola «committare solo i propri hunk» esiste esattamente
+per non far entrare nel proprio commit lavoro altrui senza dirlo, e qui e'
+successo.
