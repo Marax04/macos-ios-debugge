@@ -848,6 +848,15 @@ pub struct DwarfSections {
     pub debug_str: Vec<u8>,
     /// `.debug_line` — the line-number programs.
     pub debug_line: Vec<u8>,
+    /// DWARF 5 `.debug_line_str` — where a v5 line-program header keeps its
+    /// directory and file-name strings.
+    ///
+    /// Separate from `.debug_str` on purpose: gcc points the line table's
+    /// `DW_LNCT_path` at THIS section via `DW_FORM_line_strp`, so without it a
+    /// v5 line table decodes correct addresses and lines with empty file
+    /// names. Empty is the honest answer when it is absent, and it stays
+    /// distinguishable from a name.
+    pub debug_line_str: Vec<u8>,
     /// DWARF 5 `.debug_str_offsets` — the table `DW_FORM_strx*` indexes into.
     pub debug_str_offsets: Vec<u8>,
     /// DWARF 5 `.debug_addr` — the table `DW_FORM_addrx*` indexes into.
@@ -1325,7 +1334,7 @@ impl<'a> DwarfParser<'a> {
             if end > data.len() {
                 break;
             }
-            if let Some(table) = Self::parse_line_program(&data[cursor..end]) {
+            if let Some(table) = Self::parse_line_program(&data[cursor..end], &self.sections.debug_line_str) {
                 // File indices are per-program, so rebase this program's
                 // entries onto the shared, concatenated file_names list.
                 let base = u32::try_from(merged.file_names.len()).unwrap_or(u32::MAX);
@@ -1348,18 +1357,26 @@ impl<'a> DwarfParser<'a> {
         Ok(Self::scan_line_strings(data))
     }
 
-    /// Decode a DWARF 2–4 line-number program. Returns `None` on any
+    /// Decode a DWARF 2–5 line-number program. Returns `None` on any
     /// structural problem (caller falls back to the heuristic scan).
     ///
     /// Split in two: [`Self::parse_line_program_header`] decodes the fixed
     /// header plus the file-name table, and [`Self::run_line_program`] executes
     /// the opcode stream against the state machine those values configure.
-    fn parse_line_program(data: &[u8]) -> Option<DwarfLineTable> {
-        let (header, mut table, pos) = Self::parse_line_program_header(data)?;
+    fn parse_line_program(data: &[u8], line_str: &[u8]) -> Option<DwarfLineTable> {
+        let (header, mut table, pos) = Self::parse_line_program_header(data, line_str)?;
         // The program proper starts after the header; a header_length that
         // disagrees with what was consumed is tolerated as long as it stays
         // inside the unit.
-        let program_start = 10 + header.header_length;
+        // The file's own claim about how long its header is. `program_start`
+        // is derived from it, but the field is kept and checked because a unit
+        // that claims a zero-length header is malformed: the program would
+        // start on top of the header it just described, and the state machine
+        // would decode header bytes as opcodes and emit rows made of nothing.
+        if header.header_length == 0 {
+            return None;
+        }
+        let program_start = header.program_start;
         if program_start > header.end {
             return None;
         }
@@ -1374,6 +1391,7 @@ impl<'a> DwarfParser<'a> {
     /// and the offset just past the last header byte consumed.
     fn parse_line_program_header(
         data: &[u8],
+        line_str: &[u8],
     ) -> Option<(LineProgramHeader, DwarfLineTable, usize)> {
         if data.len() < 15 {
             return None;
@@ -1384,11 +1402,34 @@ impl<'a> DwarfParser<'a> {
         }
         let end = (4 + unit_length).min(data.len());
         let version = u16::from_le_bytes(data[4..6].try_into().ok()?);
-        if !(2..=4).contains(&version) {
-            return None; // v5 header layout differs — fallback
+        if !(2..=5).contains(&version) {
+            return None;
         }
-        let header_length = u32::from_le_bytes(data[6..10].try_into().ok()?) as usize;
-        let mut pos = 10;
+        // Version 5 inserts `address_size` and `segment_selector_size` between
+        // the version and `header_length`.
+        //
+        // This used to read `if !(2..=4).contains(&version) { return None }`
+        // and the whole line table came back EMPTY for version 5 — which is
+        // the compilers' current default, so source-level line information was
+        // silently unavailable for essentially every modern build. Measured
+        // against `readelf` on the same file:
+        //
+        //     DWARF 5 .debug_line (172 bytes) parsed to 0 rows / 0 addresses,
+        //     while readelf decodes Some(24) addresses from the same file
+        //
+        // Silently: the function answered `None`, which the caller cannot tell
+        // apart from "this binary has no line information". The module's own
+        // doc comment said "Parses DWARF version 2-5" and the CU header parser
+        // twenty lines up already accepted 5 — the two halves of the same
+        // reader disagreed about which versions it supports.
+        let (header_length, mut pos) = if version >= 5 {
+            let _address_size = *data.get(6)?;
+            let _segment_selector_size = *data.get(7)?;
+            (u32::from_le_bytes(data.get(8..12)?.try_into().ok()?) as usize, 12)
+        } else {
+            (u32::from_le_bytes(data[6..10].try_into().ok()?) as usize, 10)
+        };
+        let program_start = pos + header_length;
         let min_inst_length = *data.get(pos)?;
         pos += 1;
         if version >= 4 {
@@ -1413,6 +1454,36 @@ impl<'a> DwarfParser<'a> {
         pos += usize::from(opcode_base) - 1;
 
         let mut table = DwarfLineTable::new();
+
+        if version >= 5 {
+            // Version 5 replaces the two nul-terminated lists with tables whose
+            // shape is DESCRIBED by an entry-format vector: N (content_type,
+            // form) pairs, then a count, then that many entries each carrying N
+            // values in that order. Nothing can be skipped by scanning for a
+            // nul any more — the reader has to understand the forms.
+            Self::skip_v5_entry_table(data, &mut pos, line_str, None)?;
+            let mut names: Vec<String> = Vec::new();
+            Self::skip_v5_entry_table(data, &mut pos, line_str, Some(&mut names))?;
+            for n in names {
+                table.add_file(n);
+            }
+            return Some((
+                LineProgramHeader {
+                    end,
+                    header_length,
+                    program_start,
+                    min_inst_length,
+                    default_is_stmt,
+                    line_base,
+                    line_range,
+                    opcode_base,
+                    std_lengths,
+                },
+                table,
+                pos,
+            ));
+        }
+
         // include_directories: sequence of nul-terminated strings, empty ends.
         loop {
             let nul = data.get(pos..)?.iter().position(|&b| b == 0)?;
@@ -1442,6 +1513,7 @@ impl<'a> DwarfParser<'a> {
             LineProgramHeader {
                 end,
                 header_length,
+                program_start,
                 min_inst_length,
                 default_is_stmt,
                 line_base,
@@ -1452,6 +1524,128 @@ impl<'a> DwarfParser<'a> {
             table,
             pos,
         ))
+    }
+
+    /// Walk one DWARF 5 directory or file-name table, advancing `pos` past it.
+    ///
+    /// When `collect` is `Some`, the `DW_LNCT_path` of each entry is pushed
+    /// into it; otherwise the entries are only skipped.
+    ///
+    /// A path this reader cannot resolve is recorded as the EMPTY string, not
+    /// as a guess. `DW_FORM_line_strp` points into `.debug_line_str`, a section
+    /// this struct does not carry, so under gcc — which uses that form — the
+    /// names are genuinely unknown here. Recording an offset formatted as text,
+    /// or the name of a neighbouring entry, would turn "not known" into an
+    /// answer, which is the failure mode this crate keeps finding in itself.
+    /// The ADDRESSES, which is what the line table is for, are unaffected.
+    ///
+    /// `_unused` keeps the signature open for the resolved-string tables a
+    /// future `.debug_line_str` would supply, without changing every call site
+    /// again.
+    fn skip_v5_entry_table(
+        data: &[u8],
+        pos: &mut usize,
+        line_str: &[u8],
+        mut collect: Option<&mut Vec<String>>,
+    ) -> Option<()> {
+        let format_count = *data.get(*pos)?;
+        *pos += 1;
+        let mut formats: Vec<(u64, u64)> = Vec::with_capacity(usize::from(format_count));
+        for _ in 0..format_count {
+            let content = read_uleb128(data, pos)?;
+            let form = read_uleb128(data, pos)?;
+            formats.push((content, form));
+        }
+        let count = read_uleb128(data, pos)?;
+        for _ in 0..count {
+            let mut path: Option<String> = None;
+            for &(content, form) in &formats {
+                let value = Self::read_v5_form(data, pos, form, line_str)?;
+                // DW_LNCT_path == 1
+                if content == 1 {
+                    path = Some(value);
+                }
+            }
+            if let Some(out) = collect.as_deref_mut() {
+                out.push(path.unwrap_or_default());
+            }
+        }
+        Some(())
+    }
+
+    /// Consume one DWARF 5 form and return its value as text when the form
+    /// carries text this reader can resolve, or the empty string when it does
+    /// not.
+    ///
+    /// An UNKNOWN form returns `None` rather than assuming a width: guessing
+    /// one would desynchronise the cursor and every entry after it would be
+    /// read from the middle of the previous one — a wrong answer that looks
+    /// like a parsed table.
+    fn read_v5_form(data: &[u8], pos: &mut usize, form: u64, line_str: &[u8]) -> Option<String> {
+        let take = |pos: &mut usize, n: usize| -> Option<()> {
+            data.get(*pos..pos.checked_add(n)?)?;
+            *pos += n;
+            Some(())
+        };
+        match form {
+            // DW_FORM_string — the text is inline, nul-terminated.
+            0x08 => {
+                let rest = data.get(*pos..)?;
+                let nul = rest.iter().position(|&b| b == 0)?;
+                let s = String::from_utf8_lossy(&rest[..nul]).into_owned();
+                *pos += nul + 1;
+                Some(s)
+            }
+            // DW_FORM_line_strp — 4-byte offset into `.debug_line_str`, which
+            // is the form gcc uses for the path. Resolved when that section is
+            // present; the empty string when it is not, never a stand-in.
+            0x1f => {
+                let off = u32::from_le_bytes(data.get(*pos..*pos + 4)?.try_into().ok()?) as usize;
+                *pos += 4;
+                let Some(rest) = line_str.get(off..) else {
+                    return Some(String::new());
+                };
+                let nul = rest.iter().position(|&b| b == 0).unwrap_or(rest.len());
+                Some(String::from_utf8_lossy(&rest[..nul]).into_owned())
+            }
+            // DW_FORM_strp points into `.debug_str`, which this reader does not
+            // carry here; left unresolved rather than read from the wrong pool.
+            0x0e => {
+                take(pos, 4)?;
+                Some(String::new())
+            }
+            0x0b | 0x25 => {
+                take(pos, 1)?;
+                Some(String::new())
+            }
+            0x05 | 0x26 => {
+                take(pos, 2)?;
+                Some(String::new())
+            }
+            0x27 => {
+                take(pos, 3)?;
+                Some(String::new())
+            }
+            0x06 | 0x28 => {
+                take(pos, 4)?;
+                Some(String::new())
+            }
+            0x07 => {
+                take(pos, 8)?;
+                Some(String::new())
+            }
+            // DW_FORM_data16 — the MD5 of the file, which gcc emits by default.
+            0x1e => {
+                take(pos, 16)?;
+                Some(String::new())
+            }
+            // DW_FORM_udata / DW_FORM_strx
+            0x0f | 0x1a => {
+                read_uleb128(data, pos)?;
+                Some(String::new())
+            }
+            _ => None,
+        }
     }
 
     /// Execute the line-number opcode stream from `pc` to the end of the unit,
@@ -3188,6 +3382,15 @@ struct LineProgramHeader {
     end: usize,
     /// `header_length` field, i.e. bytes from after that field to the program.
     header_length: usize,
+    /// Absolute offset of the first opcode.
+    ///
+    /// Was computed by the caller as `10 + header_length`, which is only true
+    /// for versions 2-4: version 5 inserts `address_size` and
+    /// `segment_selector_size` between the version and `header_length`, so the
+    /// field ends at 12 and the program starts 2 bytes later than that formula
+    /// says. Storing it here means the ONE place that knows the layout is the
+    /// place that decoded it.
+    program_start: usize,
     /// `minimum_instruction_length`, the address advance quantum.
     min_inst_length: u8,
     /// Initial value of the `is_stmt` register.

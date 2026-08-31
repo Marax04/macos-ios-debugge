@@ -7,6 +7,25 @@
 //! writes) and a live `memory_search` over the target's own address space.
 //! Nothing here asserts on a structure built in memory — an in-memory
 //! `RegisterSet` proves nothing about what `PTRACE_GETREGS` actually returned.
+//!
+//! ## What this file does NOT establish — see `live_linux_devac_regs_mem.rs`
+//!
+//! Measured by the falsification campaign (STATUS.md): 9 of these 14 bite on the
+//! mutated ground truth. The five that do not are not the whole story, because
+//! most of the nine bite on the crate's SELF-CONSISTENCY rather than on the
+//! process. `write_memory_is_visible_to_a_subsequent_read_memory` compares this
+//! backend's write with this backend's read; `..._returns_exactly_the_requested_
+//! length_for_partial_sizes` compares a short read with a wider read of the same
+//! address, an equality that holds for any content including zeroes; and
+//! `set_register_then_get_register_round_trips_a_scratch_register` asks the
+//! backend what it has just told the backend. None of the three names a value
+//! that came from outside this crate.
+//!
+//! `live_linux_devac_regs_mem.rs` re-asserts each of those against a fixture
+//! that PRINTS its own addresses and values before the breakpoint fires, and
+//! closes the write direction through the program's own output. Those guards are
+//! the ones to change when the behaviour changes; these remain as the cheap
+//! smoke pass over `/bin/sh`.
 #![cfg(target_os = "linux")]
 
 use rustre_core::address::Address;

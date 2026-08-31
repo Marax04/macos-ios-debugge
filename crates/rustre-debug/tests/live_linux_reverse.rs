@@ -75,6 +75,55 @@ struct Fixture {
     callee: (u64, u64),
     /// Address of the global `g`.
     g: u64,
+    /// Every instruction boundary `objdump -d` lists, address -> instruction
+    /// text. THE oracle of this file: it comes from a different tool than the
+    /// debugger, so a pc the debugger invents cannot be in it.
+    text: BTreeMap<u64, String>,
+    /// What the fixture prints when NOTHING is debugging it. `g` ends at
+    /// `0x22` = 34 and `callee(34)` = 69, so this one line is an oracle for the
+    /// whole run that no change to the symbol table can move.
+    stdout: String,
+}
+
+impl Fixture {
+    /// The instruction `objdump -d` places AT `pc`, or `None` when `pc` is not
+    /// an instruction boundary at all (mid-instruction, or not code).
+    fn insn(&self, pc: u64) -> Option<&str> {
+        self.text.get(&pc).map(String::as_str)
+    }
+
+    /// The next instruction boundary after `pc`, per `objdump`.
+    fn next_insn(&self, pc: u64) -> Option<u64> {
+        self.text.range(pc + 1..).next().map(|(a, _)| *a)
+    }
+
+    /// The `n`-th boundary after `start` in `objdump`'s listing order.
+    fn nth_insn_from(&self, start: u64, n: usize) -> Option<u64> {
+        let mut at = start;
+        for _ in 0..n {
+            at = self.next_insn(at)?;
+        }
+        Some(at)
+    }
+
+    /// Every pc the debugger reported must be an instruction boundary of THIS
+    /// binary according to `objdump`.
+    ///
+    /// This is the guard against the vacuity measured for this file: reporting
+    /// every pc four bytes off left 18 of the 20 active tests green, because
+    /// they compare the recording with a pc list produced by the same call to
+    /// `get_registers`. A boundary is not a number the debugger gets to choose.
+    fn assert_boundaries(&self, pcs: &[(u64, u64)], what: &str) {
+        let strays: Vec<(u64, u64)> =
+            pcs.iter().copied().filter(|&(_, pc)| self.insn(pc).is_none()).collect();
+        assert!(
+            strays.is_empty(),
+            "{} of the {} pcs in {what} are not instruction boundaries in `objdump -d` output              (seq, pc): {:x?}",
+            strays.len(),
+            pcs.len(),
+            &strays[..strays.len().min(6)]
+        );
+    }
 }
 
 /// Compile the fixture, or `None` when this host has no usable C toolchain /
@@ -100,7 +149,57 @@ fn build_fixture() -> Option<Fixture> {
     let main = symbol_extent(&path, "main")?;
     let callee = symbol_extent(&path, "callee")?;
     let g = symbol_addr(&path, "g")?;
-    Some(Fixture { _dir: dir, path, main, callee, g })
+    let text = disasm(&path);
+    if text.is_empty() {
+        eprintln!("[fixture] objdump produced no disassembly; the external oracle is unavailable");
+        return None;
+    }
+    let stdout = fixture_stdout(&path)?;
+    Some(Fixture { _dir: dir, path, main, callee, g, text, stdout })
+}
+
+/// Every instruction boundary `objdump -d` lists: address -> instruction text.
+///
+/// A continuation line (`  40188d:<TAB>00 00 00`) carries an address and a colon
+/// but NO instruction field, and is deliberately not a boundary: counting it as
+/// one would let a pc that lands in the middle of an instruction pass.
+fn disasm(exe: &str) -> BTreeMap<u64, String> {
+    let Ok(out) = Command::new("objdump").args(["-d", exe]).output() else {
+        return BTreeMap::new();
+    };
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let mut map = BTreeMap::new();
+    for line in text.lines() {
+        let mut it = line.split('\t');
+        let (Some(addr), Some(_bytes), Some(insn)) = (it.next(), it.next(), it.next()) else {
+            continue;
+        };
+        let Some(addr) = addr.trim().strip_suffix(':') else { continue };
+        let Ok(addr) = u64::from_str_radix(addr, 16) else { continue };
+        if !insn.trim().is_empty() {
+            map.insert(addr, insn.trim().to_string());
+        }
+    }
+    map
+}
+
+/// The address `objdump -d` prints for a `<name>:` label — a SECOND tool's
+/// answer to the question `nm` answers, so the two can be made to contradict
+/// each other instead of being believed together.
+fn objdump_label(exe: &str, name: &str) -> Option<u64> {
+    let out = Command::new("objdump").args(["-d", exe]).output().ok()?;
+    let want = format!("<{name}>:");
+    String::from_utf8_lossy(&out.stdout).lines().find_map(|l| {
+        let l = l.trim();
+        let rest = l.strip_suffix(&want)?;
+        u64::from_str_radix(rest.trim(), 16).ok()
+    })
+}
+
+/// Run the fixture with no debugger attached and return its stdout.
+fn fixture_stdout(exe: &str) -> Option<String> {
+    let out = Command::new(exe).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// `[address, address + size)` of a named symbol — external truth, from
@@ -157,6 +256,49 @@ macro_rules! fixture_or_skip {
             }
         }
     };
+}
+
+/// PROVES: the three EXTERNAL oracles this file leans on describe the same
+/// program - `nm`'s symbol table, `objdump`'s disassembly, and the fixture's own
+/// stdout.
+///
+/// WHY THAT IS RIGHT: every other test here quotes one of the three. If two of
+/// them can disagree without anything going red, none of them is constraining
+/// the file. This is the one test whose whole job is to make them collide.
+#[test]
+fn the_three_external_oracles_agree_about_the_fixture() {
+    let fx = fixture_or_skip!();
+    assert_eq!(
+        objdump_label(&fx.path, "main"),
+        Some(fx.main.0),
+        "`nm` puts main at {:#x}; `objdump`'s label says otherwise",
+        fx.main.0
+    );
+    assert_eq!(
+        objdump_label(&fx.path, "callee"),
+        Some(fx.callee.0),
+        "`nm` puts callee at {:#x}; `objdump`'s label says otherwise",
+        fx.callee.0
+    );
+    // `g` is data, so it has no label of its own; objdump resolves the
+    // rip-relative store's target and prints `# <addr> <g>`. That address must
+    // be the one `nm` gives.
+    let store = fx
+        .text
+        .values()
+        .find(|i| i.contains("$0x22") && i.contains("<g>"))
+        .expect("objdump must show `main` storing 0x22 into <g>");
+    assert!(
+        store.contains(&format!("{:x} <g>", fx.g)),
+        "`nm` puts g at {:#x}; objdump resolves the store's target elsewhere: `{store}`",
+        fx.g
+    );
+    assert_eq!(
+        fx.stdout.trim(),
+        "34 69",
+        "the fixture must print g (0x22 = 34) and callee(34) = 69; it printed {:?}",
+        fx.stdout
+    );
 }
 
 // ── Harness ──────────────────────────────────────────────────────────────────
@@ -263,6 +405,29 @@ async fn ttd_record_loop_captures_the_real_pcs() {
     let distinct: std::collections::HashSet<u64> = rec.pcs.iter().map(|&(_, pc)| pc).collect();
     assert!(distinct.len() > 5, "a recording stuck on one pc is not a recording: {distinct:?}");
 
+    // EXTERNAL ORACLE - `objdump`, not the recording's own bookkeeping.
+    // Every pc the debugger reported must be an instruction boundary of this
+    // binary. MEASURED: shifting every reported pc by 4 left 18 of the 20 active
+    // tests in this file green, because they compare the trace with a pc list
+    // taken from the same `get_registers` call.
+    fx.assert_boundaries(&rec.pcs, "the recorded pc list");
+
+    // Stronger still: `main` opens with six branch-free instructions
+    // (`endbr64; push; mov; sub; movl $0x11,<g>; movl $0x22,<g>`), so the first
+    // six recorded pcs must be objdump's own successor chain from `main`. This
+    // pins the single-step engine to the instruction LENGTHS a second tool
+    // decoded, one at a time.
+    let mut walk = objdump_label(&fx.path, "main").expect("objdump must label main");
+    for (i, &(_, pc)) in rec.pcs.iter().take(6).enumerate() {
+        assert_eq!(
+            pc, walk,
+            "single-step {i} was reported at {pc:#x}; objdump's successor chain from main puts \
+             that step at {walk:#x} (`{}`)",
+            fx.insn(walk).unwrap_or("?")
+        );
+        walk = fx.next_insn(walk).expect("objdump lists a successor inside main");
+    }
+
     let _ = dbg.kill().await;
 }
 
@@ -287,11 +452,31 @@ async fn trace_extent_matches_the_recorded_range() {
     let empty = TtdSession::new(TtdConfig::default());
     assert!(!empty.is_trace_loaded(), "a session with no snapshots has no trace");
 
-    let sess = session_over(rec.backend);
+    let mut sess = session_over(rec.backend);
     assert!(sess.is_trace_loaded(), "attaching a backend loads the trace");
     let (a, b) = sess.trace_extent().expect("a backend-backed session reports its extent");
     assert_eq!(a, TracePosition::new(1, 0), "extent starts at the first recorded position");
     assert_eq!(b, TracePosition::new(last, 0), "extent ends at the last recorded position");
+
+    // An extent of the correct SHAPE over garbage is still garbage. Both ends
+    // must be real places in the program, judged by objdump rather than by the
+    // sequence numbers the session assigned itself.
+    let main_od = objdump_label(&fx.path, "main").expect("objdump must label main");
+    let st_a = sess.seek(a).expect("seek to the start of the extent");
+    assert_eq!(
+        st_a.pc, main_od,
+        "the extent's first position reports pc {:#x}; objdump puts `main` - where the recording \
+         was started - at {main_od:#x}",
+        st_a.pc
+    );
+    let st_b = sess.seek(b).expect("seek to the end of the extent");
+    assert!(
+        fx.insn(st_b.pc).is_some(),
+        "the extent's last position reports pc {:#x}, which objdump does not list as an \
+         instruction boundary",
+        st_b.pc
+    );
+    assert_ne!(st_a.pc, st_b.pc, "20 single-steps must not begin and end on the same pc");
 
     let _ = dbg.kill().await;
 }
@@ -340,6 +525,39 @@ async fn reverse_step_returns_the_pc_the_process_really_had() {
             "a backend-backed reverse step must not be flagged simulated: {}",
             st.stop_reason
         );
+        assert!(
+            fx.insn(st.pc).is_some(),
+            "reverse step reported pc {:#x}, which objdump does not list as an instruction \
+             boundary of this binary",
+            st.pc
+        );
+    }
+
+    // The pc list agreeing with itself proves nothing; agreeing with the
+    // DISASSEMBLY does. Wherever the earlier instruction transfers no control,
+    // the next recorded pc must be objdump's next boundary - an instruction
+    // length decoded by another tool.
+    for w in pcs.windows(2) {
+        let (a, b) = (w[0].1, w[1].1);
+        let Some(insn) = fx.insn(a) else { continue };
+        let mnem = insn.split_whitespace().next().unwrap_or("");
+        if mnem.starts_with('j')
+            || mnem.starts_with("call")
+            || mnem.starts_with("ret")
+            || mnem.starts_with("rep")
+            || mnem.starts_with("loop")
+            || mnem.starts_with("syscall")
+            || mnem.starts_with("iret")
+        {
+            continue;
+        }
+        assert_eq!(
+            Some(b),
+            fx.next_insn(a),
+            "`{insn}` at {a:#x} transfers no control, so the next recorded pc must be objdump's \
+             next boundary {:#x?}, not {b:#x}",
+            fx.next_insn(a)
+        );
     }
 
     let _ = dbg.kill().await;
@@ -361,7 +579,16 @@ async fn reverse_step_off_the_front_of_the_trace_is_an_error() {
     let rec = record_trace(&dbg, tid, 10).await;
     let mut sess = session_over(rec.backend);
 
-    sess.seek(TracePosition::new(1, 0)).expect("seek to the first recorded position");
+    let first = sess.seek(TracePosition::new(1, 0)).expect("seek to the first recorded position");
+    // "The beginning" has to be a real place, or `AtBeginning` is an error about
+    // nothing. objdump says where `main` starts; the recording started there.
+    let main_od = objdump_label(&fx.path, "main").expect("objdump must label main");
+    assert_eq!(
+        first.pc, main_od,
+        "the first recorded position reports pc {:#x}; the recording was started at `main`, \
+         which objdump puts at {main_od:#x}",
+        first.pc
+    );
     let err = sess.step_backward().expect_err("nothing precedes the first recorded position");
     assert_eq!(err, TtdError::AtBeginning, "got {err:?}");
 
@@ -384,6 +611,7 @@ async fn recorded_states_differ_between_positions() {
     };
     assert!(run_to(&dbg, fx.main.0).await, "reach main");
     let rec = record_trace(&dbg, tid, 25).await;
+    let pcs = rec.pcs.clone();
     let mut backend = rec.backend;
 
     let a = backend.seek(TracePosition::new(1, 0)).expect("first recorded state");
@@ -396,6 +624,23 @@ async fn recorded_states_differ_between_positions() {
          process"
     );
     assert_ne!(a.pc, b.pc, "rip must differ across 19 instructions");
+
+    // Both ends must be real instructions, and the walk must be the one the
+    // SOURCE describes: `main` stores 0x22 into `g` exactly once, so exactly one
+    // recorded pc may carry that instruction. A recorder reading stale or
+    // shifted registers cannot produce that.
+    fx.assert_boundaries(&pcs, "the 25-step recording");
+    let stores: Vec<u64> = pcs
+        .iter()
+        .filter(|&&(_, pc)| fx.insn(pc).is_some_and(|i| i.contains("$0x22") && i.contains("<g>")))
+        .map(|&(seq, _)| seq)
+        .collect();
+    assert_eq!(
+        stores.len(),
+        1,
+        "`main` executes the `movl $0x22,<g>` store exactly once in these 25 steps; the \
+         recording shows it at sequences {stores:?}"
+    );
 
     let _ = dbg.kill().await;
 }
@@ -428,6 +673,18 @@ async fn seek_between_recorded_positions_lands_on_the_nearest_earlier_one() {
     let st = sess.seek(TracePosition::new(5, 7)).expect("in-range seek");
     assert_eq!(st.position, TracePosition::new(5, 0), "landed on the nearest earlier state");
     assert_eq!(st.pc, pcs[4].1, "and reported that state's real pc");
+    // `pcs[4]` is not evidence of itself: the first six instructions of `main`
+    // are branch-free, so objdump's fifth successor from `main` is the ONLY
+    // address the fifth single-step can have.
+    let main_od = objdump_label(&fx.path, "main").expect("objdump must label main");
+    let fifth = fx.nth_insn_from(main_od, 4).expect("objdump lists five instructions in main");
+    assert_eq!(
+        st.pc, fifth,
+        "the fifth recorded position reports pc {:#x}; objdump's fifth instruction of `main` is \
+         {fifth:#x} (`{}`)",
+        st.pc,
+        fx.insn(fifth).unwrap_or("?")
+    );
 
     let _ = dbg.kill().await;
 }
@@ -465,12 +722,25 @@ async fn reverse_continue_lands_on_a_pc_the_process_really_visited() {
         let _ = dbg.kill().await;
         return;
     };
+    // The breakpoint address must be a real instruction of the program, not
+    // merely a number the recording agrees with itself about: without this the
+    // whole test survives every pc being reported four bytes off.
+    assert!(
+        fx.insn(target).is_some(),
+        "the chosen reverse-breakpoint pc {target:#x} is not an instruction boundary in \
+         objdump's disassembly of this binary"
+    );
     let mut sess = session_over(rec.backend);
     sess.seek(TracePosition::new(last_seq, 0)).expect("seek to the end");
     sess.add_reverse_breakpoint(target);
 
     let st = sess.reverse_continue().expect("reverse_continue over a recorded trace");
     assert_eq!(st.pc, target, "reverse_continue must stop AT the breakpoint pc");
+    assert!(
+        fx.insn(st.pc).is_some(),
+        "reverse_continue stopped at {:#x}, which objdump does not list as an instruction",
+        st.pc
+    );
     assert_eq!(st.position.sequence, seq, "and at the sequence where that pc was executed");
 
     let _ = dbg.kill().await;
@@ -500,6 +770,13 @@ async fn reverse_continue_without_breakpoints_runs_back_to_the_start() {
     assert_eq!(st.position, TracePosition::new(1, 0), "ran back to the first recorded position");
     assert_eq!(st.pc, first_pc, "which is main itself");
     assert_eq!(first_pc, fx.main.0, "sanity: the recording started at main");
+    // `nm` and the recording can be wrong together; objdump is a third party.
+    let main_od = objdump_label(&fx.path, "main").expect("objdump must label main");
+    assert_eq!(
+        first_pc, main_od,
+        "reverse_continue ran back to pc {first_pc:#x}; objdump puts `main`, where the recording \
+         was started, at {main_od:#x}"
+    );
 
     let _ = dbg.kill().await;
 }
@@ -540,6 +817,49 @@ async fn reverse_continue_to_an_unvisited_pc_returns_the_first_state_today() {
         "[measured] reverse_continue(bp={never:#x}) -> seq {} pc {:#x} reason {:?}",
         st.position.sequence, st.pc, st.stop_reason
     );
+
+    // POSITIVE CONTROL. Landing at position 1 is only evidence of the defect if
+    // reverse_continue lands somewhere ELSE when the breakpoint IS reachable.
+    // Without this half, a `reverse_continue` that always returned `states[0]`
+    // - or that ran over a recording of invented pcs - satisfies the assertion
+    // above for entirely the wrong reason.
+    let visited = pcs
+        .iter()
+        .copied()
+        .find(|&(seq, pc)| {
+            seq != 1
+                && seq != pcs.last().unwrap().0
+                && pcs.iter().filter(|&&(_, p)| p == pc).count() == 1
+        });
+    if let Some((seq, pc)) = visited {
+        assert!(
+            fx.insn(pc).is_some(),
+            "the control pc {pc:#x} is not an instruction boundary in objdump's disassembly, so              the process cannot have executed it and the control proves nothing"
+        );
+        let mut clone = SnapshotReplayBackend::new();
+        for &(s, p) in &pcs {
+            let mut cst = TtdState::new(TracePosition::new(s, 0), p, 0);
+            cst.stop_reason = "recorded".into();
+            clone.record(cst);
+        }
+        let mut sess2 = session_over(clone);
+        sess2.seek(TracePosition::new(pcs.last().unwrap().0, 0)).expect("seek to the end");
+        sess2.add_reverse_breakpoint(pc);
+        let hit = sess2.reverse_continue().expect("reverse_continue to a visited pc");
+        assert_eq!(
+            (hit.position.sequence, hit.pc),
+            (seq, pc),
+            "control: with a breakpoint on {pc:#x} (`{}`, an instruction objdump lists and the \
+             process really executed at sequence {seq}) reverse_continue must stop THERE, not at \
+             the start of the trace",
+            fx.insn(pc).unwrap_or("?")
+        );
+        assert_ne!(
+            hit.position.sequence, 1,
+            "control: the visited and the unvisited breakpoint produced the same answer, so the \
+             defect measured above is not a defect but the only thing this code can do"
+        );
+    }
 
     let _ = dbg.kill().await;
 }
@@ -622,6 +942,16 @@ async fn reverse_step_over_equals_step_backward_today() {
         return;
     }
     let end = pcs.last().unwrap().0;
+    // `nm` gives the extent of `callee` that the assertions below use; objdump
+    // is asked the same question independently, and every recorded pc must be
+    // an instruction this binary really contains.
+    assert_eq!(
+        objdump_label(&fx.path, "callee"),
+        Some(fx.callee.0),
+        "`nm` puts callee at {:#x} and objdump disagrees",
+        fx.callee.0
+    );
+    fx.assert_boundaries(&pcs, "the recording taken inside callee");
 
     // Two independent sessions over the same measured pcs, to compare the ops.
     let mut clone = SnapshotReplayBackend::new();
@@ -719,13 +1049,31 @@ async fn run_to_previous_call_does_not_land_on_a_call_site_today() {
     };
     assert!(run_to(&dbg, fx.main.0).await, "reach main");
     let rec = record_trace(&dbg, tid, 30).await;
-    let end = rec.pcs.last().unwrap().0;
+    let pcs = rec.pcs.clone();
+    let end = pcs.last().unwrap().0;
+    let previous = pcs[pcs.len() - 2];
     let mut sess = session_over(rec.backend);
     sess.seek(TracePosition::new(end, 0)).expect("seek to the end");
 
     let st = sess.run_to_previous_call().expect("run_to_previous_call");
     eprintln!(
         "[measured] run_to_previous_call -> pc {:#x}; objdump call sites in main: {sites:x?}",
+        st.pc
+    );
+    // A negative assertion alone ("it is not a call site") is satisfied by any
+    // wrong answer at all, including a pc the program never executed. State the
+    // POSITIVE fact instead: the alias returns the immediately preceding
+    // recorded state, and that pc is an instruction objdump lists.
+    assert_eq!(
+        (st.position.sequence, st.pc),
+        previous,
+        "MEASURED: run_to_previous_call is aliased to step_backward, so it must return the \
+         immediately preceding recorded state {previous:x?}"
+    );
+    assert!(
+        fx.insn(st.pc).is_some(),
+        "run_to_previous_call returned pc {:#x}, which objdump does not list as an instruction \
+         boundary of this binary",
         st.pc
     );
     assert!(
@@ -834,6 +1182,24 @@ async fn backendless_session_moves_the_cursor_but_reports_no_registers() {
             break;
         }
     }
+    // The registers the simulated path throws away must have been REAL ones:
+    // objdump says the eight pcs are instruction boundaries, the first of them
+    // `main` itself. Without this the test measures a gap in a recording of
+    // nothing.
+    let main_od = objdump_label(&fx.path, "main").expect("objdump must label main");
+    assert_eq!(
+        real_pcs.first().copied(),
+        Some(main_od),
+        "the snapshots were taken from `main` onwards; objdump puts main at {main_od:#x} and the \
+         first snapshot reports {:#x?}",
+        real_pcs.first()
+    );
+    let stray: Vec<u64> = real_pcs.iter().copied().filter(|&pc| fx.insn(pc).is_none()).collect();
+    assert!(
+        stray.is_empty(),
+        "{} of the snapshot pcs are not instruction boundaries in objdump's output: {stray:x?}",
+        stray.len()
+    );
     assert_eq!(sess.snapshot_count(), real_pcs.len(), "one snapshot per step");
     assert_eq!(sess.backend_name(), "snapshot-simulation", "no backend attached");
     assert!(real_pcs.len() >= 2, "need two positions to step back between");
@@ -967,6 +1333,18 @@ async fn who_wrote_names_the_real_instruction_that_stored_the_global() {
         fx.main.0,
         fx.main.1
     );
+    // EXTERNAL ORACLE - what the blamed instruction IS, per objdump.
+    // "inside main" is 0x51 bytes wide and was MEASURED to be slack: moving
+    // every observed writer pc by 4 left this test green, though its name
+    // claims it identifies the storing instruction. objdump names it.
+    let insn = fx
+        .insn(pc)
+        .unwrap_or_else(|| panic!("the blamed pc {pc:#x} is not even an instruction boundary"));
+    assert!(
+        insn.contains("$0x22") && insn.contains("<g>"),
+        "the LAST writer of `g` must be the instruction that stores the constant 0x22 into it; \
+         objdump says {pc:#x} is `{insn}`"
+    );
 
     let earlier = index
         .who_wrote(Address::new(fx.g), second_seq - 1)
@@ -977,6 +1355,24 @@ async fn who_wrote_names_the_real_instruction_that_stored_the_global() {
     assert_ne!(
         earlier.writer_pc, w.writer_pc,
         "two different store instructions must have two different pcs"
+    );
+    let epc = earlier.writer_pc.expect("the earlier write carries its pc").as_u64();
+    let einsn = fx
+        .insn(epc)
+        .unwrap_or_else(|| panic!("the earlier blamed pc {epc:#x} is not an instruction boundary"));
+    assert!(
+        einsn.contains("$0x11") && einsn.contains("<g>"),
+        "the earlier writer of `g` must be the instruction storing 0x11; objdump says {epc:#x} \
+         is `{einsn}`"
+    );
+    // Third witness, from neither `nm` nor `objdump`: the program's own output.
+    // `g` ends at 0x22 = 34, so the store this test blames is the one that
+    // decided what the process printed.
+    assert!(
+        fx.stdout.starts_with("34 "),
+        "the fixture printed {:?}; `g` must end at 0x22 = 34 for the 0x22 store to be its last \
+         writer",
+        fx.stdout
     );
 
     let _ = dbg.kill().await;
@@ -1004,6 +1400,24 @@ async fn who_wrote_covers_the_interior_bytes_of_a_real_store() {
         return;
     }
     let last_seq = observed.last().unwrap().0;
+    // WHY four bytes and not eight: objdump decodes the store as `movl`, a
+    // DWORD store. The `size: 4` this file records is otherwise a number the
+    // test both writes and reads back, and `g+4 has no writer` would then be
+    // true by construction rather than by fact.
+    let writer = index
+        .who_wrote(Address::new(fx.g), last_seq)
+        .first()
+        .and_then(|w| w.writer_pc)
+        .expect("a writer for g")
+        .as_u64();
+    let winsn = fx
+        .insn(writer)
+        .unwrap_or_else(|| panic!("the blamed pc {writer:#x} is not an instruction boundary"));
+    assert!(
+        winsn.starts_with("movl") && winsn.contains("<g>"),
+        "the recorded width of 4 is only right if the store really is a DWORD store; objdump \
+         decodes {writer:#x} as `{winsn}`"
+    );
     for off in 1..4u64 {
         let hits = index.who_wrote(Address::new(fx.g + off), last_seq);
         assert!(
@@ -1045,6 +1459,23 @@ async fn trace_origin_over_observed_writes_reaches_a_real_origin() {
     }
     let last_seq = observed.last().unwrap().0;
 
+    // The API says `Origin`; objdump says WHY it is one - the operand is an
+    // immediate, so the value was copied from no other address. Without this
+    // the test accepts `Origin` for a chain that simply lost its source.
+    let writer = index
+        .last_writer(Address::new(fx.g), last_seq)
+        .and_then(|w| w.writer_pc)
+        .expect("a writer for g")
+        .as_u64();
+    let winsn = fx
+        .insn(writer)
+        .unwrap_or_else(|| panic!("the blamed pc {writer:#x} is not an instruction boundary"));
+    assert!(
+        winsn.contains("$0x") && winsn.contains("<g>"),
+        "`Origin` means the value came from nowhere else; objdump must show an IMMEDIATE store \
+         into <g> at {writer:#x}, and shows `{winsn}`"
+    );
+
     let t = index.trace_origin_full(Address::new(fx.g), last_seq);
     assert_eq!(t.end, OriginEnd::Origin, "an immediate-constant store IS the origin");
     assert!(t.reached_origin(), "and the walk says so");
@@ -1077,6 +1508,12 @@ async fn nothing_in_the_crate_records_writes_from_a_live_process() {
     };
     assert!(run_to(&dbg, fx.main.0).await, "reach main");
 
+    // "Nothing recorded the writes" is vacuous unless the writes HAPPENED. The
+    // index below is empty at construction, so without this the test asserts
+    // that `OmniscientIndex::new()` is empty. Read `g` out of the live process
+    // before and after: the source stores 0x11 then 0x22 into it in these first
+    // instructions of `main`.
+    let before = dbg.read_memory(Address::new(fx.g), 4).await.expect("read g at main");
     let index = OmniscientIndex::new();
     for _ in 0..60 {
         let Ok(ev) = dbg.single_step(tid).await else { break };
@@ -1085,6 +1522,17 @@ async fn nothing_in_the_crate_records_writes_from_a_live_process() {
         }
         let _ = dbg.get_registers(tid).await;
     }
+    let after = dbg.read_memory(Address::new(fx.g), 4).await.expect("read g after 60 steps");
+    assert_ne!(
+        before, after,
+        "the fixture must really write `g` during these 60 steps, otherwise 'nothing recorded \
+         it' is a statement about an empty program"
+    );
+    assert_eq!(
+        u32::from_le_bytes(after.clone().try_into().expect("4 bytes")),
+        0x22,
+        "the source stores 0x22 into g last; the live process holds {after:x?}"
+    );
     assert!(
         index.is_empty(),
         "MEASURED: 60 single-steps of a real process produced {} recorded writes",
@@ -1145,6 +1593,18 @@ async fn retro_print_renders_real_registers_at_a_real_write() {
         }
         assert!(matches!(e.arg_values[1], EvalResult::U64(v) if v != 0), "rsp must be real");
         assert!(e.rendered.contains(&format!("{pc:#x}")), "rendered: {}", e.rendered);
+        // The rendered `rip` is only the storing instruction if objdump says
+        // that address stores into <g>. Comparing it with the pc the same loop
+        // recorded is an identity: moving every observed pc by 4 left this test
+        // green (measured).
+        let insn = fx
+            .insn(pc)
+            .unwrap_or_else(|| panic!("entry for seq {seq} blames {pc:#x}, not an instruction"));
+        assert!(
+            insn.contains("<g>") && insn.contains("$0x"),
+            "the retro-print entry for seq {seq} blames {pc:#x} = `{insn}`, which objdump does \
+             not show storing a constant into <g>"
+        );
     }
 
     let _ = dbg.kill().await;
@@ -1190,6 +1650,33 @@ async fn retro_print_derefs_the_recorded_stack_window() {
         ),
     }
 
+    // The recorded window is [rsp-64, rsp+192). Make that BOUNDARY load-bearing:
+    // inside it a deref must resolve, outside it must fail. With only the
+    // positive half, an evaluator that answered 0 for every address in the
+    // universe would pass - which is exactly the shape of vacuity this file was
+    // measured to have.
+    let probe = |expr: &str| {
+        let ann = RetroAnnotation {
+            address: fx.g,
+            format: "{0}".to_string(),
+            args: vec![expr.to_string()],
+        };
+        let e = retro_print(&index, &replay, &ann, last_seq);
+        assert!(!e.is_empty(), "the probe must produce an entry for `{expr}`");
+        e[0].arg_values[0].clone()
+    };
+    assert!(
+        matches!(probe("*(rsp-64)"), EvalResult::U64(_)),
+        "the low edge of the recorded window must resolve: {:?}",
+        probe("*(rsp-64)")
+    );
+    assert!(
+        matches!(probe("*(rsp+4096)"), EvalResult::Err(_)),
+        "an address 4 KiB above rsp was never recorded, so the historical deref must FAIL \
+         instead of inventing a value: {:?}",
+        probe("*(rsp+4096)")
+    );
+
     let _ = dbg.kill().await;
 }
 
@@ -1215,6 +1702,27 @@ async fn retro_print_on_an_unwritten_address_yields_nothing() {
         "an address nothing wrote must produce no retroactive-print entries"
     );
 
+    // POSITIVE CONTROL over the SAME index and backend. An emptiness assertion
+    // alone is satisfied by a `retro_print` that returns nothing for every
+    // address, and by a recording that observed nothing at all. `g` WAS written,
+    // and objdump must recognise every pc blamed for it.
+    let hit = retro_print(&index, &replay, &RetroAnnotation::simple(fx.g, "rip"), u64::MAX);
+    assert!(
+        !hit.is_empty(),
+        "control: `g` is written twice by `main`, so the same index and backend must produce \
+         entries for it; an empty answer there makes the assertion above meaningless"
+    );
+    for e in &hit {
+        let pc = e.writer_pc.expect("each entry carries its storing pc");
+        let insn = fx
+            .insn(pc)
+            .unwrap_or_else(|| panic!("entry blames {pc:#x}, not an instruction boundary"));
+        assert!(
+            insn.contains("<g>"),
+            "control: the entry blames {pc:#x} = `{insn}`, which objdump does not show writing <g>"
+        );
+    }
+
     let _ = dbg.kill().await;
 }
 
@@ -1230,12 +1738,18 @@ async fn retro_print_on_an_unwritten_address_yields_nothing() {
 /// `--test-threads=1`, where cargo orders tests by name.
 #[tokio::test]
 async fn zz_no_orphan_fixture_processes_remain() {
-    match Command::new("pgrep").args(["-af", "fixture"]).output() {
+    // `-x` matches the process NAME exactly and can never match this suite's own
+    // binary, which cargo names `live_linux_reverse-<hash>`. `-f` was the
+    // mistake made in the sibling falsification suite: it matched the test
+    // harness itself, so the check reported an orphan that was the checker.
+    match Command::new("pgrep").args(["-x", "fixture"]).output() {
         Ok(o) => {
-            let s = String::from_utf8_lossy(&o.stdout);
-            let mine: Vec<&str> =
-                s.lines().filter(|l| l.contains("/fixture") && !l.contains("pgrep")).collect();
-            assert!(mine.is_empty(), "orphaned fixture processes: {mine:?}");
+            let listed: Vec<String> = String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect();
+            assert!(listed.is_empty(), "orphaned `fixture` process(es): {listed:?}");
         }
         Err(e) => eprintln!("[skip] pgrep unavailable: {e}"),
     }

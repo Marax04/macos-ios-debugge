@@ -163,6 +163,7 @@ fn dwarf_sections(fx: &Fixture) -> DwarfSections {
         debug_abbrev: get(".debug_abbrev"),
         debug_str: get(".debug_str"),
         debug_line: get(".debug_line"),
+        debug_line_str: get(".debug_line_str"),
         debug_str_offsets: get(".debug_str_offsets"),
         debug_addr: get(".debug_addr"),
         split_debug_info: None,
@@ -508,7 +509,6 @@ async fn dwarf_version_gap_report() {
 /// Obtained: 0 rows, while `readelf --debug-dump=decodedline` decodes rows for
 /// the same file.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "backend defect: the line-program parser rejects DWARF 5, the current compiler default"]
 async fn dwarf5_line_program_should_parse_to_rows_like_every_other_version() {
     let fx = build_dwarf(5);
     let secs = dwarf_sections(&fx);
@@ -535,7 +535,6 @@ async fn dwarf5_line_program_should_parse_to_rows_like_every_other_version() {
 /// dismiss "we do not support `-gdwarf-5`" as an exotic flag. This one passes
 /// no version flag at all, which is what every real build does.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "backend defect: a plain `cc -g` build (DWARF 5 by default) yields an empty line table"]
 async fn the_default_compiler_build_should_have_a_usable_line_table() {
     let fx = build_default();
     let secs = dwarf_sections(&fx);
@@ -558,7 +557,6 @@ async fn the_default_compiler_build_should_have_a_usable_line_table() {
 /// `-gdwarf-4` answers line 2 of `linefixture.c`
 /// (`dwarf4_maps_each_function_entry_to_its_own_source_line` passes).
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "backend defect: under DWARF 5 source_at() answers None for a real function address"]
 async fn dwarf5_should_map_a_function_address_to_its_source_line() {
     let fx = build_dwarf(5);
     let prov = symtab_provider(&fx);

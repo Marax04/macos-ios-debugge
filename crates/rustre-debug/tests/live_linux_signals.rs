@@ -16,11 +16,13 @@
 use rustre_core::address::Address;
 use rustre_debug::linux_debugger::LinuxDebugger;
 use rustre_debug::{
-    BreakpointKind, DebugEvent, Debugger, LaunchOptions, OutputRedirect, StopReason,
+    BreakpointKind, DebugEvent, Debugger, LaunchOptions, OutputRedirect, StopReason, ThreadId,
 };
 
 /// The fixture. `argv[1]` picks the way it stops:
 ///   `segv` — dereference a NULL pointer (a real SIGSEGV at address 0)
+///   `segvat` — dereference the unmapped 0xdead0000 (a SIGSEGV at a CHOSEN
+///              address, so `si_addr` cannot be right by reporting a constant)
 ///   `fpe`  — divide by zero (SIGFPE)
 ///   `usr1` — install a SIGUSR1 handler that `_exit(7)`s, then spin
 ///   `int`  — install a SIGINT handler that `_exit(9)`s, then spin
@@ -34,16 +36,24 @@ const FIXTURE_C: &str = r#"
 static void on_usr1(int s) { (void)s; _exit(7); }
 static void on_int(int s)  { (void)s; _exit(9); }
 __attribute__((noinline)) int hot(int x) { return x + 1; }
+/* The NULL dereference lives in its own tiny function on purpose. When it sat
+   in `main`, "the fault is reported inside the function that faulted" was true
+   of a range hundreds of bytes wide, and was MEASURED not to notice `nm` shifted
+   by 0x40: the shifted window still contained the faulting pc. `boom` is smaller
+   than the shift, so the claim now has an edge to fall off. */
+__attribute__((noinline)) int boom(void) { volatile int *p = (volatile int *)0; return *p; }
 int main(int argc, char **argv) {
     const char *mode = argc > 1 ? argv[1] : "ok";
     volatile int s = hot(0);
     if (!strcmp(mode, "segv")) {
-        volatile int *p = (volatile int *)0;
-        s = *p;
+        s = boom();
     } else if (!strcmp(mode, "fpe")) {
         volatile int z = 0;
         volatile int d = 1;
         s = d / z;
+    } else if (!strcmp(mode, "segvat")) {
+        volatile int *p = (volatile int *)0xdead0000;
+        s = *p;
     } else if (!strcmp(mode, "usr1")) {
         signal(SIGUSR1, on_usr1);
         for (;;) { pause(); }
@@ -439,3 +449,231 @@ async fn a_killed_tracee_is_reported_as_death_by_signal_with_a_negative_code() {
         other => panic!("expected ProcessExit after SIGKILL, got {other:?}"),
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Falsification guards
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The workflow-5 falsification campaign shifted the one external symbol oracle
+// (`nm`, by `0x40`) under every live suite. This file lost ONE test of eight:
+// only `a_planted_breakpoint_stops_as_breakpoint_and_is_not_a_memory_fault`
+// consults `nm` at all.
+//
+// That is not the whole story, and it is worth being precise about, because
+// "vacuous on nm" and "vacuous" are different claims. The signal tests already
+// rest on something the crate cannot fabricate: the exit codes 7 and 9 are
+// produced by the fixture's OWN handlers, so they prove delivery. What was
+// missing is different:
+//
+// * **Nothing said the debugger must not CHANGE the program.** Every assertion
+//   here is about a run that has a debugger attached, compared against
+//   constants written in this file. If the backend forwarded SIGFPE as SIGSEGV,
+//   or turned a clean exit into a signal death, the only witness would be
+//   another number typed next to it. The oracle that closes this is the same
+//   program run with NO debugger at all, whose wait status comes from the
+//   kernel.
+// * **`si_addr` was only ever checked against zero.** A backend that reported a
+//   constant 0, or the program counter, or an uninitialised field that happens
+//   to be zero, passes `a_null_dereference_stops_as_sigsegv_not_as_a_breakpoint`
+//   exactly as a correct one does. The `segvat` mode faults at a CHOSEN address
+//   instead, so the reported value has to carry information.
+// * **No test said WHERE the fault happened.** The pc at the stop was never
+//   looked at, so nothing tied the stop to the code that caused it.
+
+/// Run the fixture with NO debugger attached and return what the kernel says
+/// happened: `Ok(code)` for a normal exit, `Err(signal)` for death by signal.
+///
+/// This is the independent oracle. It is not another constant in this file and
+/// it is not another answer from the crate under test — it is the same program,
+/// same arguments, same machine, observed through `waitpid` by the standard
+/// library. Everything a debugger does to a program is supposed to be invisible
+/// in this result.
+fn undebugged_outcome(exe: &str, mode: &str) -> Result<i32, i32> {
+    use std::os::unix::process::ExitStatusExt;
+    let st = std::process::Command::new(exe)
+        .arg(mode)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .expect("the fixture must be runnable without a debugger");
+    match st.signal() {
+        Some(sig) => Err(sig),
+        None => Ok(st.code().expect("a process that did not die by signal has an exit code")),
+    }
+}
+
+/// `(name, start, end)` for every TEXT symbol, from `nm -S --defined-only`.
+/// The SIZE column is what turns an address into an interval, and an interval
+/// is what turns a program counter into a function name without asking the
+/// crate under test to do it.
+fn nm_text_ranges(exe: &str) -> Vec<(String, u64, u64)> {
+    let out = std::process::Command::new("nm")
+        .args(["-S", "--defined-only", exe])
+        .output()
+        .expect("nm -S --defined-only must be available");
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split_whitespace().collect();
+            if f.len() != 4 {
+                return None;
+            }
+            let addr = u64::from_str_radix(f[0], 16).ok()?;
+            let size = u64::from_str_radix(f[1], 16).ok()?;
+            (f[2] == "T" || f[2] == "t").then(|| (f[3].to_string(), addr, addr + size))
+        })
+        .collect()
+}
+
+fn range_of(ranges: &[(String, u64, u64)], name: &str) -> (u64, u64) {
+    ranges
+        .iter()
+        .find(|(n, s, e)| n == name && e > s)
+        .map(|(_, s, e)| (*s, *e))
+        .unwrap_or_else(|| panic!("`nm -S` must give `{name}` a non-empty range in this fixture"))
+}
+
+/// Resume the tracee until it ends, and report the exit code the backend gives.
+async fn debugged_outcome(dbg: &LinuxDebugger, mine: u32, budget: usize) -> i32 {
+    for _ in 0..budget {
+        let Ok(ev) = dbg.continue_execution().await else { break };
+        if ev.pid.0 != mine {
+            continue;
+        }
+        if let StopReason::ProcessExit { exit_code } = ev.reason {
+            return exit_code;
+        }
+    }
+    panic!("the tracee never reached ProcessExit within the budget");
+}
+
+/// A debugger must not change how the program ends.
+///
+/// The strongest statement this file can make, and the one it could not make
+/// before: for each way of stopping, the SAME fixture is run twice — once with
+/// no debugger, where the kernel's wait status is the truth, and once under
+/// `ptrace`, where the backend reports it. The two must agree.
+///
+/// This is what makes the forwarding tests non-circular. `a_sigsegv_is_
+/// forwarded_and_kills_the_tracee_on_resume` asserts `exit_code == -11` against
+/// a constant typed in this file; here the `11` comes from a run the crate was
+/// never part of. A backend that swallowed the fault, or forwarded the wrong
+/// signal, or reported death-by-signal as a return value, disagrees with a
+/// program that ran on its own.
+#[tokio::test]
+async fn the_debugger_does_not_change_how_the_program_ends() {
+    let fx = build_fixture();
+    // The modes whose outcome needs no outside signal, so both runs are
+    // observing exactly the same program with no timing in the way.
+    for mode in ["ok", "segv", "fpe", "segvat"] {
+        let free = undebugged_outcome(&fx.exe, mode);
+        let dbg = launched(&fx, mode).await;
+        let mine = pid_of(&dbg);
+        let under = debugged_outcome(&dbg, mine, 40).await;
+        let _ = dbg.kill().await;
+
+        let expected = match free {
+            Ok(code) => code,
+            // The backend spells death by signal as a NEGATIVE code, which is
+            // how it keeps "returned 9" apart from "was killed by 9".
+            Err(sig) => -sig,
+        };
+        assert_eq!(
+            under, expected,
+            "mode `{mode}`: run on its own the program ended {free:?}, and under the debugger \
+             the backend reported {under}. A debugger that changes the outcome has reported \
+             an execution that did not happen"
+        );
+    }
+}
+
+/// `si_addr` must carry the address that was actually dereferenced.
+///
+/// `a_null_dereference_stops_as_sigsegv_not_as_a_breakpoint` requires
+/// `address == Some(Address(0))`, which is satisfied by a backend that reports
+/// a hardcoded zero, or an uninitialised field, or anything else that happens
+/// to be zero — the one value that carries no information. The `segvat` mode
+/// dereferences `0xdead0000` instead, so the only way to answer correctly is to
+/// read the kernel's `siginfo`. Both cases are asserted together, because a
+/// backend that got the second right by reporting the pc would then get the
+/// first wrong.
+#[tokio::test]
+async fn the_faulting_address_is_the_one_the_program_dereferenced() {
+    let fx = build_fixture();
+    for (mode, want) in [("segv", 0u64), ("segvat", 0xdead_0000u64)] {
+        let dbg = launched(&fx, mode).await;
+        let mine = pid_of(&dbg);
+        let ev = run_until_interesting(&dbg, mine, 40).await;
+        let pid = mine;
+        let got = match &ev.reason {
+            StopReason::Signal { signum, address, .. } => {
+                assert_eq!(*signum, libc::SIGSEGV, "mode `{mode}` must fault with SIGSEGV");
+                *address
+            }
+            other => {
+                let _ = dbg.kill().await;
+                panic!("mode `{mode}` must stop as a signal, got {other:?}");
+            }
+        };
+        let _ = dbg.kill().await;
+        assert_eq!(
+            got,
+            Some(Address(want)),
+            "mode `{mode}` (pid {pid}) dereferences {want:#x}; the backend reported si_addr \
+             {got:?}. A faulting address that does not depend on what the program touched is \
+             not a faulting address"
+        );
+    }
+}
+
+/// The fault must be reported at the instruction that caused it.
+///
+/// Nothing in this file looked at WHERE the tracee stopped for a signal, only
+/// at which signal it was. The fixture dereferences NULL inside `main`, so the
+/// program counter at the stop must lie inside `main`'s `nm -S` interval — and
+/// must NOT lie inside `hot`, the other function the fixture defines and the
+/// one every other test in this file plants a breakpoint on. Shifting the
+/// symbol oracle moves the interval and this goes red.
+///
+/// The interval comes from `nm -S`, which the crate never reads; the pc comes
+/// from the thread's own registers. Neither side can move the other.
+#[tokio::test]
+async fn a_fault_is_reported_at_a_pc_inside_the_function_that_faulted() {
+    let fx = build_fixture();
+    let ranges = nm_text_ranges(&fx.exe);
+    let (boom_lo, boom_hi) = range_of(&ranges, "boom");
+    let (main_lo, main_hi) = range_of(&ranges, "main");
+    // The interval has to be SMALLER than the perturbation it is meant to
+    // detect, or the test cannot notice one. Measured: with the dereference
+    // inlined in `main`, shifting every `nm` range by 0x40 left this test green,
+    // because `main` is far wider than 0x40 and the shifted window still
+    // contained the faulting pc. This assertion is why that cannot silently
+    // come back.
+    assert!(
+        boom_hi - boom_lo < 0x40,
+        "guard: `boom` is [{boom_lo:#x}, {boom_hi:#x}), {} bytes wide. A window wider than the          0x40 shift the falsification campaign applies cannot detect that shift, so this test          would be vacuous on the very oracle it claims to use",
+        boom_hi - boom_lo
+    );
+
+    let dbg = launched(&fx, "segv").await;
+    let mine = pid_of(&dbg);
+    let ev = run_until_interesting(&dbg, mine, 40).await;
+    assert!(
+        matches!(&ev.reason, StopReason::Signal { signum, .. } if *signum == libc::SIGSEGV),
+        "precondition: the `segv` fixture must stop with SIGSEGV, got {:?}",
+        ev.reason
+    );
+    let pc = dbg.get_registers(ThreadId(mine)).await.map(|r| r.pc);
+    let _ = dbg.kill().await;
+    let pc = pc.expect("the registers of the thread that just faulted must be readable");
+
+    assert!(
+        pc >= boom_lo && pc < boom_hi,
+        "the SIGSEGV was reported with pc {pc:#x}, which is outside `boom`          [{boom_lo:#x}, {boom_hi:#x}); the fixture dereferences NULL in `boom`, so a pc          elsewhere means the stop is attributed to the wrong instruction"
+    );
+    assert!(
+        !(pc >= main_lo && pc < main_hi),
+        "the SIGSEGV pc {pc:#x} lands inside `main` [{main_lo:#x}, {main_hi:#x}), which only          CALLS the faulting code; attributing a fault to its caller is the answer that sends          someone reading the wrong function"
+    );
+}
+

@@ -631,3 +631,375 @@ async fn a_watchpoint_reaches_threads_created_after_it_was_armed() {
     );
     let _ = dbg.kill().await;
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Falsification guards — the COUNT of writes, taken unfiltered
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Everything above this line checks debug-register BITS: the backend writes a
+// value through `PTRACE_POKEUSER` and the test reads it back through
+// `PTRACE_PEEKUSER`. That is a real round trip through the kernel, but the
+// address it round-trips is one the test obtained from the backend itself
+// (`get_registers().sp`), so nothing outside the crate says which address ought
+// to be there. Measured in the workflow-5 falsification campaign: shifting the
+// one external oracle this file used (`nm`) by `0x40` left 10 of the 11 active
+// tests green.
+//
+// The cure is the one that worked in `live_linux_falsification.rs`: stop
+// filtering the stop stream on the address the test is about to assert on, and
+// count crossings instead. The fixture below writes `g_five` five times,
+// `g_three` three times, `g_one` once and `g_never` never. That vector of
+// counts is an observable of the PROGRAM: no bookkeeping, no register value and
+// no shifted symbol table can reproduce it from the wrong address, because a
+// wrong address is written a different number of times.
+
+/// Writes to each global are the ground truth, read off the source and nowhere
+/// else. `g_buf` is written only at index 7, which is what makes the LEN field
+/// behaviourally observable: a 1-byte watchpoint on `g_buf[0]` must see nothing
+/// while an 8-byte watchpoint on the same address must see every write.
+const COUNTING_FIXTURE_C: &str = "\
+volatile long g_five = 0;\n\
+volatile long g_one = 0;\n\
+volatile long g_three = 0;\n\
+volatile long g_never = 0;\n\
+volatile char g_buf[16] __attribute__((aligned(16))) = {0};\n\
+int main(void) {\n\
+    for (long i = 1; i <= 5; i++) { g_five = i; }\n\
+    g_one = 7;\n\
+    for (long i = 1; i <= 3; i++) { g_three = i; }\n\
+    for (int i = 1; i <= 3; i++) { g_buf[7] = (char)i; }\n\
+    return 0;\n\
+}\n";
+
+/// How often each global is really written. Ground truth from the source above.
+const WRITE_COUNTS: [(&str, usize); 4] =
+    [("g_five", 5), ("g_three", 3), ("g_one", 1), ("g_never", 0)];
+
+struct Counting {
+    _dir: tempfile::TempDir,
+    exe: std::path::PathBuf,
+}
+
+impl Counting {
+    /// `None` when this machine has no usable `cc`; every guard below then
+    /// skips rather than failing for a reason that is not the backend's.
+    fn build() -> Option<Self> {
+        let dir = tempfile::tempdir().ok()?;
+        let exe = compile_fixture(dir.path(), "wpcount", COUNTING_FIXTURE_C)?;
+        Some(Self { _dir: dir, exe })
+    }
+
+    /// The address `nm` prints for a global. Built `-no-pie`, so it is the
+    /// address the process really writes.
+    fn addr(&self, name: &str) -> u64 {
+        symbol_addr(&self.exe, name)
+            .unwrap_or_else(|| panic!("the fixture must export the global `{name}`"))
+    }
+}
+
+/// Run the fixture to exit with watchpoints armed on `watched`, and return how
+/// many breakpoint stops were seen — WITHOUT looking at the address of any of
+/// them.
+///
+/// Not filtering is the whole point. `a_write_watchpoint_stops_the_process_on_the_write`
+/// above accepts a stop only when `address == sym` and then concludes the
+/// watchpoint works; that assertion is satisfied by the address it already
+/// selected on. Here the number comes back blind, so it describes what the
+/// program did rather than what the test was looking for.
+///
+/// The tracee is killed on every path, including the panics, so no fixture can
+/// outlive the test.
+async fn total_stops_with(fx: &Counting, watched: &[(u64, u8)]) -> usize {
+    let dbg = LinuxDebugger::new();
+    dbg.launch(exe_launch(&fx.exe)).await.expect("launch the counting fixture");
+    for (addr, size) in watched {
+        if let Err(e) =
+            dbg.set_watchpoint_sized(Address(*addr), BreakpointKind::DataWrite, *size).await
+        {
+            let _ = dbg.kill().await;
+            panic!("arming a {size}-byte write watchpoint at {addr:#x} must succeed: {e}");
+        }
+    }
+    let mut stops = 0usize;
+    for _ in 0..96 {
+        match dbg.continue_execution().await {
+            Ok(ev) => match ev.reason {
+                StopReason::Breakpoint { .. } => stops += 1,
+                StopReason::ProcessExit { .. } => break,
+                _ => {}
+            },
+            Err(_) => break,
+        }
+    }
+    let _ = dbg.kill().await;
+    stops
+}
+
+/// Same run, but the stops are TALLIED by the address the backend reports, so a
+/// slot programmed with the wrong address shows up as a wrong histogram instead
+/// of being invisible inside a total.
+async fn stops_per_address(
+    fx: &Counting,
+    watched: &[(u64, u8)],
+) -> std::collections::BTreeMap<u64, usize> {
+    let dbg = LinuxDebugger::new();
+    dbg.launch(exe_launch(&fx.exe)).await.expect("launch the counting fixture");
+    for (addr, size) in watched {
+        if let Err(e) =
+            dbg.set_watchpoint_sized(Address(*addr), BreakpointKind::DataWrite, *size).await
+        {
+            let _ = dbg.kill().await;
+            panic!("arming a {size}-byte write watchpoint at {addr:#x} must succeed: {e}");
+        }
+    }
+    let mut hist = std::collections::BTreeMap::new();
+    for _ in 0..96 {
+        match dbg.continue_execution().await {
+            Ok(ev) => match ev.reason {
+                StopReason::Breakpoint { address, .. } => {
+                    *hist.entry(address.as_u64()).or_insert(0usize) += 1;
+                }
+                StopReason::ProcessExit { .. } => break,
+                _ => {}
+            },
+            Err(_) => break,
+        }
+    }
+    let _ = dbg.kill().await;
+    hist
+}
+
+macro_rules! counting_fixture {
+    () => {
+        match Counting::build() {
+            Some(f) => f,
+            None => {
+                eprintln!("skipping: `cc -no-pie` is not usable here");
+                return;
+            }
+        }
+    };
+}
+
+/// A watchpoint must fire as often as the program writes THAT global.
+///
+/// The guard against the vacuity measured for this file. `g_five`, `g_three`,
+/// `g_one` and `g_never` are written 5, 3, 1 and 0 times; the vector
+/// `(5, 3, 1, 0)` is reproduced by exactly one assignment of addresses to names.
+/// Shift the symbol table and the counts move with it: point `g_five` at
+/// `g_one` and its count falls to 1, point it anywhere unwritten and it falls
+/// to 0. No amount of correct-looking DR7 bits can fake a write that did not
+/// happen.
+#[tokio::test]
+async fn the_write_count_pins_each_watchpoint_to_its_own_address() {
+    let fx = counting_fixture!();
+    let mut got = Vec::new();
+    for (name, _) in WRITE_COUNTS {
+        got.push((name, total_stops_with(&fx, &[(fx.addr(name), 8)]).await));
+    }
+    let want: Vec<(&str, usize)> = WRITE_COUNTS.to_vec();
+    assert_eq!(
+        got, want,
+        "an 8-byte write watchpoint fired {got:?} times per global, but the fixture writes \
+         {want:?}; a count that does not match the source means the hardware is watching \
+         something other than the named global"
+    );
+}
+
+/// The counting guard above must FAIL when the address underneath it moves.
+///
+/// Without this, the guard would be one more assertion nobody has ever seen go
+/// red. `g_never` is never written and `g_five` is written five times: if
+/// swapping one address for the other does not change the number, the count is
+/// not a function of the address and everything built on it is worthless. The
+/// third case applies the campaign's own mutation — `nm` shifted by `0x40` —
+/// directly, and requires silence.
+#[tokio::test]
+async fn the_write_count_guard_is_itself_falsifiable() {
+    let fx = counting_fixture!();
+    let five = total_stops_with(&fx, &[(fx.addr("g_five"), 8)]).await;
+    let never = total_stops_with(&fx, &[(fx.addr("g_never"), 8)]).await;
+    assert_ne!(
+        five, never,
+        "watching a global written five times and one never written both produced {five} \
+         stops; the count does not depend on the address being watched"
+    );
+    assert_eq!(never, 0, "`g_never` is never written, so it cannot be written {never} times");
+    let shifted = total_stops_with(&fx, &[(fx.addr("g_five") + 0x40, 8)]).await;
+    assert_eq!(
+        shifted, 0,
+        "an address 0x40 past `g_five` reported {shifted} writes; if a shifted address still \
+         fires, shifting the symbol oracle cannot make this file go red"
+    );
+}
+
+/// Four watchpoints armed at once must each watch their OWN address.
+///
+/// The register-level test above proves four addresses occupy four distinct
+/// slots; it cannot tell whether slot 2 was programmed with slot 3's address,
+/// because it looks each address up rather than checking the assignment. Here
+/// the four globals have four DIFFERENT write counts, so the histogram of
+/// reported stops is a fingerprint of the assignment: cross two slots and two
+/// counts swap.
+#[tokio::test]
+async fn four_simultaneous_watchpoints_each_report_their_own_writes() {
+    let fx = counting_fixture!();
+    let watched: Vec<(u64, u8)> = WRITE_COUNTS.iter().map(|(n, _)| (fx.addr(n), 8u8)).collect();
+    let hist = stops_per_address(&fx, &watched).await;
+    let want: std::collections::BTreeMap<u64, usize> =
+        WRITE_COUNTS.iter().filter(|(_, c)| *c > 0).map(|(n, c)| (fx.addr(n), *c)).collect();
+    let named = |a: u64| {
+        WRITE_COUNTS.iter().find(|(n, _)| fx.addr(n) == a).map(|(n, _)| *n).unwrap_or("?")
+    };
+    assert_eq!(
+        hist,
+        want,
+        "with all four globals watched at once the reported writes were {:?}, the source says \
+         {:?}",
+        hist.iter().map(|(a, c)| (named(*a), *c)).collect::<Vec<_>>(),
+        WRITE_COUNTS.iter().filter(|(_, c)| *c > 0).collect::<Vec<_>>()
+    );
+}
+
+/// The width asked for must reach the hardware, proved by what the program can
+/// and cannot be seen doing.
+///
+/// `each_legal_width_lands_in_the_len_field` decodes LEN out of DR7 — a value
+/// the backend itself wrote. This asks the CPU instead. The fixture writes
+/// `g_buf[7]` and nothing else in that array, so the SAME base address must be
+/// silent when the watchpoint is too narrow to cover byte 7 and must fire three
+/// times when it is wide enough. A backend that encoded every request as one
+/// byte can pass the DR7 test by lying consistently; it cannot pass this one.
+#[tokio::test]
+async fn the_watched_width_decides_what_the_hardware_can_see() {
+    let fx = counting_fixture!();
+    let buf = fx.addr("g_buf");
+    // (width, offset into g_buf, writes seen) — byte 7 is the only one written.
+    let cases: [(u8, u64, usize); 6] = [
+        (1, 0, 0), // one byte at [0]: byte 7 is outside it
+        (1, 7, 3), // one byte at [7]: exactly the written byte
+        (2, 0, 0), // [0..2)
+        (2, 6, 3), // [6..8)
+        (4, 0, 0), // [0..4)
+        (8, 0, 3), // [0..8) covers byte 7
+    ];
+    let mut got = Vec::new();
+    for (width, off, _) in cases {
+        got.push((width, off, total_stops_with(&fx, &[(buf + off, width)]).await));
+    }
+    let want: Vec<(u8, u64, usize)> = cases.to_vec();
+    assert_eq!(
+        got, want,
+        "(width, offset into g_buf, writes seen) came back {got:?} but the fixture writes only \
+         g_buf[7]; a width that does not reach the hardware makes a watchpoint cover the wrong \
+         bytes while reporting the width it was asked for"
+    );
+}
+
+/// `remove_hardware_watchpoint` must stop the TRAPPING, not merely the
+/// bookkeeping.
+///
+/// `removing_a_watchpoint_frees_its_hardware_slot` checks that no debug
+/// register still holds the address — again a value the backend wrote. The
+/// behavioural claim is different and stronger: after the removal the program
+/// must run to completion without stopping once, though it writes the removed
+/// address five times.
+#[tokio::test]
+async fn a_removed_watchpoint_stops_firing() {
+    let fx = counting_fixture!();
+    let five = fx.addr("g_five");
+    let armed = total_stops_with(&fx, &[(five, 8)]).await;
+    assert_eq!(armed, 5, "precondition: an armed watchpoint on `g_five` must see all five writes");
+
+    let dbg = LinuxDebugger::new();
+    dbg.launch(exe_launch(&fx.exe)).await.expect("launch");
+    dbg.set_watchpoint_sized(Address(five), BreakpointKind::DataWrite, 8).await.expect("arm");
+    let removed =
+        dbg.remove_hardware_watchpoint(Address(five)).await.expect("remove must not error");
+    assert!(removed, "removing an armed watchpoint must report that it found one");
+    let mut stops = 0usize;
+    for _ in 0..96 {
+        match dbg.continue_execution().await {
+            Ok(ev) => match ev.reason {
+                StopReason::Breakpoint { .. } => stops += 1,
+                StopReason::ProcessExit { .. } => break,
+                _ => {}
+            },
+            Err(_) => break,
+        }
+    }
+    let _ = dbg.kill().await;
+    assert_eq!(
+        stops, 0,
+        "after remove_hardware_watchpoint the program still trapped {stops} times on writes to \
+         `g_five`; the removal cleared the bookkeeping but not the hardware"
+    );
+}
+
+/// `disable_breakpoint` must silence the hardware and `enable_breakpoint` must
+/// bring it back, judged by whether the program actually stops.
+///
+/// The register-level sibling above reads DR7 back; a backend that disabled by
+/// forgetting the entry while leaving the enable bit set would fail that test
+/// and this one, but a backend that cleared the bit and lost the ability to
+/// re-arm would fail only this one, on its second half.
+#[tokio::test]
+async fn a_disabled_watchpoint_is_silent_and_re_enabling_restores_every_write() {
+    let fx = counting_fixture!();
+    let five = fx.addr("g_five");
+
+    for (leave_disabled, expect) in [(true, 0usize), (false, 5usize)] {
+        let dbg = LinuxDebugger::new();
+        dbg.launch(exe_launch(&fx.exe)).await.expect("launch");
+        dbg.set_watchpoint_sized(Address(five), BreakpointKind::DataWrite, 8).await.expect("arm");
+        dbg.disable_breakpoint(Address(five)).await.expect("disable_breakpoint on a watchpoint");
+        if !leave_disabled {
+            dbg.enable_breakpoint(Address(five)).await.expect("enable_breakpoint on a watchpoint");
+        }
+        let mut stops = 0usize;
+        for _ in 0..96 {
+            match dbg.continue_execution().await {
+                Ok(ev) => match ev.reason {
+                    StopReason::Breakpoint { .. } => stops += 1,
+                    StopReason::ProcessExit { .. } => break,
+                    _ => {}
+                },
+                Err(_) => break,
+            }
+        }
+        let _ = dbg.kill().await;
+        let state = if leave_disabled { "disabled" } else { "disabled then re-enabled" };
+        assert_eq!(
+            stops, expect,
+            "a {state} watchpoint on `g_five` reported {stops} of the five writes, expected \
+             {expect}"
+        );
+    }
+}
+
+/// No fixture process may outlive this suite.
+///
+/// Named `zz_` so it runs last under `--test-threads=1`. `-x` matches the
+/// process NAME exactly: `-f` was measured in `live_linux_falsification.rs` to
+/// match cargo's own `live_linux_watchpoints-<hash>` binary, so a check written
+/// that way reports the thing looking for orphans as an orphan.
+#[tokio::test]
+async fn zz_no_orphan_watchpoint_fixture_survives() {
+    for name in ["wpcount", "wp_write", "wp_thread"] {
+        let Ok(out) = std::process::Command::new("pgrep").args(["-x", name]).output() else {
+            eprintln!("[test] pgrep is unavailable; the orphan check cannot run");
+            return;
+        };
+        let listed: Vec<String> = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        assert!(
+            listed.is_empty(),
+            "the suite left {} `{name}` process(es) behind: {listed:?}",
+            listed.len()
+        );
+    }
+}

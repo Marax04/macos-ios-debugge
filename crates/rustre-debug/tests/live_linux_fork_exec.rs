@@ -347,12 +347,27 @@ fn symtab_of(path: &str) -> Option<ElfSymbolProvider> {
     .ok()
 }
 
-/// Kill the tracee through the debugger AND with `kill -9`, on every path.
+/// End the session, `kill -9` FIRST and the debugger's own `kill()` second,
+/// the second one under a timeout.
+///
+/// The order is measured, not stylistic. `Debugger::kill()` does NOT return
+/// when the tracee is RUNNING rather than stopped — the state a test is left in
+/// whenever a `continue_execution` timed out on a fixture's `for(;;)`. Observed
+/// twice while writing this file: the harness printed
+/// `test the_parent_is_told_about_its_dead_child_through_sigchld ...` and never
+/// printed a verdict, with `ps` showing the fixture at 102% CPU and the test
+/// binary alive. Signalling the process first turns the pending `waitpid` into
+/// a real event, and `kill()` then completes.
+///
+/// This is a note about the backend, not only about the tests: a caller who
+/// hits "stop" on a running target gets the same hang. Left as a documented
+/// hazard here rather than a fix, and rather than an `#[ignore]`d test in a
+/// lifecycle area another file owns.
 async fn shutdown(dbg: LinuxDebugger, pid: u32) {
-    let _ = dbg.kill().await;
     let _ = std::process::Command::new("kill")
         .args(["-9", &pid.to_string()])
         .output();
+    let _ = tokio::time::timeout(Duration::from_secs(10), dbg.kill()).await;
 }
 
 fn kill_all(pids: &[u32]) {
@@ -835,6 +850,12 @@ async fn the_parent_is_told_about_its_dead_child_through_sigchld() {
         let Some(ev) = try_resume(&dbg).await else { break };
         if let StopReason::Signal { signum, signame, .. } = &ev.reason {
             signals.push((ev.pid.0, *signum, signame.clone()));
+            // Stop the moment the answer is in hand: one more resume would run
+            // the fixture into its `for(;;)` and leave the tracee RUNNING, the
+            // state `shutdown` documents as the one that hangs.
+            if *signum == SIGCHLD {
+                break;
+            }
         }
     }
     shutdown(dbg, pid.0).await;
@@ -887,6 +908,7 @@ async fn a_signal_stop_should_name_sigchld_not_sig17() {
         if let StopReason::Signal { signum, signame, .. } = &ev.reason {
             if *signum == SIGCHLD {
                 names.push(signame.clone());
+                break;
             }
         }
     }

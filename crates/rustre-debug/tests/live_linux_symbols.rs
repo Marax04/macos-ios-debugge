@@ -186,6 +186,7 @@ fn dwarf_sections(fx: &Fixture) -> DwarfSections {
         debug_abbrev: get(".debug_abbrev"),
         debug_str: get(".debug_str"),
         debug_line: get(".debug_line"),
+        debug_line_str: get(".debug_line_str"),
         debug_str_offsets: get(".debug_str_offsets"),
         debug_addr: get(".debug_addr"),
         split_debug_info: None,

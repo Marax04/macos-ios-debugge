@@ -27,7 +27,7 @@ use rustre_debug::linux_debugger::LinuxDebugger;
 use rustre_debug::{Debugger, LaunchOptions, OutputRedirect};
 use rustre_symbols::SymbolProvider;
 use rustre_symbols::elf_provider::ElfSymbolProvider;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// One non-inlinable exported function plus a global, so every shape has at
@@ -142,10 +142,31 @@ fn build_shared() -> Fixture {
 }
 
 // ── ground truth: nm ─────────────────────────────────────────────────────────
+//
+// This is the ONLY oracle in the file that is independent of the bytes the
+// crate parses: `nm` is a separate program (binutils) reading the same file
+// with its own ELF reader. Until this round it was DECORATIVE — `Gap::expected`
+// appeared only inside `format!` arguments and in no assertion, so every
+// comparison here was `obtained` against `reachable`, two numbers computed from
+// the same bytes by the same crate: an identity, not a measurement. Forcing
+// `nm_count` to 0 left 9 tests out of 9 green.
+//
+// The cure is not a stricter count. A count is lax by construction:
+// `obtained >= 28` survives the oracle moving to 31. What is compared now is
+// the SET of names, and for every defined symbol its ADDRESS — both taken from
+// nm's own output.
 
-/// Number of symbol lines `nm` prints for `file` with `args`. `None` when nm
-/// refuses the file (e.g. "no symbols"), which is itself a measurement.
-fn nm_count(file: &str, args: &[&str]) -> Option<usize> {
+/// One row of `nm` output: a name, and the address nm printed for it (`None`
+/// for undefined symbols, which nm prints with a blank value column).
+#[derive(Debug, Clone)]
+struct NmSym {
+    name: String,
+    addr: Option<u64>,
+}
+
+/// Every symbol `nm` reports for `file`. `None` when nm refuses the file (e.g.
+/// "no symbols"), which is itself a measurement.
+fn nm_symbols(file: &str, args: &[&str]) -> Option<Vec<NmSym>> {
     let out = std::process::Command::new("nm")
         .args(args)
         .arg(file)
@@ -155,12 +176,101 @@ fn nm_count(file: &str, args: &[&str]) -> Option<usize> {
         return None;
     }
     let listing = String::from_utf8_lossy(&out.stdout).to_string();
-    Some(
-        listing
-            .lines()
-            .filter(|l| l.split_whitespace().count() >= 2)
-            .count(),
-    )
+    let mut v = Vec::new();
+    for line in listing.lines() {
+        let f: Vec<&str> = line.split_whitespace().collect();
+        match f.len() {
+            // "                 U puts"  →  type, name
+            2 => v.push(NmSym {
+                name: f[1].to_string(),
+                addr: None,
+            }),
+            // "0000000000001139 T elf_marker"  →  value, type, name
+            3 => v.push(NmSym {
+                name: f[2].to_string(),
+                addr: u64::from_str_radix(f[0], 16).ok(),
+            }),
+            _ => {}
+        }
+    }
+    Some(v)
+}
+
+/// Number of symbol lines `nm` prints. Kept for the reported figures.
+fn nm_count(file: &str, args: &[&str]) -> Option<usize> {
+    nm_symbols(file, args).map(|v| v.len())
+}
+
+/// name -> the set of addresses a provider holds under that name.
+fn provider_index(prov: &ElfSymbolProvider) -> HashMap<String, HashSet<u64>> {
+    let mut m: HashMap<String, HashSet<u64>> = HashMap::new();
+    for s in SymbolProvider::all_symbols(prov) {
+        m.entry(s.name.clone()).or_default().insert(s.address);
+    }
+    m
+}
+
+/// THE BITING ASSERTION.
+///
+/// Every name `nm` reports must be present in `prov`, and every DEFINED
+/// symbol must sit at exactly the address nm printed for it. Nothing here is
+/// derived from the crate's own parse: the names and the addresses both come
+/// out of binutils.
+///
+/// It is a SET containment, not a count, on purpose: a count is satisfied by
+/// any 29 symbols, including 29 wrong ones, and survives the oracle changing
+/// from 29 to 31. Losing a single name, or shifting a single address by one
+/// byte, fails this.
+fn assert_matches_nm(label: &str, prov: &ElfSymbolProvider, file: &str, nm_args: &[&str]) {
+    let nm = nm_symbols(file, nm_args)
+        .unwrap_or_else(|| panic!("{label}: nm must be able to list {file}"));
+    assert!(
+        !nm.is_empty(),
+        "{label}: guard — the oracle itself must report something, else this test cannot bite"
+    );
+    let idx = provider_index(prov);
+
+    // `nm` prints GNU symbol versioning as `name@GLIBC_2.34`. That suffix is
+    // NOT in `.dynstr`: it is built by joining `.gnu.version` to
+    // `.gnu.version_r`, a section the crate does not read. Matching on the base
+    // name is therefore an oracle normalisation, not a relaxation — measured:
+    // `readelf -sW --dyn-syms` shows the string as `__libc_start_main` with
+    // `(2)` beside it, so the crate reads the bytes correctly and only omits
+    // the version join. That omission is a real, separate gap and is recorded
+    // by `elf_symbols_do_not_carry_the_gnu_version_suffix` below with its red.
+    let base = |n: &str| n.split('@').next().unwrap_or(n).to_string();
+    let missing: Vec<&str> = nm
+        .iter()
+        .filter(|s| !idx.contains_key(&s.name) && !idx.contains_key(&base(&s.name)))
+        .map(|s| s.name.as_str())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "{label}: parse_elf lost {} of the {} names nm reports: {:?}",
+        missing.len(),
+        nm.len(),
+        &missing[..missing.len().min(12)]
+    );
+
+    let wrong: Vec<String> = nm
+        .iter()
+        .filter_map(|s| {
+            let want = s.addr?;
+            let got = idx.get(&s.name).or_else(|| idx.get(&base(&s.name)))?;
+            if got.contains(&want) {
+                None
+            } else {
+                Some(format!("{} nm=0x{want:x} crate={got:x?}", s.name))
+            }
+        })
+        .collect();
+    assert!(
+        wrong.is_empty(),
+        "{label}: {} of {} symbols sit at an address nm disagrees with: {:?}",
+        wrong.len(),
+        nm.len(),
+        &wrong[..wrong.len().min(12)]
+    );
 }
 
 // ── test-side ELF64 section reader (input handling, not the thing under test) ─
@@ -292,17 +402,22 @@ async fn measure(fx: &Fixture, nm_args: &[&str], symtab: &str, strtab: &str) -> 
 /// file that genuinely has no symbols.
 #[tokio::test(flavor = "multi_thread")]
 async fn parse_elf_accepts_every_real_elf_shape() {
-    let shapes: Vec<(&str, Fixture)> = vec![
-        ("no-pie -g", build(&["-no-pie", "-g"])),
-        ("pie -g", build(&["-fPIE", "-pie", "-g"])),
-        ("no-pie, no -g", build(&["-no-pie"])),
-        ("no-pie -g stripped", build(&["-no-pie", "-g", "-s"])),
-        ("shared object", build_shared()),
+    let shapes: Vec<(&str, Fixture, &[&str])> = vec![
+        ("no-pie -g", build(&["-no-pie", "-g"]), &[]),
+        ("pie -g", build(&["-fPIE", "-pie", "-g"]), &[]),
+        ("no-pie, no -g", build(&["-no-pie"]), &[]),
+        ("no-pie -g stripped", build(&["-no-pie", "-g", "-s"]), &["-D"]),
+        ("shared object", build_shared(), &["-D"]),
     ];
-    for (label, fx) in &shapes {
+    for (label, fx, nm_args) in &shapes {
         prove_runnable(fx).await;
-        let r = ElfSymbolProvider::parse_elf("subject", &fx.bytes);
-        assert!(r.is_ok(), "parse_elf rejected a runnable ELF ({label})");
+        let prov = ElfSymbolProvider::parse_elf("subject", &fx.bytes)
+            .unwrap_or_else(|e| panic!("parse_elf rejected a runnable ELF ({label}): {e}"));
+        // Accepting the file is not the claim worth making — the stub this
+        // file was written against accepted every one of these shapes and
+        // returned nothing. What is asserted is that each shape yields the
+        // names and the addresses binutils reads out of the SAME file.
+        assert_matches_nm(label, &prov, &fx.subject, nm_args);
     }
 }
 
@@ -324,10 +439,22 @@ async fn parse_elf_refuses_bytes_that_are_not_an_elf() {
         ElfSymbolProvider::parse_elf("x", &fx.bytes[..8]).is_err(),
         "parse_elf accepted an ELF truncated below e_ident"
     );
-    assert!(
-        ElfSymbolProvider::parse_elf("x", &fx.bytes).is_ok(),
-        "guard: the untruncated bytes must still be accepted"
-    );
+    // Truncating anywhere inside the section-header machinery must not be
+    // answered with a confident empty provider either.
+    for cut in [8usize, 16, 40, 63] {
+        let r = ElfSymbolProvider::parse_elf("x", &fx.bytes[..cut.min(fx.bytes.len())]);
+        assert!(
+            r.as_ref().map_or(true, |p| p.symbol_count() == 0),
+            "parse_elf invented {} symbols out of the first {cut} bytes",
+            r.map_or(0, |p| p.symbol_count())
+        );
+    }
+    let prov = ElfSymbolProvider::parse_elf("x", &fx.bytes)
+        .expect("guard: the untruncated bytes must still be accepted");
+    // `Ok` is the weak half of this test: `Ok(empty)` for ANY input would make
+    // acceptance meaningless. The oracle nails the other half — accepted means
+    // parsed, measured against nm.
+    assert_matches_nm("untruncated", &prov, &fx.subject, &[]);
 }
 
 /// Proves: the crate's `parse_symtab` — the parser `parse_elf` refuses to
@@ -356,6 +483,10 @@ async fn the_symbol_decoder_parse_elf_refuses_to_use_already_works() {
             prov.lookup_name("elf_global_counter").is_some(),
             "parse_symtab lost the global in the {extra:?} build"
         );
+        // Two spot names cannot tell a working decoder from one that keeps the
+        // strings and loses the values. nm supplies both the full name set and
+        // every address, from its own reader.
+        assert_matches_nm(&format!("parse_symtab {extra:?}"), &prov, &fx.subject, &[]);
     }
 }
 
@@ -382,6 +513,16 @@ async fn a_stripped_build_keeps_only_its_dynamic_symbols() {
     assert!(
         prov.symbol_count() > 0,
         "a stripped dynamic executable must still hold .dynsym entries"
+    );
+    // `> 0` is satisfied by one wrong symbol. The dynamic set nm -D reads out
+    // of the stripped file is not.
+    assert_matches_nm("stripped .dynsym", &prov, &fx.subject, &["-D"]);
+    // And the complement: plain nm must find nothing, which is what makes the
+    // -D oracle above the RIGHT oracle for this shape rather than a weaker one.
+    assert_eq!(
+        nm_count(&fx.subject, &[]).unwrap_or(0),
+        0,
+        "guard: `cc -s` must leave plain nm with no symbols to print"
     );
 }
 
@@ -413,6 +554,12 @@ async fn parse_elf_should_load_the_symtab_of_a_no_pie_binary() {
         "no-pie -g: parse_elf obtained {} of {} symbols ({} reachable through the crate's own parse_symtab)",
         g.obtained, g.expected, g.reachable
     );
+    // The equality above compares two numbers produced from the SAME bytes by
+    // the SAME crate — it cannot fail while the crate is self-consistently
+    // wrong. nm is the outside witness: names and addresses, as a set.
+    assert!(g.expected > 0, "guard: nm must report symbols for this shape");
+    let prov = ElfSymbolProvider::parse_elf("subject", &fx.bytes).expect("valid ELF");
+    assert_matches_nm("no-pie -g", &prov, &fx.subject, &[]);
 }
 
 /// DEFECT — ET_DYN, `cc -fPIE -pie -O0 -g`. Same stub, same total loss, on the
@@ -432,6 +579,12 @@ async fn parse_elf_should_load_the_symtab_of_a_pie_binary() {
         "pie -g: parse_elf obtained {} of {} symbols ({} reachable)",
         g.obtained, g.expected, g.reachable
     );
+    // The equality above compares two numbers produced from the SAME bytes by
+    // the SAME crate — it cannot fail while the crate is self-consistently
+    // wrong. nm is the outside witness: names and addresses, as a set.
+    assert!(g.expected > 0, "guard: nm must report symbols for this shape");
+    let prov = ElfSymbolProvider::parse_elf("subject", &fx.bytes).expect("valid ELF");
+    assert_matches_nm("pie -g", &prov, &fx.subject, &[]);
 }
 
 /// DEFECT — `cc -no-pie -O0` with NO `-g`. This isolates the defect from DWARF:
@@ -454,6 +607,12 @@ async fn parse_elf_should_load_the_symtab_of_a_binary_built_without_g() {
         "no -g: parse_elf obtained {} of {} symbols ({} reachable)",
         g.obtained, g.expected, g.reachable
     );
+    // The equality above compares two numbers produced from the SAME bytes by
+    // the SAME crate — it cannot fail while the crate is self-consistently
+    // wrong. nm is the outside witness: names and addresses, as a set.
+    assert!(g.expected > 0, "guard: nm must report symbols for this shape");
+    let prov = ElfSymbolProvider::parse_elf("subject", &fx.bytes).expect("valid ELF");
+    assert_matches_nm("no -g", &prov, &fx.subject, &[]);
 }
 
 /// DEFECT — `cc -no-pie -g -s` (stripped). Here the correct answer is the
@@ -477,6 +636,12 @@ async fn parse_elf_should_load_the_dynsym_of_a_stripped_binary() {
         "stripped: parse_elf obtained {} of {} dynamic symbols ({} reachable through .dynsym)",
         g.obtained, g.expected, g.reachable
     );
+    // The equality above compares two numbers produced from the SAME bytes by
+    // the SAME crate — it cannot fail while the crate is self-consistently
+    // wrong. nm is the outside witness: names and addresses, as a set.
+    assert!(g.expected > 0, "guard: nm must report symbols for this shape");
+    let prov = ElfSymbolProvider::parse_elf("subject", &fx.bytes).expect("valid ELF");
+    assert_matches_nm("stripped", &prov, &fx.subject, &["-D"]);
 }
 
 /// DEFECT — a shared object (`cc -fPIC -shared -g`), measured while a real
@@ -512,4 +677,60 @@ async fn parse_elf_should_load_the_dynsym_of_a_shared_object() {
         "shared object: parse_elf obtained {} symbols, fewer than the {} reachable through .dynsym alone, or lost the exported shared_marker: {lost}",
         g.obtained, g.reachable
     );
+    // `>=` is the lax half of this file: it stays green if the count drifts up
+    // for any reason at all. The set does not.
+    assert!(g.expected > 0, "guard: nm -D must report exports for the .so");
+    assert_matches_nm("shared object", &prov, &fx.subject, &["-D"]);
+    // And the exported symbol must sit where nm says, not merely exist.
+    let nm_marker = nm_symbols(&fx.subject, &["-D"])
+        .expect("nm -D on the .so")
+        .into_iter()
+        .find(|s| s.name == "shared_marker")
+        .and_then(|s| s.addr)
+        .expect("nm -D must show shared_marker with an address");
+    assert_eq!(
+        prov.lookup_name("shared_marker").map(|s| s.address),
+        Some(nm_marker),
+        "shared_marker is at a different address than nm reports"
+    );
+}
+
+/// DEFECT (measured, NOT fixed here) — the provider does not carry GNU symbol
+/// versioning. `nm -D` on a stripped `cc` build prints
+/// `__libc_start_main@GLIBC_2.34`; `parse_elf` reports the bare
+/// `__libc_start_main`.
+///
+/// It is not a parsing error: `readelf -sW --dyn-syms` shows the `.dynstr`
+/// string IS the bare name, with the version index `(2)` beside it. The suffix
+/// is produced by joining `.gnu.version` to `.gnu.version_r`, two sections
+/// `parse_elf` never reads. It matters because two different versions of the
+/// same name are two different symbols to the loader, and a debugger that
+/// merges them resolves the wrong one.
+///
+/// MEASURED RED (this test, on a `cc -O0 -no-pie -g -s` fixture):
+/// "the version suffix is not carried: nm says
+/// __libc_start_main@GLIBC_2.34, the provider has __libc_start_main".
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "documented defect: GNU symbol versioning is not applied to .dynsym names"]
+async fn elf_symbols_do_not_carry_the_gnu_version_suffix() {
+    let fx = build(&["-no-pie", "-g", "-s"]);
+    prove_runnable(&fx).await;
+    let versioned: Vec<String> = nm_symbols(&fx.subject, &["-D"])
+        .expect("nm -D")
+        .into_iter()
+        .map(|s| s.name)
+        .filter(|n| n.contains('@'))
+        .collect();
+    assert!(
+        !versioned.is_empty(),
+        "guard: the fixture must import at least one versioned symbol"
+    );
+    let prov = ElfSymbolProvider::parse_elf("stripped", &fx.bytes).expect("valid ELF");
+    for name in &versioned {
+        assert!(
+            prov.lookup_name(name).is_some(),
+            "the version suffix is not carried: nm says {name}, the provider has {}",
+            name.split('@').next().unwrap_or(name)
+        );
+    }
 }

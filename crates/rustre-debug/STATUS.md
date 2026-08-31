@@ -3743,3 +3743,130 @@ positiva.
 **Suite:** Windows `2132 passed; 0 failed` · Linux `2110 passed; 0 failed` ·
 il test dv3 prima ignorato `1 passed` · Darwin x86_64 e aarch64 `Finished`,
 zero errori (importante stavolta: la propagazione a macOS si compila solo li').
+
+---
+
+## Giro 657 — DWARF 5 non veniva letto, cioe' il predefinito di ogni compilatore
+
+Il difetto piu' grave fra quelli aperti, e non per la sua profondita' tecnica ma
+per la sua portata: **il debug a livello di sorgente era morto su qualunque
+binario moderno**.
+
+**Fail-first, con oracolo esterno gia' pronto** (tre test `#[ignore]` lasciati da
+un giro precedente col rosso misurato):
+
+    DWARF 5 .debug_line (172 bytes) parsed to 0 rows / 0 addresses,
+    while readelf decodes Some(24) addresses from the same file
+
+    the compiler's default `cc -g` emitted .debug_line version 5 (172 bytes)
+    and the parser produced 0 rows
+
+**Causa.** `if !(2..=4).contains(&version) { return None; }`. E il ritorno era
+`None`, che il chiamante **non puo' distinguere** da «questo binario non ha
+informazioni di riga»: il fallimento era silenzioso. Intanto la docstring del
+modulo diceva «Parses DWARF version 2-5» e il parser delle CU, venti righe piu'
+su, accettava gia' la 5 — **le due meta' dello stesso lettore erano in
+disaccordo su quali versioni supporta**.
+
+**Tre cose andavano corrette, non una:**
+1. l'intervallo di versioni;
+2. `program_start`, che era cablato come `10 + header_length`. Vero solo per
+   2-4: la v5 inserisce `address_size` e `segment_selector_size` fra versione e
+   `header_length`, che quindi finisce a 12. La formula sbagliata avrebbe fatto
+   decodificare **byte di intestazione come opcode**. Ora il valore e' un campo
+   calcolato da chi ha letto l'intestazione, cosi' l'unico posto che conosce il
+   formato e' quello che lo ha decodificato;
+3. le tabelle di directory e file, che in v5 non sono piu' liste terminate da
+   stringa vuota ma tabelle **descritte da un vettore di formati**: niente puo'
+   piu' essere saltato cercando un nul, il lettore deve capire le forme.
+
+**Una forma sconosciuta restituisce `None`, non una larghezza indovinata.**
+Tirare a indovinare disallineerebbe il cursore e ogni voce successiva verrebbe
+letta dal mezzo della precedente: una risposta sbagliata con l'aspetto di una
+tabella analizzata.
+
+### Il nome del file: previsto in anticipo, poi chiuso
+
+Avevo dichiarato PRIMA di misurare che indirizzi e righe sarebbero tornati ma i
+NOMI no, perche' gcc punta `DW_LNCT_path` con `DW_FORM_line_strp` dentro
+`.debug_line_str`, sezione che `DwarfSections` non portava. La misura ha dato
+esattamente quello: 2 test su 3 verdi, e il terzo rosso **solo** sull'ultima
+riga, `loc.file.ends_with(src_name)` — `loc.line` era gia' corretto.
+
+Ho quindi aggiunto la sezione e cablata lungo la catena. Regola tenuta: un nome
+non risolvibile resta la **stringa vuota**, mai un segnaposto — un offset
+formattato come testo o il nome della voce vicina trasformerebbe «non noto» in
+una risposta, che e' il difetto che questo crate continua a trovare in se'.
+
+**Esito: 10 test su 10 verdi**, inclusi i tre prima ignorati (ora senza
+`#[ignore]`) E i test DWARF 2/3/4, che sono la rete contro il rischio vero di
+questo giro: rompere le versioni vecchie mentre si aggiunge la nuova.
+
+**Un avviso non zittito.** Sostituendo l'uso di `header_length` con
+`program_start` il campo e' diventato non letto. Non l'ho tolto ne' silenziato:
+gli ho dato il controllo che il suo commento gia' descriveva — un'unita' che
+dichiara un'intestazione di lunghezza zero e' malformata, perche' il programma
+partirebbe sopra l'intestazione che ha appena descritto.
+
+---
+
+## Workflow #9 (`wf_32403181-f68`) — 5 su 5, un difetto nuovo e una RITRATTAZIONE
+
+Quarto giro di de-vacuazione. Le due correzioni di procedura del giro precedente
+hanno funzionato: gli agenti hanno lavorato su copia privata in `$HOME` e
+nessuno e' stato disturbato dalle mie modifiche all'albero condiviso.
+
+### D1 — difetto NUOVO del backend, 3 riproduzioni su 3
+
+L'uscita di un processo di una **sessione precedente** arriva timbrata col pid
+del bersaglio ATTUALE:
+
+    EVENT pid=29125 tid=29115 reason=ThreadExit { tid: ThreadId(29115), exit_code: -9 }
+
+`pid` e `tid` appartengono a due processi diversi. Cio' che lo rende grave: il
+filtro per pid che `live_linux_core.rs::run_until_interesting` **documenta come
+propria difesa** e' quindi inefficace — un evento estraneo passa il controllo
+proprio perche' indossa il pid giusto. Lasciato `#[ignore]` col rosso; e' il
+bersaglio di un giro prossimo.
+
+### La classe (b) e' universale, e ora e' quantificata
+
+- `core-lifecycle`: spostare tutti e quattro i simboli di `+8` lascia **11 verdi
+  su 11**; a `+128` ne muoiono 3. Causa misurata con `nm -S`: la catena di
+  funzioni occupa `0x9c` byte mentre `covers()` usa una finestra `+0x200`, quindi
+  `covers(crash_a)` contiene anche `crash_b`, `crash_c` e `main` — le quattro
+  asserzioni sono in realta' **una sola**.
+- `expressions`: `hot+8`, `hot+9` (a meta' istruzione) e `hot+24` lasciano tutti
+  **9 verdi su 9**. Causa: ogni oracolo e' `rdi == N`, e `rdi` non viene mai
+  toccato dentro `hot`.
+- Peggio: `core-lifecycle` ha un test di backtrace che **passa con UN SOLO
+  frame**, e uno in cui `rsp` non e' vincolato affatto (sostituirlo con `rbp`
+  lascia 11 su 11).
+
+Sull'asse VALORE invece `expressions` morde 9 su 9. **Non e' un file debole: e'
+un file cieco a un asse e sano sull'altro** — la distinzione che l'intestazione
+del file stesso non faceva.
+
+### D2 — un `#[ignore]` che ora NASCONDE copertura
+
+`current_thread_does_not_outlive_the_session` e' ancora ignorato, ma eseguito con
+`--ignored` da `ok. 1 passed`: il difetto e' stato corretto e l'attributo e'
+rimasto. E' la stessa cosa che ho corretto io due volte oggi (giri 656 e 657):
+**un difetto chiuso il cui test resta spento e' una regressione in attesa**.
+
+### La cosa migliore del workflow e' un difetto NON pubblicato
+
+Un agente aveva un candidato: un breakpoint a `hot+1` riportato come colpito.
+Invece di annunciarlo l'ha misurato: `endbr64` e' `f3 0f 1e fa`, e piantando
+l'`int3` sul secondo byte resta `f3` seguito da `int3` — che **esegue davvero e
+trappa davvero li'**. Il backend aveva ragione. L'ha ritirato e non ha lasciato
+alcun `#[ignore]`.
+
+### Altre note
+
+- `zz_no_orphan_fixture_processes_survive` e' rosso 2 volte su 3 per i fixture
+  **degli altri agenti** (`ends_with("/fixture")`): un test che accusa il vicino.
+- 9 slot `NT_PRSTATUS` su 27 rifiutati, asseriti come `len() <= 9`: passerebbe
+  anche scambiando `rip` con `gs`, e in silenzio se scendessero a zero.
+- Falsificazione dei test nuovi: una mutazione su otto resta verde, e l'agente
+  **lo dichiara e spiega perche'** — e' la mutazione dell'ORACOLO, non del dato.

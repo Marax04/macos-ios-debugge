@@ -18,6 +18,15 @@
 //! `-no-pie` is load-bearing: the binary is `ET_EXEC`, so the addresses `nm`
 //! prints — for the function AND for the globals the memory operands read —
 //! are the addresses those objects occupy at run time.
+//!
+//! ## The one shape here that is still self-referential
+//!
+//! Measured: 6 of these 9 bite. What the file cannot show on its own is that the
+//! REGISTER it reads at the stop is the one the program put there — the tests
+//! assert `rdi == N` after a condition selected on `rdi == N`, so the operand
+//! and the check come from the same read. `live_linux_devac_regs_mem.rs` pins
+//! that half down: the fixture there reports in writing the two argument values
+//! it is about to pass, and the debugger must read exactly those.
 #![cfg(target_os = "linux")]
 
 use rustre_core::address::Address;
