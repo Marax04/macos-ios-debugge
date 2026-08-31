@@ -2818,8 +2818,14 @@ impl crate::Debugger for WindowsDebugger {
             return Err(DebugError::BreakpointNotFound(addr.as_u64()));
         }
         if count == 0 {
+            // ONLY the ignore count. The thread filter is set by a different
+            // call (`set_breakpoint_thread_filter`) and says something else
+            // entirely: "ignore zero times" means "stop on every hit", not
+            // "stop on every thread". Removing it here made a `break … thread
+            // N` restriction vanish as a side effect, and `breakpoints()`
+            // agreed with the loss, so the caller had no way to notice their
+            // breakpoint had quietly become global.
             self.ignore_counts.lock().remove(&addr.as_u64());
-        self.thread_filters.lock().remove(&addr.as_u64());
         } else {
             self.ignore_counts.lock().insert(addr.as_u64(), count);
         }
@@ -4486,6 +4492,78 @@ mod live_tests {
     fn parse_pe_entry_point_rva_rejects_truncated_buffers() {
         assert!(parse_pe_entry_point_rva(&[0u8; 10], &[0u8; 44]).is_none());
         assert!(parse_pe_entry_point_rva(&[0u8; 0x40], &[0u8; 10]).is_none());
+    }
+
+    /// Clearing the ignore count must not clear the THREAD FILTER.
+    ///
+    /// `set_breakpoint_ignore_count(addr, 0)` means "stop on every hit". It
+    /// says nothing about WHICH thread the breakpoint is restricted to, and
+    /// the two are set through different calls. Yet the `count == 0` branch
+    /// removed `thread_filters` as well, so a `break … thread N` restriction
+    /// vanished as a side effect of a call about something else — and
+    /// `breakpoints()` agreed with the loss, leaving the caller no way to
+    /// notice that their breakpoint had quietly become global.
+    ///
+    /// Found by a live test on the LINUX backend and present here identically:
+    /// the two branches are a copy of each other, down to the indentation.
+    /// Three backends share it, so the cure is counted on three points.
+    #[tokio::test]
+    async fn clearing_the_ignore_count_does_not_clear_the_thread_filter() {
+        let dbg = WindowsDebugger::new();
+        dbg.launch(cmd_launch_options(&["/C", "echo hi >NUL"]))
+            .await
+            .expect("launch should succeed against a real cmd.exe");
+
+        // Any address that carries a breakpoint will do: the defect is in the
+        // bookkeeping, not in what the trap does.
+        let tid = dbg
+            .threads()
+            .await
+            .expect("threads")
+            .first()
+            .copied()
+            .expect("a live process has at least one thread");
+        // The PC of the stopped thread, not `modules()`: a mapped, executable
+        // address that needs no module enumeration — which fails with
+        // ERROR_PARTIAL_COPY while the loader is still building its list, and
+        // would make this test red for a reason that has nothing to do with
+        // what it is measuring.
+        let addr = Address::new(
+            dbg.get_registers(tid)
+                .await
+                .expect("get_registers")
+                .pc,
+        );
+
+        dbg.set_breakpoint(addr, BreakpointKind::Software)
+            .await
+            .expect("set_breakpoint");
+        dbg.set_breakpoint_thread_filter(addr, Some(tid))
+            .await
+            .expect("set_breakpoint_thread_filter");
+        dbg.set_breakpoint_ignore_count(addr, 7).await.expect("ignore 7");
+
+        // Back to "stop on every hit" — and ONLY that.
+        dbg.set_breakpoint_ignore_count(addr, 0).await.expect("ignore 0");
+
+        let bp = dbg
+            .breakpoints()
+            .await
+            .expect("breakpoints")
+            .into_iter()
+            .find(|b| b.address == addr)
+            .expect("the breakpoint is still tracked");
+        assert_eq!(
+            bp.ignore_count, 0,
+            "the ignore count is what the call was about, and it must be cleared"
+        );
+        assert_eq!(
+            bp.only_thread,
+            Some(tid),
+            "the thread filter was set by a DIFFERENT call and must survive:              clearing an ignore count says nothing about which thread"
+        );
+
+        let _ = dbg.kill().await;
     }
 
     fn cmd_launch_options(args: &[&str]) -> LaunchOptions {

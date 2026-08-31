@@ -3714,8 +3714,14 @@ impl crate::Debugger for MacosDebugger {
             return Err(DebugError::BreakpointNotFound(addr.as_u64()));
         }
         if count == 0 {
+            // ONLY the ignore count. The thread filter is set by a different
+            // call (`set_breakpoint_thread_filter`) and says something else
+            // entirely: "ignore zero times" means "stop on every hit", not
+            // "stop on every thread". Removing it here made a `break … thread
+            // N` restriction vanish as a side effect, and `breakpoints()`
+            // agreed with the loss, so the caller had no way to notice their
+            // breakpoint had quietly become global.
             self.ignore_counts.lock().remove(&addr.as_u64());
-        self.thread_filters.lock().remove(&addr.as_u64());
         } else {
             self.ignore_counts.lock().insert(addr.as_u64(), count);
         }

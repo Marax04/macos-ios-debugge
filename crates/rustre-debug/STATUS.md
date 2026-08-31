@@ -1392,6 +1392,88 @@ un altro. Vedi [[feedback_workflow_a_catena]].
 | Linux `--tests` | **ROSSO NOTO**: `apple_end_to_end` 2/4 (preesistente, percorso Apple) |
 | MCP | **408 / 1** |
 
+
+---
+
+## NOTA DI PROCEDURA — 2026-08-31: il file dell'utente era rimasto indietro di 11 giri
+
+**Difetto MIO, di procedura, non di codice.** L'utente apre lo STATUS.md
+nell'albero condiviso `Desktop/RustRE`. Io lavoro in un worktree separato
+(`wt643`), committo da li' e faccio avanzare `main` con `git update-ref`. Quel
+comando sposta il **puntatore del ramo** ma **NON aggiorna i file su disco**
+nell'albero dell'utente.
+
+Risultato misurato: il suo file era fermo a **1364 righe, ultima voce iterazione
+633**; il mio ne aveva **2086, fino alla 644**. Undici giri di verbale non sono
+mai arrivati al file che lui legge — mentre erano regolarmente in `main` e su
+`origin`. Il registro esiste per essere letto: se non arriva dove viene letto,
+non esiste.
+
+**Regola nuova, da applicare a OGNI giro**: dopo il commit e l'`update-ref`,
+copiare `STATUS.md` dal worktree all'albero condiviso.
+
+Conservata a verbale la sola riga che differiva, una riga di cruscotto poi
+aggiornata in luogo (la regola «aggiungi, non togliere» vale anche per quelle):
+
+    | MCP | Windows | **405 / 1** (632) |
+
+
+---
+
+## Iterazione 645 — 2026-08-31
+
+### Difetto: azzerare l'IGNORE COUNT cancellava anche il FILTRO SUL THREAD
+
+`set_breakpoint_ignore_count(addr, 0)` significa «fermati a ogni passaggio». Non
+dice nulla su QUALE thread: quello lo imposta una chiamata diversa,
+`set_breakpoint_thread_filter`. Eppure il ramo `count == 0` rimuoveva anche
+`thread_filters`, quindi una restrizione `break … thread N` spariva come effetto
+collaterale di una chiamata che parlava d'altro — e `breakpoints()` **concordava
+con la perdita**, lasciando il chiamante senza modo di accorgersi che il suo
+breakpoint era diventato globale.
+
+**Rosso misurato**, test LIVE contro un `cmd.exe` vero lanciato sotto il
+debugger: `left: None  right: Some(ThreadId(65120))`.
+
+### Tre punti, e la prova che era una copia
+
+Il difetto era **identico** in `windows_debugger.rs:2820`,
+`linux_debugger.rs:3503` e `macos_debugger.rs` — stessa forma e **stessa
+indentazione sbagliata**, che è la firma del copia-incolla. Corretti insieme:
+uno solo sarebbe rimasto verde mentendo sugli altri due.
+
+Trovato dagli agenti sul backend Linux (§644), chiuso da me partendo da Windows
+su richiesta dell'utente.
+
+### Due rossi VACUI miei, prima di quello buono
+
+1. Campo inesistente: `threads()` restituisce `ThreadId`, non strutture con `.id`.
+2. `modules()` risponde `MemoryError(0, "CreateToolhelp32Snapshot failed: 299")`
+   — ERROR_PARTIAL_COPY — mentre il loader sta ancora costruendo la lista. Il
+   test falliva **prima** dell'asserzione che mi interessava.
+
+Cura: prendere l'indirizzo dal **PC del thread fermo** (`get_registers(tid).pc`),
+che è mappato ed eseguibile e non dipende dall'enumerazione dei moduli. Un rosso
+che scatta sul punto sbagliato non prova nulla: cfr.
+[[feedback_provare_il_ramo_che_scatta]].
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows `--lib` | **2125 / 0** |
+| Linux `--lib` | **2107 / 0** |
+| Linux test LIVE | **61 / 0** (+3 `#[ignore]` che documentano difetti aperti) |
+| Darwin x2 | **0 errori** (sola compilazione) |
+| MCP | **408 / 1** — l'1 e' il cricchetto |
+
+### Difetti Linux ancora APERTI, trovati al §644
+
+1. Watchpoint che non raggiunge i thread nati dopo l'armamento (serve
+   `PTRACE_SEIZE` + `PTRACE_O_TRACECLONE`).
+2. `apple_end_to_end` 2/4 rosso sotto Linux — percorso Apple, sotto sospensione
+   iOS, registrato come rosso NOTO.
+
 ---
 ---
 
