@@ -1611,6 +1611,151 @@ sono trappole vere:
 Aree: divario esatto di `parse_elf`, divario DWARF 4 contro DWARF 5, heap,
 casi limite di lettura/scrittura memoria, casi limite dello stepping.
 
+
+---
+
+## Iterazione 647 — 2026-08-31
+
+### Difetto: `current_thread()` sopravviveva alla fine della sessione
+
+`kill()` e `detach()` azzeravano tutto — pid, canale dei comandi, tabelle dei
+breakpoint, contabilita' dei watchpoint — **tranne `current_tid`**. L'unico
+percorso che lo puliva era `retire_session_after_exit()`, cioe' la sola uscita
+naturale del tracee.
+
+Risultato: l'istanza si **contraddiceva**. `is_attached()` rispondeva gia'
+`false` mentre `current_thread()` continuava a servire il tid del processo morto.
+E quel tid non e' inerte: e' il thread predefinito su cui ricadono le chiamate di
+registri e stepping, quindi chi si fidava operava su un thread inesistente.
+
+**Rosso misurato** (test live, `cmd.exe` vero lanciato e poi ucciso):
+`the session is over and the only honest answer is NotAttached, got: Ok(ThreadId(62284))`
+
+### La cura e' un'INVARIANTE, non tre toppe
+
+«Il thread corrente non puo' sopravvivere al pid.» Applicata **ovunque il pid
+viene azzerato**: 3 punti per backend x 3 backend = **9 punti**. Il difetto era
+in tutti e tre — misurato, non supposto: in nessuno `kill`/`detach` toccava
+`current_tid`.
+
+### Un altro rosso VACUO mio, e la causa vale la pena saperla
+
+Il primo tentativo falliva con `a live session has a current thread: NotAttached`
+**prima** dell'asserzione utile: `current_tid` non lo imposta il `launch`, lo
+fissa il primo evento di arresto CONSUMATO. Cura del test: fare un
+`continue_execution()` prima di misurare. Terzo rosso vacuo in tre giri — la
+lezione [[feedback_provare_il_ramo_che_scatta]] continua a presentare il conto.
+
+### Verifica del WORKFLOW #2 fatta da me, file per file
+
+I numeri degli agenti reggono: **42 verdi, 0 falliti, 4 `#[ignore]`**.
+
+| file | verificato da me |
+|---|---|
+| `live_linux_lifecycle` | 13 ok, 1 ignore |
+| `live_linux_signals` | 8 ok |
+| `live_linux_symbols` | 6 ok, 3 ignore (i tre stub) |
+| `live_linux_expressions` | 9 ok |
+| `live_linux_maps_modules` | 6 ok |
+
+Totale test live Linux ora in albero: **103** (61 del workflow #1 + 42 del #2).
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows `--lib` | **2127 / 0** |
+| Linux `--lib` | **2108 / 0** |
+| Linux live (lifecycle/breakpoints/watchpoints) | **44 / 0** — nessuna regressione dall'invariante |
+| Darwin x2 | **0 errori** (sola compilazione) |
+
+
+---
+
+## WORKFLOW LINUX #3 — 2026-08-31 — il divario degli STUB, MISURATO
+
+5 agenti su 5, zero errori. Aree: ELF, righe DWARF, heap, limiti di memoria,
+limiti dello stepping. Questo giro non cercava difetti nuovi: doveva **quantificare**
+i tre stub trovati al #2, e ci e' riuscito con verita' esterne (`nm`, `readelf`).
+
+### `ElfSymbolProvider::parse_elf` — la perdita e' TOTALE e INCONDIZIONATA
+
+Il commento in `elf_provider.rs` lo ammette: «This stub returns an empty provider
+to avoid a full ELF parser dep.»
+
+| forma dell'ELF | atteso (`nm`) | RAGGIUNGIBILE | ottenuto |
+|---|---|---|---|
+| no-pie -O0 -g (ET_EXEC) | 29 | **35** | **0** |
+| PIE -O0 -g (ET_DYN) | 31 | **37** | **0** |
+| no-pie, senza `-g` | 29 | **35** | **0** |
+| strippato (`.dynsym`) | 2 | **3** | **0** |
+| shared object `.so` (`.dynsym`) | 5 | **6** | **0** |
+
+Quattro fatti che la cura deve rispettare, tutti misurati:
+
+1. **Non fallisce: RIESCE e non restituisce nulla.** `parse_elf` accetta senza
+   errore tutte e cinque le forme — per il chiamante e' indistinguibile da un file
+   privo di simboli. (E il controllo dell'header e' reale: rifiuta i non-ELF e gli
+   ELF troncati, quindi non e' un `Ok` incondizionato.)
+2. **Identico con e senza `-g`** (35 contro 35): non e' un percorso legato al
+   debug info.
+3. **Colpisce il caso COMUNE**: la PIE e' il default di ogni distribuzione
+   moderna, ed e' cio' a cui un debugger si attacca normalmente.
+4. **Non serve un parser nuovo.** `parse_symtab`, gia' nel crate, legge
+   correttamente i simboli sia in ET_EXEC sia in ET_DYN: manca solo la
+   **camminata delle section header** (`e_shoff/e_shentsize/e_shnum/e_shstrndx`)
+   per trovare `.symtab`/`.strtab` e `.dynsym`/`.dynstr` e delegare. Servono DUE
+   tabelle, non una: la seconda e' l'unica presente negli strippati e nei `.so`.
+
+Il bersaglio giusto e' la colonna RAGGIUNGIBILE, non quella di `nm`: la differenza
+(29 contro 35) e' l'entry nulla all'indice 0 piu' le voci FILE/SECTION che `nm`
+non stampa. Contabilizzata, non rumore.
+
+### Il parser delle righe DWARF — rotto ESATTAMENTE sul default del compilatore
+
+Stesso sorgente, stesso `cc -no-pie -O0 -g`, verita' esterna
+`readelf --debug-dump=decodedline`:
+
+| versione | byte `.debug_line` | righe del parser | indirizzi | readelf |
+|---|---|---|---|---|
+| 2 | 189 | 24 | 24 | 24 |
+| 3 | 192 | 24 | 24 | 24 |
+| 4 | 193 | 24 | 24 | 24 |
+| **5** | 172 | **0** | **0** | **24** |
+
+**Il default di `cc -g` su questa macchina e' la versione 5**, quindi il caso
+rotto e' quello normale, non un bordo. Causa gia' scritta nel sorgente:
+`parse_line_program_header` esce su v5 («v5 header layout differs — fallback») e
+`parse_line_table` restituisce `Ok` con tabella **vuota**.
+
+**Il modo di fallire e' il SILENZIO, non un errore** — verificato: nessuna
+versione produce `Err`. E' la ragione per cui il difetto e' invisibile a monte.
+
+Faccia visibile al consumatore: `DWARF 5: no line row covers line_alpha at
+0x401136`, mentre lo stesso sorgente con `-gdwarf-4` risponde «riga 2 di
+linefixture.c». E `0x401136` non e' teorico: e' l'indirizzo che stampa `nm` e su
+cui un breakpoint scatta davvero.
+
+Sulle versioni 2/3/4 il parser **non inventa nulla**: l'insieme dei suoi
+indirizzi e' un sottoinsieme di quelli di `readelf` in tutte e tre.
+
+### Nota di metodo degli agenti, che vale la pena tenere
+
+L'asserzione e' scritta come **sottoinsieme**, non uguaglianza: `readelf` stampa
+anche le righe di fine-sequenza, e pretendere l'uguaglianza avrebbe fatto fallire
+il test per un non-difetto. Inventare un indirizzo che `readelf` non decodifica
+resta comunque errore, ed e' quello che viene sorvegliato.
+
+### Esiti dichiarati (da verificare dal coordinatore)
+
+| file | esito |
+|---|---|
+| `live_linux_elf_symbols.rs` | 4 ok, 5 ignore (i 5 divari ELF) |
+| `live_linux_dwarf_lines.rs` | 7 ok, 3 ignore (i 3 divari DWARF 5) |
+| `live_linux_heap.rs` | 11 ok, 1 ignore |
+| `live_linux_memory_limits.rs` | in verifica |
+| `live_linux_stepping_limits.rs` | in verifica |
+
 ---
 ---
 

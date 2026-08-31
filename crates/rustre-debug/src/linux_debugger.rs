@@ -1089,6 +1089,13 @@ impl LinuxDebugger {
     /// `set_breakpoint` then reports success while planting nothing.
     fn retire_session_after_exit(&self) {
         *self.pid.lock() = None;
+        // The current thread cannot outlive the pid. `kill` and `detach`
+        // cleared everything else — breakpoints, watchpoints, the command
+        // channel — but left `current_tid` set, so the instance contradicted
+        // itself: `is_attached()` answered false while `current_thread()` still
+        // handed out the dead process's tid. That tid is the default the
+        // register and stepping calls fall back to.
+        *self.current_tid.lock() = None;
         *self.cmd_tx.lock() = None;
         *self.current_tid.lock() = None;
         self.breakpoints.lock().clear();
@@ -3348,6 +3355,13 @@ impl crate::Debugger for LinuxDebugger {
         self.ignore_counts.lock().clear();
         self.thread_filters.lock().clear();
         *self.pid.lock() = None;
+        // The current thread cannot outlive the pid. `kill` and `detach`
+        // cleared everything else — breakpoints, watchpoints, the command
+        // channel — but left `current_tid` set, so the instance contradicted
+        // itself: `is_attached()` answered false while `current_thread()` still
+        // handed out the dead process's tid. That tid is the default the
+        // register and stepping calls fall back to.
+        *self.current_tid.lock() = None;
         *self.cmd_tx.lock() = None;
         match reply {
             Reply::Ack(r) => r,
@@ -3358,6 +3372,13 @@ impl crate::Debugger for LinuxDebugger {
     async fn kill(&self) -> Result<(), DebugError> {
         let reply = self.send(Command::Kill)?;
         *self.pid.lock() = None;
+        // The current thread cannot outlive the pid. `kill` and `detach`
+        // cleared everything else — breakpoints, watchpoints, the command
+        // channel — but left `current_tid` set, so the instance contradicted
+        // itself: `is_attached()` answered false while `current_thread()` still
+        // handed out the dead process's tid. That tid is the default the
+        // register and stepping calls fall back to.
+        *self.current_tid.lock() = None;
         *self.cmd_tx.lock() = None;
         // Clear the breakpoint map too, exactly as `detach()` does. The
         // process is gone, so the tracked original bytes are meaningless —

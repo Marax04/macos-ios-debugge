@@ -1204,6 +1204,13 @@ impl WindowsDebugger {
     /// `set_breakpoint` then reports success while planting nothing.
     fn retire_session_after_exit(&self) {
         *self.pid.lock() = None;
+        // The current thread cannot outlive the pid. `kill` and `detach`
+        // cleared everything else — breakpoints, watchpoints, the command
+        // channel — but left `current_tid` set, so the instance contradicted
+        // itself: `is_attached()` answered false while `current_thread()` still
+        // handed out the dead process's tid. That tid is the default the
+        // register and stepping calls fall back to.
+        *self.current_tid.lock() = None;
         *self.cmd_tx.lock() = None;
         *self.current_tid.lock() = None;
         self.breakpoints.lock().clear();
@@ -2665,6 +2672,13 @@ impl crate::Debugger for WindowsDebugger {
         self.ignore_counts.lock().clear();
         self.thread_filters.lock().clear();
         *self.pid.lock() = None;
+        // The current thread cannot outlive the pid. `kill` and `detach`
+        // cleared everything else — breakpoints, watchpoints, the command
+        // channel — but left `current_tid` set, so the instance contradicted
+        // itself: `is_attached()` answered false while `current_thread()` still
+        // handed out the dead process's tid. That tid is the default the
+        // register and stepping calls fall back to.
+        *self.current_tid.lock() = None;
         *self.cmd_tx.lock() = None;
         match reply {
             Reply::Ack(r) => r,
@@ -2675,6 +2689,13 @@ impl crate::Debugger for WindowsDebugger {
     async fn kill(&self) -> Result<(), DebugError> {
         let reply = self.send(Command::Kill)?;
         *self.pid.lock() = None;
+        // The current thread cannot outlive the pid. `kill` and `detach`
+        // cleared everything else — breakpoints, watchpoints, the command
+        // channel — but left `current_tid` set, so the instance contradicted
+        // itself: `is_attached()` answered false while `current_thread()` still
+        // handed out the dead process's tid. That tid is the default the
+        // register and stepping calls fall back to.
+        *self.current_tid.lock() = None;
         *self.cmd_tx.lock() = None;
         // Clear the breakpoint map too, exactly as `detach()` does. The
         // process is gone, so the tracked original bytes are meaningless —
@@ -4564,6 +4585,45 @@ mod live_tests {
         );
 
         let _ = dbg.kill().await;
+    }
+
+    /// `current_thread()` must not outlive the session.
+    ///
+    /// `kill` and `detach` clear the pid, the command channel, the breakpoint
+    /// tables, the watchpoint bookkeeping — everything except `current_tid`.
+    /// The only path that clears it is the tracee's natural exit. So after a
+    /// `kill` the instance CONTRADICTS ITSELF: `is_attached()` already answers
+    /// `false` while `current_thread()` still hands out the dead process's tid.
+    ///
+    /// That tid is not inert. It is the default thread the register and
+    /// stepping calls fall back to, so a caller who trusts it operates on a
+    /// thread that no longer exists.
+    ///
+    /// Found by a live test on the Linux backend; measured by me to be present
+    /// in all three — no backend's `kill`/`detach` touches `current_tid`.
+    #[tokio::test]
+    async fn current_thread_does_not_outlive_the_session() {
+        let dbg = WindowsDebugger::new();
+        dbg.launch(cmd_launch_options(&["/C", "echo hi >NUL"]))
+            .await
+            .expect("launch should succeed against a real cmd.exe");
+
+        // `current_tid` is set when a stop event is CONSUMED, not by `launch`
+        // itself: asking straight after the launch answers `NotAttached` for an
+        // ordinary reason that has nothing to do with this defect. Take one
+        // stop first, so the tid under test is a real one.
+        dbg.continue_execution().await.expect("continue to the first stop");
+        let live = dbg.current_thread().await;
+        assert!(live.is_ok(), "a stopped session must name its current thread, got {live:?}");
+
+        dbg.kill().await.expect("kill");
+
+        assert!(!dbg.is_attached(), "kill ends the session");
+        let after = dbg.current_thread().await;
+        assert!(
+            matches!(after, Err(DebugError::NotAttached)),
+            "the session is over and the only honest answer is NotAttached, got: {after:?}"
+        );
     }
 
     fn cmd_launch_options(args: &[&str]) -> LaunchOptions {
