@@ -929,6 +929,28 @@ pub struct FunctionDetector {
     pub min_function_size: usize,
 }
 
+/// Un nome RISERVATO all'implementazione (C99 7.1.3): inizia con `_` e non e'
+/// un simbolo decorato C++/Rust.
+///
+/// ⚠ Serve solo all'esenzione dalla soglia di dimensione, e la ragione e'
+/// misurata (#7070): esentando **tutti** i simboli, il corpus guadagna 308
+/// funzioni ma **15 file (4% dei nuovi) smettono di compilare**, tutti con la
+/// stessa causa — `conflicting types for '_exit' / '_errno' / '__p___argv' /
+/// '_set_fmode'`. Sono thunk verso la CRT: il prelude li dichiara gia' con la
+/// loro firma vera, e ridefinirli come `__int64 f()` e' un conflitto. Sono
+/// anche gli unici di cui non si perde nulla a NON emetterli, perche' al link
+/// li fornisce la libreria standard.
+///
+/// I nomi decorati (`_Z…` Itanium, che copre anche Rust legacy) sono
+/// deliberatamente ESCLUSI da questa regola: iniziano con `_` ma non sono
+/// riservati alla CRT, e sono proprio quelli che servono — le funzioni
+/// `_ZN12_GLOBAL__N_14pool…` dell'anonymous namespace sono la seconda causa
+/// dei `LINK_FAIL` misurati al §131.
+fn nome_riservato_crt(nome: Option<&str>) -> bool {
+    let Some(n) = nome else { return false };
+    n.starts_with('_') && !n.starts_with("_Z")
+}
+
 impl FunctionDetector {
     /// Create a detector for the given architecture with all passes enabled.
     #[must_use]
@@ -938,7 +960,41 @@ impl FunctionDetector {
             enable_prologue_scan: true,
             enable_call_target_scan: true,
             enable_gap_analysis: true,
-            min_function_size: 4,
+            // #7430 — era 4, e la soglia scartava funzioni VERE.
+            //
+            // Catena misurata (2026-08-26): `accumulate` (rust3_O0) non linkava
+            // per `__rustc____rust_no_alloc_shim_is_unstable_v2`, **chiamato da
+            // 181 file e definito da nessuno**. Risalito l indirizzo dalle
+            // `call` del disassemblato: `0x140001A40`, che e'
+            //
+            //     0x140001a40  ret
+            //     --- fn instr range: 0x140001a40..=0x140001a40 ---
+            //
+            // **una funzione di UN byte**, in `.text` e fuori da `.pdata`
+            // (foglia senza unwind info, normale per un `ret` solo).
+            //
+            // Il commento sotto diceva che `CallTarget` e' «esattamente il
+            // rumore che la soglia esiste per togliere». **Misurato, e' falso**
+            // su questo corpus: portando la soglia a 1 compaiono **+44 funzioni
+            // su 5 bucket** (rust3 +24, cpp_sample7 +8, csharp +6,
+            // c_sample11 +5, go_sample4 +1), e disassemblandone **24 su 24**:
+            //
+            //     ret                 x6     xor %eax,%eax; ret   x11
+            //     mov $1,%al; ret     x1     mov (%rcx),%eax; ret x1
+            //     jmp *%rcx           x1     fninit; ret          x1
+            //
+            // Stub di ritorno, getter, trampolini, init FPU: **zero spazzatura**.
+            //
+            // ⚠ Rischio residuo DICHIARATO: la motivazione della soglia nasce
+            // dallo scan del byte `0xE8` **non allineato**, che rumore lo
+            // produce davvero. Ho campionato **5 bucket su 38** e **24 casi su
+            // 44**: non escludo che altrove tolga rumore vero. Il tetto del
+            // danno e' comunque basso — 44 file minuscoli — mentre il beneficio
+            // e' sbloccare riferimenti di link reali.
+            //
+            // Per tornare al comportamento precedente esiste gia' la sonda
+            // `RUSTRE_DBG_MINFN=4`.
+            min_function_size: 1,
         }
     }
 
@@ -998,8 +1054,38 @@ impl FunctionDetector {
         let mut merged = self.merge_results(results);
 
         // Discard suspiciously tiny "functions".
+        //
+        // ⚠ La soglia serve contro la scansione dei prologhi, che prova OGNI
+        // offset e produce spazzatura di pochi byte. Applicarla anche a un
+        // indirizzo che arriva dalla TABELLA DEI SIMBOLI e' un errore: li' non
+        // c'e' niente da indovinare, il binario dichiara che quella e' una
+        // funzione, e la sua taglia non e' una prova contro.
+        //
+        // MISURATO (#7070) su `go_sample4_O0`: con la soglia applicata a tutti,
+        // **84 funzioni note restano non emesse**, fra cui
+        // `runtime.panicIndex` — un thunk di 2 istruzioni **chiamato 823
+        // volte**, che da solo manda in `LINK_FAIL` l'intero bucket
+        // comportamentale. Abbassando la soglia a 0 i file passano da 3338 a
+        // **3423 (+85)** e il simbolo compare. Sul corpus la classe vale
+        // **1923 funzioni (6%)** ed e' la causa dominante dei `LINK_FAIL`
+        // (21 su 63 al §131).
+        //
+        // Si esentano quindi le sole sorgenti AUTOREVOLI — quelle in cui
+        // l'indirizzo e' dichiarato, non dedotto. `ProloguePattern`,
+        // `HeuristicGap` e `CallTarget` restano soggetti alla soglia, perche'
+        // sono esattamente il rumore che la soglia esiste per togliere.
         let min_size = self.min_function_size;
         merged.retain(|fb| {
+            if matches!(
+                fb.source,
+                DetectionSource::SymbolTable
+                    | DetectionSource::EntryPoint
+                    | DetectionSource::Flirt
+                    | DetectionSource::ExceptionHandler
+            ) && !nome_riservato_crt(fb.name.as_deref())
+            {
+                return true;
+            }
             fb.end.is_none_or(|e| {
                 usize::try_from(e.as_u64().saturating_sub(fb.start.as_u64())).unwrap_or(usize::MAX)
                     >= min_size

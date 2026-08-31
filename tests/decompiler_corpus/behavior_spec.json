@@ -1,4586 +1,4542 @@
 {
- "_doc": [
-  "Ground truth for the behavioural metric: functions whose ORIGINAL source is in",
-  "src/, called with the same inputs in both the emitted and the reference build.",
-  "",
-  "Types are the SOURCE types. The emitted signature is deliberately NOT consulted:",
-  "the question this metric asks is whether the reconstruction can be called the way",
-  "the original could. A recovered `size_t` where the source says `int32_t` is a real",
-  "finding, not a detail to accommodate.",
-  "",
-  "Inputs must include the boundaries that separate a correct reconstruction from a",
-  "plausible one: the default/out-of-range switch arm, division by zero, the shift",
-  "count that x86 masks implicitly (b=33), recursion depth, negative values, and for",
-  "pointer arguments a single-element buffer (loop preconditions) as well as a long",
-  "one. A buffer argument is {\"buf\": [...], \"elem\": \"<C type>\"} and is compared",
-  "after the call too \u00e2\u20ac\u201d several of these functions write through the pointer.",
-  "",
-  "Excluded on purpose: variadic functions (sum_varargs) \u00e2\u20ac\u201d the emitted signature",
-  "cannot express `...`, so a mismatch would measure the harness, not the output.",
-  "random: {cases, ranges} adds a fixed-seed sweep on top of the curated inputs. Scalars only, and ranges are chosen to stay in the function's real domain (factorial past 20 overflows uint64 in BOTH builds, which would compare equal and prove nothing).",
-  "sample1 and sample1_c are the SAME source compiled into two different binaries; both are measured on purpose, because a function that reconstructs correctly in one build and not the other localises a compilation-dependent defect.",
-  "Cross-language on purpose: accumulate/find_max appear in C (sample1, sample1_c), C++ (sample2_cpp) and Rust (sample3_rust, sample8_rust) with identical signatures. Same algorithm, different code generators \u2014 a divergence in one and not the others localises which generated shape the decompiler cannot handle, which a single language can never show.",
-  "A bucket may set \"out_dir\" (relative to this directory, or absolute) to point at its own decompiled output instead of a subdirectory of the snapshot passed on the command line; the cross-language buckets built into behav/bin are decompiled into behav/out and use it. Absent, behaviour is unchanged. \"reference_mode\": \"staticlib\" switches the Rust reference from --emit=obj to a staticlib (needed by any source that allocates) and adds the Windows system libraries it needs. Go buckets name a prebuilt cgo c-archive with \"reference_archive\"."
- ],
- "buckets": {
-  "sample1": {
-   "source": "sample1_struct_loop.c",
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ]
-     ]
+  "_doc": [
+    "Ground truth for the behavioural metric: functions whose ORIGINAL source is in",
+    "src/, called with the same inputs in both the emitted and the reference build.",
+    "",
+    "Types are the SOURCE types. The emitted signature is deliberately NOT consulted:",
+    "the question this metric asks is whether the reconstruction can be called the way",
+    "the original could. A recovered `size_t` where the source says `int32_t` is a real",
+    "finding, not a detail to accommodate.",
+    "",
+    "Inputs must include the boundaries that separate a correct reconstruction from a",
+    "plausible one: the default/out-of-range switch arm, division by zero, the shift",
+    "count that x86 masks implicitly (b=33), recursion depth, negative values, and for",
+    "pointer arguments a single-element buffer (loop preconditions) as well as a long",
+    "one. A buffer argument is {\"buf\": [...], \"elem\": \"<C type>\"} and is compared",
+    "after the call too \u00e2\u20ac\u201d several of these functions write through the pointer.",
+    "",
+    "Excluded on purpose: variadic functions (sum_varargs) \u00e2\u20ac\u201d the emitted signature",
+    "cannot express `...`, so a mismatch would measure the harness, not the output.",
+    "random: {cases, ranges} adds a fixed-seed sweep on top of the curated inputs. Scalars only, and ranges are chosen to stay in the function's real domain (factorial past 20 overflows uint64 in BOTH builds, which would compare equal and prove nothing).",
+    "sample1 and sample1_c are the SAME source compiled into two different binaries; both are measured on purpose, because a function that reconstructs correctly in one build and not the other localises a compilation-dependent defect.",
+    "Cross-language on purpose: accumulate/find_max appear in C (sample1, sample1_c), C++ (sample2_cpp) and Rust (sample3_rust, sample8_rust) with identical signatures. Same algorithm, different code generators \u2014 a divergence in one and not the others localises which generated shape the decompiler cannot handle, which a single language can never show.",
+    "A bucket may set \"out_dir\" (relative to this directory, or absolute) to point at its own decompiled output instead of a subdirectory of the snapshot passed on the command line; the cross-language buckets built into behav/bin are decompiled into behav/out and use it. Absent, behaviour is unchanged. \"reference_mode\": \"staticlib\" switches the Rust reference from --emit=obj to a staticlib (needed by any source that allocates) and adds the Windows system libraries it needs. Go buckets name a prebuilt cgo c-archive with \"reference_archive\"."
+  ],
+  "buckets": {
+    "sample1": {
+      "source": "sample1_struct_loop.c",
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "functions": {
+        "accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -5,
+                    5,
+                    0
+                  ],
+                  [
+                    100,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ]
+          ]
+        },
+        "find_max": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  -9,
+                  -3,
+                  -100
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ]
+          ]
+        }
+      }
     },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
+    "sample6_c": {
+      "source": "sample6_constructs.c",
+      "functions": {
+        "classify": {
+          "ret": "int32_t",
+          "args": [
+            "int32_t",
+            "int32_t",
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0,
+              6,
+              7
+            ],
+            [
+              1,
+              6,
+              7
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [
+              3,
+              6,
+              7
+            ],
+            [
+              3,
+              6,
+              0
+            ],
+            [
+              4,
+              12,
+              10
+            ],
+            [
+              5,
+              12,
+              10
+            ],
+            [
+              6,
+              12,
+              10
+            ],
+            [
+              7,
+              1,
+              3
+            ],
+            [
+              7,
+              1,
+              33
+            ],
+            [
+              8,
+              1,
+              1
+            ],
+            [
+              -1,
+              1,
+              1
+            ],
+            [
+              2,
+              -3,
+              5
+            ],
+            [
+              1,
+              -2147483648,
+              1
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                -2,
+                10
+              ],
+              [
+                -100000,
+                100000
+              ],
+              [
+                -40,
+                40
+              ]
+            ]
+          }
+        },
+        "factorial": {
+          "ret": "uint64_t",
+          "args": [
+            "uint32_t"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              5
+            ],
+            [
+              12
+            ],
+            [
+              20
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                0,
+                20
+              ]
+            ]
+          }
+        },
+        "apply": {
+          "ret": "int32_t",
+          "args": [
+            "int32_t",
+            "int32_t",
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0,
+              3,
+              4
+            ],
+            [
+              1,
+              3,
+              4
+            ],
+            [
+              0,
+              -3,
+              4
+            ],
+            [
+              1,
+              -3,
+              -4
+            ],
+            [
+              2,
+              5,
+              5
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                1
+              ],
+              [
+                -100000,
+                100000
+              ],
+              [
+                -100000,
+                100000
+              ]
+            ]
+          }
+        },
+        "count_set_flags": {
+          "ret": "uint32_t",
+          "args": [
+            "const uint32_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  5,
+                  2
+                ],
+                "elem": "uint32_t"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "uint32_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  0,
+                  0,
+                  0
+                ],
+                "elem": "uint32_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  7,
+                  7,
+                  7,
+                  7
+                ],
+                "elem": "uint32_t"
+              },
+              4
+            ]
+          ]
+        },
+        "dot": {
+          "ret": "double",
+          "args": [
+            "const double *",
+            "const double *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  "1.0",
+                  "2.0",
+                  "3.0"
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  "4.0",
+                  "5.0",
+                  "6.0"
+                ],
+                "elem": "double"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  "0.0"
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  "0.0"
+                ],
+                "elem": "double"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  "-1.5",
+                  "2.5"
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  "2.0",
+                  "-4.0"
+                ],
+                "elem": "double"
+              },
+              2
+            ]
+          ]
+        }
+      }
+    },
+    "sample11_c": {
+      "source": "sample11_c_features.c",
+      "functions": {
+        "dispatch": {
+          "ret": "int64_t",
+          "args": [
+            "int",
+            "int64_t",
+            "int64_t"
+          ],
+          "inputs": [
+            [
+              0,
+              9,
+              4
+            ],
+            [
+              1,
+              9,
+              4
+            ],
+            [
+              2,
+              9,
+              4
+            ],
+            [
+              3,
+              9,
+              4
+            ],
+            [
+              4,
+              9,
+              4
+            ],
+            [
+              -1,
+              9,
+              4
+            ],
+            [
+              2,
+              -3,
+              -3
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                -1,
+                5
+              ],
+              [
+                -1000000,
+                1000000
+              ],
+              [
+                -1000000,
+                1000000
+              ]
+            ]
+          }
+        },
+        "punned_bits": {
+          "ret": "int64_t",
+          "args": [
+            "double"
+          ],
+          "inputs": [
+            [
+              "0.0"
+            ],
+            [
+              "1.0"
+            ],
+            [
+              "-1.0"
+            ],
+            [
+              "3.14159"
+            ],
+            [
+              "-0.0"
+            ]
+          ]
+        },
+        "pack_fields": {
+          "ret": "uint32_t",
+          "args": [
+            "int",
+            "int",
+            "int",
+            "int"
+          ],
+          "inputs": [
+            [
+              1,
+              2,
+              3,
+              4
+            ],
+            [
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              255,
+              255,
+              255,
+              255
+            ],
+            [
+              -1,
+              -1,
+              -1,
+              -1
+            ],
+            [
+              16,
+              8,
+              4,
+              2
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                -300,
+                300
+              ],
+              [
+                -300,
+                300
+              ],
+              [
+                -300,
+                300
+              ],
+              [
+                -300,
+                300
+              ]
+            ]
+          }
+        },
+        "my_strlen": {
+          "ret": "size_t",
+          "args": [
+            "const char *"
+          ],
+          "inputs": [
+            [
+              {
+                "str": ""
+              }
+            ],
+            [
+              {
+                "str": "a"
+              }
+            ],
+            [
+              {
+                "str": "hello world"
+              }
+            ],
+            [
+              {
+                "str": "0123456789abcdef"
+              }
+            ]
+          ]
+        },
+        "matrix_trace": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  42
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  0,
+                  0,
+                  1
+                ],
+                "elem": "int64_t"
+              },
+              2
+            ]
+          ]
+        }
+      }
+    },
+    "sample1_c": {
+      "source": "sample1_struct_loop.c",
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "functions": {
+        "accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -5,
+                    5,
+                    0
+                  ],
+                  [
+                    100,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ]
+          ]
+        },
+        "find_max": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  -9,
+                  -3,
+                  -100
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ]
+          ]
+        }
+      }
+    },
+    "sample2_cpp": {
+      "source": "sample2_struct_loop.cpp",
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "functions": {
+        "accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -5,
+                    5,
+                    0
+                  ],
+                  [
+                    100,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ]
+          ]
+        },
+        "find_max": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  -9,
+                  -3,
+                  -100
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ]
+          ]
+        }
+      }
+    },
+    "sample3_rust": {
+      "source": "sample3_struct_loop.rs",
+      "functions": {
+        "accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -5,
+                    5,
+                    0
+                  ],
+                  [
+                    100,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ]
+          ]
+        },
+        "find_max": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  -9,
+                  -3,
+                  -100
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ]
+          ]
+        }
+      },
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "link_libs": [
+        "-lntdll",
+        "-lsynchronization"
       ]
-     ]
+    },
+    "sample8_rust": {
+      "source": "sample8_rust_features.rs",
+      "functions": {
+        "compute": {
+          "ret": "int64_t",
+          "args": [
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              8
+            ],
+            [
+              -1
+            ],
+            [
+              -5
+            ],
+            [
+              7
+            ],
+            [
+              9
+            ],
+            [
+              100
+            ],
+            [
+              200
+            ],
+            [
+              -2147483648
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                -8,
+                200
+              ]
+            ]
+          }
+        }
+      },
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "link_libs": [
+        "-lntdll",
+        "-lsynchronization"
+      ]
+    },
+    "sample7_cpp": {
+      "source": "sample7_cpp_features.cpp",
+      "functions": {
+        "total_area": {
+          "ret": "double",
+          "args": [
+            "int"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              5
+            ],
+            [
+              10
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                0,
+                60
+              ]
+            ]
+          }
+        },
+        "string_map_demo": {
+          "ret": "int64_t",
+          "args": [
+            "int"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              3
+            ],
+            [
+              6
+            ],
+            [
+              10
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                0,
+                50
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "c_sample6_O0": {
+      "source": "sample6_constructs.c",
+      "functions": {
+        "classify": {
+          "ret": "int32_t",
+          "args": [
+            "int32_t",
+            "int32_t",
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              2147483647,
+              1
+            ],
+            [
+              1,
+              -2147483648,
+              1
+            ],
+            [
+              2,
+              65536,
+              65536
+            ],
+            [
+              3,
+              10,
+              0
+            ],
+            [
+              3,
+              -7,
+              2
+            ],
+            [
+              3,
+              7,
+              -2
+            ],
+            [
+              4,
+              -1,
+              0
+            ],
+            [
+              5,
+              0,
+              0
+            ],
+            [
+              6,
+              -1,
+              -1
+            ],
+            [
+              7,
+              1,
+              0
+            ],
+            [
+              7,
+              1,
+              31
+            ],
+            [
+              7,
+              1,
+              33
+            ],
+            [
+              7,
+              -1,
+              32
+            ],
+            [
+              8,
+              1,
+              2
+            ],
+            [
+              -1,
+              1,
+              2
+            ],
+            [
+              99,
+              5,
+              5
+            ],
+            [
+              2147483647,
+              1,
+              1
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                9
+              ],
+              [
+                -100000,
+                100000
+              ],
+              [
+                -100000,
+                100000
+              ]
+            ]
+          }
+        },
+        "factorial": {
+          "ret": "uint64_t",
+          "args": [
+            "uint32_t"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              5
+            ],
+            [
+              12
+            ],
+            [
+              20
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                20
+              ]
+            ]
+          }
+        },
+        "apply": {
+          "ret": "int32_t",
+          "args": [
+            "int",
+            "int32_t",
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              2147483647,
+              1
+            ],
+            [
+              1,
+              -1,
+              -1
+            ],
+            [
+              1,
+              0,
+              7
+            ],
+            [
+              0,
+              -5,
+              5
+            ],
+            [
+              2,
+              3,
+              4
+            ],
+            [
+              -1,
+              3,
+              4
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                1
+              ],
+              [
+                -100000,
+                100000
+              ],
+              [
+                -100000,
+                100000
+              ]
+            ]
+          }
+        },
+        "count_set_flags": {
+          "ret": "uint32_t",
+          "args": [
+            "const uint32_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  0
+                ],
+                "elem": "uint32_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "uint32_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  2
+                ],
+                "elem": "uint32_t"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  4,
+                  7,
+                  0,
+                  4294967295
+                ],
+                "elem": "uint32_t"
+              },
+              6
+            ]
+          ]
+        },
+        "dot": {
+          "ret": "double",
+          "args": [
+            "const double *",
+            "const double *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  0.0
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  0.0
+                ],
+                "elem": "double"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  1.0
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  2.0
+                ],
+                "elem": "double"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  1.0,
+                  2.0,
+                  3.0
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  4.0,
+                  5.0,
+                  6.0
+                ],
+                "elem": "double"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  -1.5,
+                  2.0
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  2.0,
+                  -0.5
+                ],
+                "elem": "double"
+              },
+              2
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "c_sample6_O2": {
+      "source": "sample6_constructs.c",
+      "functions": {
+        "classify": {
+          "ret": "int32_t",
+          "args": [
+            "int32_t",
+            "int32_t",
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              2147483647,
+              1
+            ],
+            [
+              1,
+              -2147483648,
+              1
+            ],
+            [
+              2,
+              65536,
+              65536
+            ],
+            [
+              3,
+              10,
+              0
+            ],
+            [
+              3,
+              -7,
+              2
+            ],
+            [
+              3,
+              7,
+              -2
+            ],
+            [
+              4,
+              -1,
+              0
+            ],
+            [
+              5,
+              0,
+              0
+            ],
+            [
+              6,
+              -1,
+              -1
+            ],
+            [
+              7,
+              1,
+              0
+            ],
+            [
+              7,
+              1,
+              31
+            ],
+            [
+              7,
+              1,
+              33
+            ],
+            [
+              7,
+              -1,
+              32
+            ],
+            [
+              8,
+              1,
+              2
+            ],
+            [
+              -1,
+              1,
+              2
+            ],
+            [
+              99,
+              5,
+              5
+            ],
+            [
+              2147483647,
+              1,
+              1
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                9
+              ],
+              [
+                -100000,
+                100000
+              ],
+              [
+                -100000,
+                100000
+              ]
+            ]
+          }
+        },
+        "factorial": {
+          "ret": "uint64_t",
+          "args": [
+            "uint32_t"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              5
+            ],
+            [
+              12
+            ],
+            [
+              20
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                20
+              ]
+            ]
+          }
+        },
+        "apply": {
+          "ret": "int32_t",
+          "args": [
+            "int",
+            "int32_t",
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              2147483647,
+              1
+            ],
+            [
+              1,
+              -1,
+              -1
+            ],
+            [
+              1,
+              0,
+              7
+            ],
+            [
+              0,
+              -5,
+              5
+            ],
+            [
+              2,
+              3,
+              4
+            ],
+            [
+              -1,
+              3,
+              4
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                1
+              ],
+              [
+                -100000,
+                100000
+              ],
+              [
+                -100000,
+                100000
+              ]
+            ]
+          }
+        },
+        "count_set_flags": {
+          "ret": "uint32_t",
+          "args": [
+            "const uint32_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  0
+                ],
+                "elem": "uint32_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "uint32_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  2
+                ],
+                "elem": "uint32_t"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  4,
+                  7,
+                  0,
+                  4294967295
+                ],
+                "elem": "uint32_t"
+              },
+              6
+            ]
+          ]
+        },
+        "dot": {
+          "ret": "double",
+          "args": [
+            "const double *",
+            "const double *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  0.0
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  0.0
+                ],
+                "elem": "double"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  1.0
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  2.0
+                ],
+                "elem": "double"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  1.0,
+                  2.0,
+                  3.0
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  4.0,
+                  5.0,
+                  6.0
+                ],
+                "elem": "double"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  -1.5,
+                  2.0
+                ],
+                "elem": "double"
+              },
+              {
+                "buf": [
+                  2.0,
+                  -0.5
+                ],
+                "elem": "double"
+              },
+              2
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "c_sample11_O0": {
+      "source": "sample11_c_features.c",
+      "functions": {
+        "dispatch": {
+          "ret": "int64_t",
+          "args": [
+            "int",
+            "int64_t",
+            "int64_t"
+          ],
+          "inputs": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              6,
+              7
+            ],
+            [
+              1,
+              12,
+              10
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [
+              3,
+              12,
+              10
+            ],
+            [
+              4,
+              1,
+              1
+            ],
+            [
+              -1,
+              1,
+              1
+            ],
+            [
+              99,
+              1,
+              1
+            ],
+            [
+              0,
+              9223372036854775807,
+              1
+            ],
+            [
+              2,
+              4294967296,
+              4294967296
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                -2,
+                6
+              ],
+              [
+                -1000000,
+                1000000
+              ],
+              [
+                -1000000,
+                1000000
+              ]
+            ]
+          }
+        },
+        "punned_bits": {
+          "ret": "int64_t",
+          "args": [
+            "double"
+          ],
+          "inputs": [
+            [
+              0.0
+            ],
+            [
+              -0.0
+            ],
+            [
+              1.0
+            ],
+            [
+              -1.0
+            ],
+            [
+              3.14
+            ],
+            [
+              0.5
+            ],
+            [
+              1e+308
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                -1000000,
+                1000000
+              ]
+            ]
+          }
+        },
+        "pack_fields": {
+          "ret": "uint32_t",
+          "args": [
+            "int",
+            "int",
+            "int",
+            "int"
+          ],
+          "inputs": [
+            [
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              63,
+              255
+            ],
+            [
+              1,
+              0,
+              40,
+              30
+            ],
+            [
+              1,
+              1,
+              64,
+              256
+            ],
+            [
+              -1,
+              -1,
+              -1,
+              -1
+            ],
+            [
+              0,
+              1,
+              0,
+              255
+            ],
+            [
+              1,
+              0,
+              1,
+              0
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                3
+              ],
+              [
+                0,
+                3
+              ],
+              [
+                -8,
+                300
+              ],
+              [
+                -8,
+                600
+              ]
+            ]
+          }
+        },
+        "my_strlen": {
+          "ret": "size_t",
+          "args": [
+            "const char *"
+          ],
+          "inputs": [
+            [
+              {
+                "str": ""
+              }
+            ],
+            [
+              {
+                "str": "a"
+              }
+            ],
+            [
+              {
+                "str": "hello, world"
+              }
+            ],
+            [
+              {
+                "str": "0123456789abcdef0123456789abcdef0"
+              }
+            ]
+          ]
+        },
+        "matrix_trace": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  0
+                ],
+                "elem": "int64_t"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "elem": "int64_t"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  -1,
+                  0,
+                  0,
+                  0,
+                  -2,
+                  0,
+                  0,
+                  0,
+                  -3
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "c_sample11_O2": {
+      "source": "sample11_c_features.c",
+      "functions": {
+        "dispatch": {
+          "ret": "int64_t",
+          "args": [
+            "int",
+            "int64_t",
+            "int64_t"
+          ],
+          "inputs": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              6,
+              7
+            ],
+            [
+              1,
+              12,
+              10
+            ],
+            [
+              2,
+              6,
+              7
+            ],
+            [
+              3,
+              12,
+              10
+            ],
+            [
+              4,
+              1,
+              1
+            ],
+            [
+              -1,
+              1,
+              1
+            ],
+            [
+              99,
+              1,
+              1
+            ],
+            [
+              0,
+              9223372036854775807,
+              1
+            ],
+            [
+              2,
+              4294967296,
+              4294967296
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                -2,
+                6
+              ],
+              [
+                -1000000,
+                1000000
+              ],
+              [
+                -1000000,
+                1000000
+              ]
+            ]
+          }
+        },
+        "punned_bits": {
+          "ret": "int64_t",
+          "args": [
+            "double"
+          ],
+          "inputs": [
+            [
+              0.0
+            ],
+            [
+              -0.0
+            ],
+            [
+              1.0
+            ],
+            [
+              -1.0
+            ],
+            [
+              3.14
+            ],
+            [
+              0.5
+            ],
+            [
+              1e+308
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                -1000000,
+                1000000
+              ]
+            ]
+          }
+        },
+        "pack_fields": {
+          "ret": "uint32_t",
+          "args": [
+            "int",
+            "int",
+            "int",
+            "int"
+          ],
+          "inputs": [
+            [
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              63,
+              255
+            ],
+            [
+              1,
+              0,
+              40,
+              30
+            ],
+            [
+              1,
+              1,
+              64,
+              256
+            ],
+            [
+              -1,
+              -1,
+              -1,
+              -1
+            ],
+            [
+              0,
+              1,
+              0,
+              255
+            ],
+            [
+              1,
+              0,
+              1,
+              0
+            ]
+          ],
+          "random": {
+            "cases": 20000,
+            "ranges": [
+              [
+                0,
+                3
+              ],
+              [
+                0,
+                3
+              ],
+              [
+                -8,
+                300
+              ],
+              [
+                -8,
+                600
+              ]
+            ]
+          }
+        },
+        "my_strlen": {
+          "ret": "size_t",
+          "args": [
+            "const char *"
+          ],
+          "inputs": [
+            [
+              {
+                "str": ""
+              }
+            ],
+            [
+              {
+                "str": "a"
+              }
+            ],
+            [
+              {
+                "str": "hello, world"
+              }
+            ],
+            [
+              {
+                "str": "0123456789abcdef0123456789abcdef0"
+              }
+            ]
+          ]
+        },
+        "matrix_trace": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  0
+                ],
+                "elem": "int64_t"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4
+                ],
+                "elem": "int64_t"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  -1,
+                  0,
+                  0,
+                  0,
+                  -2,
+                  0,
+                  0,
+                  0,
+                  -3
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "cpp_sample2_O0": {
+      "source": "sample2_struct_loop.cpp",
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "functions": {
+        "accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -5,
+                    5,
+                    0
+                  ],
+                  [
+                    100,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    9223372036854775807,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    4611686018427387904,
+                    4611686018427387903,
+                    0
+                  ],
+                  [
+                    1,
+                    1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -9223372036854775807,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ]
+          ]
+        },
+        "find_max": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  -9,
+                  -3,
+                  -100
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  40,
+                  10,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  20,
+                  30,
+                  40
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  0,
+                  -9223372036854775807,
+                  9223372036854775807
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  9223372036854775807,
+                  1
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "cpp_sample2_O2": {
+      "source": "sample2_struct_loop.cpp",
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "functions": {
+        "accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -5,
+                    5,
+                    0
+                  ],
+                  [
+                    100,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    9223372036854775807,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    4611686018427387904,
+                    4611686018427387903,
+                    0
+                  ],
+                  [
+                    1,
+                    1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -9223372036854775807,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ]
+          ]
+        },
+        "find_max": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  -9,
+                  -3,
+                  -100
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  40,
+                  10,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  20,
+                  30,
+                  40
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  0,
+                  -9223372036854775807,
+                  9223372036854775807
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  9223372036854775807,
+                  1
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "cpp_sample7_O0": {
+      "source": "sample7_cpp_features.cpp",
+      "functions": {
+        "total_area": {
+          "ret": "double",
+          "args": [
+            "int"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              5
+            ],
+            [
+              10
+            ],
+            [
+              -1
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                0,
+                60
+              ]
+            ]
+          }
+        },
+        "string_map_demo": {
+          "ret": "int64_t",
+          "args": [
+            "int"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              6
+            ],
+            [
+              7
+            ],
+            [
+              10
+            ],
+            [
+              -1
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                0,
+                50
+              ]
+            ]
+          }
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "cpp_sample7_O2": {
+      "source": "sample7_cpp_features.cpp",
+      "functions": {
+        "total_area": {
+          "ret": "double",
+          "args": [
+            "int"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              5
+            ],
+            [
+              10
+            ],
+            [
+              -1
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                0,
+                60
+              ]
+            ]
+          }
+        },
+        "string_map_demo": {
+          "ret": "int64_t",
+          "args": [
+            "int"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              6
+            ],
+            [
+              7
+            ],
+            [
+              10
+            ],
+            [
+              -1
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                0,
+                50
+              ]
+            ]
+          }
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "rust3_O0": {
+      "source": "sample3_struct_loop.rs",
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "functions": {
+        "accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    7,
+                    8,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    7,
+                    8,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              -1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -5,
+                    5,
+                    0
+                  ],
+                  [
+                    100,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    1,
+                    0
+                  ],
+                  [
+                    2,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    3,
+                    0
+                  ],
+                  [
+                    4,
+                    4,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    1,
+                    0
+                  ],
+                  [
+                    2,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    3,
+                    0
+                  ],
+                  [
+                    4,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    5,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    9223372036854775807,
+                    1,
+                    0
+                  ],
+                  [
+                    1,
+                    1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -9223372036854775807,
+                    -1,
+                    0
+                  ],
+                  [
+                    -1,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ]
+          ]
+        },
+        "find_max": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  4,
+                  3,
+                  2,
+                  1
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8
+                ],
+                "elem": "int64_t"
+              },
+              8
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  -9,
+                  -3,
+                  -100
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  -9223372036854775807,
+                  9223372036854775807,
+                  0
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  9223372036854775807,
+                  -1,
+                  -1,
+                  -1,
+                  -1
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  -1,
+                  -1,
+                  -1,
+                  -1,
+                  9223372036854775807
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out",
+      "link_libs": [
+        "-lntdll",
+        "-lsynchronization"
+      ]
+    },
+    "rust3_O2": {
+      "source": "sample3_struct_loop.rs",
+      "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+      "functions": {
+        "accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    7,
+                    8,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    7,
+                    8,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              -1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -5,
+                    5,
+                    0
+                  ],
+                  [
+                    100,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    1,
+                    0
+                  ],
+                  [
+                    2,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    3,
+                    0
+                  ],
+                  [
+                    4,
+                    4,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    1,
+                    0
+                  ],
+                  [
+                    2,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    3,
+                    0
+                  ],
+                  [
+                    4,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    5,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    9223372036854775807,
+                    1,
+                    0
+                  ],
+                  [
+                    1,
+                    1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -9223372036854775807,
+                    -1,
+                    0
+                  ],
+                  [
+                    -1,
+                    -1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ]
+          ]
+        },
+        "find_max": {
+          "ret": "int64_t",
+          "args": [
+            "const int64_t *",
+            "size_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  7
+                ],
+                "elem": "int64_t"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  4,
+                  3,
+                  2,
+                  1
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8
+                ],
+                "elem": "int64_t"
+              },
+              8
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ],
+                "elem": "int64_t"
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  -9,
+                  -3,
+                  -100
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  -9223372036854775807,
+                  9223372036854775807,
+                  0
+                ],
+                "elem": "int64_t"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  9223372036854775807,
+                  -1,
+                  -1,
+                  -1,
+                  -1
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  -1,
+                  -1,
+                  -1,
+                  -1,
+                  9223372036854775807
+                ],
+                "elem": "int64_t"
+              },
+              5
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out",
+      "link_libs": [
+        "-lntdll",
+        "-lsynchronization"
+      ]
+    },
+    "rust8_O0": {
+      "source": "sample8_rust_features.rs",
+      "functions": {
+        "compute": {
+          "ret": "int64_t",
+          "args": [
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              8
+            ],
+            [
+              -1
+            ],
+            [
+              -5
+            ],
+            [
+              7
+            ],
+            [
+              9
+            ],
+            [
+              100
+            ],
+            [
+              200
+            ],
+            [
+              -2147483648
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                -8,
+                200
+              ]
+            ]
+          }
+        }
+      },
+      "out_dir": "behav/out",
+      "reference_mode": "staticlib"
+    },
+    "rust8_O2": {
+      "source": "sample8_rust_features.rs",
+      "functions": {
+        "compute": {
+          "ret": "int64_t",
+          "args": [
+            "int32_t"
+          ],
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              8
+            ],
+            [
+              -1
+            ],
+            [
+              -5
+            ],
+            [
+              7
+            ],
+            [
+              9
+            ],
+            [
+              100
+            ],
+            [
+              200
+            ],
+            [
+              -2147483648
+            ]
+          ],
+          "random": {
+            "cases": 2000,
+            "ranges": [
+              [
+                -8,
+                200
+              ]
+            ]
+          }
+        }
+      },
+      "out_dir": "behav/out",
+      "reference_mode": "staticlib"
+    },
+    "go_sample4_O2": {
+      "source": "sample4_struct_loop.go",
+      "reference_archive": "behav/goref/libgoref.a",
+      "harness_prelude": "typedef struct { int64_t X, Y, Sum; } Point;",
+      "functions": {
+        "main_accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int64_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    7,
+                    5,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -1,
+                    -2,
+                    0
+                  ],
+                  [
+                    -3,
+                    -4,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    9223372036854775807,
+                    1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -9223372036854775807,
+                    -1,
+                    0
+                  ],
+                  [
+                    1,
+                    1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    0
+                  ],
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              4
+            ]
+          ]
+        },
+        "main_findMax": {
+          "ret": "int64_t",
+          "args": [
+            "int64_t *",
+            "int64_t"
+          ],
+          "_note": "length 0 is NOT tested: arr[0] panics in the original Go, which aborts the process and would read as CRASH rather than a decompiler defect.",
+          "inputs": [
+            [
+              {
+                "buf": [
+                  42
+                ]
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ]
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  40,
+                  10,
+                  20,
+                  30
+                ]
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  20,
+                  30,
+                  40
+                ]
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  -1,
+                  -2,
+                  -3
+                ]
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  -9223372036854775807,
+                  0
+                ]
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  9223372036854775807,
+                  -9223372036854775807
+                ]
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  5,
+                  5,
+                  5,
+                  5
+                ]
+              },
+              4
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "go_sample4_O0": {
+      "source": "sample4_struct_loop.go",
+      "reference_archive": "behav/goref/libgoref.a",
+      "harness_prelude": "typedef struct { int64_t X, Y, Sum; } Point;",
+      "functions": {
+        "main_accumulate": {
+          "ret": "int64_t",
+          "args": [
+            "Point *",
+            "int64_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  [
+                    0,
+                    0,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    7,
+                    5,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    1,
+                    2,
+                    0
+                  ],
+                  [
+                    3,
+                    4,
+                    0
+                  ],
+                  [
+                    5,
+                    6,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    -1,
+                    -2,
+                    0
+                  ],
+                  [
+                    -3,
+                    -4,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  [
+                    9223372036854775807,
+                    1,
+                    0
+                  ]
+                ],
+                "elem": "Point"
+              },
+              1
+            ]
+          ]
+        },
+        "main_findMax": {
+          "ret": "int64_t",
+          "args": [
+            "int64_t *",
+            "int64_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  42
+                ]
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  10,
+                  40,
+                  20,
+                  30
+                ]
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  40,
+                  10,
+                  20,
+                  30
+                ]
+              },
+              4
+            ],
+            [
+              {
+                "buf": [
+                  -1,
+                  -2,
+                  -3
+                ]
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  9223372036854775807,
+                  -9223372036854775807
+                ]
+              },
+              2
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "go_sample9_O2": {
+      "source": "sample9_go_features.go",
+      "reference_archive": "behav/goref/libgoref.a",
+      "harness_prelude": "",
+      "functions": {
+        "main_sumVariadic": {
+          "ret": "int64_t",
+          "args": [
+            "int64_t *",
+            "int64_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  0
+                ]
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ]
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  -1,
+                  -2,
+                  -3
+                ]
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  9223372036854775807,
+                  1
+                ]
+              },
+              2
+            ],
+            [
+              {
+                "buf": [
+                  -9223372036854775807,
+                  -1,
+                  -1
+                ]
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              4
+            ]
+          ]
+        },
+        "main_parallelSquares": {
+          "ret": "int64_t",
+          "args": [
+            "int64_t"
+          ],
+          "_note": "n < 0 is NOT tested: make(chan, n) panics in the original.",
+          "inputs": [
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              6
+            ],
+            [
+              64
+            ]
+          ],
+          "random": {
+            "cases": 200,
+            "ranges": [
+              [
+                0,
+                64
+              ]
+            ]
+          }
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "go_sample9_O0": {
+      "source": "sample9_go_features.go",
+      "reference_archive": "behav/goref/libgoref.a",
+      "harness_prelude": "",
+      "functions": {
+        "main_sumVariadic": {
+          "ret": "int64_t",
+          "args": [
+            "int64_t *",
+            "int64_t"
+          ],
+          "inputs": [
+            [
+              {
+                "buf": [
+                  0
+                ]
+              },
+              0
+            ],
+            [
+              {
+                "buf": [
+                  7
+                ]
+              },
+              1
+            ],
+            [
+              {
+                "buf": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              },
+              5
+            ],
+            [
+              {
+                "buf": [
+                  -1,
+                  -2,
+                  -3
+                ]
+              },
+              3
+            ],
+            [
+              {
+                "buf": [
+                  9223372036854775807,
+                  1
+                ]
+              },
+              2
+            ]
+          ]
+        }
+      },
+      "out_dir": "behav/out"
+    },
+    "cs_sample5_O0": {
+      "source": "sample5_struct_loop.cs",
+      "out_dir": "behav/out",
+      "functions": {},
+      "_blocked": [
+        "C# is NOT wired in, and the blocker is on the DECOMPILER side, not the",
+        "build side. behav/build_csharp.sh already produces NativeAOT binaries",
+        "(behav/bin/cs_sample5_{O0,O2}.exe and _lib.dll) WITHOUT stripping, keeping",
+        "a .link.map and a .map.xml, and the DLL even carries a real PE export",
+        "table: cs_Accumulate at RVA 0x8b4d0, cs_FindMax at 0x8b680, cs_Main.",
+        "Two things still block a behavioural comparison:",
+        "  1. NAMES: `nm behav/bin/cs_sample5_O0_lib.dll` reports 'no symbols'.",
+        "     NativeAOT/link.exe writes no COFF symbol table (names live in the PDB",
+        "     and the linker map), so every one of the 6916 emitted functions in",
+        "     behav/out/cs_sample5_O0 is named sub_<ADDR> and find_definition()",
+        "     cannot locate any of them by source name.",
+        "  2. The export addresses are not even emitted as functions: 0x18008b4d0",
+        "     (cs_Accumulate) is absent from behav/out/cs_sample5_O0_lib/summary.json",
+        "     -- the nearest emitted entry point below it is 0x18008b320 -- so there",
+        "     is no emitted body to compile even if it were renamed by hand.",
+        "To unblock: teach the decompiler to name functions from the PE export table",
+        "and/or from a supplied linker .map, and to treat exported RVAs as function",
+        "entry points. Then the reference side is straightforward: link the harness",
+        "against behav/bin/cs_sample5_O0_lib.lib and call cs_Accumulate/cs_FindMax.",
+        "The harness skips any bucket whose \"functions\" is empty, so this entry",
+        "documents the gap without affecting the measurement."
+      ]
     }
-   }
-  },
-  "sample6_c": {
-   "source": "sample6_constructs.c",
-   "functions": {
-    "classify": {
-     "ret": "int32_t",
-     "args": [
-      "int32_t",
-      "int32_t",
-      "int32_t"
-     ],
-     "inputs": [
-      [
-       0,
-       6,
-       7
-      ],
-      [
-       1,
-       6,
-       7
-      ],
-      [
-       2,
-       6,
-       7
-      ],
-      [
-       3,
-       6,
-       7
-      ],
-      [
-       3,
-       6,
-       0
-      ],
-      [
-       4,
-       12,
-       10
-      ],
-      [
-       5,
-       12,
-       10
-      ],
-      [
-       6,
-       12,
-       10
-      ],
-      [
-       7,
-       1,
-       3
-      ],
-      [
-       7,
-       1,
-       33
-      ],
-      [
-       8,
-       1,
-       1
-      ],
-      [
-       -1,
-       1,
-       1
-      ],
-      [
-       2,
-       -3,
-       5
-      ],
-      [
-       1,
-       -2147483648,
-       1
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        -2,
-        10
-       ],
-       [
-        -100000,
-        100000
-       ],
-       [
-        -40,
-        40
-       ]
-      ]
-     }
-    },
-    "factorial": {
-     "ret": "uint64_t",
-     "args": [
-      "uint32_t"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       5
-      ],
-      [
-       12
-      ],
-      [
-       20
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        0,
-        20
-       ]
-      ]
-     }
-    },
-    "apply": {
-     "ret": "int32_t",
-     "args": [
-      "int32_t",
-      "int32_t",
-      "int32_t"
-     ],
-     "inputs": [
-      [
-       0,
-       3,
-       4
-      ],
-      [
-       1,
-       3,
-       4
-      ],
-      [
-       0,
-       -3,
-       4
-      ],
-      [
-       1,
-       -3,
-       -4
-      ],
-      [
-       2,
-       5,
-       5
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        1
-       ],
-       [
-        -100000,
-        100000
-       ],
-       [
-        -100000,
-        100000
-       ]
-      ]
-     }
-    },
-    "count_set_flags": {
-     "ret": "uint32_t",
-     "args": [
-      "const uint32_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         5,
-         2
-        ],
-        "elem": "uint32_t"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "uint32_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         0,
-         0,
-         0
-        ],
-        "elem": "uint32_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         7,
-         7,
-         7,
-         7
-        ],
-        "elem": "uint32_t"
-       },
-       4
-      ]
-     ]
-    },
-    "dot": {
-     "ret": "double",
-     "args": [
-      "const double *",
-      "const double *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         "1.0",
-         "2.0",
-         "3.0"
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         "4.0",
-         "5.0",
-         "6.0"
-        ],
-        "elem": "double"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         "0.0"
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         "0.0"
-        ],
-        "elem": "double"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         "-1.5",
-         "2.5"
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         "2.0",
-         "-4.0"
-        ],
-        "elem": "double"
-       },
-       2
-      ]
-     ]
-    }
-   }
-  },
-  "sample11_c": {
-   "source": "sample11_c_features.c",
-   "functions": {
-    "dispatch": {
-     "ret": "int64_t",
-     "args": [
-      "int",
-      "int64_t",
-      "int64_t"
-     ],
-     "inputs": [
-      [
-       0,
-       9,
-       4
-      ],
-      [
-       1,
-       9,
-       4
-      ],
-      [
-       2,
-       9,
-       4
-      ],
-      [
-       3,
-       9,
-       4
-      ],
-      [
-       4,
-       9,
-       4
-      ],
-      [
-       -1,
-       9,
-       4
-      ],
-      [
-       2,
-       -3,
-       -3
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        -1,
-        5
-       ],
-       [
-        -1000000,
-        1000000
-       ],
-       [
-        -1000000,
-        1000000
-       ]
-      ]
-     }
-    },
-    "punned_bits": {
-     "ret": "int64_t",
-     "args": [
-      "double"
-     ],
-     "inputs": [
-      [
-       "0.0"
-      ],
-      [
-       "1.0"
-      ],
-      [
-       "-1.0"
-      ],
-      [
-       "3.14159"
-      ],
-      [
-       "-0.0"
-      ]
-     ]
-    },
-    "pack_fields": {
-     "ret": "uint32_t",
-     "args": [
-      "int",
-      "int",
-      "int",
-      "int"
-     ],
-     "inputs": [
-      [
-       1,
-       2,
-       3,
-       4
-      ],
-      [
-       0,
-       0,
-       0,
-       0
-      ],
-      [
-       255,
-       255,
-       255,
-       255
-      ],
-      [
-       -1,
-       -1,
-       -1,
-       -1
-      ],
-      [
-       16,
-       8,
-       4,
-       2
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        -300,
-        300
-       ],
-       [
-        -300,
-        300
-       ],
-       [
-        -300,
-        300
-       ],
-       [
-        -300,
-        300
-       ]
-      ]
-     }
-    },
-    "my_strlen": {
-     "ret": "size_t",
-     "args": [
-      "const char *"
-     ],
-     "inputs": [
-      [
-       {
-        "str": ""
-       }
-      ],
-      [
-       {
-        "str": "a"
-       }
-      ],
-      [
-       {
-        "str": "hello world"
-       }
-      ],
-      [
-       {
-        "str": "0123456789abcdef"
-       }
-      ]
-     ]
-    },
-    "matrix_trace": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5,
-         6,
-         7,
-         8,
-         9
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         42
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         1,
-         0,
-         0,
-         1
-        ],
-        "elem": "int64_t"
-       },
-       2
-      ]
-     ]
-    }
-   }
-  },
-  "sample1_c": {
-   "source": "sample1_struct_loop.c",
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ]
-     ]
-    },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ]
-     ]
-    }
-   }
-  },
-  "sample2_cpp": {
-   "source": "sample2_struct_loop.cpp",
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ]
-     ]
-    },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ]
-     ]
-    }
-   }
-  },
-  "sample3_rust": {
-   "source": "sample3_struct_loop.rs",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ]
-     ]
-    },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ]
-     ]
-    }
-   },
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;"
-  },
-  "sample8_rust": {
-   "source": "sample8_rust_features.rs",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ]
-     ]
-    },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ]
-     ]
-    }
-   },
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;"
-  },
-  "sample7_cpp": {
-   "source": "sample7_cpp_features.cpp",
-   "functions": {
-    "total_area": {
-     "ret": "double",
-     "args": [
-      "int"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       5
-      ],
-      [
-       10
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        0,
-        60
-       ]
-      ]
-     }
-    },
-    "string_map_demo": {
-     "ret": "int64_t",
-     "args": [
-      "int"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       3
-      ],
-      [
-       6
-      ],
-      [
-       10
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        0,
-        50
-       ]
-      ]
-     }
-    }
-   }
-  },
-  "c_sample6_O0": {
-   "source": "sample6_constructs.c",
-   "functions": {
-    "classify": {
-     "ret": "int32_t",
-     "args": [
-      "int32_t",
-      "int32_t",
-      "int32_t"
-     ],
-     "inputs": [
-      [
-       0,
-       0,
-       0
-      ],
-      [
-       0,
-       2147483647,
-       1
-      ],
-      [
-       1,
-       -2147483648,
-       1
-      ],
-      [
-       2,
-       65536,
-       65536
-      ],
-      [
-       3,
-       10,
-       0
-      ],
-      [
-       3,
-       -7,
-       2
-      ],
-      [
-       3,
-       7,
-       -2
-      ],
-      [
-       4,
-       -1,
-       0
-      ],
-      [
-       5,
-       0,
-       0
-      ],
-      [
-       6,
-       -1,
-       -1
-      ],
-      [
-       7,
-       1,
-       0
-      ],
-      [
-       7,
-       1,
-       31
-      ],
-      [
-       7,
-       1,
-       33
-      ],
-      [
-       7,
-       -1,
-       32
-      ],
-      [
-       8,
-       1,
-       2
-      ],
-      [
-       -1,
-       1,
-       2
-      ],
-      [
-       99,
-       5,
-       5
-      ],
-      [
-       2147483647,
-       1,
-       1
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        9
-       ],
-       [
-        -100000,
-        100000
-       ],
-       [
-        -100000,
-        100000
-       ]
-      ]
-     }
-    },
-    "factorial": {
-     "ret": "uint64_t",
-     "args": [
-      "uint32_t"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       5
-      ],
-      [
-       12
-      ],
-      [
-       20
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        20
-       ]
-      ]
-     }
-    },
-    "apply": {
-     "ret": "int32_t",
-     "args": [
-      "int",
-      "int32_t",
-      "int32_t"
-     ],
-     "inputs": [
-      [
-       0,
-       0,
-       0
-      ],
-      [
-       1,
-       0,
-       0
-      ],
-      [
-       0,
-       2147483647,
-       1
-      ],
-      [
-       1,
-       -1,
-       -1
-      ],
-      [
-       1,
-       0,
-       7
-      ],
-      [
-       0,
-       -5,
-       5
-      ],
-      [
-       2,
-       3,
-       4
-      ],
-      [
-       -1,
-       3,
-       4
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        1
-       ],
-       [
-        -100000,
-        100000
-       ],
-       [
-        -100000,
-        100000
-       ]
-      ]
-     }
-    },
-    "count_set_flags": {
-     "ret": "uint32_t",
-     "args": [
-      "const uint32_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         0
-        ],
-        "elem": "uint32_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "uint32_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         5,
-         2
-        ],
-        "elem": "uint32_t"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         4,
-         7,
-         0,
-         4294967295
-        ],
-        "elem": "uint32_t"
-       },
-       6
-      ]
-     ]
-    },
-    "dot": {
-     "ret": "double",
-     "args": [
-      "const double *",
-      "const double *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         0.0
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         0.0
-        ],
-        "elem": "double"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         1.0
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         2.0
-        ],
-        "elem": "double"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         1.0,
-         2.0,
-         3.0
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         4.0,
-         5.0,
-         6.0
-        ],
-        "elem": "double"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         -1.5,
-         2.0
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         2.0,
-         -0.5
-        ],
-        "elem": "double"
-       },
-       2
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "c_sample6_O2": {
-   "source": "sample6_constructs.c",
-   "functions": {
-    "classify": {
-     "ret": "int32_t",
-     "args": [
-      "int32_t",
-      "int32_t",
-      "int32_t"
-     ],
-     "inputs": [
-      [
-       0,
-       0,
-       0
-      ],
-      [
-       0,
-       2147483647,
-       1
-      ],
-      [
-       1,
-       -2147483648,
-       1
-      ],
-      [
-       2,
-       65536,
-       65536
-      ],
-      [
-       3,
-       10,
-       0
-      ],
-      [
-       3,
-       -7,
-       2
-      ],
-      [
-       3,
-       7,
-       -2
-      ],
-      [
-       4,
-       -1,
-       0
-      ],
-      [
-       5,
-       0,
-       0
-      ],
-      [
-       6,
-       -1,
-       -1
-      ],
-      [
-       7,
-       1,
-       0
-      ],
-      [
-       7,
-       1,
-       31
-      ],
-      [
-       7,
-       1,
-       33
-      ],
-      [
-       7,
-       -1,
-       32
-      ],
-      [
-       8,
-       1,
-       2
-      ],
-      [
-       -1,
-       1,
-       2
-      ],
-      [
-       99,
-       5,
-       5
-      ],
-      [
-       2147483647,
-       1,
-       1
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        9
-       ],
-       [
-        -100000,
-        100000
-       ],
-       [
-        -100000,
-        100000
-       ]
-      ]
-     }
-    },
-    "factorial": {
-     "ret": "uint64_t",
-     "args": [
-      "uint32_t"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       5
-      ],
-      [
-       12
-      ],
-      [
-       20
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        20
-       ]
-      ]
-     }
-    },
-    "apply": {
-     "ret": "int32_t",
-     "args": [
-      "int",
-      "int32_t",
-      "int32_t"
-     ],
-     "inputs": [
-      [
-       0,
-       0,
-       0
-      ],
-      [
-       1,
-       0,
-       0
-      ],
-      [
-       0,
-       2147483647,
-       1
-      ],
-      [
-       1,
-       -1,
-       -1
-      ],
-      [
-       1,
-       0,
-       7
-      ],
-      [
-       0,
-       -5,
-       5
-      ],
-      [
-       2,
-       3,
-       4
-      ],
-      [
-       -1,
-       3,
-       4
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        1
-       ],
-       [
-        -100000,
-        100000
-       ],
-       [
-        -100000,
-        100000
-       ]
-      ]
-     }
-    },
-    "count_set_flags": {
-     "ret": "uint32_t",
-     "args": [
-      "const uint32_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         0
-        ],
-        "elem": "uint32_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "uint32_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         5,
-         2
-        ],
-        "elem": "uint32_t"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         4,
-         7,
-         0,
-         4294967295
-        ],
-        "elem": "uint32_t"
-       },
-       6
-      ]
-     ]
-    },
-    "dot": {
-     "ret": "double",
-     "args": [
-      "const double *",
-      "const double *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         0.0
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         0.0
-        ],
-        "elem": "double"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         1.0
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         2.0
-        ],
-        "elem": "double"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         1.0,
-         2.0,
-         3.0
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         4.0,
-         5.0,
-         6.0
-        ],
-        "elem": "double"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         -1.5,
-         2.0
-        ],
-        "elem": "double"
-       },
-       {
-        "buf": [
-         2.0,
-         -0.5
-        ],
-        "elem": "double"
-       },
-       2
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "c_sample11_O0": {
-   "source": "sample11_c_features.c",
-   "functions": {
-    "dispatch": {
-     "ret": "int64_t",
-     "args": [
-      "int",
-      "int64_t",
-      "int64_t"
-     ],
-     "inputs": [
-      [
-       0,
-       0,
-       0
-      ],
-      [
-       0,
-       6,
-       7
-      ],
-      [
-       1,
-       12,
-       10
-      ],
-      [
-       2,
-       6,
-       7
-      ],
-      [
-       3,
-       12,
-       10
-      ],
-      [
-       4,
-       1,
-       1
-      ],
-      [
-       -1,
-       1,
-       1
-      ],
-      [
-       99,
-       1,
-       1
-      ],
-      [
-       0,
-       9223372036854775807,
-       1
-      ],
-      [
-       2,
-       4294967296,
-       4294967296
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        -2,
-        6
-       ],
-       [
-        -1000000,
-        1000000
-       ],
-       [
-        -1000000,
-        1000000
-       ]
-      ]
-     }
-    },
-    "punned_bits": {
-     "ret": "int64_t",
-     "args": [
-      "double"
-     ],
-     "inputs": [
-      [
-       0.0
-      ],
-      [
-       -0.0
-      ],
-      [
-       1.0
-      ],
-      [
-       -1.0
-      ],
-      [
-       3.14
-      ],
-      [
-       0.5
-      ],
-      [
-       1e+308
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        -1000000,
-        1000000
-       ]
-      ]
-     }
-    },
-    "pack_fields": {
-     "ret": "uint32_t",
-     "args": [
-      "int",
-      "int",
-      "int",
-      "int"
-     ],
-     "inputs": [
-      [
-       0,
-       0,
-       0,
-       0
-      ],
-      [
-       1,
-       1,
-       63,
-       255
-      ],
-      [
-       1,
-       0,
-       40,
-       30
-      ],
-      [
-       1,
-       1,
-       64,
-       256
-      ],
-      [
-       -1,
-       -1,
-       -1,
-       -1
-      ],
-      [
-       0,
-       1,
-       0,
-       255
-      ],
-      [
-       1,
-       0,
-       1,
-       0
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        3
-       ],
-       [
-        0,
-        3
-       ],
-       [
-        -8,
-        300
-       ],
-       [
-        -8,
-        600
-       ]
-      ]
-     }
-    },
-    "my_strlen": {
-     "ret": "size_t",
-     "args": [
-      "const char *"
-     ],
-     "inputs": [
-      [
-       {
-        "str": ""
-       }
-      ],
-      [
-       {
-        "str": "a"
-       }
-      ],
-      [
-       {
-        "str": "hello, world"
-       }
-      ],
-      [
-       {
-        "str": "0123456789abcdef0123456789abcdef0"
-       }
-      ]
-     ]
-    },
-    "matrix_trace": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         0
-        ],
-        "elem": "int64_t"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4
-        ],
-        "elem": "int64_t"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5,
-         6,
-         7,
-         8,
-         9
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         -1,
-         0,
-         0,
-         0,
-         -2,
-         0,
-         0,
-         0,
-         -3
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "c_sample11_O2": {
-   "source": "sample11_c_features.c",
-   "functions": {
-    "dispatch": {
-     "ret": "int64_t",
-     "args": [
-      "int",
-      "int64_t",
-      "int64_t"
-     ],
-     "inputs": [
-      [
-       0,
-       0,
-       0
-      ],
-      [
-       0,
-       6,
-       7
-      ],
-      [
-       1,
-       12,
-       10
-      ],
-      [
-       2,
-       6,
-       7
-      ],
-      [
-       3,
-       12,
-       10
-      ],
-      [
-       4,
-       1,
-       1
-      ],
-      [
-       -1,
-       1,
-       1
-      ],
-      [
-       99,
-       1,
-       1
-      ],
-      [
-       0,
-       9223372036854775807,
-       1
-      ],
-      [
-       2,
-       4294967296,
-       4294967296
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        -2,
-        6
-       ],
-       [
-        -1000000,
-        1000000
-       ],
-       [
-        -1000000,
-        1000000
-       ]
-      ]
-     }
-    },
-    "punned_bits": {
-     "ret": "int64_t",
-     "args": [
-      "double"
-     ],
-     "inputs": [
-      [
-       0.0
-      ],
-      [
-       -0.0
-      ],
-      [
-       1.0
-      ],
-      [
-       -1.0
-      ],
-      [
-       3.14
-      ],
-      [
-       0.5
-      ],
-      [
-       1e+308
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        -1000000,
-        1000000
-       ]
-      ]
-     }
-    },
-    "pack_fields": {
-     "ret": "uint32_t",
-     "args": [
-      "int",
-      "int",
-      "int",
-      "int"
-     ],
-     "inputs": [
-      [
-       0,
-       0,
-       0,
-       0
-      ],
-      [
-       1,
-       1,
-       63,
-       255
-      ],
-      [
-       1,
-       0,
-       40,
-       30
-      ],
-      [
-       1,
-       1,
-       64,
-       256
-      ],
-      [
-       -1,
-       -1,
-       -1,
-       -1
-      ],
-      [
-       0,
-       1,
-       0,
-       255
-      ],
-      [
-       1,
-       0,
-       1,
-       0
-      ]
-     ],
-     "random": {
-      "cases": 20000,
-      "ranges": [
-       [
-        0,
-        3
-       ],
-       [
-        0,
-        3
-       ],
-       [
-        -8,
-        300
-       ],
-       [
-        -8,
-        600
-       ]
-      ]
-     }
-    },
-    "my_strlen": {
-     "ret": "size_t",
-     "args": [
-      "const char *"
-     ],
-     "inputs": [
-      [
-       {
-        "str": ""
-       }
-      ],
-      [
-       {
-        "str": "a"
-       }
-      ],
-      [
-       {
-        "str": "hello, world"
-       }
-      ],
-      [
-       {
-        "str": "0123456789abcdef0123456789abcdef0"
-       }
-      ]
-     ]
-    },
-    "matrix_trace": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         0
-        ],
-        "elem": "int64_t"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4
-        ],
-        "elem": "int64_t"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5,
-         6,
-         7,
-         8,
-         9
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         -1,
-         0,
-         0,
-         0,
-         -2,
-         0,
-         0,
-         0,
-         -3
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "cpp_sample2_O0": {
-   "source": "sample2_struct_loop.cpp",
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          9223372036854775807,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          4611686018427387904,
-          4611686018427387903,
-          0
-         ],
-         [
-          1,
-          1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          -9223372036854775807,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ]
-     ]
-    },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         40,
-         10,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         10,
-         20,
-         30,
-         40
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         0,
-         -9223372036854775807,
-         9223372036854775807
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         9223372036854775807,
-         1
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "cpp_sample2_O2": {
-   "source": "sample2_struct_loop.cpp",
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          9223372036854775807,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          4611686018427387904,
-          4611686018427387903,
-          0
-         ],
-         [
-          1,
-          1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          -9223372036854775807,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ]
-     ]
-    },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         40,
-         10,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         10,
-         20,
-         30,
-         40
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         0,
-         -9223372036854775807,
-         9223372036854775807
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         9223372036854775807,
-         1
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "cpp_sample7_O0": {
-   "source": "sample7_cpp_features.cpp",
-   "functions": {
-    "total_area": {
-     "ret": "double",
-     "args": [
-      "int"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       3
-      ],
-      [
-       5
-      ],
-      [
-       10
-      ],
-      [
-       -1
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        0,
-        60
-       ]
-      ]
-     }
-    },
-    "string_map_demo": {
-     "ret": "int64_t",
-     "args": [
-      "int"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       3
-      ],
-      [
-       6
-      ],
-      [
-       7
-      ],
-      [
-       10
-      ],
-      [
-       -1
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        0,
-        50
-       ]
-      ]
-     }
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "cpp_sample7_O2": {
-   "source": "sample7_cpp_features.cpp",
-   "functions": {
-    "total_area": {
-     "ret": "double",
-     "args": [
-      "int"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       3
-      ],
-      [
-       5
-      ],
-      [
-       10
-      ],
-      [
-       -1
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        0,
-        60
-       ]
-      ]
-     }
-    },
-    "string_map_demo": {
-     "ret": "int64_t",
-     "args": [
-      "int"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       3
-      ],
-      [
-       6
-      ],
-      [
-       7
-      ],
-      [
-       10
-      ],
-      [
-       -1
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        0,
-        50
-       ]
-      ]
-     }
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "rust3_O0": {
-   "source": "sample3_struct_loop.rs",
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         [
-          7,
-          8,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          7,
-          8,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       -1
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ],
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          1,
-          0
-         ],
-         [
-          2,
-          2,
-          0
-         ],
-         [
-          3,
-          3,
-          0
-         ],
-         [
-          4,
-          4,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          1,
-          0
-         ],
-         [
-          2,
-          2,
-          0
-         ],
-         [
-          3,
-          3,
-          0
-         ],
-         [
-          4,
-          4,
-          0
-         ],
-         [
-          5,
-          5,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         [
-          9223372036854775807,
-          1,
-          0
-         ],
-         [
-          1,
-          1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          -9223372036854775807,
-          -1,
-          0
-         ],
-         [
-          -1,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ]
-     ]
-    },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         5,
-         4,
-         3,
-         2,
-         1
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5,
-         6,
-         7,
-         8
-        ],
-        "elem": "int64_t"
-       },
-       8
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         0,
-         0,
-         0,
-         0,
-         0
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         -9223372036854775807,
-         9223372036854775807,
-         0
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         9223372036854775807,
-         -1,
-         -1,
-         -1,
-         -1
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         -1,
-         -1,
-         -1,
-         -1,
-         9223372036854775807
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "rust3_O2": {
-   "source": "sample3_struct_loop.rs",
-   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
-   "functions": {
-    "accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         [
-          7,
-          8,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          7,
-          8,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       -1
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ],
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          -5,
-          5,
-          0
-         ],
-         [
-          100,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          1,
-          0
-         ],
-         [
-          2,
-          2,
-          0
-         ],
-         [
-          3,
-          3,
-          0
-         ],
-         [
-          4,
-          4,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          1,
-          0
-         ],
-         [
-          2,
-          2,
-          0
-         ],
-         [
-          3,
-          3,
-          0
-         ],
-         [
-          4,
-          4,
-          0
-         ],
-         [
-          5,
-          5,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         [
-          9223372036854775807,
-          1,
-          0
-         ],
-         [
-          1,
-          1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          -9223372036854775807,
-          -1,
-          0
-         ],
-         [
-          -1,
-          -1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ]
-     ]
-    },
-    "find_max": {
-     "ret": "int64_t",
-     "args": [
-      "const int64_t *",
-      "size_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         7
-        ],
-        "elem": "int64_t"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         5,
-         4,
-         3,
-         2,
-         1
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5,
-         6,
-         7,
-         8
-        ],
-        "elem": "int64_t"
-       },
-       8
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ],
-        "elem": "int64_t"
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         -9,
-         -3,
-         -100
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         0,
-         0,
-         0,
-         0,
-         0
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         -9223372036854775807,
-         9223372036854775807,
-         0
-        ],
-        "elem": "int64_t"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         9223372036854775807,
-         -1,
-         -1,
-         -1,
-         -1
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         -1,
-         -1,
-         -1,
-         -1,
-         9223372036854775807
-        ],
-        "elem": "int64_t"
-       },
-       5
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "rust8_O0": {
-   "source": "sample8_rust_features.rs",
-   "functions": {
-    "compute": {
-     "ret": "int64_t",
-     "args": [
-      "int32_t"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       3
-      ],
-      [
-       4
-      ],
-      [
-       8
-      ],
-      [
-       -1
-      ],
-      [
-       -5
-      ],
-      [
-       7
-      ],
-      [
-       9
-      ],
-      [
-       100
-      ],
-      [
-       200
-      ],
-      [
-       -2147483648
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        -8,
-        200
-       ]
-      ]
-     }
-    }
-   },
-   "out_dir": "behav/out",
-   "reference_mode": "staticlib"
-  },
-  "rust8_O2": {
-   "source": "sample8_rust_features.rs",
-   "functions": {
-    "compute": {
-     "ret": "int64_t",
-     "args": [
-      "int32_t"
-     ],
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       3
-      ],
-      [
-       4
-      ],
-      [
-       8
-      ],
-      [
-       -1
-      ],
-      [
-       -5
-      ],
-      [
-       7
-      ],
-      [
-       9
-      ],
-      [
-       100
-      ],
-      [
-       200
-      ],
-      [
-       -2147483648
-      ]
-     ],
-     "random": {
-      "cases": 2000,
-      "ranges": [
-       [
-        -8,
-        200
-       ]
-      ]
-     }
-    }
-   },
-   "out_dir": "behav/out",
-   "reference_mode": "staticlib"
-  },
-  "go_sample4_O2": {
-   "source": "sample4_struct_loop.go",
-   "reference_archive": "behav/goref/libgoref.a",
-   "harness_prelude": "typedef struct { int64_t X, Y, Sum; } Point;",
-   "functions": {
-    "main_accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int64_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         [
-          7,
-          5,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          -1,
-          -2,
-          0
-         ],
-         [
-          -3,
-          -4,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          9223372036854775807,
-          1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          -9223372036854775807,
-          -1,
-          0
-         ],
-         [
-          1,
-          1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ],
-         [
-          0,
-          0,
-          0
-         ],
-         [
-          0,
-          0,
-          0
-         ],
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       4
-      ]
-     ]
-    },
-    "main_findMax": {
-     "ret": "int64_t",
-     "args": [
-      "int64_t *",
-      "int64_t"
-     ],
-     "_note": "length 0 is NOT tested: arr[0] panics in the original Go, which aborts the process and would read as CRASH rather than a decompiler defect.",
-     "inputs": [
-      [
-       {
-        "buf": [
-         42
-        ]
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ]
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         40,
-         10,
-         20,
-         30
-        ]
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         10,
-         20,
-         30,
-         40
-        ]
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         -1,
-         -2,
-         -3
-        ]
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         -9223372036854775807,
-         0
-        ]
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         9223372036854775807,
-         -9223372036854775807
-        ]
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         5,
-         5,
-         5,
-         5
-        ]
-       },
-       4
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "go_sample4_O0": {
-   "source": "sample4_struct_loop.go",
-   "reference_archive": "behav/goref/libgoref.a",
-   "harness_prelude": "typedef struct { int64_t X, Y, Sum; } Point;",
-   "functions": {
-    "main_accumulate": {
-     "ret": "int64_t",
-     "args": [
-      "Point *",
-      "int64_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         [
-          0,
-          0,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         [
-          7,
-          5,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         [
-          1,
-          2,
-          0
-         ],
-         [
-          3,
-          4,
-          0
-         ],
-         [
-          5,
-          6,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         [
-          -1,
-          -2,
-          0
-         ],
-         [
-          -3,
-          -4,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         [
-          9223372036854775807,
-          1,
-          0
-         ]
-        ],
-        "elem": "Point"
-       },
-       1
-      ]
-     ]
-    },
-    "main_findMax": {
-     "ret": "int64_t",
-     "args": [
-      "int64_t *",
-      "int64_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         42
-        ]
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         10,
-         40,
-         20,
-         30
-        ]
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         40,
-         10,
-         20,
-         30
-        ]
-       },
-       4
-      ],
-      [
-       {
-        "buf": [
-         -1,
-         -2,
-         -3
-        ]
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         9223372036854775807,
-         -9223372036854775807
-        ]
-       },
-       2
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "go_sample9_O2": {
-   "source": "sample9_go_features.go",
-   "reference_archive": "behav/goref/libgoref.a",
-   "harness_prelude": "",
-   "functions": {
-    "main_sumVariadic": {
-     "ret": "int64_t",
-     "args": [
-      "int64_t *",
-      "int64_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         0
-        ]
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         7
-        ]
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5
-        ]
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         -1,
-         -2,
-         -3
-        ]
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         9223372036854775807,
-         1
-        ]
-       },
-       2
-      ],
-      [
-       {
-        "buf": [
-         -9223372036854775807,
-         -1,
-         -1
-        ]
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         0,
-         0,
-         0,
-         0
-        ]
-       },
-       4
-      ]
-     ]
-    },
-    "main_parallelSquares": {
-     "ret": "int64_t",
-     "args": [
-      "int64_t"
-     ],
-     "_note": "n < 0 is NOT tested: make(chan, n) panics in the original.",
-     "inputs": [
-      [
-       0
-      ],
-      [
-       1
-      ],
-      [
-       2
-      ],
-      [
-       6
-      ],
-      [
-       64
-      ]
-     ],
-     "random": {
-      "cases": 200,
-      "ranges": [
-       [
-        0,
-        64
-       ]
-      ]
-     }
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "go_sample9_O0": {
-   "source": "sample9_go_features.go",
-   "reference_archive": "behav/goref/libgoref.a",
-   "harness_prelude": "",
-   "functions": {
-    "main_sumVariadic": {
-     "ret": "int64_t",
-     "args": [
-      "int64_t *",
-      "int64_t"
-     ],
-     "inputs": [
-      [
-       {
-        "buf": [
-         0
-        ]
-       },
-       0
-      ],
-      [
-       {
-        "buf": [
-         7
-        ]
-       },
-       1
-      ],
-      [
-       {
-        "buf": [
-         1,
-         2,
-         3,
-         4,
-         5
-        ]
-       },
-       5
-      ],
-      [
-       {
-        "buf": [
-         -1,
-         -2,
-         -3
-        ]
-       },
-       3
-      ],
-      [
-       {
-        "buf": [
-         9223372036854775807,
-         1
-        ]
-       },
-       2
-      ]
-     ]
-    }
-   },
-   "out_dir": "behav/out"
-  },
-  "cs_sample5_O0": {
-   "source": "sample5_struct_loop.cs",
-   "out_dir": "behav/out",
-   "functions": {},
-   "_blocked": [
-    "C# is NOT wired in, and the blocker is on the DECOMPILER side, not the",
-    "build side. behav/build_csharp.sh already produces NativeAOT binaries",
-    "(behav/bin/cs_sample5_{O0,O2}.exe and _lib.dll) WITHOUT stripping, keeping",
-    "a .link.map and a .map.xml, and the DLL even carries a real PE export",
-    "table: cs_Accumulate at RVA 0x8b4d0, cs_FindMax at 0x8b680, cs_Main.",
-    "Two things still block a behavioural comparison:",
-    "  1. NAMES: `nm behav/bin/cs_sample5_O0_lib.dll` reports 'no symbols'.",
-    "     NativeAOT/link.exe writes no COFF symbol table (names live in the PDB",
-    "     and the linker map), so every one of the 6916 emitted functions in",
-    "     behav/out/cs_sample5_O0 is named sub_<ADDR> and find_definition()",
-    "     cannot locate any of them by source name.",
-    "  2. The export addresses are not even emitted as functions: 0x18008b4d0",
-    "     (cs_Accumulate) is absent from behav/out/cs_sample5_O0_lib/summary.json",
-    "     -- the nearest emitted entry point below it is 0x18008b320 -- so there",
-    "     is no emitted body to compile even if it were renamed by hand.",
-    "To unblock: teach the decompiler to name functions from the PE export table",
-    "and/or from a supplied linker .map, and to treat exported RVAs as function",
-    "entry points. Then the reference side is straightforward: link the harness",
-    "against behav/bin/cs_sample5_O0_lib.lib and call cs_Accumulate/cs_FindMax.",
-    "The harness skips any bucket whose \"functions\" is empty, so this entry",
-    "documents the gap without affecting the measurement."
-   ]
   }
- }
 }

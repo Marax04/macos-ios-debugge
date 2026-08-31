@@ -19,13 +19,17 @@ fail=0
 check() {
   local fn="$1" want="$2"
   local sig
-  sig=$(grep -rhoE "^[a-zA-Z_][a-zA-Z_0-9 \*]*(__fastcall )?$fn\([^)]*\) \{" --include=*.c "$DIR" | head -1)
+  # Lo stile della graffa non deve decidere se la metrica vede una funzione:
+  # path A e' K&R, path B e' Allman (misurato 80/0 contro 0/80). Con `) {`
+  # letterale questa metrica crollava a 0/0 IN SILENZIO sui .c di path B.
+  # `\{?$` accetta entrambi e continua a non matchare una dichiarazione (`;`).
+  sig=$(grep -rhoE "^[a-zA-Z_][a-zA-Z_0-9 \*]*(__fastcall )?$fn\([^)]*\)[[:space:]]*\{?$" --include=*.c --exclude=*.hlil.c "$DIR" | head -1)
   if [ -z "$sig" ]; then
     echo "SKIP $fn (not found)"
     return
   fi
   local args got
-  args=$(echo "$sig" | sed 's/.*'"$fn"'(\(.*\)) {/\1/')
+  args=$(echo "$sig" | sed 's/.*'"$fn"'(\(.*\)).*/\1/')
   if [ -z "$args" ] || [ "$args" = "void" ]; then
     got=0
   else
@@ -59,4 +63,9 @@ check _FindPESection 2
 check _pei386_runtime_relocator 0
 check __mingw_GetSectionForAddress 1
 
+if [ $((pass + fail)) -eq 0 ]; then
+  echo "*** ATTENZIONE: nessuna delle firme cercate e' stata TROVATA."
+  echo "    Non e' un punteggio di 0: e' la metrica che non ha visto nulla."
+  echo "    Causa tipica: lo stile delle firme non combacia col pattern."
+fi
 echo "TOTAL: $pass/$((pass + fail)) signatures at the correct arity"

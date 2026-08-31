@@ -644,6 +644,21 @@ pub struct DecompilerContext {
     pub callsite_argc: Arc<HashMap<u64, (usize, usize, usize, usize, usize)>>,
     /// #6970: inizi di funzione noti (vedi `ArityCache`).
     pub fn_starts: Arc<std::collections::HashSet<u64>>,
+    /// #8770: gli EPILOGHI CONDIVISI dell'immagine (vedi `ArityCache`): una
+    /// sola istruzione, ed e' `ret`. Un salto di coda verso uno di questi non
+    /// e' una chiamata, e' un ritorno del rax gia' in mano al chiamante.
+    pub ret_thunks: Arc<std::collections::HashSet<u64>>,
+    /// #7550: l'immagine usa la **regabi Go** (RAX, RBX, RCX, …) invece della
+    /// ABI Win64 per gli argomenti.
+    ///
+    /// E' una proprieta' dell'IMMAGINE, non della funzione, e va decisa una
+    /// volta sola al caricamento: dedurla per funzione dai registri letti
+    /// sarebbe circolare, perche' e' proprio quali registri leggere che si sta
+    /// cercando di stabilire.
+    ///
+    /// Predefinito `false`: un contesto costruito a mano (test, chiamanti di
+    /// libreria) si comporta esattamente come prima.
+    pub abi_go: bool,
 }
 
 impl DecompilerContext {
@@ -665,6 +680,8 @@ impl DecompilerContext {
             callee_arities: Arc::new(HashMap::new()),
             callsite_argc: Arc::new(HashMap::new()),
             fn_starts: Arc::new(std::collections::HashSet::new()),
+            ret_thunks: Arc::new(std::collections::HashSet::new()),
+            abi_go: false,
             published_arity: Arc::new(std::collections::HashSet::new()),
         }
     }
@@ -905,7 +922,7 @@ impl DecompilerContext {
         // afterwards left every one of them printing `f()` with no arguments —
         // the single most common call shape in the corpus. `rewrite_tail_call`
         // only needs `in_func_labels`, so it is free to run this early.
-        rewrite_tail_call(&mut stmts, &in_func_labels);
+        rewrite_tail_call(&mut stmts, &in_func_labels, &self.ret_thunks);
         infer_call_arguments(&mut stmts);
         capture_call_result(&mut stmts);
         if !local_decls.is_empty() {
@@ -1795,6 +1812,10 @@ fn lift_alu_binop(
         // into the result) and made the shift signed — the exact defect
         // behind `(uint16_t)(u>>5)` coming out 3362959405758 instead of
         // 12990 (the two differ by exactly a 0xFFFF mask).
+        // #8780 - la MASCHERA DEL CONTEGGIO DI SHIFT. L'x86 maschera a 5 bit
+        // per operandi da 1/2/4 byte e a 6 per quelli da 8. Il lift emetteva il
+        // conteggio nudo, quindi `classify(7,1,33)` dava 0 invece di 2.
+        let s = mask_shift_count(base, &d, &s);
         if let Some(m) = subreg_value_mask(&d)
             && matches!(base, "shr" | "shl" | "sal")
         {
@@ -1814,6 +1835,33 @@ fn lift_alu_binop(
         }));
     }
     return InstrLift::Skip;
+}
+
+/// #8780 - applica la maschera hardware al conteggio di uno shift.
+///
+/// Conteggio LETTERALE gia' valido: resta scritto ESATTAMENTE com'era, grafia
+/// compresa (la prima versione lo ri-formattava, e un test l'ha colta).
+/// Conteggio VARIABILE: `(x & 31)` / `(x & 63)`.
+/// Larghezza sconosciuta: invariato, prudente.
+fn mask_shift_count(base: &str, dst: &str, count: &str) -> String {
+    if !matches!(base, "shl" | "sal" | "shr" | "sar") {
+        return count.to_string();
+    }
+    let Some(w) = x86_register_width::register_width_bytes(dst) else {
+        return count.to_string();
+    };
+    let mask: u64 = if w == 8 { 63 } else { 31 };
+    let t = count.trim();
+    let lit = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .and_then(|h| u64::from_str_radix(h, 16).ok())
+        .or_else(|| t.parse::<u64>().ok());
+    match lit {
+        Some(n) if n & mask == n => t.to_string(),
+        Some(n) => (n & mask).to_string(),
+        None => format!("({t} & {mask})"),
+    }
 }
 
 /// Increment and decrement.
@@ -2698,9 +2746,94 @@ pub(crate) fn direct_tail_jump_target(ins: &Instruction) -> Option<u64> {
 /// defined here is therefore live-in, i.e. a parameter of *this* function.
 /// `callee_arities` maps a call target VA to that callee's own recovered
 /// arity; targets absent from the map contribute nothing (never a phantom).
+/// #7550 - i registri che portano gli ARGOMENTI, per ABI.
+///
+/// ## Il difetto, provato sul disassemblato
+///
+/// `main_sumVariadic` (go_sample9_O0, `0x14009c780`) apre cosi':
+///
+/// ```asm
+/// mov %rax, 0x50(%rsp)   ; slice.ptr
+/// mov %rbx, 0x58(%rsp)   ; slice.len
+/// mov %rcx, 0x60(%rsp)   ; slice.cap
+/// ```
+///
+/// Sono i registri della **regabi Go** (RAX, RBX, RCX, …), non quelli di Win64.
+/// La funzione non tocca mai `rdx`/`r8`/`r9`.
+///
+/// Cercando i parametri fra `rcx/rdx/r8/r9` si trova **solo `rcx`** — che in Go
+/// e' il TERZO campo (la capacita'), non il primo. Emesso:
+/// `main_sumVariadic(a1)` con `a1` legato alla capacita', mentre puntatore e
+/// lunghezza (`rax`, `rbx`) diventano variabili **indeterminate** e finiscono
+/// negli slot sbagliati. Da li' un puntatore spazzatura e il **CRASH** — non un
+/// DIVERGE: il difetto e' negli INDIRIZZI, non nei valori.
+///
+/// ⚠ `rcx` e' il primo registro Win64 **e** il terzo Go: la coincidenza fa
+/// sembrare che un parametro sia stato riconosciuto, e nasconde il difetto.
+///
+/// ## Perche' rimappare RISOLVE, invece di spostare il problema
+///
+/// Il C emesso viene compilato e chiamato con la **ABI C**. Non conta quale
+/// registro usasse l'originale: conta che `a1` sia legato alla variabile che
+/// l'originale usava come PRIMO argomento. Legando `a1` a `rax` per un binario
+/// Go, `f(ptr, len)` in C mette `ptr` dove il corpo lo cerca.
+///
+/// ⚠ Difetto **CONDIVISO con path A**: entrambi emettono `main_sumVariadic(a1)`.
+/// Qui non c'e' un path di riferimento.
+pub(crate) fn arg_regs_per_abi(go: bool) -> [&'static str; 4] {
+    // #7550/#7560 - gate `RUSTRE_ABI_GO`, ora predefinito ACCESO.
+    //
+    // Acceso dopo DUE conferme comportamentali indipendenti (eseguite, non
+    // dedotte) e la prova che Win64 resta byte-identico. La cronologia sotto e'
+    // lo stato PRECEDENTE, tenuta perche' spiega perche' il quinto anello
+    // serviva:
+    //
+    // La rimappatura e' corretta e VERIFICATA sui primi tre anelli (rilevamento
+    // dell'immagine, liveness, firma emessa), ma ne manca un QUARTO e senza
+    // quello il risultato e' **peggiore** dello stato di partenza:
+    //
+    //     __int64 main_sumVariadic(int64_t a1, int64_t a2, uint64_t a3)  // firma: 3
+    //     *(__int64 *)(sp + 80) = v1;   // <- RAX resta una LOCALE indeterminata
+    //     *(__int64 *)(sp + 88) = v2;   // <- RBX idem
+    //     *(__int64 *)(sp + 96) = a3;   // <- solo RCX e' diventato parametro
+    //
+    // La firma dichiara tre parametri e il corpo ne usa uno: gli altri due sono
+    // parametri FANTASMA, la classe che compila pulita ed e' silenziosamente
+    // sbagliata. Verificato eseguendo: **segfault**, come prima del fix.
+    //
+    // Il quarto anello e' la denominazione dei registri NEL CORPO: `rcx`
+    // diventa `a3` perche' e' nell'elenco Win64 originale, `rax`/`rbx` restano
+    // `v1`/`v2` perche' un'altra passata li battezza come locali. Finche' non e'
+    // cablato anche quello, il gate resta spento.
+    if go
+        && !matches!(
+            std::env::var("RUSTRE_ABI_GO").as_deref(),
+            Ok("0") | Ok("false")
+        )
+    {
+        // regabi Go (amd64): RAX, RBX, RCX, RDI, RSI, R8, R9, R10, R11.
+        // Ne servono i primi quattro, quanti ne tratta questo codice.
+        ["rax", "rbx", "rcx", "rdi"]
+    } else {
+        ["rcx", "rdx", "r8", "r9"]
+    }
+}
+
+/// Forma storica: ABI Win64. Ogni chiamante che non sa nulla dell'immagine
+/// resta invariato per costruzione.
 fn win64_param_regs_live_in(
     instructions: &[Instruction],
     callee_arities: &HashMap<u64, usize>,
+) -> [bool; 4] {
+    win64_param_regs_live_in_abi(instructions, callee_arities, false)
+}
+
+/// Come sopra, ma coi registri della ABI dell'immagine (vedi
+/// [`arg_regs_per_abi`]).
+fn win64_param_regs_live_in_abi(
+    instructions: &[Instruction],
+    callee_arities: &HashMap<u64, usize>,
+    abi_go: bool,
 ) -> [bool; 4] {
     // SONDA #6630 (`RUSTRE_DBG_PARAMREG`, zero effetto sull'emissione): il
     // FLUSSO ricevuto. Le sonde LIVEIN/WRITE piu' sotto mostrano promozioni le
@@ -2742,7 +2875,7 @@ fn win64_param_regs_live_in(
                     // rispondono correttamente su `%r8d`, eppure la scrittura
                     // non viene registrata. Stampare l'esito effettivo e' l'unico
                     // modo di vedere quale anello cede in esecuzione.
-                    let verdicts: Vec<String> = ["rcx", "rdx", "r8", "r9"]
+                    let verdicts: Vec<String> = arg_regs_per_abi(abi_go)
                         .iter()
                         .flat_map(|r| reg_width_aliases(r))
                         .filter(|a| mentions_reg(&o, a))
@@ -2769,7 +2902,7 @@ fn win64_param_regs_live_in(
         );
     }
     // Scan instructions to find which arg registers are READ before WRITE.
-    let regs = ["rcx", "rdx", "r8", "r9"];
+    let regs = arg_regs_per_abi(abi_go);
 
     // ── #6640: «letto prima di scritto» in ordine di INDIRIZZO e' falso nei CICLI ──
     //
@@ -3879,6 +4012,210 @@ fn fold_scaled_index_access(s: &str) -> String {
 /// dereferenced at multiple fixed offsets (e.g. `*(v3 + 0x8)`,
 /// `*(v3 + 0x10)`), emit a synthetic struct declaration above the
 /// function and rewrite the accesses to `v3->field_K` form.
+/// #7360 - ricostruzione delle struct per **path B**.
+///
+/// Sorella di [`recover_struct_accesses`], che serve path A. Sono due funzioni e
+/// non una parametrizzata, perche' dopo la verifica non condividono piu' nulla
+/// oltre allo scopo:
+///
+/// | | path A | path B |
+/// |---|---|---|
+/// | forma cercata | `*(NOME + N)` **nudo** | `*(TIPO *)(NOME + N)` |
+/// | tipo del campo | **dedotto dal divario** | **letto dal cast** |
+/// | forma emessa | ritipizza: `ptr->field_X` | **cast all'uso** |
+/// | tag | hash degli offset | hash di offset **e tipi** |
+///
+/// Fondere due algoritmi diversi in un `if` non evita la duplicazione: la
+/// nasconde nei rami.
+///
+/// ## Perche' il cast all'USO e non la ritipizzazione
+///
+/// Path A cambia il tipo della variabile base. In path B non si puo': misurato
+/// che **207 basi su 306 (68%)** compaiono anche in ARITMETICA, e con
+/// `v1: struct X *` l'espressione `v1 + 8` **non somma piu' 8 byte** - il C scala
+/// per `sizeof(struct X)`. Compila, non emette warning, e calcola un indirizzo
+/// diverso: un cambiamento di semantica silenzioso.
+///
+/// Con `((struct X *)v1)->field_20` la base resta intera e l'aritmetica altrove
+/// mantiene la semantica byte-per-byte. Verificato che la forma compila con i
+/// flag del corpus (`gnu89 -w`) senza diagnostica.
+///
+/// ## Le tre esclusioni, tutte misurate
+///
+/// 1. **il FRAME** (`sp`, `fp`, `var_sp`): il **40%** delle basi candidate. Un
+///    frame non e' una struct, e `sp->field_C0` scriverebbe sul frame sintetico.
+///    Path A esclude gia' `rsp` per la stessa ragione.
+/// 2. **larghezze contraddittorie** sullo stesso offset (115 basi): assegnare un
+///    tipo solo cambierebbe la larghezza di qualche accesso.
+/// 3. **larghezza maggiore del divario** al campo successivo (11 basi): i campi
+///    si sovrapporrebbero.
+///
+/// Sopravvivono **1451 basi su 1577** nei due bucket misurati, **5943** sul
+/// corpus, per **37430** accessi riscritti su 129870.
+///
+/// ## Il tag deve dipendere anche dai TIPI
+///
+/// Path A hasha i soli offset, e in path A e' corretto perche' i suoi tipi sono
+/// una funzione deterministica degli offset. Qui no: misurato che **61 layout di
+/// offset** compaiono con combinazioni di tipi diverse in funzioni diverse.
+/// Hashando i soli offset, quei 61 tag avrebbero definizioni contraddittorie e
+/// due file cosi' non compilano insieme.
+fn recover_struct_accesses_hlil(code: &str) -> String {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    // Larghezza in byte del tipo scritto nel cast. `None` per un tipo che non
+    // conosciamo: quella base viene scartata invece di essere indovinata.
+    fn larghezza(t: &str) -> Option<u64> {
+        Some(match t {
+            "uint8_t" | "int8_t" | "char" => 1,
+            "uint16_t" | "int16_t" | "__int16" => 2,
+            "uint32_t" | "int32_t" | "int" => 4,
+            "uint64_t" | "int64_t" | "__int64" => 8,
+            "unsigned __int128" | "__int128" => 16,
+            _ => return None,
+        })
+    }
+
+    // `sp`/`fp`/`var_sp` non sono puntatori a struct: sono il frame.
+    fn e_frame(n: &str) -> bool {
+        matches!(n, "sp" | "fp" | "var_sp")
+    }
+
+    let mut basi: BTreeMap<String, BTreeMap<u64, String>> = BTreeMap::new();
+    let mut ambigue: BTreeSet<String> = BTreeSet::new();
+    let b = code.as_bytes();
+    let mut i = 0usize;
+    while i + 4 < b.len() {
+        if b[i] != b'*' || b[i + 1] != b'(' {
+            i += 1;
+            continue;
+        }
+        // `*(TIPO *)(NOME + N)` - il TIPO puo' contenere cifre e spazi
+        // (`__int64`, `unsigned __int128`), quindi niente classi di soli
+        // caratteri alfabetici: e' l'errore che ha reso muta la prima sonda.
+        let Some(fine_tipo) = code[i + 2..].find(" *)(") else {
+            i += 1;
+            continue;
+        };
+        let tipo = &code[i + 2..i + 2 + fine_tipo];
+        if tipo.is_empty()
+            || !tipo
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b' ')
+        {
+            i += 1;
+            continue;
+        }
+        let dopo = i + 2 + fine_tipo + 4;
+        let Some(chiusa) = code[dopo..].find(')') else {
+            i += 1;
+            continue;
+        };
+        let dentro = &code[dopo..dopo + chiusa];
+        let Some((nome, off)) = dentro.split_once(" + ") else {
+            i += 1;
+            continue;
+        };
+        if nome.is_empty()
+            || !nome.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
+            || !nome.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+            || off.is_empty()
+            || !off.bytes().all(|c| c.is_ascii_digit())
+        {
+            i += 1;
+            continue;
+        }
+        if let Ok(o) = off.parse::<u64>()
+            && !e_frame(nome)
+        {
+            let e = basi.entry(nome.to_string()).or_default();
+            if let Some(gia) = e.get(&o)
+                && gia != tipo
+            {
+                ambigue.insert(nome.to_string());
+            }
+            e.insert(o, tipo.to_string());
+        }
+        i = dopo + chiusa;
+    }
+
+    basi.retain(|nome, offs| {
+        if offs.len() < 2 || ambigue.contains(nome) {
+            return false;
+        }
+        let ord: Vec<u64> = offs.keys().copied().collect();
+        for (k, o) in ord.iter().enumerate() {
+            let Some(w) = larghezza(&offs[o]) else {
+                return false;
+            };
+            if let Some(succ) = ord.get(k + 1)
+                && w > succ - o
+            {
+                return false;
+            }
+        }
+        true
+    });
+    if basi.is_empty() {
+        return code.to_string();
+    }
+
+    let mut decls = String::new();
+    let mut tag_di: BTreeMap<String, String> = BTreeMap::new();
+    let mut emesse: BTreeSet<String> = BTreeSet::new();
+    for (nome, offs) in &basi {
+        // FNV-1a su offset E tipi (#7360: i soli offset danno 61 collisioni).
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for (o, ty) in offs {
+            for byte in o.to_le_bytes().iter().chain(ty.as_bytes()) {
+                h ^= u64::from(*byte);
+                h = h.wrapping_mul(0x1000_0000_01b3);
+            }
+        }
+        let tag = format!("StructB_{:08X}_t", (h >> 32) as u32);
+        tag_di.insert(nome.clone(), tag.clone());
+        if !emesse.insert(tag.clone()) {
+            continue;
+        }
+        writeln!(decls, "#ifndef {tag}_DEFINED").unwrap();
+        writeln!(decls, "#define {tag}_DEFINED").unwrap();
+        writeln!(decls, "// inferred from {} typed accesses", offs.len()).unwrap();
+        writeln!(decls, "struct {tag} {{").unwrap();
+        let ord: Vec<u64> = offs.keys().copied().collect();
+        if let Some(&primo) = ord.first()
+            && primo > 0
+        {
+            writeln!(decls, "    char _pad_start[{primo}];").unwrap();
+        }
+        for (k, o) in ord.iter().enumerate() {
+            let ty = &offs[o];
+            let w = larghezza(ty).unwrap_or(8);
+            writeln!(decls, "    {ty} field_{o:X}; // offset 0x{o:X}").unwrap();
+            // Il padding porta il campo SUCCESSIVO al suo offset vero: senza,
+            // `->field_18` non starebbe piu' a 0x18.
+            if let Some(succ) = ord.get(k + 1) {
+                let pad = succ - o - w;
+                if pad > 0 {
+                    writeln!(decls, "    char _pad_{o:X}[{pad}];").unwrap();
+                }
+            }
+        }
+        writeln!(decls, "}};").unwrap();
+        writeln!(decls, "#endif").unwrap();
+    }
+
+    let mut out = code.to_string();
+    for (nome, offs) in &basi {
+        let tag = &tag_di[nome];
+        for (o, ty) in offs {
+            let da = format!("*({ty} *)({nome} + {o})");
+            let a = format!("((struct {tag} *){nome})->field_{o:X}");
+            out = out.replace(&da, &a);
+        }
+    }
+    format!("{decls}{out}")
+}
+
 fn recover_struct_accesses(code: &str) -> String {
     use std::collections::{BTreeMap, BTreeSet};
     // base name → set of byte offsets accessed.
@@ -4415,7 +4752,21 @@ fn infer_usage_name(code: &str, v: &str) -> Option<&'static str> {
     if var_is_called(code, v) {
         return Some("func_ptr");
     }
+    // #8060 - la grafia dell'incremento NON e' la stessa nei due path, e la
+    // condizione era scritta solo per quella di path A. Misurato su
+    // post8040 (12188 file appaiati):
+    //
+    //   | forma            | path A | path B |
+    //   |------------------|--------|--------|
+    //   | `v = v + 1`      |  187   |    0   |
+    //   | `v = (v + 1)`    |    0   | 1944   |
+    //
+    // Path B parentesizza SEMPRE, quindi 1944 contatori di ciclo restavano
+    // senza nome pur soddisfacendo il concetto. Il caso `result` funzionava
+    // gia' perche' `return v;` e' identico nei due path: la neutralita' di
+    // questo riconoscitore va verificata IDIOMA PER IDIOMA, non per passata.
     if code.contains(&format!("{v} = {v} + 1"))
+        || code.contains(&format!("{v} = ({v} + 1)"))
         || code.contains(&format!("++{v}"))
         || code.contains(&format!("{v}++"))
     {
@@ -4428,7 +4779,27 @@ fn infer_usage_name(code: &str, v: &str) -> Option<&'static str> {
         return Some("i");
     }
     // A local that only flips between the literal values 0 and 1 is a flag.
-    if code.contains(&format!("{v} = 1;")) && code.contains(&format!("{v} = 0;")) {
+    //
+    // #8070 - `contains` NON basta: `*(uint32_t *)v8 = 1;` contiene la
+    // sottostringa `v8 = 1;` pur essendo uno store ATTRAVERSO il puntatore, non
+    // un'assegnazione A `v8`. Misurato su `sample7_cpp` path B: delle variabili
+    // catturate da questa regola, **3 su 3 erano store per dereferenziazione** —
+    // zero legittime. Il nome `flag` finiva su un puntatore al TEB
+    // (`v8 = __readgsqword(...)`), che e' un nome CONFIDENTEMENTE SBAGLIATO, la
+    // classe di difetto peggiore del crate.
+    //
+    // Il difetto e' condiviso con path A (stessa funzione), ma path B lo espone
+    // molto di piu' perche' emette molti piu' store per dereferenziazione.
+    // Le altre regole della famiglia sono pulite: il contatore misura 80 corrette
+    // e 0 sbagliate, `mem` 19 e 0 — perche' `malloc(`/`(v + 1)` non compaiono
+    // quasi mai dopo un bersaglio dereferenziato.
+    //
+    // La cura e' esigere che la riga, ripulita, SIA l'assegnazione.
+    let assegna_letterale = |lit: &str| {
+        code.lines()
+            .any(|l| l.trim() == format!("{v} = {lit};"))
+    };
+    if assegna_letterale("1") && assegna_letterale("0") {
         return Some("flag");
     }
     // A pointer advanced by a non-unit stride and dereferenced is a loop
@@ -4664,6 +5035,20 @@ fn resolve_symbols(code: &str, resolver: &dyn SymbolResolver) -> String {
                     && let Ok(addr) = u64::from_str_radix(
                         std::str::from_utf8(&bytes[i + plen..j]).unwrap_or("0"), 16) {
                         let sym_text = resolver.resolve(addr);
+                        // Sonda `RUSTRE_DBG_RESOLVE1=<hex>`: dice se il
+                        // resolver conosce l'indirizzo e cosa restituisce,
+                        // PRIMA delle guardie che possono azzerarlo.
+                        if let Ok(w) = std::env::var("RUSTRE_DBG_RESOLVE1")
+                            && u64::from_str_radix(w.trim_start_matches("0x"), 16) == Ok(addr)
+                        {
+                            eprintln!(
+                                "[resolve1] {addr:#x} pfx={} sym={:?} next={:?} is_import={}",
+                                std::str::from_utf8(&bytes[i..i + plen]).unwrap_or("?"),
+                                sym_text,
+                                bytes.get(j).map(|c| *c as char),
+                                resolver.is_import(addr)
+                            );
+                        }
                         // ⚠ #6050, gate opt-in `RUSTRE_RESOLVE_SKIP_PROTO`:
                         // rinominare verso un nome con PROTOTIPO PUBBLICATO
                         // (`strtoul`, `fwrite`, …) mette la nostra arita'
@@ -5262,13 +5647,17 @@ fn uniform_self_stride(code: &str, name: &str) -> Option<u64> {
                 // Postfisso `name++;` — passo 1, come il prefisso sopra.
                 seg_strides.push(Some(1));
                 continue;
-            } else if let Some(r2) = r.strip_prefix("+=").or_else(|| r.strip_prefix("-=")) {
-                Some(Some(r2))
+            } else if let Some(r2) = r.strip_prefix("+=") {
+                Some(Some((r2, false)))
+            } else if let Some(r2) = r.strip_prefix("-=") {
+                // #8790 - il SEGNO va portato fino alla decisione: solo la
+                // SOTTRAZIONE puo' essere una differenza fra puntatori.
+                Some(Some((r2, true)))
             } else if let Some(r2) = r.strip_prefix('=') {
                 let r2 = r2.trim_start();
                 match r2.strip_prefix(name).map(|r3| r3.trim_start()) {
                     Some(r3) if r3.starts_with('+') || r3.starts_with('-') => {
-                        Some(Some(&r3[1..]))
+                        Some(Some((&r3[1..], r3.starts_with('-'))))
                     }
                     // `name = <other>;` — reassignment: new lifetime.
                     _ => Some(None),
@@ -5280,13 +5669,41 @@ fn uniform_self_stride(code: &str, name: &str) -> Option<u64> {
             None
         };
         match rest {
-            Some(Some(step)) => {
+            Some(Some((step, e_sottrazione))) => {
                 let lit = step.trim_start().trim_end_matches(';').trim_end();
                 let k = if let Some(h) = lit.strip_prefix("0x") {
                     u64::from_str_radix(h, 16).ok()
                 } else {
                     lit.parse::<u64>().ok()
-                };
+                }
+                // #8830 - un passo `IDENT*K` avanza di K byte per elemento:
+                // la falcata e' K, come per il letterale K. Senza questo, il
+                // moltiplicatore reso visibile non veniva guardato da nessuno.
+                .or_else(|| {
+                    let (id, mul) = lit.split_once('*')?;
+                    let (id, mul) = (id.trim(), mul.trim());
+                    if id.is_empty()
+                        || !id.bytes().all(is_word_char)
+                        || id.bytes().next().is_some_and(|c| c.is_ascii_digit())
+                    {
+                        return None;
+                    }
+                    mul.parse::<u64>().ok()
+                });
+                // #8790 - una DIFFERENZA FRA PUNTATORI non e' un passo.
+                //
+                // `p = p - q` con `q` a sua volta un puntatore non fa avanzare
+                // `p`: lo CONSUMA, producendo un conteggio. E' l'ultima riga
+                // della forma strlen classica, e trattarla come passo di
+                // ampiezza ignota METTEVA IL VETO all'intera inferenza: la
+                // falcata 1 vista sul `++result` veniva buttata tre righe dopo
+                // essere stata trovata. Misurato su `my_strlen`.
+                //
+                // Solo la SOTTRAZIONE: `p = p + q` non e' una differenza fra
+                // puntatori, e li' non ho argomento.
+                if e_sottrazione && k.is_none() && e_nome_di_puntatore(code, lit) {
+                    continue;
+                }
                 seg_strides.push(k);
             }
             Some(None) => flush(&mut seg_strides, &mut seg_deref, &mut stride, &mut vetoed),
@@ -5295,6 +5712,232 @@ fn uniform_self_stride(code: &str, name: &str) -> Option<u64> {
     }
     flush(&mut seg_strides, &mut seg_deref, &mut stride, &mut vetoed);
     if vetoed { None } else { stride }
+}
+
+/// #8790 - `nome` e' dichiarato PUNTATORE in questo testo?
+///
+/// Cerca `*nome` preceduto da un carattere di parola (la fine di un TIPO), sia
+/// in una dichiarazione locale (`char *src;`) sia nella riga di firma. Serve a
+/// distinguere una DIFFERENZA fra puntatori da un passo per un conteggio.
+/// Prudente: se non lo riconosce, il chiamante mantiene il veto.
+fn e_nome_di_puntatore(code: &str, nome: &str) -> bool {
+    let nome = nome.trim();
+    if nome.is_empty() || !nome.bytes().all(is_word_char) {
+        return false;
+    }
+    let ago = format!("*{nome}");
+    for (at, _) in code.match_indices(&ago) {
+        if code.as_bytes().get(at + ago.len()).is_some_and(|&c| is_word_char(c)) {
+            continue;
+        }
+        let pre = code[..at].trim_end();
+        if pre.ends_with(|c: char| c.is_ascii_alphanumeric() || c == '_') {
+            return true;
+        }
+    }
+    false
+}
+
+/// #8750 - la scala di indicizzazione con cui il corpo derifera `name`.
+///
+/// Riconosce `*(name + IDENT*K)` e `*(name + K*IDENT)`. Restituisce `K` solo se
+/// TUTTE le occorrenze concordano. Gli offset COSTANTI sono ignorati apposta:
+/// sono la forma dei campi di struct, non di un array.
+fn uniform_param_index_scale(code: &str, name: &str) -> Option<u32> {
+    let mut found: Option<u32> = None;
+    let ago = format!("*({name} + ");
+    for (at, _) in code.match_indices(&ago) {
+        let rest = &code[at + ago.len()..];
+        let close = rest.find(')')?;
+        let inner = rest[..close].trim();
+        let (x, y) = inner.split_once('*')?;
+        let (x, y) = (x.trim(), y.trim());
+        let k = x.parse::<u32>().ok().or_else(|| y.parse::<u32>().ok())?;
+        if !matches!(k, 1 | 2 | 4 | 8) {
+            return None;
+        }
+        match found {
+            None => found = Some(k),
+            Some(pp) if pp == k => {}
+            Some(_) => return None,
+        }
+    }
+    found
+}
+
+/// #8830 - ripiega `X = IDENT*K;` dentro l'uso `P += X;`.
+///
+/// Il codice NON ottimizzato calcola l'offset in una variabile a parte, e chi
+/// sceglie il pointee vede un identificatore nudo: `__int64 *src` avanzato di
+/// `8*(i*4) = 32i` byte dove il vero e' `4i`. Correggere il solo TIPO
+/// peggiorerebbe di nascosto (16i): piu' vicino al vero e ancora sbagliato.
+///
+/// PRECONDIZIONI, tutte testate: una sola definizione di `X`; la definizione
+/// PRECEDE l'uso; nessuna riscrittura di `X` ne' di `IDENT` fra le due.
+/// DUE grafie: la conversione `x = x + y` -> `x += y` gira molto piu' tardi,
+/// quindi qui il testo dice ancora `src = src + a2;` - la prima versione
+/// cercava solo `+=` ed e' stata INERTE sul witness.
+fn fold_scaled_step_into_use(code: &str) -> String {
+    let lines: Vec<&str> = code.lines().collect();
+    let mut scaled: std::collections::HashMap<String, (usize, String, String)> =
+        std::collections::HashMap::new();
+    let mut assign_count: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    for (i, l) in lines.iter().enumerate() {
+        let Some((lhs, rhs)) = assegnazione_semplice(l) else { continue };
+        *assign_count.entry(lhs.to_string()).or_insert(0) += 1;
+        let Some((id, lit)) = rhs.split_once('*') else { continue };
+        let (id, lit) = (id.trim(), lit.trim());
+        if id.is_empty()
+            || !id.bytes().all(is_word_char)
+            || id.bytes().next().is_some_and(|c| c.is_ascii_digit())
+            || lit.is_empty()
+            || !lit.bytes().all(|c| c.is_ascii_digit())
+        {
+            continue;
+        }
+        scaled.insert(lhs.to_string(), (i, id.to_string(), lit.to_string()));
+    }
+    if scaled.is_empty() {
+        return code.to_string();
+    }
+    let mut out: Vec<String> = lines.iter().map(|s| (*s).to_string()).collect();
+    for (i, l) in lines.iter().enumerate() {
+        let t = l.trim();
+        let Some(rest) = t.strip_suffix(';') else { continue };
+        let coppia = rest.split_once("+= ").map(|(q, s)| (q.trim(), s.trim())).or_else(|| {
+            let (lhs, rhs) = rest.split_once(" = ")?;
+            let lhs = lhs.trim();
+            let resto = rhs.trim().strip_prefix(lhs)?.trim_start().strip_prefix("+ ")?;
+            Some((lhs, resto.trim()))
+        });
+        let Some((q, step)) = coppia else { continue };
+        if step.is_empty() || !step.bytes().all(is_word_char) {
+            continue;
+        }
+        let Some((def, id, lit)) = scaled.get(step) else { continue };
+        if assign_count.get(step).copied().unwrap_or(0) != 1 || *def >= i {
+            continue;
+        }
+        let sporco = lines[*def + 1..i].iter().any(|m| {
+            assegnazione_semplice(m).is_some_and(|(lhs, _)| lhs == step || lhs == id)
+        });
+        if sporco {
+            continue;
+        }
+        let indent: String = l.chars().take_while(|c| c.is_whitespace()).collect();
+        out[i] = format!("{indent}{q} += {id}*{lit};");
+    }
+    out.join("\n")
+}
+
+/// `NAME = RHS;` con `NAME` identificatore nudo. `None` per tutto il resto.
+fn assegnazione_semplice(line: &str) -> Option<(&str, &str)> {
+    let t = line.trim();
+    let rest = t.strip_suffix(';')?;
+    let (lhs, rhs) = rest.split_once(" = ")?;
+    let lhs = lhs.trim();
+    if lhs.is_empty() || !lhs.bytes().all(is_word_char) {
+        return None;
+    }
+    Some((lhs, rhs.trim()))
+}
+
+/// #8880 - il parametro `aN` e' una QUANTITA', non un puntatore?
+///
+/// Vero quando: il corpo lo CONFRONTA D'ORDINE con una costante NON NULLA
+/// (`a2 > 1`) e piu' sotto viene RISCRITTO senza usare se stesso, cioe' il
+/// valore MUORE e il registro passa ad altro.
+///
+/// Il criterio e' stato ristretto quattro volte (563 -> 302 -> 179 -> 31 -> 5):
+/// un puntatore legittimo puo' essere riassegnato (`p = p + 8`); un cast
+/// `(__int64 *)a1` non e' aritmetica; `a2 != 0` e' un test NULL, valido su un
+/// puntatore, e non prova nulla.
+fn parametro_e_una_quantita(code: &str, n: usize) -> bool {
+    let a = format!("a{n}");
+    let Some(corpo) = code.split_once('{').map(|(_, r)| r) else { return false };
+    let mut morte: Option<usize> = None;
+    let mut off = 0usize;
+    for line in corpo.lines() {
+        let t = line.trim();
+        if let Some(rhs) = t
+            .strip_prefix(&a)
+            .and_then(|r| r.trim_start().strip_prefix("= "))
+            && !mentions_reg(rhs, &a)
+        {
+            morte = Some(off);
+            break;
+        }
+        off += line.len() + 1;
+    }
+    let Some(morte) = morte else { return false };
+    let prima = &corpo[..morte.min(corpo.len())];
+    let costante_non_nulla = |s: &str| -> bool {
+        let s = s.trim();
+        let d = s.strip_prefix("0x").unwrap_or(s);
+        !d.is_empty()
+            && d.bytes().all(|c| c.is_ascii_hexdigit())
+            && d.bytes().any(|c| c != b'0')
+    };
+    for (at, _) in find_word_positions(prima, &a) {
+        let dopo = prima[at + a.len()..].trim_start();
+        let op = dopo.strip_prefix(">=").or_else(|| dopo.strip_prefix("<="))
+            .or_else(|| dopo.strip_prefix('>')).or_else(|| dopo.strip_prefix('<'));
+        if let Some(rest) = op {
+            let tok: String = rest.trim_start().chars().take_while(|c| c.is_alphanumeric() || *c == 'x').collect();
+            if costante_non_nulla(&tok) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// #8880b - spezza il parametro MORTO dal registro che lo riusa.
+///
+/// Witness `find_max` (sorgente: `size_t len` per VALORE): `if (a2 > 1)` lo usa
+/// come NUMERO, `a2 = a1 + 1` lo fa MORIRE, `a2 = *a2` riusa il registro come
+/// PUNTATORE. Emesso `size_t *a2`, e la funzione CRASHA in quattro bucket.
+///
+/// RITIRATA la v1, che si limitava a non promuovere il parametro: il tipo
+/// diventava giusto ma il corpo continuava a scrivere `a2[1]`, e il file NON
+/// COMPILAVA PIU'. La cura intera e' spezzare la VARIABILE.
+fn spezza_parametro_morto(code: &str) -> String {
+    let Some((testa, _)) = code.split_once('{') else { return code.to_string() };
+    let testa = testa.to_string();
+    let mut out = code.to_string();
+    for n in 1..=9usize {
+        let a = format!("a{n}");
+        if !testa.contains(&format!(" {a}")) || testa.contains(&format!("*{a}")) {
+            continue;
+        }
+        if !parametro_e_una_quantita(&out, n) {
+            continue;
+        }
+        let righe: Vec<String> = out.lines().map(str::to_string).collect();
+        let Some(morte) = righe.iter().position(|l| {
+            l.trim()
+                .strip_prefix(&a)
+                .and_then(|r| r.trim_start().strip_prefix("= "))
+                .is_some_and(|rhs| !mentions_reg(rhs, &a))
+        }) else {
+            continue;
+        };
+        let nuovo = format!("{a}_riuso");
+        let mut nuove: Vec<String> = Vec::with_capacity(righe.len() + 1);
+        for (i, l) in righe.iter().enumerate() {
+            if i >= morte {
+                nuove.push(rename_word(l, &a, &nuovo));
+            } else {
+                nuove.push(l.clone());
+            }
+        }
+        if let Some(apre) = nuove.iter().position(|l| l.trim_end().ends_with('{')) {
+            nuove.insert(apre + 1, format!("    __int64 {nuovo};"));
+        }
+        out = nuove.join("\n");
+    }
+    out
 }
 
 fn promote_pointer_locals_rec(code: &str) -> (String, Vec<String>) {
@@ -5540,9 +6183,48 @@ fn promote_pointer_params_rec(code: &str) -> (String, Vec<String>) {
         // `__int64`, `unsigned __int64`, `size_t`) to a pointer. Skip if already
         // a pointer (`*aN`).
         let n = idx + 1;
-        for ty in ["__int64", "unsigned __int64", "size_t", "int"] {
+        // #7730 - le grafie di path B.
+        //
+        // La lista conteneva solo le grafie di path A. MISURATO: il **94,1%**
+        // dei parametri di path B e' dichiarato `uint64_t`, che qui non
+        // c'era: portare la chiamata su path B senza toccare questa riga
+        // sarebbe stato **inerte**, e il risultato ("gate acceso, zero
+        // differenze") sarebbe stato indistinguibile da "il difetto non
+        // esiste".
+        for ty in [
+            "__int64",
+            "unsigned __int64",
+            "size_t",
+            "int",
+            "uint64_t",
+            "int64_t",
+        ] {
             let name = format!("{ty} a{n}");
-            let repl = format!("__int64 *a{n}");
+            // #7730 - la grafia del puntatore SEGUE quella d'origine.
+            //
+            // Per le quattro grafie di path A resta `__int64 *`, identica a
+            // prima: path A e' byte-identico PER COSTRUZIONE, non per
+            // verifica a posteriori. Per le grafie di path B si conserva la
+            // loro (`uint64_t *`), perche' mescolare i due vocabolari nello
+            // stesso file e' gratuito e illeggibile.
+            // #8750 - il POINTEE dalla scala osservata.
+            //
+            // ASIMMETRIA col ramo dei LOCALI (`uniform_self_stride`), che gia'
+            // sceglie `int`/`__int16`/`char` dalla falcata. Qui il pointee era
+            // SEMPRE a 8 byte: `count_set_flags` derifera `*(a1 + i*4)` con
+            // `a1` dichiarato `__int64 *`, il C riscala per 8 e la funzione
+            // legge a passo DOPPIO. E' la lettura "a passo 8x" dell'audit IDA.
+            let pointee = match uniform_param_index_scale(&out, &format!("a{n}")) {
+                Some(4) => Some("int"),
+                Some(2) => Some("__int16"),
+                Some(1) => Some("char"),
+                _ => None,
+            };
+            let repl = match pointee {
+                Some(p) => format!("{p} *a{n}"),
+                None if matches!(ty, "uint64_t" | "int64_t") => format!("{ty} *a{n}"),
+                None => format!("__int64 *a{n}"),
+            };
             if let Some(pos) = out.find(&name)
                 && out[pos + name.len()..].starts_with(|c: char| c == ',' || c == ')')
                 && !out[..pos].ends_with('*')
@@ -6427,6 +7109,55 @@ fn rewrite_param_array_access(s: &str) -> String {
                                 i = k + 1;
                                 continue;
                             }
+                    }
+                }
+                // #7740 - l'offset DECIMALE.
+                //
+                // Il ramo sopra pretende `" + 0"` seguito da `x`: accetta solo
+                // `*(aN + 0xHEX)`. Il commento della funzione lo diceva ed era
+                // accurato - nessuno aveva notato che l'emissione produce anche
+                // la forma DECIMALE.
+                //
+                // Costo misurato di quella cecita': in path A **724**
+                // occorrenze di `*(aN + 8)` con `aN` dichiarato `__int64 *`,
+                // cioe' una lettura al byte 64 dove il disassemblato legge il
+                // byte 8 - provato su `cpp_sample7_O0/sub_14001a7f0.c` contro
+                // `mov 8(%rcx), %rax`. Sbagliato di 8x, e COMPILA.
+                //
+                // Perche' qui e' sicuro: questa passata gira PRIMA della
+                // promozione a puntatore e della riscalatura, quindi gli
+                // offset che vede sono ancora byte grezzi del codice macchina.
+                // I 3710 `+ 1` decimali visibili nell'output finale sono il
+                // PRODOTTO della riscalatura e non esistono ancora qui.
+                //
+                // Solo multipli di 8, e il ramo esadecimale NON e' toccato:
+                // `off / 8` tronca (`0x4` da' `a1[0]`, difetto preesistente) e
+                // allargare la troncatura ai decimali ne creerebbe di nuovi.
+                if j > start + 1
+                    && !struct_params.contains(std::str::from_utf8(&bytes[start..j]).unwrap_or("a?"))
+                    && j + 3 < bytes.len()
+                    && &bytes[j..j + 3] == b" + "
+                    && bytes[j + 3].is_ascii_digit()
+                    && bytes[j + 3] != b'0'
+                {
+                    let dec_start = j + 3;
+                    let mut k = dec_start;
+                    while k < bytes.len() && bytes[k].is_ascii_digit() {
+                        k += 1;
+                    }
+                    if k > dec_start
+                        && k < bytes.len()
+                        && bytes[k] == b')'
+                        && let Ok(off) =
+                            std::str::from_utf8(&bytes[dec_start..k]).unwrap_or("0").parse::<u64>()
+                        && off > 0
+                        && off % 8 == 0
+                    {
+                        let name = std::str::from_utf8(&bytes[start..j]).unwrap_or("a?");
+                        let idx = off / 8;
+                        write!(out, "{name}[{idx}]").unwrap();
+                        i = k + 1;
+                        continue;
                     }
                 }
             }
@@ -10478,6 +11209,37 @@ fn fine_reale_funzione(instructions: &[Instruction]) -> Option<u64> {
         .max()
 }
 
+/// #7540b - il nome e' gia' DICHIARATO dalla prelude?
+///
+/// Ribattezzare una funzione emessa con un nome che `ida_defs.h` (o le
+/// intestazioni che include) dichiara produce `conflicting types`: la nostra
+/// `__int64 NOME()` contraddice il prototipo vero. **E il conflitto e' la
+/// fortuna**: se compilasse, la nostra definizione vincerebbe al link e
+/// cambierebbe il comportamento del programma in silenzio.
+///
+/// L'elenco viveva come costante LOCALE dentro una sola passata, quindi
+/// `rename_hlil_definitions` non lo consultava e ribattezzava lo stesso —
+/// misurati `__p__fmode` e `___mb_cur_max_func`, gli ultimi due file di
+/// sample7_cpp che non compilavano. Estratto qui perche' la regola vale per
+/// OGNI passata che assegna un nome a una definizione, non per quella che
+/// l'ha scritta per prima.
+pub(crate) fn nome_dichiarato_dalla_prelude(nome: &str) -> bool {
+    matches!(
+        nome,
+        "atexit" | "__p__fmode" | "strnlen" | "wcsnlen" | "strlen" | "wcslen"
+            | "memcpy" | "memmove" | "memset" | "memcmp" | "strcpy" | "strncpy"
+            | "strcmp" | "strncmp" | "strcat" | "malloc" | "free" | "calloc"
+            | "realloc" | "printf" | "fprintf" | "sprintf" | "puts" | "exit"
+            | "abort" | "memchr" | "strchr" | "strrchr" | "strstr" | "strdup"
+            | "strerror" | "strtoul" | "strtol" | "strtod" | "_errno" | "getenv"
+            | "fputs" | "fputc" | "putc" | "fwrite" | "fread" | "fopen"
+            | "fclose" | "vfprintf" | "snprintf" | "qsort" | "bsearch"
+            | "___mb_cur_max_func" | "__mb_cur_max" | "toupper" | "tolower"
+            | "_set_invalid_parameter_handler" | "_get_invalid_parameter_handler"
+            | "isalpha" | "isdigit" | "isspace" | "abs" | "labs" | "llabs"
+    )
+}
+
 /// The spelling the function at `va` is DEFINED under.
 ///
 /// Two traps, both found by reading emitted C rather than by reasoning:
@@ -10509,9 +11271,10 @@ fn defines(code: &str, name: &str) -> bool {
 fn resolve_hlil_code_pointers(
     code: &str,
     starts: &HashMap<u64, usize>,
+    extra: &std::collections::HashSet<u64>,
     name_of: &dyn Fn(u64) -> Option<String>,
 ) -> String {
-    if starts.is_empty() || !code.contains("off_") {
+    if (starts.is_empty() && extra.is_empty()) || !code.contains("off_") {
         return code.to_string();
     }
     // Collect the resolvable names first: a single scan tells both the rewrite
@@ -10539,7 +11302,15 @@ fn resolve_hlil_code_pointers(
         let Ok(va) = u64::from_str_radix(&code[at + 4..e], 16) else {
             continue;
         };
-        if starts.contains_key(&va) {
+        // #8140: `starts` sono i BERSAGLI DI CHIAMATA (`image_callee_arities`).
+        // Un indirizzo raggiunto SOLO da una tabella di puntatori non e' bersaglio
+        // di alcuna `call`, quindi non compare li' PER COSTRUZIONE -- la stessa
+        // cecita' strutturale che `DetectionSource` aveva sui confini (#8130).
+        // `extra` porta `fn_starts`, l'insieme VERO degli inizi di funzione.
+        // Misurato: 155 `extern __int64 off_HEX;` di path B puntano a indirizzi
+        // che path B DEFINISCE come funzioni nello stesso bucket (75+74 nei due
+        // bucket C#, 3+3 nei due Rust).
+        if starts.contains_key(&va) || extra.contains(&va) {
             // Fallback spelling for an address with no recovered symbol is
             // `fn_<lowercase hex>`, NOT `sub_<hex>`: measured over every
             // emitted path-B file, an unnamed function is ALWAYS defined as
@@ -10896,12 +11667,515 @@ fn mentions_word(hay: &str, needle: &str) -> bool {
 /// so a `sub_` token that is not a known function entry is left exactly as it
 /// was; and a name this text already DEFINES is never re-declared, which is the
 /// `conflicting types` trap the fixed-list gcc run caught on the sibling pass.
+/// Porta la RIGA DI DEFINIZIONE di path B al nome con cui path B gia' CHIAMA.
+///
+/// #7410 — path B si contraddice fra due file. Stessa funzione, `0x1400181a0`:
+///
+/// | path | definizione |
+/// |---|---|
+/// | A | `_anonymous_namespace___pool__allocate_unsigned_long_long___clone__constprop_0_` |
+/// | **B** | **`fn_1400181a0`** |
+///
+/// Il chiamante di B emette la CHIAMATA col nome risolto — glielo riscrivono
+/// `resolve_hlil_code_pointers` (`off_HEX`) e `rename_hlil_sub_symbols`
+/// (`sub_HEX`) — mentre la DEFINIZIONE resta come l ha battezzata il lifter HLIL
+/// (`il-hlil/lib.rs:2115` e `:2589`), dove i simboli non sono raggiungibili.
+/// Il link non chiude.
+///
+/// ⚠ Perche' e' rimasto invisibile: **ogni passata presa da sola e' coerente**.
+/// La contraddizione vive FRA DUE FILE, e nessuna metrica la guarda —
+/// `check.sh` non linka, e `callsite_consistency.py` confronta le ARITA', non
+/// le grafie.
+///
+/// ## Il confine: solo i simboli INTERNI, mai il CRT
+///
+/// Misurato sul corpus: **292** funzioni dove A risolve un nome e B emette
+/// `fn_HEX` per lo stesso indirizzo. Ma **212 sono CRT/libc** (`abort`,
+/// `calloc`, `exit`, `free`, `malloc`, `strncmp`…): li' il nome sintetico e'
+/// plausibilmente la scelta **piu' sicura**, perche' definire `malloc` puo'
+/// entrare in conflitto col CRT vero — la stessa ragione per cui esiste
+/// `drop_conflicting_crt_forward_decls`.
+///
+/// Il fronte reale sono le **39** interne/mangled
+/// (`_anonymous_namespace___system_error_category…`), che **solo il progetto
+/// emesso puo' definire**. Il riconoscitore usa quella forma: nome lungo,
+/// oppure con `__` interno — cioe' esattamente cio' che un simbolo C++ o Rust
+/// decorato ha e un nome di libreria C no.
+///
+/// ⚠ Se il riconoscitore sbaglia in eccesso il danno e' un conflitto di
+/// definizione col CRT, che il compilatore SEGNALA; se sbaglia in difetto resta
+/// il difetto di oggi. Sbagliare verso il silenzio e' peggio, quindi la regola
+/// e' volutamente STRETTA.
+/// #7480 - materializza una TABELLA DI PUNTATORI A FUNZIONE, rilocando ogni
+/// voce sul simbolo con cui la funzione e' DEFINITA.
+///
+/// ## Il difetto, con l'oracolo accanto
+///
+/// `dispatch` (sample11_c) e' ricostruita **correttamente**:
+///
+/// ```c
+/// extern __int64 off_140004000;                       // <- mai definito
+/// v2 = *(__int64 *)((__int64)&off_140004000 + a1 * 8);
+/// return ((__int64 (*)())v2)(a1, a2);
+/// ```
+///
+/// Non linka per un simbolo solo. E `data_symbol_definitions` lo rifiuta **di
+/// proposito**: emetterlo come byte grezzi scriverebbe gli indirizzi assoluti
+/// dell'immagine ORIGINALE, che nel nostro eseguibile non sono niente — da cui
+/// il CRASH gia' misurato quando le basi di tabella venivano definite.
+///
+/// Il rifiuto e' giusto per i BYTE, sbagliato per i PUNTATORI: gli indirizzi
+/// non vanno copiati, vanno **rilocati**. Letti dal `.rdata` di sample11_c:
+///
+/// | voce | valore | funzione emessa |
+/// |---|---|---|
+/// | `table[0]` | `0x140001450` | `op_add` |
+/// | `table[1]` | `0x140001460` | `op_sub` |
+/// | `table[2]` | `0x140001470` | `op_mul` |
+/// | `table[3]` | `0x140001480` | `op_xor` |
+///
+/// Tutte e quattro sono funzioni che questo stesso progetto emette. La risposta
+/// giusta era gia' in albero, a pochi file di distanza.
+///
+/// ## La condizione di ammissione, deliberatamente stretta
+///
+/// Si materializza SOLO se **ogni** voce, dalla prima, e' un punto di ingresso
+/// di funzione emessa (`starts`), e ce ne sono almeno due. Al primo qword che
+/// non lo e' ci si ferma: quella e' la fine della tabella, non un'occasione per
+/// indovinare. Una voce fuori da `starts` e' esattamente il caso in cui
+/// definire produrrebbe un indirizzo inventato — cioe' il CRASH — quindi il
+/// rifiuto storico resta in vigore ovunque la prova non ci sia.
+///
+/// ## Perche' le dichiarazioni non possono confliggere
+///
+/// Ogni funzione emessa vive nel PROPRIO file, quindi la definizione di
+/// `op_add` non e' in questo. Qui c'e' una sola dichiarazione, e il C non
+/// confronta i tipi FRA unita' di traduzione: `__int64 op_add();` (senza
+/// prototipo) e' accettata dal linker anche se altrove la definizione ha un
+/// tipo di ritorno diverso.
+/// ⚠ #7500 — `starts` NON basta: e' una mappa di ARITA', e i THUNK non ci sono.
+///
+/// `arities_from_seeds` esclude i thunk di import **di proposito** — il commento
+/// a `binary_entry.rs:1587` lo dice: «serve a NON inferire un'arita' da un corpo
+/// che non esiste». Giustissimo per le arita'. Ma `callee_arities` veniva usata
+/// anche come «insieme delle funzioni emesse», e per QUELLA domanda i thunk
+/// devono esserci: sono funzioni emesse a tutti gli effetti.
+///
+/// Conseguenza misurata su sample11_c: `sub_1400027c8.hlil.c` DEFINISCE
+/// `__set_app_type()`, e ogni chiamante dichiara e invoca `sub_1400027C8()` —
+/// mai rinominato, perche' l'indirizzo non e' nella mappa delle arita'.
+/// Risultato: **50 simboli irrisolti** in un bucket da 87 file, dominati da
+/// `sub_1400027XX`/`sub_1400028XX` spaziati di 8 byte (`FF 25 … 90 90`, cioe'
+/// `jmp *IAT` + padding: thunk da manuale).
+///
+/// `extra` porta `fn_starts` (#6970), l'insieme VERO degli inizi di funzione.
+/// Una mappa che risponde a due domande con requisiti OPPOSTI e' il difetto;
+/// questo parametro separa le due domande invece di allargare la mappa, perche'
+/// allargarla rimetterebbe i thunk fra le arita' inferibili.
+fn materialise_pointer_tables(
+    code: &str,
+    oracle: Option<&binary_entry::DataOracle>,
+    starts: &HashMap<u64, usize>,
+    extra: &std::collections::HashSet<u64>,
+    name_of: &dyn Fn(u64) -> Option<String>,
+) -> String {
+    if matches!(
+        std::env::var("RUSTRE_PTR_TABLES").as_deref(),
+        Ok("0") | Ok("false")
+    ) {
+        return code.to_string();
+    }
+    let Some(oracle) = oracle else { return code.to_string() };
+    const TETTO_VOCI: usize = 4096;
+    const MAX_PROF: usize = 4;
+
+    // #7570 - la GRIGLIA dei confini: ogni simbolo off_ nominato nel file.
+    //
+    // E la clausola che il round 513 aveva sbagliato. La tabella .reloc dice
+    // QUALI parole sono puntatori, NON dove finisce un oggetto: camminare
+    // "finche e rilocato" faceva scorrere la scansione fino al tetto (32 voci
+    // per tutte e cinque le strutture provate) perche gli oggetti sono
+    // CONTIGUI e si sconfinava nel vicino. Stesso difetto gia curato da #7380
+    // con LIMITE_DOMINIO.
+    //
+    // Col confine al simbolo successivo le lunghezze diventano diverse e
+    // plausibili - 2, 34, 2, 2 - e proprio il fatto che NON siano tutte uguali
+    // e il segno che il confine e reale e non inventato.
+    let mut griglia: Vec<u64> = off_simboli_nominati(code);
+    griglia.sort_unstable();
+    griglia.dedup();
+
+    let mut out = String::with_capacity(code.len() + 256);
+    let mut coda: Vec<String> = Vec::new();
+    let mut gia: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+
+    for line in code.lines() {
+        let cruda = line.trim();
+        let va = cruda
+            .strip_prefix("extern __int64 off_")
+            .and_then(|r| r.strip_suffix(';'))
+            .and_then(|h| u64::from_str_radix(h, 16).ok());
+        let Some(va) = va else {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        };
+        // #7570b - se un'ALTRA passata definisce gia' questo simbolo, non lo si
+        // rivendica. Misurato: senza questa guardia `data_symbol_definitions`
+        // emetteva `static uint8_t off_X[16] = {...}` e questa
+        // `static void *off_X[5];` nello stesso file - `conflicting types`, 35
+        // occorrenze, e 16 file che PRIMA compilavano.
+        //
+        // Il criterio e' la presenza di `off_X[`: la riga `extern __int64
+        // off_X;` non contiene la parentesi quadra, quindi non si auto-esclude.
+        if code.contains(&format!("off_{va:X}[")) {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+        let Some(voci) = struttura_a(va, oracle, &griglia, TETTO_VOCI) else {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        };
+        out.push_str(&format!("static void *off_{va:X}[{}];\n", voci.len()));
+        emetti_struttura(
+            va, &voci, oracle, starts, extra, &griglia, name_of, 0, MAX_PROF, &mut gia,
+            &mut coda,
+        );
+    }
+    for l in &coda {
+        out.push_str(l);
+        out.push('\n');
+    }
+    out
+}
+
+/// Ogni off_HEX nominato nel testo, come indirizzi.
+fn off_simboli_nominati(code: &str) -> Vec<u64> {
+    let mut v = Vec::new();
+    let b = code.as_bytes();
+    let mut i = 0usize;
+    while let Some(r) = code[i..].find("off_") {
+        let a = i + r;
+        if a > 0 && (b[a - 1].is_ascii_alphanumeric() || b[a - 1] == b'_') {
+            i = a + 4;
+            continue;
+        }
+        let mut e = a + 4;
+        while e < b.len() && b[e].is_ascii_hexdigit() {
+            e += 1;
+        }
+        if e > a + 4
+            && let Ok(x) = u64::from_str_radix(&code[a + 4..e], 16)
+        {
+            v.push(x);
+        }
+        i = e.max(a + 4);
+    }
+    v
+}
+
+/// Una voce della struttura: cio che il FILE dice che sia, non cio che sembra.
+#[derive(Clone, Copy)]
+enum Voce {
+    /// Parola rilocata: e un puntatore, e questo e il bersaglio.
+    Ptr(u64),
+    /// Zero non rilocato in mezzo a rilocazioni (offset-to-top di una vtable
+    /// Itanium): fa parte della struttura, ma non e un puntatore.
+    Zero,
+}
+
+/// Le voci di va, oppure None se non ce nulla da materializzare.
+///
+/// Tre clausole, ognuna per UNA domanda (validate sui dati al round 515):
+/// 1. confine: il simbolo off_ successivo nella griglia, col tetto;
+/// 2. cammino: voce rilocata, oppure zero SEGUITO da una rilocazione entro il
+///    confine;
+/// 3. stop: prima parola non rilocata e non nulla - e dato grezzo, non un
+///    puntatore. E cosi che un typeinfo si ferma prima del nome mangled.
+fn struttura_a(
+    va: u64,
+    oracle: &binary_entry::DataOracle,
+    griglia: &[u64],
+    tetto: usize,
+) -> Option<Vec<Voce>> {
+    let succ = griglia.iter().copied().find(|&x| x > va);
+    let nmax = succ
+        .map_or(tetto, |s| usize::try_from((s - va) / 8).unwrap_or(tetto))
+        .min(tetto);
+    let mut voci = Vec::new();
+    for i in 0..nmax {
+        let a = va + (i as u64) * 8;
+        let Some(q) = oracle.data_at(a, 8) else { break };
+        let w = u64::from_le_bytes(q.try_into().unwrap_or([0; 8]));
+        if oracle.is_relocated_ptr(a) {
+            voci.push(Voce::Ptr(w));
+            continue;
+        }
+        if w == 0 && i + 1 < nmax && oracle.is_relocated_ptr(a + 8) {
+            voci.push(Voce::Zero);
+            continue;
+        }
+        break;
+    }
+    while matches!(voci.last(), Some(Voce::Zero)) {
+        voci.pop(); // uno zero finale non appartiene alla struttura
+    }
+    // Serve almeno un PUNTATORE: una struttura di soli zeri non e una tabella.
+    voci.iter().any(|v| matches!(v, Voce::Ptr(_))).then_some(voci)
+}
+
+/// Emette la definizione di va e, ricorsivamente, dei bersagli DATO.
+///
+/// La ricorsione non e un abbellimento: materializzare la struttura ma NON i
+/// suoi bersagli sbloccherebbe il link lasciando una vtable che punta a
+/// indirizzi sbagliati - LINK_FAIL diventerebbe CRASH, perche total_area fa
+/// dispatch virtuale e quei puntatori li DEREFERENZIA.
+///
+/// Misurata PRIMA di scriverla: dalle 5 strutture bloccanti la chiusura ha
+/// 11 oggetti e profondita 1. Il tetto a 4 e una rete di sicurezza, non un
+/// limite operativo.
+#[allow(clippy::too_many_arguments)]
+fn emetti_struttura(
+    va: u64,
+    voci: &[Voce],
+    oracle: &binary_entry::DataOracle,
+    starts: &HashMap<u64, usize>,
+    extra: &std::collections::HashSet<u64>,
+    griglia: &[u64],
+    name_of: &dyn Fn(u64) -> Option<String>,
+    prof: usize,
+    maxprof: usize,
+    gia: &mut std::collections::BTreeSet<u64>,
+    coda: &mut Vec<String>,
+) {
+    if !gia.insert(va) {
+        return;
+    }
+    let mut init: Vec<String> = Vec::new();
+    let mut figli: Vec<(u64, Vec<Voce>)> = Vec::new();
+    for v in voci {
+        match *v {
+            Voce::Zero => init.push("0".to_string()),
+            Voce::Ptr(p) => {
+                if starts.contains_key(&p) || extra.contains(&p) {
+                    let n = definition_spelling(p, name_of);
+                    // #7570c - mai dichiarare un nome che la prelude dichiara
+                    // gia': `conflicting types`, misurato su 5 file
+                    // (`__p__fmode`, `_set_invalid_parameter_handler`, ...).
+                    // Il predicato esiste dal #7540b; qui non veniva
+                    // consultato — la stessa regola, di nuovo applicata da uno
+                    // solo dei punti che ne hanno bisogno.
+                    if !nome_dichiarato_dalla_prelude(&n) {
+                        coda.push(format!("__int64 {n}();"));
+                    }
+                    init.push(format!("(void *)&{n}"));
+                } else if prof + 1 < maxprof
+                    && let Some(sub) = struttura_a(p, oracle, griglia, 4096)
+                {
+                    init.push(format!("(void *)&off_{p:X}"));
+                    figli.push((p, sub));
+                } else {
+                    // Bersaglio non materializzabile: NON si inventa un
+                    // indirizzo. Zero, e la perdita e dichiarata nel testo.
+                    init.push("0 /* bersaglio non materializzato */".to_string());
+                }
+            }
+        }
+    }
+    for (p, sub) in figli {
+        if !gia.contains(&p) {
+            coda.push(format!("static void *off_{p:X}[{}];", sub.len()));
+        }
+        emetti_struttura(
+            p, &sub, oracle, starts, extra, griglia, name_of, prof + 1, maxprof, gia, coda,
+        );
+    }
+    coda.push(format!(
+        "static void *off_{va:X}[{}] = {{ {} }};",
+        voci.len(),
+        init.join(", ")
+    ));
+}
+
+/// ⚠ #7500 — `starts` NON basta: e' una mappa di ARITA', e i THUNK non ci sono.
+///
+/// `arities_from_seeds` esclude i thunk di import **di proposito** — il commento
+/// a `binary_entry.rs:1587` lo dice: «serve a NON inferire un'arita' da un corpo
+/// che non esiste». Giustissimo per le arita'. Ma `callee_arities` veniva usata
+/// anche come «insieme delle funzioni emesse», e per QUELLA domanda i thunk
+/// devono esserci: sono funzioni emesse a tutti gli effetti.
+///
+/// Conseguenza misurata su sample11_c: `sub_1400027c8.hlil.c` DEFINISCE
+/// `__set_app_type()`, e ogni chiamante dichiara e invoca `sub_1400027C8()` —
+/// mai rinominato, perche' l'indirizzo non e' nella mappa delle arita'.
+/// Risultato: **50 simboli irrisolti** in un bucket da 87 file, dominati da
+/// `sub_1400027XX`/`sub_1400028XX` spaziati di 8 byte (`FF 25 … 90 90`, cioe'
+/// `jmp *IAT` + padding: thunk da manuale).
+///
+/// `extra` porta `fn_starts` (#6970), l'insieme VERO degli inizi di funzione.
+/// Una mappa che risponde a due domande con requisiti OPPOSTI e' il difetto;
+/// questo parametro separa le due domande invece di allargare la mappa, perche'
+/// allargarla rimetterebbe i thunk fra le arita' inferibili.
+fn rename_hlil_definitions(
+    code: &str,
+    starts: &HashMap<u64, usize>,
+    extra: &std::collections::HashSet<u64>,
+    name_of: &dyn Fn(u64) -> Option<String>,
+) -> String {
+    if (starts.is_empty() && extra.is_empty()) || !code.contains("fn_") {
+        return code.to_string();
+    }
+    // Interno al programma: decorato (`__` interno) oppure lungo. Un nome di
+    // libreria C e' corto e senza decorazioni.
+    fn e_interno(n: &str) -> bool {
+        let corpo = n.trim_start_matches('_');
+        corpo.len() > 24 || corpo.contains("__")
+    }
+    let bytes = code.as_bytes();
+    let mut hits: Vec<(String, String)> = Vec::new();
+    let mut i = 0usize;
+    while let Some(rel) = code[i..].find("fn_") {
+        let at = i + rel;
+        let mut e = at + 3;
+        while e < bytes.len() && bytes[e].is_ascii_hexdigit() {
+            e += 1;
+        }
+        i = e;
+        if e == at + 3
+            || (at > 0 && is_word_char(bytes[at - 1]))
+            || (e < bytes.len() && is_word_char(bytes[e]))
+        {
+            continue;
+        }
+        let name = &code[at..e];
+        if hits.iter().any(|(h, _)| h == name) {
+            continue;
+        }
+        let Ok(va) = u64::from_str_radix(&code[at + 3..e], 16) else {
+            continue;
+        };
+        if !(starts.contains_key(&va) || extra.contains(&va)) {
+            continue;
+        }
+        let target = definition_spelling(va, name_of);
+        // `definition_spelling` ripiega su `fn_{va:x}`: se torna quello, non
+        // c e' un nome risolto e non c e' nulla da fare.
+        if target == name || !e_interno(&target) {
+            continue;
+        }
+        // #7540b: mai DEFINIRE un nome che la prelude dichiara gia'.
+        if nome_dichiarato_dalla_prelude(&target) {
+            continue;
+        }
+        // ⚠ Stessa guardia di `rename_hlil_sub_symbols`: se il testo DEFINISCE
+        // gia' quel nome, rinominare creerebbe due definizioni omonime.
+        if defines(code, &target) {
+            continue;
+        }
+        hits.push((name.to_string(), target));
+    }
+    if hits.is_empty() {
+        return code.to_string();
+    }
+    let mut out = code.to_string();
+    for (da, a) in &hits {
+        out = out.replace(da.as_str(), a.as_str());
+    }
+    // ⚠⚠ #6030, REGRESSIONE GIA' PAGATA UNA VOLTA in questa stessa catena
+    // (commento a `lib.rs:21495`): dopo il rename il file contiene la
+    // DEFINIZIONE col nome nuovo **e la sua forward DECLARATION**, emessa
+    // quando quel nome apparteneva al solo CHIAMATO. Firme diverse ⇒
+    // `conflicting types`.
+    //
+    // La guardia `defines(code, &target)` piu' sopra NON copre questo caso: una
+    // dichiarazione **non e' una definizione**, quindi passa. Trovato leggendo
+    // la passata vicina, non dalla pre-verifica sui nomi — che misurava QUALI
+    // nomi scegliere, non che cosa succede al file DOPO.
+    //
+    // La dichiarazione ora e' inutile per costruzione: il nome lo definisce
+    // questo stesso file.
+    let nomi: Vec<&str> = hits.iter().map(|(_, a)| a.as_str()).collect();
+    out.lines()
+        .filter(|line| {
+            let t = line.trim_end();
+            if !t.ends_with(';') {
+                return true;
+            }
+            !nomi.iter().any(|n| {
+                line.starts_with("__int64 ") && t.contains(&format!(" {n}("))
+                    || line.starts_with("void ") && t.contains(&format!(" {n}("))
+            })
+        })
+        .map(|l| format!("{l}
+"))
+        .collect()
+}
+
+/// ⚠ #7500 — `starts` NON basta: e' una mappa di ARITA', e i THUNK non ci sono.
+///
+/// `arities_from_seeds` esclude i thunk di import **di proposito** — il commento
+/// a `binary_entry.rs:1587` lo dice: «serve a NON inferire un'arita' da un corpo
+/// che non esiste». Giustissimo per le arita'. Ma `callee_arities` veniva usata
+/// anche come «insieme delle funzioni emesse», e per QUELLA domanda i thunk
+/// devono esserci: sono funzioni emesse a tutti gli effetti.
+///
+/// Conseguenza misurata su sample11_c: `sub_1400027c8.hlil.c` DEFINISCE
+/// `__set_app_type()`, e ogni chiamante dichiara e invoca `sub_1400027C8()` —
+/// mai rinominato, perche' l'indirizzo non e' nella mappa delle arita'.
+/// Risultato: **50 simboli irrisolti** in un bucket da 87 file, dominati da
+/// `sub_1400027XX`/`sub_1400028XX` spaziati di 8 byte (`FF 25 … 90 90`, cioe'
+/// `jmp *IAT` + padding: thunk da manuale).
+///
+/// `extra` porta `fn_starts` (#6970), l'insieme VERO degli inizi di funzione.
+/// Una mappa che risponde a due domande con requisiti OPPOSTI e' il difetto;
+/// questo parametro separa le due domande invece di allargare la mappa, perche'
+/// allargarla rimetterebbe i thunk fra le arita' inferibili.
+/// #7620 - la firma di `NOME` come definita in `code`: (parametri, ritorna_void).
+///
+/// Serve a decidere se una chiamata RICORSIVA si puo rinominare. Il bersaglio e
+/// definito nello stesso testo, quindi la sua firma e leggibile li.
+fn firma_definita(code: &str, nome: &str) -> Option<(usize, bool)> {
+    for l in code.lines() {
+        let t = l.trim_start();
+        if t.ends_with(';') {
+            continue;
+        }
+        let Some(pos) = t.find(nome) else { continue };
+        if pos == 0 {
+            continue; // niente tipo di ritorno davanti: non e una definizione
+        }
+        let prima = t.as_bytes()[pos - 1];
+        if prima != b' ' && prima != b'*' {
+            continue;
+        }
+        let dopo = &t[pos + nome.len()..];
+        let Some(resto) = dopo.strip_prefix('(') else { continue };
+        let Some(fine) = resto.find(')') else { continue };
+        let args = resto[..fine].trim();
+        let n = if args.is_empty() || args == "void" { 0 } else { args.matches(',').count() + 1 };
+        return Some((n, t.starts_with("void ")));
+    }
+    None
+}
+
+/// Quanti argomenti passa la chiamata a `NOME` sulla riga `l`.
+fn argomenti_alla_chiamata(l: &str, nome: &str) -> Option<usize> {
+    let pos = l.find(nome)?;
+    let resto = l[pos + nome.len()..].strip_prefix('(')?;
+    let fine = resto.find(')')?;
+    let a = resto[..fine].trim();
+    Some(if a.is_empty() { 0 } else { a.matches(',').count() + 1 })
+}
+
 fn rename_hlil_sub_symbols(
     code: &str,
     starts: &HashMap<u64, usize>,
+    extra: &std::collections::HashSet<u64>,
     name_of: &dyn Fn(u64) -> Option<String>,
 ) -> String {
-    if starts.is_empty() || !code.contains("sub_") {
+    if (starts.is_empty() && extra.is_empty()) || !code.contains("sub_") {
         return code.to_string();
     }
     let bytes = code.as_bytes();
@@ -10927,7 +12201,7 @@ fn rename_hlil_sub_symbols(
         let Ok(va) = u64::from_str_radix(&code[at + 4..e], 16) else {
             continue;
         };
-        if starts.contains_key(&va) {
+        if starts.contains_key(&va) || extra.contains(&va) {
             let target = definition_spelling(va, name_of);
             // A RECURSIVE call — the target is defined in this very text — must
             // keep the `sub_` spelling. Renaming it puts the call next to a real
@@ -10939,7 +12213,52 @@ fn rename_hlil_sub_symbols(
             // visible. Skipping keeps such files exactly as they were (still
             // unlinkable, no worse) instead of turning them into invalid C,
             // and leaves the real defect to be fixed where it is produced.
-            if target != name && !defines(code, &target) {
+            // #7620 - una chiamata RICORSIVA si rinomina quando la firma
+            // combacia.
+            //
+            // La motivazione storica sopra e SCADUTA in parte: diceva che i
+            // siti ricorsivi perdono gli argomenti, e quel difetto e chiuso
+            // (#7340). Ma non basta rimuovere la guardia — #7580 fu scritta
+            // cosi e il test `hlil_sub_symbols_skip_self_definition` la boccio,
+            // perche restano DUE casi in cui rinominare rompe il file:
+            //
+            //   - il bersaglio ritorna `void` e la chiamata ASSEGNA
+            //     (`void value not ignored as it ought to be`);
+            //   - il sito passa MENO argomenti dei parametri dichiarati
+            //     (`too few arguments`), che e il caso del test.
+            //
+            // Si rinomina quindi solo quando **entrambe** le condizioni sono
+            // soddisfatte: ritorno non-`void` e conteggio degli argomenti
+            // uguale a quello dei parametri. E il caso di `factorial`
+            // (c_sample6_O0), che era LINK_FAIL per un simbolo solo:
+            //     __int64 factorial(uint64_t a1)     definizione: 1 parametro
+            //     v2 = sub_14000152D(a1);            chiamata: 1 argomento
+            //
+            // Un file che compila e non linka non va trasformato in un file che
+            // non compila: e la ragione per cui la condizione e stretta.
+            let ok = if defines(code, &target) {
+                match firma_definita(code, &target) {
+                    // ⚠ La DICHIARAZIONE `__int64 sub_X();` contiene anch essa
+                    // `sub_X(` e ha ZERO argomenti: includerla faceva fallire
+                    // il confronto sempre, e la prima versione di #7620 era
+                    // **inerte**. Il sintomo era il conteggio: due occorrenze
+                    // di `sub_14000152D(` invece di una.
+                    Some((np, false)) => {
+                        let mut siti = code
+                            .lines()
+                            .map(str::trim_end)
+                            .filter(|l| l.contains(&format!("{name}(")))
+                            .filter(|l| !l.ends_with("();") || np == 0)
+                            .peekable();
+                        siti.peek().is_some()
+                            && siti.all(|l| argomenti_alla_chiamata(l, &name) == Some(np))
+                    }
+                    _ => false,
+                }
+            } else {
+                true
+            };
+            if target != name && ok {
                 hits.push((name.to_string(), target));
             }
         }
@@ -11458,25 +12777,620 @@ fn varsp_enabled() -> bool {
 /// un array locale con margine sui due lati, e `var_sp` che punta a meta'.
 /// Il margine serve perche' le `push` del prologo DECREMENTANO prima di
 /// scrivere, quindi si va sotto la base.
+/// #7340 — una chiamata RICORSIVA emessa con zero argomenti riceve gli
+/// argomenti che la sua stessa firma dichiara.
+///
+/// ## Il difetto
+///
+/// Path B emette la funzione a `0x140002E10` cosi':
+///
+/// ```c
+/// __int64 sub_140002E10();                        /* dichiarazione */
+/// __int64 d_find_pack(uint64_t a1, uint64_t a2)   /* DEFINIZIONE, 2 parametri */
+/// {   …
+///         a2 = *(__int64 *)(v1 + 16);             /* il 2o parametro e' PREPARATO */
+///         v2 = sub_140002E10();                   /* …e la chiamata ne passa ZERO */
+/// ```
+///
+/// Il C non se ne accorge finche' i due nomi restano diversi: vede due funzioni.
+/// Appena `RUSTRE_HLIL_RESOLVE` battezza anche il sito di chiamata, gcc dice la
+/// verita': `too few arguments to function 'd_find_pack'`.
+///
+/// ⇒ Il gate non ROMPE quei file: SMASCHERA un difetto che avevano gia'.
+///
+/// ## Perche' qui l'arita' NON e' un'euristica
+///
+/// `callee_arities` avverte — a ragione — che dedurre l'arita' da un
+/// read-before-written INVENTA parametri fantasma. Qui non si deduce nulla: il
+/// chiamato **e' la funzione che contiene la chiamata**, quindi la sua arita' e'
+/// la propria firma, nello stesso file. Verita' di base.
+/// E i valori da passare sono i **nomi dei propri parametri**, che nel punto di
+/// chiamata contengono esattamente cio' che i registri argomento contengono.
+///
+/// ⚠ Vale SOLO per la ricorsione DIRETTA. Applicare la stessa mossa a una
+/// chiamata verso un'altra funzione sarebbe l'euristica che la docstring di
+/// `callee_arities` proibisce, e li' il divieto resta valido in pieno.
+///
+/// ## Riconoscimento
+///
+/// L'auto-chiamata si riconosce per **due** grafie, perche' prima del battesimo
+/// definizione e sito di chiamata portano nomi diversi:
+/// - il nome della definizione (`d_find_pack()`), e
+/// - `sub_{indirizzo}` con l'indirizzo della funzione (`sub_140002E10()`).
+///
+/// Misurato sul corpus: 4 casi in `sample7_cpp` — gli stessi 4 che gcc rifiuta,
+/// il che valida la sonda contro il compilatore.
+fn recursive_call_args(code: &str, address: u64, enabled: bool) -> String {
+    if !enabled || !code.contains("()") {
+        return code.to_string();
+    }
+    let righe: Vec<&str> = code.lines().collect();
+    // La DEFINIZIONE: prima riga che apre un corpo (la successiva inizia con `{`).
+    let mut nome = String::new();
+    let mut params: Vec<String> = Vec::new();
+    for (i, l) in righe.iter().enumerate() {
+        if righe.get(i + 1).is_none_or(|n| !n.starts_with('{')) {
+            continue;
+        }
+        let Some(ap) = l.find('(') else { continue };
+        let Some(cp) = l.rfind(')') else { continue };
+        if cp < ap {
+            continue;
+        }
+        let testa = &l[..ap];
+        let Some(n) = testa.rsplit([' ', '*']).find(|s| !s.is_empty()) else { continue };
+        if !n.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
+            continue;
+        }
+        nome = n.to_string();
+        params = l[ap + 1..cp]
+            .split(',')
+            .filter_map(|a| {
+                let a = a.trim();
+                (!a.is_empty() && a != "void")
+                    .then(|| a.rsplit([' ', '*']).find(|s| !s.is_empty()).unwrap_or("").to_string())
+            })
+            .filter(|s| !s.is_empty())
+            .collect();
+        break;
+    }
+    if nome.is_empty() || params.is_empty() {
+        return code.to_string();
+    }
+    let argomenti = params.join(", ");
+    let per_indirizzo = format!("sub_{address:X}");
+    let mut out = String::with_capacity(code.len() + 64);
+    for (i, l) in righe.iter().enumerate() {
+        // La riga della DEFINIZIONE non si tocca, e nemmeno le dichiarazioni
+        // (`tipo nome();`), che restano legali e servono al forward-declare.
+        let e_definizione = righe.get(i + 1).is_some_and(|n| n.starts_with('{'));
+        let e_dichiarazione = l.trim_end().ends_with(");") && !l.contains('=');
+        if e_dichiarazione {
+            // #7340b — la funzione NON deve dichiarare SE STESSA.
+            //
+            // Residuo misurato dopo il fix dell'arita': 1 file su 60, e la
+            // causa e' un'altra sotto-classe — il TIPO DI RITORNO, non gli
+            // argomenti:
+            //
+            //     __int64 d_count_templates_scopes();              /* decl */
+            //     void    d_count_templates_scopes(uint64_t, …)    /* DEF  */
+            //
+            // `conflicting types`. La dichiarazione e' costruita da una passata
+            // che non conosce il tipo di ritorno vero e ripiega su `__int64`.
+            //
+            // La cura non e' indovinare quel tipo: e' **togliere la
+            // dichiarazione**. In C una funzione puo' chiamare se stessa senza
+            // forward-declare — la sua intestazione l'ha gia' dichiarata. Una
+            // auto-dichiarazione non aggiunge nulla e puo' solo contraddire la
+            // definizione che la segue.
+            // ⚠ SOLO il nome della DEFINIZIONE, mai la grafia `sub_{indirizzo}`.
+            //
+            // Difetto trovato provando il fix (e non previsto): quando la
+            // funzione e' gia' battezzata, `d_count_templates_scopes` e
+            // `sub_140002950` sono nomi DIVERSI. La dichiarazione
+            // `__int64 sub_140002950();` non e' un'auto-dichiarazione
+            // ridondante: e' cio' che DICHIARA il simbolo che la chiamata usa.
+            // Toglierla lasciava `sub_140002950(a1, a2)` senza dichiarazione —
+            // una dichiarazione implicita in piu', cioe' un peggioramento della
+            // classe che CLAUDE.md misura al 28%.
+            //
+            // Con il gate acceso i due nomi coincidono e la rimozione torna
+            // corretta; senza gate, la riga va lasciata dov'e'.
+            let dichiara_se_stessa =
+                l.contains(&format!("{nome}(")) && l.trim_end().ends_with(");");
+            // ⚠ #7520 — «una funzione non ha bisogno di dichiarare se stessa» e'
+            if dichiara_se_stessa {
+                continue;
+            }
+        }
+        if e_definizione || e_dichiarazione {
+            out.push_str(l);
+            out.push_str("
+");
+            continue;
+        }
+        let mut r = l.to_string();
+        for grafia in [nome.as_str(), per_indirizzo.as_str()] {
+            let vuota = format!("{grafia}()");
+            if r.contains(&vuota) {
+                r = r.replace(&vuota, &format!("{grafia}({argomenti})"));
+            }
+        }
+        out.push_str(&r);
+        out.push_str("
+");
+    }
+    out
+}
+/// L offset positivo piu grande a cui il corpo accede a partire da `nome`.
+///
+/// #7370 - il frame sintetico era dimensionato sul solo `frame_size` dedotto dal
+/// prologo, ma il corpo puo accedere OLTRE: misurati **131 file di path A e 9 di
+/// path B** che dichiarano `char X_frame[N]` e poi scrivono a `X + K` con `K`
+/// oltre la fine. Sono scritture fuori dall oggetto: il compilatore non le vede
+/// (l indirizzo e passato per intero) e **nessuna metrica statica le vede**.
+///
+/// Allargare e sicuro, MISURATO e non supposto: l eccesso ha mediana **32
+/// byte**, minimo 8, massimo 8008; nessuno oltre i 64 KB e solo 4 oltre 4096.
+/// Non esiste l offset patologico che avrebbe imposto un tetto - cercato PRIMA
+/// di scrivere la cura, non dopo.
+///
+/// La formula era duplicata in due punti (`seed_var_sp` per B,
+/// `declare_bare_frame_regs` per A) e con essa il difetto: correggerne uno solo
+/// lascerebbe i test verdi e meta dei file rotti.
+fn max_offset_osservato(code: &str, nome: &str) -> u32 {
+    let mut mx = 0u32;
+    let ago = format!("{nome} + ");
+    let b = code.as_bytes();
+    let mut base = 0usize;
+    while let Some(p) = code[base..].find(&ago) {
+        let at = base + p;
+        // Il carattere prima deve NON essere un identificatore, altrimenti
+        // cercando `sp + ` si conterebbero anche i `var_sp + N`.
+        let prima_ok = at == 0 || !(b[at - 1].is_ascii_alphanumeric() || b[at - 1] == b'_');
+        let dopo = at + ago.len();
+        let cifre: String = code[dopo..].chars().take_while(|c| c.is_ascii_digit()).collect();
+        if prima_ok && !cifre.is_empty() {
+            if let Ok(v) = cifre.parse::<u32>() {
+                mx = mx.max(v);
+            }
+        }
+        base = dopo;
+    }
+    mx
+}
+
+
+/// #7710 - quanto il prologo SPOSTA IN BASSO il puntatore di frame.
+///
+/// `max_offset_osservato` guarda solo gli offset POSITIVI e testuali
+/// (`{nome} + N`), quindi copre la direzione SOPRA la base - quella chiusa da
+/// #7370. Questa copre la direzione SOTTO, che nessuno guardava: un
+/// `sp = (sp - N);` sposta la base, e ogni accesso successivo, anche scritto
+/// con un offset positivo, cade PIU' IN BASSO dell'array.
+///
+/// Ritorna il massimo scostamento CUMULATIVO verso il basso: si segue la
+/// catena `sp = sp +/- N` in ordine testuale e si tiene il minimo raggiunto.
+/// Non e' il singolo `- N` piu' grande - prologhi che allocano in due tempi
+/// sommano, ed epiloghi che ripristinano vanno sottratti.
+///
+/// MISURATO su `behav/out` PRIMA di scrivere la cura: 1341 file di path B
+/// accedono sotto l'array, e `SLACK + max_alloc` li ripara tutti e 1341,
+/// residuo ZERO. Mediana di `max_alloc` 576 byte, massimo 20216.
+///
+/// ATTENZIONE: il difetto NON e' condiviso con path A, malgrado la formula sia
+/// duplicata: `declare_bare_frame_regs` non ha nulla da correggere perche'
+/// path A non emette affatto l'allocazione (0 file su 35626 contengono
+/// `rsp = rsp - N`; l'unica riassegnazione e' `rsp = str + 8`). Toccarlo
+/// sarebbe lavoro inerte su una popolazione di 2.
+fn max_alloc_osservato(code: &str, nome: &str) -> u32 {
+    let mut cur: i64 = 0;
+    let mut minimo: i64 = 0;
+    for riga in code.lines() {
+        let t = riga.trim();
+        let Some(resto) = t.strip_prefix(nome) else { continue };
+        let resto = resto.trim_start();
+        let Some(resto) = resto.strip_prefix('=') else { continue };
+        let resto = resto.trim_start().trim_start_matches('(').trim_start();
+        let Some(resto) = resto.strip_prefix(nome) else { continue };
+        let resto = resto.trim_start();
+        let (segno, resto) = match resto.as_bytes().first() {
+            Some(b'-') => (-1i64, &resto[1..]),
+            Some(b'+') => (1i64, &resto[1..]),
+            _ => continue,
+        };
+        let cifre: String =
+            resto.trim_start().chars().take_while(char::is_ascii_digit).collect();
+        if cifre.is_empty() {
+            continue;
+        }
+        if let Ok(v) = cifre.parse::<i64>() {
+            cur += segno * v;
+            minimo = minimo.min(cur);
+        }
+    }
+    u32::try_from(-minimo).unwrap_or(u32::MAX)
+}
+
+/// #7750 - il thunk IAT di path B, risolto come lo risolve path A.
+///
+/// Stessa funzione, stesso indirizzo, `rust3_O0/sub_140099038`:
+///
+/// | | |
+/// |---|---|
+/// | path A | `NtWriteFile();` |
+/// | path B | `return ((__int64 (*)())(*(__int64 *)__imp_NtWriteFile))();` |
+///
+/// Path B si ferma UN PASSO prima: ha risolto l'indirizzo fino al nome
+/// `__imp_NAME` ma non compie l'ultimo passo verso `NAME()`. E' la stessa
+/// conversione che `resolve_symbols` esegue su path A (ramo
+/// `JUMPOUT(off_X);` -> `return Sleep();`), che li' non combacia perche' la
+/// grafia e' `__imp_NAME` invece di `off_HEX` - il residuo che #7340 aveva
+/// gia' annotato.
+///
+/// MISURATO sui 38 bucket rigenerati: **2548** file con questa forma, **311**
+/// import distinti. Blocca il LINK, perche' nulla definisce `__imp_NAME`
+/// (`accumulate` e `find_max` in `rust3_O0` sono LINK_FAIL proprio per
+/// `__imp_NtWriteFile` e compagni).
+///
+/// L'oracolo esiste e non serve inventare la semantica: path A emette gia' la
+/// forma giusta e LINKA. Il nome nudo si risolve contro la libreria di import
+/// esattamente come li'.
+///
+/// ⚠ NON tocca la seconda forma, il CARICAMENTO
+/// `v5 = *(__int64 *)(__int64)&__imp_Sleep;` (2793 occorrenze): e' un indirizzo
+/// preso, non una chiamata, e va valutata a parte. Una passata che ne copre
+/// due meta' diverse e' impossibile da attribuire quando la misura si muove.
+pub(crate) fn resolve_iat_thunks_hlil(code: &str) -> String {
+    // #7750c - la GRAFIA DEL TIPO, e una sonda per smettere di indovinare.
+    //
+    // Due versioni sono uscite INERTI (2548 -> 2548, misurato due volte). La
+    // v1 cercava solo la forma col cast; la v2 accettava entrambe le code ma
+    // pretendeva ancora `*(__int64 *)`. Path B pero' parla `uint64_t` - e' il
+    // 94,1% dei suoi parametri - e il `__int64` che si legge nel file FINALE
+    // e' il prodotto di una normalizzazione successiva.
+    //
+    // Quindi non si fissa piu' nessun tipo: si parte da `__imp_`, si risale a
+    // sinistra su un `*(<qualunque tipo> *)` e si guarda la coda a destra.
+    //
+    // `RUSTRE_DBG_IAT=1` stampa quante forme sono state viste e trasformate:
+    // con due misure inerti alle spalle, una sonda vale piu' di una terza
+    // ipotesi.
+    if !code.contains("__imp_") {
+        return code.to_string();
+    }
+    let dbg = std::env::var("RUSTRE_DBG_IAT").is_ok_and(|v| v != "0");
+    let mut visti = 0usize;
+    let mut fatti = 0usize;
+    let mut usati: Vec<String> = Vec::new();
+    let mut out = String::with_capacity(code.len());
+    let mut resto = code;
+    while let Some(at) = resto.find("__imp_") {
+        let dopo = &resto[at + "__imp_".len()..];
+        let fine = dopo
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(dopo.len());
+        let nome = &dopo[..fine];
+        let coda = &dopo[fine..];
+        visti += 1;
+        // Coda: `)()` senza cast esterno, `))()` con.
+        let (avanza, con_cast) = if coda.starts_with("))()") {
+            (4usize, true)
+        } else if coda.starts_with(")()") {
+            (3usize, false)
+        } else {
+            out.push_str(&resto[..at + "__imp_".len()]);
+            resto = dopo;
+            continue;
+        };
+        // Testa: `… *(<tipo> *)` immediatamente prima del nome.
+        let testa = &resto[..at];
+        let Some(k) = testa.rfind("*(") else {
+            out.push_str(&resto[..at + "__imp_".len()]);
+            resto = dopo;
+            continue;
+        };
+        let dentro = &testa[k + 2..];
+        // Fra `*(` e il nome ci dev'essere SOLO un tipo e `*)`.
+        if !dentro.ends_with("*)")
+            || dentro[..dentro.len() - 2]
+                .chars()
+                .any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == ' '))
+        {
+            out.push_str(&resto[..at + "__imp_".len()]);
+            resto = dopo;
+            continue;
+        }
+        // ⚠ Due difetti trovati DAI TEST, non dalla rilettura.
+        //
+        // 1) Senza cast la forma e' `(*(<tipo> *)__imp_N)()`: la parentesi
+        //    aperta prima di `*` fa parte del costrutto e va tolta, altrimenti
+        //    esce `x = (exit();` - sbilanciata, e compila per caso solo se
+        //    qualcosa la richiude.
+        // 2) Se la coda dice «col cast» ma il prefisso del cast NON c'e', la
+        //    forma non e' quella attesa e va RIFIUTATA. La versione precedente
+        //    proseguiva lo stesso e produceva `x = (Foo();`.
+        let mut prima = &testa[..k];
+        if con_cast {
+            let Some(p2) = prima.rfind("((").filter(|&p2| prima[p2..].contains("(*)()")) else {
+                out.push_str(&resto[..at + "__imp_".len()]);
+                resto = dopo;
+                continue;
+            };
+            prima = &prima[..p2];
+        } else {
+            let Some(k2) = prima.strip_suffix('(') else {
+                out.push_str(&resto[..at + "__imp_".len()]);
+                resto = dopo;
+                continue;
+            };
+            prima = k2;
+        }
+        // #7760 - ALIAS ASM: un nostro nome che non puo' confliggere.
+        //
+        // Le due forme precedenti fallivano in modo OPPOSTO e nessuna
+        // aggirava il prerequisito (misurato, compile failures da 45):
+        //
+        //   `NAME()`               -> 283, `too few arguments` sulle CRT
+        //   `((T(*)())NAME)()`     -> 957, `undeclared` sulle altre
+        //
+        // Misurato anche il perche' non basta una lista: dei 323 nomi, **32**
+        // sono gia' dichiarati dal preludio (tutte CRT: `exit`, `free`,
+        // `calloc`, `abort`, … - il preludio non include `stdlib.h` ma su
+        // mingw `<emmintrin.h>` lo tira dentro per `_mm_malloc`), e il DB
+        // `LibrarySignatureDb` ne copre **ZERO**: contiene simboli unwind e
+        // libgcc, non CRT. Quindi non esiste in casa un discriminante.
+        //
+        // La soluzione toglie il problema invece di classificarlo: si dichiara
+        // un identificatore NOSTRO con un'etichetta asm che punta al simbolo
+        // vero.
+        //
+        //     extern __int64 rustre_imp_Sleep(void) __asm__("Sleep");
+        //     … ((__int64 (*)())rustre_imp_Sleep)() …
+        //
+        // Nessun conflitto e' possibile - il nome non e' quello dichiarato da
+        // alcuna intestazione - e il linker risolve `Sleep` come sempre.
+        // VERIFICATO con gcc su tutti e tre i casi: una CRT gia' dichiarata
+        // (`exit`), una WinAPI (`Sleep`), una NT (`NtWriteFile`): compila E
+        // linka.
+        //
+        // #7750e - si chiama ATTRAVERSO IL PUNTATORE, non per nome.
+        //
+        // La v4 emetteva `NAME()`. Misurato: **+238 compile failures** su 20
+        // bucket su 20. Causa provata con gcc, non dedotta:
+        //
+        //     return exit();
+        //     error: too few arguments to function 'exit'; expected 1, have 0
+        //
+        // Le CRT hanno prototipi VERI nelle intestazioni, e una chiamata senza
+        // argomenti li viola. Non era il tipo di ritorno `void`, come avevo
+        // supposto: era l'ARITA'.
+        //
+        // La forma col puntatore compila per tutte - verificato su `exit`,
+        // `free` e un simbolo dichiarato implicitamente - ed e' anche la
+        // traduzione FEDELE del thunk originale, che fa `jmp [__imp_X]`:
+        // salta a X e il valore di ritorno di X diventa quello del thunk.
+        out.push_str(prima);
+        out.push_str("((__int64 (*)())rustre_imp_");
+        out.push_str(nome);
+        out.push_str(")()");
+        usati.push(nome.to_string());
+        fatti += 1;
+        resto = &coda[avanza..];
+    }
+    out.push_str(resto);
+    // Le dichiarazioni in testa, deduplicate e in ordine stabile: un ordine
+    // dipendente dall'hash renderebbe due esecuzioni diverse a parita' di
+    // ingresso, e un `diff -rq` fra snapshot smetterebbe di essere una prova.
+    if !usati.is_empty() {
+        usati.sort_unstable();
+        usati.dedup();
+        // ── #8000: ritirare l'`extern __imp_X;` che questa passata ha appena
+        // reso orfano ────────────────────────────────────────────────────────
+        //
+        // Catena, misurata: il corpo conteneva `__imp_X`, qualcuno lo dichiaro'
+        // (LEGITTIMO in quel momento), poi la riscrittura qui sopra ha
+        // sostituito l'uso con `((__int64 (*)())rustre_imp_X)()`. Da quel
+        // momento `__imp_X` non e' piu' riferito e la dichiarazione resta.
+        //
+        // MISURATO su `runs/pathb_first`: **310 righe** cosi', e il **100%**
+        // delle dichiarazioni mai usate di path B ha questa forma, in tutti e
+        // 12 i bucket (path A: zero). Distribuzione coerente: C/C++ 21-22%,
+        // Rust 4%, C#/Go 0% — questi ultimi non hanno thunk IAT e non
+        // attivano la riscrittura.
+        //
+        // ⚠ NON si possono togliere tutti gli `extern __imp_`: su `sample1`,
+        // **38 file** ne hanno uno e solo **31** sono stati riscritti. Nei
+        // restanti **7** il nome e' ancora USATO, e rimuoverlo romperebbe la
+        // compilazione. Per questo il taglio e' doppiamente ristretto:
+        //   1. solo i nomi in `usati` — quelli che QUESTA passata ha riscritto;
+        //   2. e solo se `__imp_X` non compare piu' nel testo dopo la
+        //      riscrittura — verifica diretta, non deduzione.
+        let mut ritirate = 0usize;
+        for n in &usati {
+            let decl = format!("extern __int64 __imp_{n};");
+            if !out.contains(&decl) {
+                continue;
+            }
+            let senza_decl = out.replace(&format!("{decl}
+"), "");
+            let token = format!("__imp_{n}");
+            // Il nome compare ancora ALTROVE (oltre alle dichiarazioni tolte)?
+            // Allora la dichiarazione serve e resta.
+            if senza_decl.contains(&token) {
+                continue;
+            }
+            out = senza_decl;
+            ritirate += 1;
+        }
+        if dbg && ritirate > 0 {
+            eprintln!("[imp] dichiarazioni orfane ritirate: {ritirate}");
+        }
+        let mut testa = String::new();
+        for n in &usati {
+            if !out.contains(&format!("rustre_imp_{n}(void)")) {
+                testa.push_str(&format!(
+                    "extern __int64 rustre_imp_{n}(void) __asm__(\"{n}\");
+"
+                ));
+            }
+        }
+        testa.push_str(&out);
+        out = testa;
+    }
+    if dbg && visti > 0 {
+        eprintln!("[iat] __imp_ visti={visti} trasformati={fatti}");
+        if fatti == 0 {
+            for l in code.lines() {
+                if l.contains("__imp_") && !l.trim_start().starts_with("extern") {
+                    eprintln!("[iat] NON TRASFORMATA: {}", l.trim());
+                }
+            }
+        }
+    }
+    out
+}
 fn seed_var_sp(code: &str, frame_size: u32, enabled: bool) -> String {
     if !enabled {
         return code.to_string();
     }
     const SLACK: u32 = 256;
+    // #7110 — il nome e' cambiato sotto i piedi alla passata.
+    //
+    // Questa funzione cercava SOLO `var_sp`, ma la rinominazione basata
+    // sull'uso lo stampa ormai come **`sp`**, e da allora la passata non
+    // trovava piu' nulla. MISURATO sullo snapshot corrente: **9036** file
+    // dichiarano `uint64_t sp;` e in **9017 (99,8%)** non e' mai
+    // inizializzata; 2853 fanno anche `fp = sp`, propagando il valore
+    // indefinito al frame pointer.
+    //
+    // E' il difetto dietro i CRASH di `behavior.py`. Caso di controllo
+    // perfetto: `accumulate` CRASHA in `cpp_sample2_O0` e AGREE in `O2` — e la
+    // versione O0 apre proprio cosi':
+    //     uint64_t sp;            <- mai inizializzata
+    //     fp = sp;                <- copia il garbage
+    //     *(__int64 *)(fp + 16) = a1;   <- scrive a un indirizzo casuale
+    // mentre la O2, senza frame pointer, non tocca `sp` e funziona.
+    //
+    // `fp` non serve trattarlo: prende il suo valore da `sp`, quindi seminare
+    // `sp` lo sistema per costruzione.
+    // #7290 — `sp` va seminata se la funzione la USA e nessuno la
+    // INIZIALIZZA.
+    //
+    // Sostituisce sia il vecchio `ha_forma_di_frame` (che cercava tre forme
+    // testuali) sia la condizione «usata come base e mai assegnata» (#7280).
+    // Misurate tre lacune, tutte chiuse da questa regola sola:
+    //
+    //  1. **1051 file** con `sp = (sp + N);` — l'EPILOGO di un frame. Aggiorna
+    //     `sp` LEGGENDOLA: se nessuno l'ha inizializzata resta spazzatura, ma
+    //     il test «mai assegnata» la vedeva come assegnata e saltava la semina.
+    //     ⚠ E `sp = (sp - N)` era gia' in `ha_forma_di_frame` e SEMINAVA: le due
+    //     meta' dello stesso frame trattate in modo opposto.
+    //  2. **123 file** con `vN = sp;` — letta e copiata, mai dereferenziata:
+    //     il test «usata come base» non la vedeva.
+    //  3. **15 file** con `*(__int64 *)((sp) + 8) = a1;` — parentesi in piu',
+    //     e il pattern `(sp + ` non combaciava.
+    //
+    // La regola: un `sp = <expr>` INIZIALIZZA solo se `<expr>` non nomina `sp`.
+    // Un aggiornamento auto-referenziale (`sp + N`, `sp - N`) non inizializza
+    // nulla, quindi non protegge dalla spazzatura.
+    //
+    // ⚠ Il confine di parola e' indispensabile: `sp_frame`, `var_sp` e `_sp`
+    // contengono `sp` ma sono altre variabili — e uno di loro e' proprio cio'
+    // che questa passata EMETTE, quindi senza il confine si auto-riconoscerebbe.
+    let nomina_sp = |s: &str| -> bool {
+        let b = s.as_bytes();
+        let mut i = 0;
+        while let Some(p) = s[i..].find("sp") {
+            let a = i + p;
+            let prima_ok = a == 0 || !(b[a - 1].is_ascii_alphanumeric() || b[a - 1] == b'_');
+            let dopo = a + 2;
+            let dopo_ok =
+                dopo >= b.len() || !(b[dopo].is_ascii_alphanumeric() || b[dopo] == b'_');
+            if prima_ok && dopo_ok {
+                return true;
+            }
+            i = a + 2;
+        }
+        false
+    };
+    let mut usata = false;
+    let mut inizializzata = false;
+    for l in code.lines() {
+        let s = l.trim();
+        if s == "uint64_t sp;" || s == "__int64 sp;" {
+            continue;
+        }
+        if let Some(rhs) = s.strip_prefix("sp = ")
+            && !nomina_sp(rhs)
+        {
+            inizializzata = true;
+        }
+        if nomina_sp(s) {
+            usata = true;
+        }
+    }
+    let ha_forma_di_frame = usata && !inizializzata;
     let mut out = String::with_capacity(code.len() + 128);
     let mut fatto = false;
     for line in code.lines() {
         let t = line.trim();
-        if !fatto
-            && (t == "uint64_t var_sp;" || t == "__int64 var_sp;" || t == "uint64_t var_sp ;")
-        {
+        let e_var_sp =
+            t == "uint64_t var_sp;" || t == "__int64 var_sp;" || t == "uint64_t var_sp ;";
+        // ⚠ `sp` e' un nome breve e potrebbe appartenere a una variabile
+        // qualunque: lo si accetta SOLO se il corpo ha la forma di un frame
+        // (`fp = sp;` oppure `sp = (sp - N)`), che nessun uso ordinario ha.
+        let e_sp = (t == "uint64_t sp;" || t == "__int64 sp;") && ha_forma_di_frame;
+        if !fatto && (e_var_sp || e_sp) {
+            let nome = if e_var_sp { "var_sp" } else { "sp" };
             let indent = &line[..line.len() - line.trim_start().len()];
-            let total = frame_size.saturating_add(2 * SLACK);
+            // #7370: il corpo puo accedere oltre `frame_size`; la formula e
+            // duplicata nei due path e lo era anche il difetto.
+            let usato = max_offset_osservato(code, nome);
+            // #7710 - l'allocazione del prologo sposta la base VERSO IL BASSO.
+            //
+            // #7720 - DUE fonti, e serve il massimo delle due.
+            //
+            // ATTENZIONE, commento CORRETTO dopo la misura: la motivazione
+            // originale di questo fix era FALSA. Diceva che 22357 file (i
+            // bucket C#) contenevano `sp = (sp - N)` nel testo finale con la
+            // base non abbassata, e ne deduceva un problema d'ORDINE fra
+            // passate. Quei file erano **output stale**: i 6 bucket `*_lib`
+            // non vengono rigenerati da `regen_behav.sh` (sono DLL senza
+            // `.exe`) e non avevano mai visto il fix. Il fenomeno non esiste.
+            //
+            // Il merito REALE di questa riga, misurato sui soli bucket
+            // effettivamente rigenerati: **128** file in cui la base scende
+            // grazie al disassemblato pur non essendoci alcuna allocazione nel
+            // testo. Piccolo, ma corretto e non ridondante.
+            //
+            // `max_alloc_osservato` legge il TESTO gia' emesso, quindi vede
+            // solo le allocazioni che le passate precedenti hanno gia'
+            // scritto; copre pero' quelle oltre le prime 32 istruzioni o dopo
+            // una `call`, che `prologue_frame_size` taglia.
+            //
+            // `frame_size` invece viene dal DISASSEMBLATO
+            // (`prologue_frame_size`, i `sub rsp, N` decodificati), quindi non
+            // dipende dall'ordine delle passate. Era gia' disponibile e gia'
+            // passata qui: serviva a DIMENSIONARE l'array e non ha mai
+            // ABBASSATO la base - l'informazione c'era, applicata alla
+            // dimensione sbagliata.
+            //
+            // Le due fonti sono COMPLEMENTARI, non alternative: il testo vede
+            // le allocazioni oltre le prime 32 istruzioni o dopo una `call`
+            // (che `prologue_frame_size` taglia), il disassemblato vede quelle
+            // non ancora emesse. Si prende il massimo.
+            let giu = max_alloc_osservato(code, nome).max(frame_size);
+            let base = SLACK.saturating_add(giu);
+            let total = frame_size
+                .max(usato)
+                .saturating_add(2 * SLACK)
+                .saturating_add(giu);
             out.push_str(&format!(
-                "{indent}char var_sp_frame[{total}] __attribute__((aligned(16)));\n"
+                "{indent}char {nome}_frame[{total}] __attribute__((aligned(16)));\n"
             ));
             out.push_str(&format!(
-                "{indent}uint64_t var_sp = (uint64_t)(var_sp_frame + {SLACK});\n"
+                "{indent}uint64_t {nome} = (uint64_t)({nome}_frame + {base});\n"
             ));
             fatto = true;
             continue;
@@ -11549,7 +13463,10 @@ fn declare_bare_frame_regs(code: &str, frame_size: u32) -> String {
                 // the object; the base is `SLACK` in so `rsp + K` for
                 // `0 <= K < frame_size` lands at the right offset.
                 const SLACK: u32 = 64;
-                let total = frame_size.saturating_add(2 * SLACK);
+                // #7370: il corpo puo accedere oltre `frame_size`; la formula e
+                // duplicata nei due path e lo era anche il difetto.
+                let usato = max_offset_osservato(code, "rsp");
+                let total = frame_size.max(usato).saturating_add(2 * SLACK);
                 format!(
                     "{indent}char rsp_frame[{total}] __attribute__((aligned(16)));\n\
                      {indent}__int64 rsp = (__int64)(rsp_frame + {SLACK});"
@@ -12239,8 +14156,7 @@ fn append_missing_tail_return(code: &str) -> String {
     };
     let mut out: Vec<String> = lines.iter().map(|l| (*l).to_string()).collect();
     out.insert(idx, format!("{indent}return {lhs};"));
-    let mut joined = out.join("
-");
+    let mut joined = out.join("\n");
     if code.ends_with('\n') {
         joined.push('\n');
     }
@@ -12498,6 +14414,34 @@ fn data_symbol_definitions(
     // l'indirizzo giusto E indicizzarci dentro e' lecito, che e' esattamente
     // l'uso da base di tabella. Uno scalare da 8 byte non lo permetterebbe.
     const ARRAY_BYTES: usize = 64;
+    /// Ampiezza massima su cui la guardia #6470 giudica: oltre, i byte sono del
+    /// VICINO. 32 perche' il colpevole di una tabella vera sta entro +0x18 nel
+    /// **94%** dei casi misurati.
+    const LIMITE_DOMINIO: usize = 32;
+    // #7380 - la guardia #6470 deve giudicare i byte che appartengono a QUESTO
+    // simbolo, non anche quelli del VICINO.
+    //
+    // Misurato sui byte (sample7_cpp): `off_14002D118` e `off_14002D120` sono un
+    // mutex e un rwlock winpthreads di ~32 byte in `.data`. La finestra fissa di
+    // 64 byte arriva a `0x14002D158` e cattura un puntatore che vive a
+    // `0x14002D150`, cioe' in un OGGETTO VICINO. La guardia rifiuta tutto, i due
+    // simboli restano `extern`, e `string_map_demo` e `total_area` non linkano.
+    // Guardia giusta, DOMINIO sbagliato: giudica 64 byte e ne possiede ~32.
+    //
+    // ⚠ Popolazione misurata PRIMA di scrivere la cura, su 230 simboli rifiutati
+    // in 5 bucket: **87,8% ha il colpevole al primo qword** (tabelle VERE, e
+    // rifiutarle e' cio' che evita i CRASH di #6470), e solo il **6,1%** ce l ha
+    // oltre i 32 byte. La cura NON vale il fronte: vale quel 6%. Restringere il
+    // dominio non tocca l 88%, perche' il loro colpevole sta a offset 0.
+    //
+    // Il confine e' il PROSSIMO simbolo nominato nello stesso file: se esiste un
+    // `off_Y` con `Y > X`, i byte da `Y` in poi appartengono a Y, non a X.
+    let mut altri: Vec<u64> = vars
+        .iter()
+        .filter_map(|n| n.strip_prefix("off_"))
+        .filter_map(|h| u64::from_str_radix(h, 16).ok())
+        .collect();
+    altri.sort_unstable();
     for name in vars {
         let Some(hex) = name.strip_prefix("off_") else { continue };
         let Ok(va) = u64::from_str_radix(hex, 16) else { continue };
@@ -12510,6 +14454,12 @@ fn data_symbol_definitions(
         // simboli ancora `extern` (124 su 264), il gruppo piu' grosso.
         let kind = oracle.section_kind(va);
         let bss = matches!(kind, binary_entry::SectionKind::Bss);
+        // Sonda a effetto ZERO (`RUSTRE_DBG_DATAKIND`): perche il 96% dei dati
+        // dichiarati extern resta non definito, se i byte sono nell immagine?
+        // Si conta il motivo dello scarto invece di dedurlo.
+        if std::env::var("RUSTRE_DBG_DATAKIND").is_ok() {
+            eprintln!("[datakind] {name} kind={kind:?} addrof={addrof}");
+        }
         if !matches!(kind, binary_entry::SectionKind::Init) && !(bss && addrof) {
             continue;
         }
@@ -12546,8 +14496,46 @@ fn data_symbol_definitions(
             // E' la stessa ragione per cui #5700 esclude le basi di tabella,
             // ma quel filtro guarda `tables` e questa tabella NON vi compare
             // (non risolta come jump table) ⇒ serve il test SUI BYTE.
+            // #7380: il dominio della guardia si ferma al prossimo simbolo.
+            let confine = altri
+                .iter()
+                .copied()
+                .find(|&o| o > va)
+                // #7380b: senza un simbolo successivo il file non porta
+                // informazione sul confine, e la v1 lasciava 64 - cioe' non
+                // correggeva proprio l ULTIMO simbolo della sequenza, che e'
+                // il caso di `off_14002D120`.
+                //
+                // Il ripiego e' 32 byte, e il numero viene dalla POPOLAZIONE
+                // misurata (230 simboli rifiutati, 5 bucket): il colpevole sta
+                // a +0x00 nell **87,8%** dei casi e entro +0x18 nel **94%**.
+                // Giudicare i primi 32 byte riconosce quindi 216 tabelle vere
+                // su 230 e lascia passare esattamente la classe di coda (14)
+                // che questo fix vuole recuperare.
+                .map_or(LIMITE_DOMINIO, |succ| {
+                    // ⚠ #7380c — il `.min(ARRAY_BYTES)` qui era `64`, e bastava
+                    // che il file nominasse UN simbolo successivo LONTANO
+                    // perche' la finestra restasse piena. Misurato:
+                    //
+                    //   sub_140018290: off_14002D118, off_14003AC00  -> distanza
+                    //                  0xDAE8 -> finestra 64 -> RIFIUTATO
+                    //   sub_1400185d0: off_14002D118, off_14002D120  -> distanza
+                    //                  8 -> finestra 8 -> ACCETTATO
+                    //
+                    // Stesso simbolo, stesso uso (`&off_X`), esito opposto a
+                    // seconda di CHI ALTRO il file nomina. Il ripiego a 32 non
+                    // si applicava mai quando un successivo esisteva, per
+                    // quanto lontano.
+                    usize::try_from(succ - va).unwrap_or(LIMITE_DOMINIO).min(LIMITE_DOMINIO)
+                });
+            // Almeno un qword: sotto gli 8 byte non c e' nulla da giudicare.
+            // Il dominio non supera mai 32 byte: il colpevole di una tabella
+            // VERA sta a +0x00 nell 87,8% dei casi ed entro +0x18 nel 94%
+            // (misura su 230 simboli rifiutati, 5 bucket). Oltre i 32 byte si
+            // giudicano byte che appartengono al VICINO.
+            let dominio = &b[..confine.max(8).min(b.len())];
             let punta_nell_immagine = !bss
-                && b.chunks_exact(8).any(|q| {
+                && dominio.chunks_exact(8).any(|q| {
                     let p = u64::from_le_bytes(q.try_into().unwrap_or([0; 8]));
                     p != 0 && !matches!(oracle.section_kind(p), binary_entry::SectionKind::None)
                 });
@@ -12565,20 +14553,51 @@ fn data_symbol_definitions(
                     (p != 0 && !matches!(oracle.section_kind(p), binary_entry::SectionKind::None))
                         .then_some(p)
                 }) {
-                    eprintln!("PTRGUARD {:?}", oracle.section_kind(q));
+                    eprintln!("PTRGUARD {name} {:?}", oracle.section_kind(q));
                 }
             }
-            if punta_nell_immagine
-                && !matches!(
-                    std::env::var("RUSTRE_DATA_PTR_GUARD").as_deref(),
-                    Ok("0") | Ok("false")
-                )
-            {
-                continue;
+            // ⚠⚠ #7380d — TRONCARE invece di RIFIUTARE quando il puntatore
+            // non e' al primo qword.
+            //
+            // La guardia rifiutava l intero simbolo appena un qword puntava
+            // dentro l immagine. Ma un puntatore a +0x18 non dice «questo e'
+            // una tabella»: dice «l oggetto finisce a +0x18 e li' comincia il
+            // VICINO». Misurato su `off_14002D138`:
+            //
+            //     +0x00  FFFFFFFFFFFFFFFF      <- l oggetto (mutex winpthreads)
+            //     +0x08  FFFFFFFFFFFFFFFF
+            //     +0x10  0000000000000000
+            //     +0x18  000000014001D5B0      <- il VICINO, non nostro
+            //
+            // Lo stesso puntatore (`0x14001D5B0`, residente a `0x14002D150`)
+            // avvelenava gia' `off_14002D118` a +56 e `off_14002D120` a +48.
+            //
+            // ⇒ Regola: se il primo colpevole e' al **primo qword**, e' davvero
+            // una tabella di puntatori e si rifiuta (misurato: **87,8%** dei
+            // casi). Altrimenti si emette il **prefisso pulito**, che e'
+            // l oggetto vero. Indicizzare oltre era gia' sbagliato prima.
+            let primo_colpevole = if bss {
+                None
+            } else {
+                b.chunks_exact(8).position(|q| {
+                    let p = u64::from_le_bytes(q.try_into().unwrap_or([0; 8]));
+                    p != 0 && !matches!(oracle.section_kind(p), binary_entry::SectionKind::None)
+                })
+            };
+            let guardia_on = !matches!(
+                std::env::var("RUSTRE_DATA_PTR_GUARD").as_deref(),
+                Ok("0") | Ok("false")
+            );
+            let mut n_byte = ARRAY_BYTES;
+            if guardia_on && let Some(i) = primo_colpevole {
+                if i == 0 {
+                    continue; // tabella di puntatori vera
+                }
+                n_byte = i * 8;
             }
-            let vals: Vec<String> = b.iter().map(|x| format!("0x{x:02X}")).collect();
+            let vals: Vec<String> = b[..n_byte].iter().map(|x| format!("0x{x:02X}")).collect();
             out.push(format!(
-                "static uint8_t {name}[{ARRAY_BYTES}] = {{ {} }};",
+                "static uint8_t {name}[{n_byte}] = {{ {} }};",
                 vals.join(", ")
             ));
             covered.insert(name.clone());
@@ -12929,14 +14948,33 @@ fn emit_callee_forward_decls(
     if fns.is_empty() && vars.is_empty() && named_decls.is_empty() && !image_base_used {
         return code.to_string();
     }
-    // Never forward-declare the function being defined.
-    let own = code
+    // Never forward-declare a function this file DEFINES.
+    //
+    // #8170: era `.find(...)`, cioe' la PRIMA firma soltanto. Regge finche' un
+    // file definisce una funzione sola -- vero per path A (misurato: 12558
+    // firme in 12558 file, 1,00/file, ZERO file con piu' di una definizione) e
+    // FALSO per path B (15112 firme in 12558 file, 1,20/file, 889 file con piu'
+    // di una definizione, il 7,1%).
+    //
+    // Con piu' definizioni per file la dichiarazione veniva emessa per funzioni
+    // che lo STESSO file definisce, e con un tipo di ritorno inventato:
+    //
+    //   riga  84:  void runtime_runFinalizers()        <- definizione
+    //   riga 539:  __int64 runtime_runFinalizers();    <- dichiarazione
+    //
+    // gcc: `conflicting types`. Misurato: 16 file su 12558 (10 di questa classe
+    // esatta), tutti in Go/Rust/C#, tutti appaiati fra le due build.
+    //
+    // Prendere l'INSIEME invece della prima e' un no-op per path A **per
+    // costruzione**: con una definizione per file l'insieme ha un elemento solo.
+    let own: std::collections::HashSet<String> = code
         .lines()
-        .find(|l| looks_like_signature_line(l))
-        .and_then(parse_signature_name);
+        .filter(|l| looks_like_signature_line(l))
+        .filter_map(parse_signature_name)
+        .collect();
     let mut decls: Vec<String> = fns
         .iter()
-        .filter(|n| own.as_deref() != Some(n.as_str()))
+        .filter(|n| !own.contains(n.as_str()))
         .map(|n| format!("__int64 {n}();"))
         .collect();
     // D18 named callees (return type recovered, so the declaration agrees with
@@ -12944,7 +14982,7 @@ fn emit_callee_forward_decls(
     decls.extend(
         named_decls
             .iter()
-            .filter(|(n, _)| own.as_deref() != Some(n.as_str()))
+            .filter(|(n, _)| !own.contains(n.as_str()))
             .map(|(n, ret)| crate::source_bucketing::format_prototype(n, ret)),
     );
     // Le tabelle di salto si DEFINISCONO (estensione nota); tutto il resto
@@ -13503,6 +15541,31 @@ fn name_stack_slots(code: &str) -> String {
     // Width-correct C type for a protected slot, from the ACCESS width: the
     // register paired with the deref on the same line (store RHS `*(rsp+K) =
     // edx;` or load LHS `eax = *(rsp+K);`). Unknown counterpart → `__int64`.
+    // #8820b - `None` significa NON SO, non "8 byte".
+    //
+    // `slot_access_type` restituisce `__int64` sia quando l'accesso e' davvero
+    // a 64 bit sia quando la controparte non e' un registro. Il criterio
+    // "tieni il piu' largo" conterebbe quindi l'IGNOTO come il massimo.
+    let slot_access_width = |emitted_prefix: &str, after_deref: &str| -> Option<u8> {
+        let word_of = |s: &str| -> String {
+            let s = s.trim_start();
+            let end = s.bytes().take_while(|&b| is_word_char(b)).count();
+            s[..end].to_string()
+        };
+        let counterpart = after_deref
+            .trim_start()
+            .strip_prefix('=')
+            .filter(|r| !r.starts_with('='))
+            .map(|r| word_of(r))
+            .or_else(|| {
+                let head = emitted_prefix.trim_end().strip_suffix('=')?;
+                let head = head.trim_end();
+                let start =
+                    head.len() - head.bytes().rev().take_while(|&c| is_word_char(c)).count();
+                Some(head[start..].to_string())
+            });
+        counterpart.as_deref().and_then(x86_register_width::register_width_bytes)
+    };
     let slot_access_type = |emitted_prefix: &str, after_deref: &str| -> &'static str {
         let word_of = |s: &str| -> String {
             let s = s.trim_start();
@@ -13597,7 +15660,36 @@ fn name_stack_slots(code: &str) -> String {
                 let name = format!("{prefix}_{v:x}");
                 // An array decl for the same slot supersedes a scalar one.
                 if !arrays.contains_key(&name) {
-                    decls.insert(name.clone(), "int");
+                    // #8820 - la larghezza dello slot dall'ACCESSO, non `int`
+                    // fisso. Tre righe sopra, il ramo dell'indirizzo-preso
+                    // chiede la larghezza a `slot_access_type`; questo ramo
+                    // scriveva `int` a mano. In `c_sample6_O0` erano `int` 15
+                    // slot su 15: ogni parametro PUNTATORE spillato usciva
+                    // troncato a 32 bit. E' la causa dei CRASH sui bucket O0.
+                    //
+                    // Solo le larghezze NOTE allargano: `None` significa NON SO,
+                    // non "8 byte" (#8820b).
+                    let rango = |t: &str| match t {
+                        "char" => 1u8,
+                        "__int16" => 2,
+                        "int" => 4,
+                        _ => 8,
+                    };
+                    let nome_di = |w: u8| match w {
+                        1 => "char",
+                        2 => "__int16",
+                        4 => "int",
+                        _ => "__int64",
+                    };
+                    if let Some(w) = slot_access_width(&out, &after[close + 1..]) {
+                        let ty = nome_di(w);
+                        let piu_largo = decls
+                            .get(&name)
+                            .map_or(ty, |gia| if rango(ty) > rango(gia) { ty } else { *gia });
+                        decls.insert(name.clone(), piu_largo);
+                    } else {
+                        decls.entry(name.clone()).or_insert("__int64");
+                    }
                 }
                 out.push_str(&name);
                 rest = &after[close + 1..];
@@ -14280,7 +16372,7 @@ fn split_return_of_void_returning_call(code: &str) -> String {
         .join("\n")
 }
 
-fn fix_return_statement_consistency(code: &str) -> String {
+pub(crate) fn fix_return_statement_consistency(code: &str) -> String {
     let mut lines: Vec<String> = code.lines().map(str::to_string).collect();
     let Some(sig) = lines.iter().find(|l| l.contains('(') && l.contains(')')) else {
         return code.to_string();
@@ -14370,6 +16462,42 @@ fn parse_decl_line(line: &str) -> Option<&str> {
 /// `int *`/`DWORD *`-style entry would silently ×4 the local's byte
 /// arithmetic. If you ever add one, record the retyped names like
 /// `refine_param_types_rec` does.
+/// #7540 - le CRT VARIADICHE, riconosciute per nome.
+///
+/// Elenco chiuso e verificabile: sono le funzioni la cui firma pubblicata
+/// termina con `...`, quindi il numero di argomenti lo decide il CHIAMANTE e
+/// nessuna tabella puo' contenerlo. Per queste, e solo per queste, l'evidenza
+/// giusta e' quanti registri argomento sono stati preparati prima della
+/// chiamata.
+///
+/// Le forme `_l` (locale esplicito) sono incluse perche' mingw le espone e sono
+/// variadiche allo stesso modo; le `v*` (`vfprintf`, `vsnprintf`) NO: prendono
+/// una `va_list` e hanno arita' FISSA — inserirle qui sarebbe l'errore
+/// speculare, cioe' trattare come variabile un'arita' che e' nota.
+fn crt_variadica(nome: &str) -> bool {
+    matches!(
+        nome,
+        "printf"
+            | "fprintf"
+            | "sprintf"
+            | "snprintf"
+            | "_snprintf"
+            | "scanf"
+            | "fscanf"
+            | "sscanf"
+            | "printf_s"
+            | "fprintf_s"
+            | "sprintf_s"
+            | "_printf_l"
+            | "_fprintf_l"
+            | "_sprintf_l"
+            | "open"
+            | "_open"
+            | "execl"
+            | "execlp"
+    )
+}
+
 fn api_signature(name: &str) -> Option<&'static [&'static str]> {
     Some(match name {
         // CRT.
@@ -14422,8 +16550,30 @@ fn api_signature(name: &str) -> Option<&'static [&'static str]> {
         // `FILE *` come `void *`: qui serve solo l'ARITA', e introdurre un tipo
         // che il prelude non definisce romperebbe l'emissione.
         "fwrite" => &["const void *", "size_t", "size_t", "void *"],
+        // #7530 - `fputc`/`fputs` mancavano del tutto dalla tabella, e senza
+        // arita' pubblicata `fill_mlil_call_args_with` non riempie nulla: path B
+        // emetteva `fputc()` e `fputs()`, che `gcc` **rifiuta** perche' la
+        // prelude ne conosce il prototipo (`too few arguments`). Il file non
+        // compila, il suo oggetto non esiste, e ogni suo simbolo risulta
+        // irrisolto altrove: un difetto di COMPILAZIONE che si presenta come
+        // difetto di LINK.
+        //
+        // Misurate 17 chiamate (14 `fputc`, 3 `fputs`) su sample7_cpp. Come per
+        // `fwrite` qui sopra, `FILE *` si scrive `void *`: serve solo l'ARITA',
+        // e un tipo che il prelude non definisce romperebbe l'emissione.
+        //
+        // ⚠ `fprintf`/`vfprintf` NON si aggiungono: sono **variadiche**, e
+        // `published_lib_arity` restituisce `None` per costruzione. Dichiarare
+        // un'arita' fissa per una variadica significa scegliere quanti
+        // argomenti tagliare — cioe' inventare una chiamata diversa da quella
+        // vera. Restano scoperte finche' non si ricostruiscono gli argomenti
+        // dai registri effettivamente preparati.
+        "fputc" | "putc" => &["int", "void *"],
+        "fputs" => &["const char *", "void *"],
         "strtoul" => &["const char *", "char **", "int"],
         "free" => &["void *"],
+        // #7530 - mancava: `getenv()` a vuoto rompeva un file (misurato).
+        "getenv" => &["const char *"],
         "atexit" => &["void *"],
         // CRT handler installer — 1 arg (the new handler); a live register
         // frequently gets swept in as a bogus second argument once the full
@@ -18122,8 +20272,27 @@ fn infer_call_arguments(stmts: &mut Vec<CfsStatement>) {
                 CfsStatement::Return(v) => v.as_deref().into_iter().collect(),
             };
             if reads.iter().any(|t| aliases.iter().any(|a| mentions_reg(t, a))) {
-                written[i] = true;
-                current[i] = Some((*r).to_string());
+                // #8760 - la prima lettura RILOCA lo slot invece di usarlo.
+                //
+                // S15 marca vivo uno slot letto prima di essere scritto, per
+                // riconoscere i parametri inoltrati alla chiamata. Ma se quella
+                // lettura e' `mov %r8d,%edx`, il valore viene SPOSTATO in un
+                // ALTRO slot argomento: r8 e' vivo in ingresso alla FUNZIONE,
+                // non alla CHIAMATA, dove e' gia' consumato. Argomento FANTASMA.
+                //
+                // La forma di inoltro per cui S15 esiste (`f(a1,a2){g(a1,a2);}`)
+                // NON e' toccata: li' il registro non viene copiato in un altro
+                // slot, viene letto dalla chiamata.
+                let rilocato = matches!(stmt, CfsStatement::Assign { lhs, rhs }
+                    if !lhs.starts_with('*')
+                        && aliases.iter().any(|a| mentions_reg(rhs, a))
+                        && regs.iter().enumerate().any(|(j, other)| {
+                            j != i && reg_width_aliases(other).iter().any(|a| lhs == a)
+                        }));
+                if !rilocato {
+                    written[i] = true;
+                    current[i] = Some((*r).to_string());
+                }
                 break;
             }
         }
@@ -18152,6 +20321,26 @@ fn infer_call_arguments(stmts: &mut Vec<CfsStatement>) {
                 }
                 CfsStatement::Raw(r) | CfsStatement::Branch(r) => reads.push(r.as_str()),
                 CfsStatement::Return(v) => reads.extend(v.as_deref()),
+            }
+            // #8760 - il valore ripiegato e' un NOME, non un valore.
+            //
+            // `mov %edx,%ecx` ripiega "edx" nello slot 0 e CANCELLA
+            // l'assegnazione. Se piu' sotto `edx` viene RISCRITTO, l'argomento
+            // continua a dire "edx" e denota il valore NUOVO: propagazione
+            // all'INDIETRO. La guardia sotto uccide il ripiegamento quando si
+            // LEGGE il registro dello slot, non quando si SCRIVE il registro
+            // CITATO dal valore: due domande diverse, una sola implementata.
+            if let CfsStatement::Assign { lhs, .. } = &*stmt
+                && !lhs.starts_with('*')
+            {
+                for i in 0..4 {
+                    let stale = fold[i]
+                        .as_ref()
+                        .is_some_and(|(di, val)| *di != idx && mentions_reg(val, lhs));
+                    if stale {
+                        fold[i] = None;
+                    }
+                }
             }
             for (i, r) in regs.iter().enumerate() {
                 if fold[i].as_ref().is_none_or(|(di, _)| *di == idx) {
@@ -18263,6 +20452,18 @@ fn infer_call_arguments(stmts: &mut Vec<CfsStatement>) {
                     args.insert(0, imm);
                     drop_indices.push(src_idx);
                 }
+            // #8850 - una chiamata INDIRETTA non passa se stessa.
+            //
+            // `((__int64 (*)())func_ptr)(v2, a3, a3, func_ptr)`: il registro che
+            // porta il BERSAGLIO viene contato anche come argomento. MISURATO:
+            // 199 chiamate indirette su 957 (21%), in ogni linguaggio.
+            //
+            // Solo quelli in CODA: l'arieta' viene dallo slot piu' alto scritto,
+            // quindi il fantasma sta in fondo; togliere un argomento in mezzo
+            // sposterebbe gli altri di posizione, danno peggiore.
+            while args.last().is_some_and(|a| a == &name) {
+                args.pop();
+            }
             if !args.is_empty() {
                 let joined = args.join(", ");
                 match stmt {
@@ -18491,9 +20692,17 @@ fn capture_call_result(stmts: &mut Vec<CfsStatement>) {
             {
                 // A pure write to rax (`rax = …` not reading rax) settles it
                 // instead: the call's result is dead, nothing to capture.
+                // #8740 - ASIMMETRIA: la lettura sopra riconosce gli ALIAS di
+                // larghezza (`eax` conta come uso di `rax`), questa scrittura no.
+                // `add $0xCE,%eax` diventa `eax = eax + 206`: il lato destro
+                // menziona `eax`, non `rax`, quindi la riga veniva classificata
+                // SCRITTURA PURA e il risultato della chiamata precedente
+                // dichiarato morto. Misurato su `main` di sample6_c: ritorno
+                // 8589934803 invece di 209.
                 if let CfsStatement::Assign { lhs, rhs } = s
                     && canonical_reg(lhs) == "rax"
                     && !mentions_reg(rhs, "rax")
+                    && !reg_width_aliases("rax").iter().any(|a| mentions_reg(rhs, a))
                 {
                     return Some(false);
                 }
@@ -18653,7 +20862,11 @@ fn rewrite_dangling_goto_tailcall(code: &str) -> String {
     out.join("\n")
 }
 
-fn rewrite_tail_call(stmts: &mut [CfsStatement], in_func_labels: &std::collections::HashSet<u64>) {
+fn rewrite_tail_call(
+    stmts: &mut [CfsStatement],
+    in_func_labels: &std::collections::HashSet<u64>,
+    ret_thunks: &std::collections::HashSet<u64>,
+) {
     // An unconditional `jmp` to an address that is NOT a label inside this
     // function is a TAIL CALL (a jump into another function), not intra-function
     // control flow — render it as `return sub_TARGET();`. A jump BACK into this
@@ -18727,8 +20940,123 @@ fn rewrite_tail_call(stmts: &mut [CfsStatement], in_func_labels: &std::collectio
         if in_func_labels.contains(&addr) {
             continue;
         }
+        // #8770 - un salto di coda verso un EPILOGO CONDIVISO (corpo di una
+        // sola istruzione, ed e' `ret`) non e' una chiamata: e' il ritorno di
+        // questa funzione, e il valore e' il rax che abbiamo gia' in mano.
+        if ret_thunks.contains(&addr) {
+            *s = CfsStatement::Return(Some("rax".to_string()));
+            continue;
+        }
         *s = CfsStatement::Return(Some(format!("sub_{rest}()")));
     }
+}
+
+/// #8860 - abbassa il marcatore `__PARITY` a C vero.
+///
+/// `ucomisd` mette il flag PF quando il confronto e' UNORDERED (un NaN);
+/// `jp`/`jnp` lo leggono. Il lift emette `__PARITY(expr)` che **nessuno
+/// definisce**: misurato 81 occorrenze in 30 file, e nel link esce come
+/// `__PARITY: external`.
+///
+/// La forma esatta non richiede header: NaN e' l'unico valore per cui
+/// `x != x`, quindi `__PARITY(X) == ((X) != (X))`.
+///
+/// Verificato che TUTTE le occorrenze siano su operandi float (69 xmm-xmm,
+/// 8 aN-aN, 4 miste). Su operandi INTERI il PF e' la parita' dei bit bassi e
+/// `(X) != (X)` sarebbe sbagliato: per questo si richiede che l'argomento
+/// nomini un xmm o un parametro. L'espressione compare DUE volte, quindi si
+/// accetta solo un argomento senza chiamate ne' assegnazioni.
+fn lower_parity_marker(code: &str) -> String {
+    if !code.contains("__PARITY(") {
+        return code.to_string();
+    }
+    let mut out = String::with_capacity(code.len());
+    let mut rest = code;
+    while let Some(at) = rest.find("__PARITY(") {
+        out.push_str(&rest[..at]);
+        let dopo = &rest[at + "__PARITY(".len()..];
+        let Some(close) = dopo.find(')') else {
+            out.push_str(&rest[at..]);
+            return out;
+        };
+        let inner = &dopo[..close];
+        let float = inner.contains("xmm") || inner.contains('a');
+        let puro = !inner.contains('(') && !inner.contains('=');
+        if float && puro && !inner.trim().is_empty() {
+            out.push_str(&format!("(({inner}) != ({inner}))"));
+        } else {
+            out.push_str(&format!("__PARITY({inner})"));
+        }
+        rest = &dopo[close + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// #8870 - `_mm_cvtsi128_si64(<double>)` e' un BIT-CAST, non un'intrinseca.
+///
+/// `movq %xmm0,%rax` su un valore in virgola mobile e' type-punning: si
+/// vogliono i BIT del double. Il lift lo rende con l'intrinseca SSE, che vuole
+/// un `__m128i`, e gcc rifiuta. Popolazione: 3 occorrenze, ma sono il 100% dei
+/// COMPILE_FAIL della suite comportamentale.
+///
+/// `memcpy` e' la forma canonica C89 senza UB (`string.h` gia' nel prelude);
+/// NON un cast di puntatore, che violerebbe lo strict aliasing.
+///
+/// RESTRIZIONE: solo `double` (8 byte) = larghezza della destinazione. Con un
+/// `float` resterebbe indefinita la meta' alta: un difetto silenzioso al posto
+/// di un errore di compilazione.
+fn lower_double_bitcast(code: &str) -> String {
+    if !code.contains("_mm_cvtsi128_si64(") {
+        return code.to_string();
+    }
+    let mut doppi: Vec<String> = Vec::new();
+    for line in code.lines() {
+        let t = line.trim();
+        if !(t.contains('(') && t.ends_with('{')) {
+            continue;
+        }
+        let (Some(o), Some(c)) = (t.find('('), t.rfind(')')) else { continue };
+        if c <= o {
+            continue;
+        }
+        for par in t[o + 1..c].split(',') {
+            let par = par.trim();
+            if let Some(nome) = par.strip_prefix("double ") {
+                let nome = nome.trim();
+                if !nome.is_empty() && nome.bytes().all(is_word_char) {
+                    doppi.push(nome.to_string());
+                }
+            }
+        }
+        break;
+    }
+    if doppi.is_empty() {
+        return code.to_string();
+    }
+    code.lines()
+        .map(|line| {
+            let t = line.trim();
+            let Some(rest) = t.strip_suffix(';') else { return line.to_string() };
+            let Some((lhs, rhs)) = rest.split_once(" = ") else { return line.to_string() };
+            let Some(arg) = rhs
+                .trim()
+                .strip_prefix("_mm_cvtsi128_si64(")
+                .and_then(|r| r.strip_suffix(')'))
+            else {
+                return line.to_string();
+            };
+            let arg = arg.trim();
+            if !doppi.iter().any(|d| d == arg) {
+                return line.to_string();
+            }
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            let lhs = lhs.trim();
+            format!("{indent}memcpy(&{lhs}, &{arg}, sizeof({lhs}));")
+        })
+        .collect::<Vec<_>>()
+        .join("
+")
 }
 
 /// Drop `rsp = rsp + N` / `rsp = rsp - N` prologue/epilogue stmts so
@@ -19266,6 +21594,9 @@ pub struct DecompilerPipeline {
     /// #6800: vedi `set_callsite_argc`.
     callsite_argc: Arc<HashMap<u64, (usize, usize, usize, usize, usize)>>,
     fn_starts: Arc<std::collections::HashSet<u64>>,
+    ret_thunks: Arc<std::collections::HashSet<u64>>,
+    /// #7550: la regabi Go, decisa una volta al caricamento dell'immagine.
+    abi_go: bool,
     /// D18: VA → predicted return type of that callee, used to forward-declare
     /// a named callee with a prototype matching its definition.
     callee_return_types: HashMap<u64, String>,
@@ -19754,6 +22085,36 @@ impl DecompilerPipeline {
                         .or_else(|| published_lib_arity(&nm))
                     {
                         extra.insert(tgt, arity);
+                    } else if crt_variadica(&nm) {
+                        // #7540 - per una VARIADICA non esiste un'arita' da
+                        // pubblicare, e infatti `api_signature` e
+                        // `published_lib_arity` restituiscono `None` **di
+                        // proposito**. Senza voce nella mappa il riempimento
+                        // lascia zero argomenti, e path B emette `fprintf()`:
+                        // `gcc` lo rifiuta (la prelude ha il prototipo), il
+                        // file non compila, il suo oggetto non esiste, e ogni
+                        // suo simbolo risulta irrisolto altrove.
+                        //
+                        // Ma l'informazione C'E'. Sullo stesso indirizzo path A
+                        // emette `fprintf(v5, v2)` e path B ha gli stessi due
+                        // valori nelle righe che precedono la chiamata: a
+                        // perdersi e' il COLLEGAMENTO fra registro preparato e
+                        // chiamata, non i valori.
+                        //
+                        // Si semina quindi il MASSIMO dei registri argomento e
+                        // si lascia decidere al clamp che la passata gia'
+                        // applica: `riempiti = arity.min(4).min(available)`,
+                        // dove `available` conta i registri preparati **prima
+                        // di questa chiamata**. Per una variadica quello E' il
+                        // numero di argomenti — e' il chiamante a deciderlo, e
+                        // nessun prototipo puo' saperlo.
+                        //
+                        // ⚠ Vale SOLO per le variadiche riconosciute per nome.
+                        // Applicare la stessa regola a ogni bersaglio senza
+                        // arita' nota inventerebbe argomenti sui non-variadici:
+                        // la classe OVER, che compila pulita ed e'
+                        // silenziosamente sbagliata.
+                        extra.insert(tgt, 4);
                     }
                 }
             }
@@ -19796,6 +22157,20 @@ impl DecompilerPipeline {
     /// #6970: inizi di funzione noti all'immagine.
     pub fn set_fn_starts(&mut self, m: std::collections::HashSet<u64>) {
         self.fn_starts = Arc::new(m);
+    }
+
+    /// #8770 - dichiara gli EPILOGHI CONDIVISI dell'immagine.
+    pub fn set_ret_thunks(&mut self, m: std::collections::HashSet<u64>) {
+        self.ret_thunks = Arc::new(m);
+    }
+
+    /// #7550 - dichiara che l'immagine usa la **regabi Go**.
+    ///
+    /// Va deciso al CARICAMENTO, dai marcatori dell'immagine, e mai per
+    /// funzione: dedurlo dai registri letti sarebbe circolare, perche' e'
+    /// proprio quali registri leggere che si sta stabilendo.
+    pub fn set_abi_go(&mut self, go: bool) {
+        self.abi_go = go;
     }
 
     pub fn set_callsite_argc(&mut self, m: HashMap<u64, (usize, usize, usize, usize, usize)>) {
@@ -19860,6 +22235,8 @@ impl DecompilerPipeline {
         ctx.callee_arities = Arc::clone(&self.callee_arities_shared);
         ctx.callsite_argc = Arc::clone(&self.callsite_argc);
         ctx.fn_starts = Arc::clone(&self.fn_starts);
+        ctx.ret_thunks = Arc::clone(&self.ret_thunks);
+        ctx.abi_go = self.abi_go;
         self.seed_crt_arities(&mut ctx, instructions);
         ctx.jump_tables = self.jump_tables.clone();
 
@@ -20024,9 +22401,33 @@ impl DecompilerPipeline {
         // sign-hint passes instead of throwing it away as `Unknown` (which the
         // C printer renders as `void *`). Falls back to `Unknown` for unnamed
         // spellings.
+        // #7670b - un nome che e' gia' un PARAMETRO non puo' essere anche una
+        // locale: `f(uint64_t a1) { uint64_t a1; }` e' una RIDICHIARAZIONE, che
+        // il compilatore rifiuta.
+        //
+        // Il filtro `!v.is_parameter` qui sotto e' corretto e NON basta: sotto
+        // `RUSTRE_MLIL_SSA=1` lo STESSO NOME compare DUE volte in `variables`,
+        // una con `is_parameter=true` e una con `false` — la versionatura SSA
+        // produce un secondo record per il registro-parametro. Ciascun filtro
+        // vede solo il proprio record e li lascia passare entrambi.
+        //
+        // MISURATO su `go_sample9_O0` con il gate acceso: **987 file su 2576
+        // (38%)** emettono `uint64_t a1;` dentro una funzione il cui parametro
+        // e' `a1`. E' uno dei DUE difetti che tengono spento l'item «SSA MLIL»
+        // della direttiva (l'altro e' il tipo `unknown`).
+        //
+        // ⚠ La guardia e' per NOME, non per flag: e' il nome a collidere in C.
+        //
+        // ⚠ A gate spento e' un NO-OP misurato: nessun produttore odierno
+        // duplica un parametro fra le locali.
+        let nomi_param: std::collections::HashSet<&str> = variables
+            .iter()
+            .filter(|v| v.is_parameter)
+            .map(|v| v.name.as_str())
+            .collect();
         let local_vars: Vec<VarDecl> = variables
             .iter()
-            .filter(|v| !v.is_parameter)
+            .filter(|v| !v.is_parameter && !nomi_param.contains(v.name.as_str()))
             .map(|v| VarDecl::new(v.name.clone(), rustre_decompiler_type::parse_c_type(&v.type_str)))
             .collect();
 
@@ -20078,6 +22479,8 @@ impl DecompilerPipeline {
         ctx.callee_arities = Arc::clone(&self.callee_arities_shared);
         ctx.callsite_argc = Arc::clone(&self.callsite_argc);
         ctx.fn_starts = Arc::clone(&self.fn_starts);
+        ctx.ret_thunks = Arc::clone(&self.ret_thunks);
+        ctx.abi_go = self.abi_go;
         self.seed_crt_arities(&mut ctx, instructions);
         ctx.jump_tables = self.jump_tables.clone();
         let perf_fn_start = crate::perf::enabled().then(Instant::now);
@@ -20383,6 +22786,10 @@ impl DecompilerPipeline {
         // Names retyped int→pointer by the promotion passes this run; their
         // body arithmetic is still raw byte arithmetic and is element-rescaled
         // by `rescale_promoted_pointer_arith` late in the pipeline.
+        // #8880b - spezza il parametro MORTO dal registro che lo riusa.
+        // Gira PRIMA della promozione: cosi' quella vede un parametro senza
+        // dereferenze e un locale separato.
+        text_pass!(spezza_parametro_morto(&func.pseudo_code), "spezza_parametro_morto");
         let mut promoted_ptr_names: Vec<String> = Vec::new();
         {
             let (c, mut rec) = promote_pointer_params_rec(&func.pseudo_code);
@@ -20557,6 +22964,9 @@ impl DecompilerPipeline {
 
         // Promote a scalar local to a pointer when the body indexes it
         // (`NAME[idx]`) — else indexing a `__int64 NAME;` scalar is invalid C.
+        // #8830 - rendi VISIBILE il moltiplicatore al punto d'uso, prima che la
+        // promozione a puntatore scelga il pointee.
+        text_pass!(fold_scaled_step_into_use(&func.pseudo_code), "fold_scaled_step_into_use");
         {
             let (c, mut rec) = promote_pointer_locals_rec(&func.pseudo_code);
             func.pseudo_code = c;
@@ -20802,6 +23212,10 @@ impl DecompilerPipeline {
         // gcc rejects it as "invalid type argument of unary '*'". Runs after the
         // frame-reg declarations so their derefs are visible.
         text_pass!(cast_nonpointer_deref(&func.pseudo_code), "cast_nonpointer_deref");
+        // #8860 - il marcatore `__PARITY` non e' C.
+        text_pass!(lower_parity_marker(&func.pseudo_code), "lower_parity_marker");
+        // #8870 - il type-punning double -> bit non e' un'intrinseca SSE.
+        text_pass!(lower_double_bitcast(&func.pseudo_code), "lower_double_bitcast");
 
         // Emit `__int64 sub_X();` prototypes for every `sub_HEX` this function
         // calls, so the isolated single-function output is self-contained C
@@ -20915,7 +23329,21 @@ impl DecompilerPipeline {
                         .as_ref()
                         .and_then(|r| r.resolve(va).map(|n| sanitize_c_identifier(&r.demangle(&n))))
                 };
-                resolve_hlil_code_pointers(&fixed, &self.callee_arities, &name_of)
+                // #8140, OPT-IN `RUSTRE_HLIL_FNPTR_DATA=1`: aggiunge `fn_starts`
+                // ai confini riconosciuti. Spento: insieme identico a prima.
+                let vuoto = std::collections::HashSet::new();
+                let extra: &std::collections::HashSet<u64> =
+                    if std::env::var("RUSTRE_HLIL_FNPTR_DATA").as_deref() == Ok("1") {
+                        &self.fn_starts
+                    } else {
+                        &vuoto
+                    };
+                if std::env::var("RUSTRE_DBG_8140").is_ok_and(|v| v != "0") {
+                    let n_off = fixed.matches("off_").count();
+                    eprintln!("[8140] starts={} fn_starts={} extra={} off_nel_testo={}",
+                        self.callee_arities.len(), self.fn_starts.len(), extra.len(), n_off);
+                }
+                resolve_hlil_code_pointers(&fixed, &self.callee_arities, extra, &name_of)
             };
             // 24th: same invariant applied to the ORDINARY `sub_HEX` references
             // `prepend_hlil_externs` emits. Default ON, opt out with `=0`.
@@ -20932,13 +23360,29 @@ impl DecompilerPipeline {
                         .as_ref()
                         .and_then(|r| r.resolve(va).map(|n| sanitize_c_identifier(&r.demangle(&n))))
                 };
-                let renamed = rename_hlil_sub_symbols(&fixed, &self.callee_arities, &name_of);
+                let renamed = rename_hlil_sub_symbols(&fixed, &self.callee_arities, &self.fn_starts, &name_of);
                 // La rinomina tocca ANCHE la forward declaration: `sub_HEX();`
                 // diventa `_set_invalid_parameter_handler();`, che confligge col
                 // prototipo vero incluso dal prelude (#950-#960). Qui e' il solo
                 // punto in cui il nome CRT esiste gia' e la dichiarazione e'
                 // ancora nostra, quindi la rimozione va fatta SUBITO DOPO.
-                drop_conflicting_crt_forward_decls(&renamed)
+                let renamed = drop_conflicting_crt_forward_decls(&renamed);
+                // #7410: la stessa fonte, applicata alla RIGA DI DEFINIZIONE.
+                // Le due passate qui sopra portano i RIFERIMENTI al nome
+                // risolto; la definizione restava `fn_HEX` come l ha battezzata
+                // il lifter HLIL, e il link non chiudeva.
+                let con_nomi =
+                    rename_hlil_definitions(&renamed, &self.callee_arities, &self.fn_starts, &name_of);
+                // #7480: le tabelle di puntatori a funzione si RILOCANO.
+                // Va DOPO la rinomina, perche' usa la stessa grafia con
+                // cui le funzioni bersaglio sono definite.
+                materialise_pointer_tables(
+                    &con_nomi,
+                    self.data_oracle.as_deref(),
+                    &self.callee_arities,
+                    &self.fn_starts,
+                    &name_of,
+                )
             };
             // ⚠ #6010, gate opt-in `RUSTRE_CPP_ONE_NAME`: la DEFINIZIONE prende
             // il nome da `func.name` (publics/PDB, forma CORTA) mentre le
@@ -21022,6 +23466,16 @@ impl DecompilerPipeline {
                 Ok("1") | Ok("true")
             ) && let Some(resolver) = self.symbol_resolver.as_ref()
             {
+                // Sonda `RUSTRE_DBG_PRERESOLVE=<hex>`: come appare l'indirizzo
+                // nel testo IN INGRESSO a `resolve_symbols`. Tre interventi su
+                // candidati «plausibili» sono risultati inerti perche'
+                // modificavo un punto che non esegue la trasformazione: questa
+                // sonda risponde con una prova di ESECUZIONE, non di lettura.
+                if let Ok(w) = std::env::var("RUSTRE_DBG_PRERESOLVE") {
+                    for l in fixed.lines().filter(|l| l.contains(w.as_str())) {
+                        eprintln!("[pre-resolve] {}", l.trim());
+                    }
+                }
                 // ⚠ La rimozione DEVE seguire, come a `:19316` dopo
                 // `rename_hlil_sub_symbols`: anche questa passata risolve i
                 // `sub_HEX` e con essi la loro FORWARD DECLARATION, e i nomi
@@ -21149,6 +23603,47 @@ impl DecompilerPipeline {
             // (`RUSTRE_C_POSTPROCESS`, default OFF) perche' i due effetti vanno
             // misurati distinti.
             let fixed = c_postprocess_pass(&fixed, c_postprocess_enabled());
+            // 32c — #8050: NOMI D'USO anche su path B.
+            //
+            // Divario misurato (post8040, 12188 coppie, sonda BILINGUE):
+            // nomi parlanti **21414 su path A contro 984 su path B (22x)**.
+            // E' l'unica delle sei voci della direttiva in cui path B e'
+            // davvero indietro — le altre cinque sono cablate o escluse di
+            // proposito.
+            //
+            // ⚠ NON confondere con `name_stack_slots`, che NON e' cablabile
+            // qui: cerca `rsp`/`rbp` e path B scrive `sp`/`fp`, quindi sarebbe
+            // inerte. Il divario sugli slot grezzi, con sonda bilingue, e'
+            // 78023 contro 50778 — 1,54x, non una differenza di natura.
+            //
+            // Questa passata invece HA un bersaglio: lavora su `v<cifre>` e
+            // `v_<hex>`, e path B ne ha **39550 distinti** (A: 43013).
+            //
+            // Simulando le sue condizioni sul testo reale di path B:
+            // **4185 nomi (10%) in 4166 file (34%)** — `result` 4138, `flag` 42,
+            // `mem` 5.
+            //
+            // ⚠ Resa PARZIALE per una seconda differenza di grafia, misurata:
+            // `infer_usage_name` cerca `"{v} = {v} + 1"` (senza parentesi, che
+            // e' la grafia di path A: 187 occorrenze) mentre path B scrive
+            // `v = (v + 1)` (**1944** occorrenze) ⇒ i contatori di ciclo NON
+            // vengono nominati. Chiuderlo e' un secondo passo, tenuto separato
+            // apposta: insieme, un numero che non torna non direbbe quale dei
+            // due ha mancato.
+            //
+            // Collisione `fp` verificata GIA' chiusa: `infer_usage_name`
+            // restituisce `"fp"` per un `FILE*` e path B usa `fp` come frame
+            // pointer, ma la deduplica fa
+            // `while used.contains(c) || mentions_reg(&out, c) { n += 1 }` e
+            // `mentions_reg` cerca con confini di parola ⇒ forza `fp2`.
+            let fixed = if !matches!(
+                std::env::var("RUSTRE_HLIL_USAGE_NAMES").as_deref(),
+                Ok("0") | Ok("false")
+            ) {
+                rename_locals_by_usage(&fixed)
+            } else {
+                fixed
+            };
             // VERAMENTE ultima: `emit_callee_forward_decls` piu' sopra ri-aggiunge
             // `extern __int64 off_X;` per simboli che la catena B ha gia'
             // DEFINITO (`static`), e gcc rifiuta «static declaration follows
@@ -21163,6 +23658,14 @@ impl DecompilerPipeline {
             // 420/420 file C++, 168/168 Rust, 14/14 C — ogni file che la usa.
             // Path A risolve gia' lo stesso problema per `rsp` in
             // `declare_bare_frame_regs`: si riusa quella forma.
+            // #7340 — la ricorsione diretta riceve i propri argomenti.
+            // Gate come parametro (non lettura d'ambiente) per la stessa
+            // ragione delle passate vicine: cosi' e' testabile.
+            let fixed = recursive_call_args(
+                &fixed,
+                func.address,
+                !matches!(std::env::var("RUSTRE_REC_ARGS").as_deref(), Ok("0") | Ok("false")),
+            );
             let fixed = seed_var_sp(&fixed, func.frame_size, varsp_enabled());
             let fixed = sign_test_casts(&fixed, signcmp_enabled());
             let fixed = sbb_uses_carry(&fixed, sbbfix_enabled());
@@ -21184,6 +23687,59 @@ impl DecompilerPipeline {
                     }
                 }
                 out
+            } else {
+                fixed
+            };
+            // #7360 - le struct di path B. Gate default ON: la passata e'
+            // conservativa per costruzione (esclude frame, larghezze
+            // contraddittorie e campi sovrapposti) e non tocca path A, che usa
+            // una funzione diversa.
+            let fixed = if matches!(
+                std::env::var("RUSTRE_HLIL_STRUCTS").as_deref(),
+                Ok("0") | Ok("false")
+            ) {
+                fixed
+            } else {
+                recover_struct_accesses_hlil(&fixed)
+            };
+            // #7730 - i TIPI dei parametri di path B.
+            //
+            // MISURATO prima di scrivere: path B dichiara il 94,1% dei
+            // parametri `uint64_t` e non emette **un solo** puntatore, mentre
+            // path A ne emette 35365 (31,1%) con la stessa sonda - lo zero
+            // non e' cecita' del rilevatore, che li vede dove ci sono. Il
+            // bersaglio: 8895 parametri su 41841 (21,3%) sono dereferenziati
+            // pur essendo dichiarati scalari.
+            //
+            // ⚠ SERVONO DUE PASSATE, e portarne una sola sarebbe un difetto,
+            // non un miglioramento a meta'. Dopo la promozione l'aritmetica
+            // del corpo e' ancora in BYTE: senza
+            // `rescale_promoted_pointer_arith`, `*(uint64_t *)(a1 + 8)` con
+            // `a1` diventato puntatore avanza di **64** byte invece di 8. Su
+            // 4369 parametri della forma `aN + K` sarebbe corruzione di
+            // memoria che COMPILA - invisibile alla ricompilabilita'.
+            //
+            // Gate opt-in: e' l'unico fronte della sessione che puo' cambiare
+            // il COMPORTAMENTO, quindi la prova e' `behavior.py`, non il
+            // conteggio dei puntatori (che salirebbe comunque).
+            let fixed = if matches!(
+                std::env::var("RUSTRE_HLIL_PTRPARAMS").as_deref(),
+                Ok("1") | Ok("true")
+            ) {
+                // ⚠ TRE passate, non due. Misurato coi test: la promozione
+                // NON riconosce `*(T *)(aN + K)` - guarda solo `X->`, `X[`,
+                // `*X`. E' `rewrite_param_array_access` a trasformare
+                // `*(aN + K)` in `aN[K]`, ed e' quella forma che la promozione
+                // vede. Portare solo le due passate finali sarebbe stato
+                // inerte, e me ne sono accorto perche' il test falliva anche
+                // sulla grafia di PATH A.
+                let fixed = rewrite_param_array_access(&fixed);
+                let (promosso, nomi) = promote_pointer_params_rec(&fixed);
+                if nomi.is_empty() {
+                    promosso
+                } else {
+                    rescale_promoted_pointer_arith(&promosso, &nomi)
+                }
             } else {
                 fixed
             };
@@ -22105,6 +24661,121 @@ fn fp_params_in_hlil_enabled() -> bool {
     })
 }
 
+/// Gate `RUSTRE_HLIL_FOLDARGS`: ripiega nella chiamata la COSTANTE assegnata a
+/// un registro argomento subito prima.
+///
+/// ```text
+/// a1 = 27;              a1 = 27;
+/// a2 = 41;        ->    a2 = 41;
+/// v4 = f();             v4 = f(27, 41);
+/// ```
+///
+/// MISURATO su `fn12d` (i 12 binari del corpus) prima di scrivere la passata:
+/// 8843 assegnamenti `aN = costante`, di cui **664 ripiegabili**, **1706 con il
+/// registro RISCRITTO** prima della chiamata e 1407 con la chiamata gia'
+/// completa.
+///
+/// ⚠⚠ I 1706 sono il motivo per cui la guardia esiste. `a1 = 27; a1 = v3; f();`
+/// ripiegato darebbe `f(27)` — il valore SBAGLIATO, in silenzio, su piu' del
+/// doppio dei siti che la passata tocca. La trasformazione e' fedele SOLO se
+/// nessuno riscrive il registro nel mezzo.
+///
+/// ⚠ Prefisso CONTIGUO: si passa `a1`, oppure `a1, a2`, … Se e' noto solo `a2`
+/// non si puo' emettere `f(41)`, perche' in C quel valore finirebbe nel PRIMO
+/// parametro. E' la stessa ragione della guardia di contiguita' in
+/// `win64_param_regs_live_in`.
+///
+/// ⚠ L'assegnamento NON viene rimosso. Path A lo rimuove, ma solo dopo aver
+/// verificato che nessuno legga piu' quel registro; qui la rimozione non
+/// aggiungerebbe fedelta' e potrebbe togliere un lettore. `a1 = 27; f(27);` e'
+/// ridondante e corretto — e una DCE successiva puo' toglierlo con la sua
+/// analisi, non con la mia supposizione.
+fn fold_const_call_args(code: &str, enabled: bool) -> String {
+    if !enabled || !code.contains(" = ") {
+        return code.to_string();
+    }
+    let lines: Vec<&str> = code.lines().collect();
+    // valore costante noto per a1..a4, e da quante righe e' fermo
+    let mut noto: [Option<String>; 4] = [None, None, None, None];
+    let mut eta: [usize; 4] = [0; 4];
+    const FINESTRA: usize = 3;
+    let mut out = String::with_capacity(code.len() + 64);
+
+    for line in &lines {
+        let t = line.trim();
+        // `aN = <costante>;`
+        let assegna = t
+            .strip_suffix(';')
+            .and_then(|s| s.split_once(" = "))
+            .filter(|(l, _)| {
+                l.len() == 2
+                    && l.starts_with('a')
+                    && l.as_bytes()[1].is_ascii_digit()
+                    && (b'1'..=b'4').contains(&l.as_bytes()[1])
+            });
+        if let Some((lhs, rhs)) = assegna {
+            let i = (lhs.as_bytes()[1] - b'1') as usize;
+            let r = rhs.trim();
+            // costante: numero nudo, oppure con i cast di larghezza che path B
+            // antepone (`(uint64_t)(uint32_t)27`)
+            let nudo = r.rsplit(')').next().unwrap_or(r).trim();
+            let e_costante = !nudo.is_empty()
+                && (nudo.starts_with("0x") || nudo.chars().all(|c| c.is_ascii_digit()));
+            noto[i] = e_costante.then(|| nudo.to_string());
+            eta[i] = 0;
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+        // chiamata NUDA: `f();` oppure `x = f();`
+        let nuda = t.strip_suffix("();").map(|p| p.rsplit(' ').next().unwrap_or(p));
+        if let Some(nome) = nuda
+            && (nome.starts_with("sub_") || nome.starts_with("fn_"))
+            && noto[0].is_some()
+        {
+            // prefisso contiguo, e solo valori ancora freschi
+            let mut args: Vec<String> = Vec::new();
+            for i in 0..4 {
+                match &noto[i] {
+                    Some(v) if eta[i] <= FINESTRA => args.push(v.clone()),
+                    _ => break,
+                }
+            }
+            if !args.is_empty() {
+                let indent = &line[..line.len() - line.trim_start().len()];
+                let prefisso = &t[..t.len() - nome.len() - 3];
+                out.push_str(indent);
+                out.push_str(prefisso);
+                out.push_str(nome);
+                out.push('(');
+                out.push_str(&args.join(", "));
+                out.push_str(");\n");
+                for i in 0..4 {
+                    noto[i] = None;
+                }
+                continue;
+            }
+        }
+        for i in 0..4 {
+            eta[i] += 1;
+            if eta[i] > FINESTRA {
+                noto[i] = None;
+            }
+        }
+        // qualunque altra scrittura del registro invalida il valore noto
+        if let Some((lhs, _)) = t.strip_suffix(';').and_then(|s| s.split_once(" = "))
+            && lhs.len() == 2
+            && lhs.starts_with('a')
+            && (b'1'..=b'4').contains(&lhs.as_bytes()[1])
+        {
+            noto[(lhs.as_bytes()[1] - b'1') as usize] = None;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
 fn name_saved_callee_regs_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
@@ -22240,7 +24911,27 @@ fn name_saved_callee_regs(code: &str) -> String {
         }
         let indent = &line[..line.len() - line.trim_start().len()];
         out.push_str(indent);
-        out.push_str("extern ");
+        // ⚠⚠ #7210 — NON `extern`. La dichiarazione resta una LOCALE non
+        // inizializzata.
+        //
+        // `extern T v;` dice due cose: (a) il valore non nasce qui, (b) esiste
+        // un simbolo `v` DEFINITO altrove. La prima e' vera, **la seconda e'
+        // falsa** — nessuno definisce mai quel simbolo — e costa il LINK
+        // dell'intero file. Misurato su `behavior.py`: `main_sumVariadic` e'
+        // LINK_FAIL con causa UNICA `v2: external`, e nel corpus ci sono
+        // **492 dichiarazioni** cosi' (319 callee-saved + 173 xmm in ingresso)
+        // sparse su 349 file.
+        //
+        // Una locale non inizializzata dice esattamente (a) e NON dice (b):
+        // porta la stessa informazione — valore indeterminato, non prodotto da
+        // questa funzione — ed e' linkabile. Non e' un compromesso al ribasso:
+        // e' la stessa affermazione, senza quella falsa in piu'.
+        //
+        // ⚠ Cio' che NON risolve: per una xmm in ingresso il valore CONTA e
+        // resta ignoto. La cura vera sarebbe promuoverla a parametro, che pero'
+        // e' esattamente la mossa che genera i PARAMETRI FANTASMA (2233 nel
+        // 2026-07, tutti compilanti e silenziosamente sbagliati). Meglio un
+        // valore dichiaratamente indeterminato di un parametro inventato.
         out.push_str(&ty);
         out.push(' ');
         out.push_str(&name);
@@ -22249,9 +24940,9 @@ fn name_saved_callee_regs(code: &str) -> String {
         // an incoming value — claiming "saved by the prologue" for it would be
         // a guess, and under SysV it would be wrong.
         if all_saves {
-            out.push_str("; /* caller's callee-saved register, saved by the prologue */\n");
+            out.push_str("; /* registro callee-saved del chiamante: solo salvato e ripristinato, valore indeterminato */\n");
         } else {
-            out.push_str("; /* incoming register value: read before it is ever written */\n");
+            out.push_str("; /* valore in ingresso in un registro: letto prima di essere scritto, indeterminato */\n");
         }
     }
     out
@@ -22880,6 +25571,219 @@ fn orfani_testo(code: &str) -> usize {
 /// ESCLUSE: la misura non trova per loro nessun candidato con cardinalita'
 /// coerente, perche' path A le rende come cast e non come intrinseche. Mapparle
 /// sarebbe indovinare.
+/// Gate `RUSTRE_HLIL_TMPDCE`, **opt-in**: toglie gli store a `var_tmpN` che
+/// NESSUNO legge.
+///
+/// ## Perche' qui e non sull'AST (misurato, #7060)
+///
+/// La prima versione era una passata HLIL. Girava (31 chiamate su sample1_c) ma
+/// non spostava il testo, e l'esperimento di controllo ha detto perche':
+/// forzandola a togliere TUTTI i temporanei il testo cambiava (261 file, 4244
+/// store), quindi **l'AST arriva all'emissione** — solo che a quel punto della
+/// pipeline quei temporanei sono ancora LETTI. Diventano morti piu' tardi,
+/// quando le passate testuali qui sopra rimuovono i loro lettori.
+///
+/// Due ragioni in piu' per stare nel testo:
+/// * i nomi sono gia' distinti per live range (`var_tmp0..N`), mentre nell'AST
+///   sono **un solo nome riusato**: `var_tmp0` con 11 scritture;
+/// * i 3040 casi, la guardia e i 239 da escludere sono stati misurati **su
+///   questo testo**, quindi qui si agisce esattamente su cio' che si e' contato.
+///
+/// ## La guardia
+///
+/// RHS dei 3040: deref 84%, aritmetica 15%, **chiamate 0**. L'aritmetica e'
+/// inerte, ma un deref e' un accesso che il programma ESEGUE: cancellarlo
+/// perderebbe fedelta'. Si rimuove se la RHS non deferenzia **oppure** se lo
+/// stesso deref ricompare entro 3 righe (2317 casi: il `cmp` di cui la riga dopo
+/// rifa' gia' l'accesso) ⇒ **2801 su 3040**, e i 239 restano.
+fn drop_dead_var_tmp_stores(code: &str, enabled: bool) -> String {
+    if !enabled || !code.contains("var_tmp") {
+        return code.to_string();
+    }
+    let righe: Vec<&str> = code.lines().collect();
+
+    // Scritture, letture e riga della dichiarazione, per nome.
+    let mut scritture: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut letture: HashMap<String, usize> = HashMap::new();
+    let mut decl: HashMap<String, usize> = HashMap::new();
+    for (i, r) in righe.iter().enumerate() {
+        let t = r.trim();
+        let store = t
+            .split_once('=')
+            .filter(|(l, _)| {
+                let l = l.trim();
+                l.starts_with("var_tmp") && l[7..].chars().all(|c| c.is_ascii_digit())
+            })
+            .map(|(l, _)| l.trim().to_string());
+        // Dichiarazione: `<tipo> var_tmpN;` — NON e' una lettura. Ometterlo e'
+        // il difetto che al §119 aveva fatto scambiare 3040 store morti per
+        // 3038 «fusibili», cioe' per la classe opposta.
+        // Una dichiarazione e `<tipo> var_tmpN;`. ⚠ La prima versione si
+        // fermava qui e catturava anche `return var_tmp0;` — che finisce con
+        // `;`, non ha `=` e ha `var_tmp0` come ultimo token. Risultato: una
+        // LETTURA contata come dichiarazione, quindi uno store vivo rimosso.
+        // Il test `tmpdce_toglie_i_morti...` caso (d) lo ha colto subito.
+        let primo = t.split_whitespace().next().unwrap_or("");
+        let dichiara = t.ends_with(';')
+            && !t.contains('=')
+            && t.split_whitespace().count() >= 2
+            && !matches!(
+                primo,
+                "return" | "goto" | "break" | "continue" | "case" | "default" | "else" | "do"
+            )
+            && !primo.ends_with(')')
+            && t.trim_end_matches(';').split_whitespace().last().is_some_and(|u| u.starts_with("var_tmp"));
+        for n in nomi_var_tmp(r) {
+            if store.as_deref() == Some(n.as_str()) {
+                scritture.entry(n).or_default().push(i);
+                continue;
+            }
+            if dichiara {
+                decl.insert(n, i);
+                continue;
+            }
+            *letture.entry(n).or_insert(0) += 1;
+        }
+    }
+
+    let mut togli: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    for (n, ws) in &scritture {
+        if ws.len() != 1 || letture.contains_key(n) {
+            continue;
+        }
+        let i = ws[0];
+        let Some((_, rhs)) = righe[i].split_once('=') else { continue };
+        let rhs = rhs.trim().trim_end_matches(';');
+        if rhs.contains('(') && rhs.contains(')') && !rhs.starts_with('(') && rhs.contains(char::is_alphabetic) && chiamata_probabile(rhs) {
+            continue; // effetti collaterali: mai
+        }
+        let sicuro = match primo_deref_testuale(rhs) {
+            None => true,
+            Some(d) => {
+                let fine = (i + 4).min(righe.len());
+                righe[i + 1..fine].iter().any(|x| x.contains(&d))
+            }
+        };
+        if sicuro {
+            togli.insert(i);
+            if let Some(&d) = decl.get(n) {
+                togli.insert(d);
+            }
+        }
+    }
+    if togli.is_empty() {
+        return code.to_string();
+    }
+    let fine_nl = code.ends_with('\n');
+    let mut out: String = righe
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !togli.contains(i))
+        .map(|(_, r)| *r)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if fine_nl {
+        out.push('\n');
+    }
+    out
+}
+
+/// I nomi `var_tmpN` citati in una riga.
+fn nomi_var_tmp(r: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let b = r.as_bytes();
+    let mut i = 0usize;
+    while let Some(p) = r[i..].find("var_tmp") {
+        let a = i + p;
+        // Non deve essere la coda di un identificatore piu' lungo.
+        if a > 0 && (b[a - 1].is_ascii_alphanumeric() || b[a - 1] == b'_') {
+            i = a + 7;
+            continue;
+        }
+        let mut e = a + 7;
+        while e < b.len() && b[e].is_ascii_digit() {
+            e += 1;
+        }
+        if e > a + 7 {
+            let n = r[a..e].to_string();
+            if !out.contains(&n) {
+                out.push(n);
+            }
+        }
+        i = e.max(a + 7);
+    }
+    out
+}
+
+/// Una chiamata a funzione nella RHS (euristica volutamente LARGA: in caso di
+/// dubbio la passata rinuncia, e il difetto e' una rimozione mancata).
+fn chiamata_probabile(rhs: &str) -> bool {
+    let b = rhs.as_bytes();
+    for (i, c) in rhs.char_indices() {
+        if c != '(' || i == 0 {
+            continue;
+        }
+        let prima = b[i - 1];
+        if prima.is_ascii_alphanumeric() || prima == b'_' {
+            // `f(` — ma non `*(uint32_t *)(...)`, dove prima di `(` c'e' `)`.
+            return true;
+        }
+    }
+    false
+}
+
+/// Il primo deref testuale della RHS, es. `*(uint32_t *)a1` o
+/// `*(uint32_t *)(v8 + 116)`. `None` = nessun deref.
+fn primo_deref_testuale(rhs: &str) -> Option<String> {
+    let a = rhs.find("*(")?;
+    let b = rhs.as_bytes();
+    // chiusura della parentesi del cast
+    let mut liv = 0i32;
+    let mut i = a + 1;
+    while i < b.len() {
+        match b[i] {
+            b'(' => liv += 1,
+            b')' => {
+                liv -= 1;
+                if liv == 0 {
+                    break;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    if i >= b.len() {
+        return None;
+    }
+    let mut j = i + 1;
+    if j < b.len() && b[j] == b'(' {
+        let mut l2 = 0i32;
+        while j < b.len() {
+            match b[j] {
+                b'(' => l2 += 1,
+                b')' => {
+                    l2 -= 1;
+                    if l2 == 0 {
+                        j += 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            j += 1;
+        }
+    } else {
+        while j < b.len() && (b[j].is_ascii_alphanumeric() || b[j] == b'_') {
+            j += 1;
+        }
+    }
+    if j <= i + 1 {
+        return None;
+    }
+    Some(rhs[a..j].to_string())
+}
+
 fn raise_sse_pseudo_intrinsics(code: &str, enabled: bool) -> String {
     if !enabled || !code.contains("xmm") {
         return code.to_string();
@@ -23131,6 +26035,19 @@ fn apply_recovered_hlil_name(code: &str, address: u64, name: &str) -> String {
         "atexit", "__p__fmode", "strnlen", "wcsnlen", "strlen", "wcslen", "memcpy", "memmove",
         "memset", "memcmp", "strcpy", "strncpy", "strcmp", "strncmp", "strcat", "malloc", "free",
         "calloc", "realloc", "printf", "fprintf", "sprintf", "puts", "exit", "abort",
+        // #7530 - aggiunti dopo aver LETTO gli errori di `gcc`, non per
+        // simmetria. Ognuno di questi produceva `conflicting types` su un file
+        // di sample7_cpp, perche' e' un THUNK DI IMPORT battezzato col nome
+        // importato: definiamo `memchr` sopra quello della libc.
+        //
+        // ⚠ Il conflitto e' una fortuna. Se compilasse, la NOSTRA `memchr`
+        // vincerebbe al link e cambierebbe il comportamento dell'intero
+        // programma **in silenzio**. Non rinominare il thunk lascia le chiamate
+        // legate al simbolo vero della libc, che e' esattamente cio' che il
+        // thunk faceva nell'originale.
+        "memchr", "strchr", "strrchr", "strstr", "strdup", "strerror", "strtoul",
+        "strtol", "strtod", "_errno", "getenv", "fputs", "fputc", "putc", "fwrite",
+        "fread", "fopen", "fclose", "vfprintf", "snprintf", "qsort", "bsearch",
     ];
     let synthetic = name.starts_with("sub_") || name.starts_with("off_") || name.starts_with("loc_");
     let valid = !name.as_bytes()[0].is_ascii_digit()
@@ -23219,8 +26136,16 @@ fn collapse_widen_then_narrow_casts(code: &str) -> String {
                     changed = true;
                 }
                 _ => {
-                    next.push_str(&rest[..inner_start]);
-                    rest = &rest[inner_start..];
+                    // #8260: avanzare di `inner_start` (i+2) consumava anche la
+                    // parentesi APERTA del cast interno, cosi' il `)(` seguente
+                    // restava senza `(` davanti e `rfind` dava None: la coppia
+                    // veniva saltata. La forma tipica di path B,
+                    // `(uint64_t)(uint32_t)(uint32_t)x`, cade esattamente li'.
+                    // Il ciclo a punto fisso non rimedia, perche' `changed`
+                    // resta false e si esce alla prima iterazione.
+                    // Fermarsi DOPO la `)` lascia la `(` come ancora.
+                    next.push_str(&rest[..=i]);
+                    rest = &rest[i + 1..];
                 }
             }
         }
@@ -25120,7 +28045,55 @@ fn rewrite_thread_context_register(code: &str) -> String {
     for (i, line) in lines.iter().enumerate() {
         if i == decl_line {
             // `extern` INSIDE the body is valid C and keeps the change local.
-            out.push_str("    extern uint64_t __thread_context;\n");
+            //
+            // #7100 — ma un `extern` che NESSUNO definisce non linka, e questo
+            // e' il simbolo mancante piu' diffuso del corpus: **7744 file** lo
+            // usano, sempre con offset 16 (15547 occorrenze). Al §138 e' una
+            // delle tre cause residue di `LINK_FAIL` sui bucket Go.
+            //
+            // La forma emessa e' `*(__int64 *)(__thread_context + 16)`: il
+            // simbolo e' un VALORE che porta l'indirizzo base del TLS, non un
+            // oggetto. Definirlo a 0 farebbe linkare e poi deferenziare `0x10`
+            // — si passerebbe da `LINK_FAIL` a `CRASH`, che non e' un
+            // progresso. Lo si fa puntare a un blocco statico, cosi' il deref
+            // e' valido e legge zeri.
+            //
+            // ⚠ INESATTO E DICHIARATO: il vero blocco TLS ha i valori del
+            // thread, qui sono zeri. Nella forma osservata il confronto e'
+            // `sp > *(ctx + 16)` (il controllo di crescita dello stack del Go),
+            // e con zero il ramo preso e' quello «stack sufficiente» — il piu'
+            // frequente nell'esecuzione reale. E' la stessa scelta di
+            // `repair_return_void_call`, che inventa un valore e lo dichiara.
+            //
+            // Gate `RUSTRE_TLS_DEFINE`, **opt-in**: tocca 7744 file, e una
+            // modifica di questa taglia non si accende senza il numero.
+            // #7270 — DEFAULT ON dal 2026-08-25, con il numero in mano.
+            //
+            // Misurato: acceso non muove NESSUN AGREE (era gia' noto), e
+            // nemmeno i LINK_FAIL da solo — coerente con l'analisi per blocco,
+            // che trovo' ZERO funzioni bloccate SOLO da `__thread_context`.
+            //
+            // Lo accendo lo stesso, e non per ottimismo: il ramo spento emette
+            // `extern uint64_t __thread_context;` per un simbolo che **nessuno
+            // definisce mai** (misurate 2172 dichiarazioni, 0 definizioni). E'
+            // un'affermazione FALSA sul programma, della stessa specie dei
+            // registri dichiarati `extern` (#7210), e costa il link a chiunque
+            // la incontri. Il ramo acceso definisce un blocco locale: dice meno,
+            // ed e' vero.
+            //
+            // ⚠ Resta un co-fattore, non una cura: sblocca solo dove le ALTRE
+            // cause sono gia' cadute.
+            if !matches!(
+                std::env::var("RUSTRE_TLS_DEFINE").as_deref(),
+                Ok("0") | Ok("false")
+            ) {
+                out.push_str("    static uint64_t __tls_blocco[32];\n");
+                out.push_str(
+                    "    uint64_t __thread_context = (uint64_t)(uintptr_t)__tls_blocco;\n",
+                );
+            } else {
+                out.push_str("    extern uint64_t __thread_context;\n");
+            }
             continue;
         }
         out.push_str(&replace_word(line, &name, "__thread_context"));
@@ -25299,7 +28272,37 @@ fn rewrite_hlil_jump_table_switch(
     // risolta CANCELLA l'associazione precedente invece di lasciarla in piedi.
     fn ass(t: &str) -> Option<(&str, u64)> {
         let (lhs, rhs) = t.split_once('=')?;
-        let hex = rhs.trim().trim_end_matches(';').trim().strip_prefix("off_")?;
+        let mut r = rhs.trim().trim_end_matches(';').trim();
+        // ⚠⚠ #7440 — l ANCORA era `off_<BASE>` NUDO, e questa passata era
+        // diventata MUTA senza che nessuno se ne accorgesse.
+        //
+        // Misurato: accendendo `RUSTRE_HLIL_SWITCH` non cambiava **nulla** —
+        // 7 file con `switch` prima e dopo su sample11_c, 80 righe su sample6_c
+        // — nemmeno su `classify`, il caso che la docstring NOMINA e per cui
+        // path A emette gia' lo `switch` (l oracolo).
+        //
+        // Causa: una passata SUCCESSIVA normalizza il riferimento al simbolo.
+        // Tre righe della forma su quattro combaciavano ancora; a non
+        // combaciare era la prima:
+        //
+        //     attesa:  v1 = off_140004000;
+        //     reale:   v1 = (__int64)&off_140004000;
+        //
+        // E' [[feedback_ordine_passate_decompiler]]: chi riconosce una forma
+        // GREZZA deve girare PRIMA di chi la normalizza. Qui la passata non si
+        // puo' spostare senza rimescolare la catena, quindi le si insegna la
+        // grafia derivata — che e' la correzione piu' piccola e piu' stabile.
+        //
+        // Si accetta un cast iniziale `(TIPO)` e un `&` facoltativo. Il cast si
+        // salta per parentesi, non per lunghezza fissa: `(__int64)`,
+        // `(uint64_t)` e `(unsigned __int64)` hanno lunghezze diverse.
+        if r.starts_with('(')
+            && let Some(fine) = r.find(')')
+        {
+            r = r[fine + 1..].trim_start();
+        }
+        r = r.strip_prefix('&').unwrap_or(r);
+        let hex = r.strip_prefix("off_")?;
         Some((lhs.trim(), u64::from_str_radix(hex, 16).ok()?))
     }
     if !lines.iter().any(|l| ass(l.trim()).is_some()) {
@@ -25412,6 +28415,106 @@ fn cast_addrof_expr_derefs(code: &str) -> String {
 /// identico mi aveva fatto credere a una causa unica.
 ///
 /// Si tiene solo cio' che e' ancora anonimo (`off_…`): quello nessuno lo
+
+/// #7680 — toglie le dichiarazioni locali che RIDICHIARANO un parametro.
+///
+/// `f(uint64_t a1) { uint64_t a1; ... }` non e' uno shadowing: in C e' una
+/// **ridichiarazione** dello stesso identificatore nello stesso ambito, e il
+/// compilatore la rifiuta.
+///
+/// ## Perche' una passata TESTUALE e tardiva
+///
+/// Il difetto nasce da DUE produttori che non si vedono:
+/// * `CCodePrinter::print_function` stampa il corpo con le locali quando il
+///   prototipo NON ha ancora parametri;
+/// * `apply_win64_calling_convention_with` riscrive DOPO la riga di firma
+///   promuovendo i registri a `a1..a4`, **senza toccare le dichiarazioni**.
+///
+/// Le guardie #7670/#7670b, messe nei due emettitori, sono corrette ma
+/// **inerti**: al momento in cui stampano, il conflitto non esiste ancora. Solo
+/// qui, a valle di ogni produttore, firma e dichiarazioni sono entrambe
+/// visibili — la stessa ragione per cui la rete di riparazione sintattica gira
+/// per ultima.
+///
+/// ## Misura
+///
+/// Con `RUSTRE_MLIL_SSA=1` su `go_sample9_O0`: **987 file su 2576 (38%)**
+/// emettono `uint64_t a1;` dentro una funzione il cui parametro e' `a1`. E'
+/// uno dei DUE difetti che tengono spento l'item «SSA MLIL» della direttiva.
+///
+/// ⚠ A gate spento e' un NO-OP atteso: nessun produttore odierno crea il
+/// conflitto. Serve a SBLOCCARE l'SSA, non a cambiare l'output di oggi.
+fn drop_locals_shadowing_params(code: &str) -> String {
+    let lines: Vec<&str> = code.lines().collect();
+    // ⚠ La riga di firma NON finisce con `{`: path B emette la graffa da SOLA
+    // sulla riga successiva. La prima versione di questa passata cercava
+    // `ends_with('{')` e non trovava nulla — girava e non toccava niente
+    // (987 → 986, cioe' inerte). Il predicato giusto e' «finisce con `)` e la
+    // riga dopo e' una graffa sola», che copre entrambi gli stili.
+    let Some(open) = lines.iter().enumerate().position(|(i, l)| {
+        let t = l.trim_end();
+        !l.trim_start().starts_with("//")
+            && t.contains('(')
+            && (t.ends_with('{')
+                || (t.ends_with(')') && lines.get(i + 1).is_some_and(|n| n.trim() == "{")))
+    }) else {
+        return code.to_string();
+    };
+    // Nomi legati dalla firma: l'ultimo identificatore di ogni argomento.
+    let sig = lines[open];
+    let Some(a) = sig.find('(') else { return code.to_string() };
+    let Some(b) = sig.rfind(')') else { return code.to_string() };
+    let params: std::collections::HashSet<&str> = sig[a + 1..b]
+        .split(',')
+        .filter_map(|p| p.split_whitespace().last())
+        .map(|n| n.trim_start_matches('*'))
+        .filter(|n| !n.is_empty() && n.bytes().all(is_word_char))
+        .collect();
+    if params.is_empty() {
+        return code.to_string();
+    }
+    let mut out = String::with_capacity(code.len());
+    for (i, l) in lines.iter().enumerate() {
+        // Solo le righe di DICHIARAZIONE nuda `TIPO nome;`, mai un'assegnazione
+        // o uno statement: una riga con `=` o `(` non e' una dichiarazione.
+        let t = l.trim();
+        // ⚠⚠ La PAROLA CHIAVE iniziale va esclusa, o `return a1;` viene
+        // scambiato per una dichiarazione: finisce con `;`, non ha `=` ne'
+        // `(`, ha due token e l'ultimo e' il nome di un parametro.
+        //
+        // MISURATO sulla prima versione di #7680: le occorrenze di `return `
+        // passavano da **2474 a 1449** con `RUSTRE_MLIL_SSA=1` — **1025
+        // return CANCELLATI**, cioe' funzioni che smettevano di restituire il
+        // loro valore. A gate spento era invisibile (116 → 116), perche' la
+        // collisione col nome del parametro non si presenta.
+        //
+        // ⚠ La stessa trappola e' gia' registrata per `drop_dead_var_tmp_stores`
+        // (#3850): li' fu trovata da un test col caso NEGATIVO, non dalla
+        // misura. Qui l'ho ripetuta pur avendo letto quella nota lo stesso
+        // giorno — la guardia va SCRITTA, non ricordata.
+        let primo = t.split_whitespace().next().unwrap_or("");
+        let e_parola_chiave = matches!(
+            primo,
+            "return" | "goto" | "break" | "continue" | "case" | "default" | "else" | "do"
+        );
+        let e_dichiarazione = i > open
+            && !e_parola_chiave
+            && t.ends_with(';')
+            && !t.contains('=')
+            && !t.contains('(')
+            && t.split_whitespace().count() >= 2;
+        if e_dichiarazione
+            && let Some(nome) = t.trim_end_matches(';').split_whitespace().last()
+            && params.contains(nome.trim_start_matches('*'))
+        {
+            continue;
+        }
+        out.push_str(l);
+        out.push('\n');
+    }
+    out
+}
+
 /// definisce al posto nostro. Va nella rete FINALE, prima di
 /// `drop_extern_when_defined`, cosi' l'`extern` resta e il file torna valido.
 fn drop_named_data_definitions(code: &str) -> String {
@@ -25547,6 +28650,12 @@ fn prepend_hlil_externs(
         }
     }
     // Drop any mis-placed copies the A-shaped pass left behind mid-file.
+    //
+    // ⚠ #8010 RITIRATO: il filtro qui era INERTE (391 righe prima, 391 dopo).
+    // Le `extern __int64 __imp_X;` dentro il corpo non passano di qui: le
+    // produce `rename_import_slots` in `batch_decompiler.rs`, che gira DOPO,
+    // riscrivendo una riga IN LOCO e conservando la posizione sbagliata.
+    // Un predicato che no-oppa e' un bug (REGOLA #2), quindi non resta.
     for line in code.lines() {
         if line.starts_with("extern __int64 off_") || line.starts_with("extern __int64 sub_") {
             continue;
@@ -25735,6 +28844,815 @@ fn drop_redundant_addr_casts(code: &str, enabled: bool) -> String {
     }
     out.push_str(rest);
     out
+}
+
+
+/// #8370 - fonde le letture di flag grezzi nelle condizioni di path B.
+///
+/// Path B emette l'idioma x86 alla lettera:
+///
+/// ```text
+/// var_tmp0 = (a - b);
+/// flag_zf  = (var_tmp0 == 0);
+/// flag_sf  = ((int32_t)var_tmp0 < 0);
+/// flag_of  = 0;
+/// if ((flag_zf == 1) | (flag_sf != flag_of)) {
+/// ```
+///
+/// Path A fonde e ne emette ZERO; misurate **4835** condizioni con flag in B,
+/// di cui 3732 (77%) idiomi riconoscibili.
+///
+/// La sostituzione qui e' **esattamente equivalente**: rimpiazzo ogni lettura
+/// con la sua definizione e semplifico. NON riscrivo `(a - b) <= 0` in
+/// `a <= b`: quel passo assume assenza di overflow, e il segno degli operandi
+/// e' gia' costato due difetti in questo crate. La larghezza (`int32_t`) viene
+/// letta dalla definizione di `flag_sf`, dove e' esplicita, mai dedotta dalla
+/// variabile.
+///
+/// Sostituisco solo se fra definizione e uso non c'e' un'etichetta o un cambio
+/// di blocco: senza dominanza la definizione potrebbe non raggiungere l'uso.
+fn fuse_hlil_flag_conditions(code: &str) -> String {
+    use std::collections::HashMap;
+    let mut def: HashMap<String, String> = HashMap::new();
+    let mut out: Vec<String> = Vec::new();
+
+    for raw in code.split('\n') {
+        let t = raw.trim();
+
+        let e_condizione = t.starts_with("if ")
+            || t.starts_with("while ")
+            || t.starts_with("} while")
+            || t.starts_with("} else if ")
+            || t.starts_with("else if ");
+
+        // Un'etichetta o una graffa cambia blocco: le definizioni raccolte non
+        // dominano piu' cio' che segue.
+        //
+        // ⚠ L'ORDINE qui azzerava la passata: la riga `if (X) {` CONTIENE una
+        // graffa, ma quella graffa apre il blocco DOPO che la condizione e'
+        // stata valutata, e le definizioni che precedono l'`if` dominano sia la
+        // condizione sia il corpo. Azzerare su di essa faceva fallire ogni
+        // fusione (3 test su 5, presi al primo giro).
+        // Chi CHIUDE un blocco (`}` in testa) azzera davvero: le definizioni
+        // interne a quel blocco non raggiungono cio' che segue.
+        // La coda di un `do { ... } while (cond);` e' l'ECCEZIONE: comincia con
+        // `}`, ma le definizioni del CORPO raggiungono davvero quella
+        // condizione — il blocco si chiude dopo averla valutata, non prima.
+        // Misurate 71 letture di flag che restavano solo per questo.
+        let coda_do_while = t.starts_with("} while");
+        if (t.starts_with('}') && !coda_do_while)
+            || (!e_condizione && (t.ends_with(':') || t.contains('{')))
+        {
+            def.clear();
+        }
+        let cambia_blocco_dopo = e_condizione && t.contains('{');
+
+        // #8400 - INVALIDAZIONE PER SCRITTURA. Senza questa, la passata non
+        // e' una propagazione di copie: e' una sostituzione cieca.
+        //
+        // Provato sul campo, non dedotto. `apply` in `sample6_c` passava da
+        // AGREE a DIVERGE (ref=7, emesso=12):
+        //
+        // ```c
+        //  9| flag_zf = ((uint32_t)a1 == 0);   <- cattura la a1 ORIGINALE
+        // 10| a1 = (uint64_t)(uint32_t)a2;     <- a1 VIENE RIASSEGNATA
+        // 12| v1 = ((flag_zf == 0) ? a2 : v1); <- usa il flag della a1 vecchia
+        // ```
+        //
+        // Sostituendo alla riga 12 si legge la a1 NUOVA. Popolazione misurata
+        // su tutto il corpus: **2871 coppie def-uso su 12633 (22%)** hanno un
+        // operando riassegnato in mezzo.
+        //
+        // Nota il caso piu' insidioso, ricorrente nel corpus:
+        // `flag_zf = ((result | v5) == 0);` seguito da `result = (result | v5);`
+        // - e' l'istruzione ALU che ha IMPOSTATO quel flag, emessa dopo di esso.
+        if let Some(scritta) = variabile_scritta(t) {
+            def.retain(|_, expr| !menziona_identificatore(expr, scritta));
+        }
+        // Una chiamata o una scrittura in memoria puo' cambiare qualunque cosa
+        // si legga attraverso un puntatore: scarto le definizioni che
+        // dereferenziano.
+        if t.contains("*(") && t.contains(" = ") && t.trim_start().starts_with('*')
+            || contiene_chiamata(t)
+        {
+            def.retain(|_, expr| !expr.contains('*'));
+        }
+
+        if t.starts_with("flag_")
+            && t.ends_with(';')
+            && let Some(eq) = t.find(" = ")
+        {
+            let nome = t[..eq].trim().to_string();
+            let val = t[eq + 3..t.len() - 1].trim().to_string();
+            if !nome.contains(' ') {
+                // Se il valore legge a sua volta un flag, lo sostituisco PRIMA
+                // di registrarlo: altrimenti propago in avanti un nome che poi
+                // sparisce. Misurate 2 occorrenze reali nel corpus.
+                let val = if val.contains("flag_") {
+                    let mut v = val.clone();
+                    for (n, d) in &def {
+                        v = v.replace(n.as_str(), &format!("({d})"));
+                    }
+                    v
+                } else {
+                    val
+                };
+                let riga = if raw.contains("flag_")
+                    && raw.split(" = ").nth(1).is_some_and(|r| r.contains("flag_"))
+                {
+                    format!("{}{val};", &raw[..raw.find(" = ").unwrap() + 3])
+                } else {
+                    raw.to_string()
+                };
+                def.insert(nome, val);
+                out.push(riga);
+                if cambia_blocco_dopo {
+                    def.clear();
+                }
+                continue;
+            }
+        }
+
+        // #8380: non solo `if`/`while`. Misurato dopo la prima stesura:
+        // **3772** letture di flag stanno nei TERNARI (`(flag_zf == 1) ? a : b`,
+        // cioe' `cmov`), contro 4835 nelle condizioni. Guardare solo le
+        // condizioni lasciava fuori un fronte quasi altrettanto grande.
+        //
+        // Va invece escluso cio' che NON e' una lettura:
+        //   * le dichiarazioni `uint8_t flag_of;` — 5963 nel corpus.
+        //     Sostituirvi dentro produrrebbe `uint8_t (x == 0);`.
+        //   * il lato sinistro di `flag_X = ...` (ma il DESTRO si', esiste).
+        let dichiarazione = t.ends_with(';') && !t.contains('=') && t.contains(' ');
+        if !t.contains("flag_") || dichiarazione {
+            out.push(raw.to_string());
+            if cambia_blocco_dopo {
+                def.clear();
+            }
+            continue;
+        }
+        let _ = e_condizione;
+
+        let ch: Vec<char> = raw.chars().collect();
+        let mut nuova = String::with_capacity(raw.len() * 2);
+        let mut i = 0usize;
+        let mut sostituito = false;
+        while i < ch.len() {
+            if ch[i..].starts_with(&['f', 'l', 'a', 'g', '_']) {
+                let mut j = i + 5;
+                while j < ch.len() && (ch[j].is_ascii_alphanumeric() || ch[j] == '_') {
+                    j += 1;
+                }
+                let nome: String = ch[i..j].iter().collect();
+                if let Some(v) = def.get(&nome) {
+                    // Un letterale (`flag_of = 0`) non va avvolto: `(0)` fa
+                    // sopravvivere `!= (0)` al semplificatore, che cerca
+                    // `!= 0)`. Misurato: senza questo, `jle` si fondeva in
+                    // `(((int32_t)x < 0) != (0))` invece di `((int32_t)x < 0)`.
+                    let semplice =
+                        !v.is_empty() && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+                    if semplice {
+                        nuova.push_str(v);
+                    } else {
+                        nuova.push('(');
+                        nuova.push_str(v);
+                        nuova.push(')');
+                    }
+                    sostituito = true;
+                    i = j;
+                    continue;
+                }
+            }
+            nuova.push(ch[i]);
+            i += 1;
+        }
+
+        if sostituito {
+            out.push(simplify_bool_compare(&nuova));
+        } else {
+            out.push(raw.to_string());
+        }
+        if cambia_blocco_dopo {
+            def.clear();
+        }
+    }
+
+    out.join("\n")
+}
+
+/// Semplifica `(X) == 1` -> `X` e `(X) == 0` -> `!(X)` quando `X` e' gia' un
+/// confronto (quindi vale 0/1). Applicata solo alle condizioni riscritte da
+/// [`fuse_hlil_flag_conditions`].
+fn simplify_bool_compare(riga: &str) -> String {
+    let mut s = riga.to_string();
+    for _ in 0..4 {
+        let prima = s.clone();
+        s = s.replace(") == 1)", "))").replace(") != 0)", "))");
+        s = rewrite_negated_compare(&s);
+        if s == prima {
+            break;
+        }
+    }
+    s
+}
+
+/// `(E) == 0` / `(E) != 1` -> `!(E)`, risalendo alla parentesi aperta
+/// corrispondente invece di indovinarla.
+///
+/// ⚠ La prima stesura cercava `") == 0)"` — SETTE caratteri, con la parentesi
+/// di chiusura — e la consumava. Ma in `if ((E) == 0) {` quella parentesi
+/// chiude l'`if`, non il confronto: mangiarla produceva
+/// `if ((!(E)) {`, sbilanciata, e gcc rifiutava il file.
+/// Rotti 3 file su 60 campionati, ZERO dei quali era rotto prima.
+/// Il pattern giusto e' di SEI caratteri e la parentesi resta dov'e'.
+fn rewrite_negated_compare(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    loop {
+        let p = match (rest.find(") == 0"), rest.find(") != 1")) {
+            (Some(a), Some(b)) => a.min(b),
+            (Some(a), None) => a,
+            (None, Some(b)) => b,
+            (None, None) => break,
+        };
+        // Solo se il confronto e' l'intero operando: la prossima cosa dopo
+        // `) == 0` deve essere una chiusura. Altrimenti `(a) == 0 + 1`
+        // diventerebbe `!(a) + 1`, che non e' la stessa espressione.
+        let dopo = rest[p + 6..].chars().next();
+        let mut apre = None;
+        if dopo == Some(')') {
+            let head = &rest[..=p];
+            let mut liv = 0i32;
+            for (k, c) in head.char_indices().rev() {
+                match c {
+                    ')' => liv += 1,
+                    '(' => {
+                        liv -= 1;
+                        if liv == 0 {
+                            apre = Some(k);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        match apre {
+            Some(k) => {
+                out.push_str(&rest[..k]);
+                out.push('!');
+                out.push_str(&rest[k..=p]);
+                rest = &rest[p + 6..];
+            }
+            None => {
+                out.push_str(&rest[..=p]);
+                rest = &rest[p + 1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+#[cfg(test)]
+mod prove_fusione_flag {
+    use super::*;
+
+    #[test]
+    fn jle_con_segno_diventa_confronto_esatto() {
+        let src = "    var_tmp0 = (a - b);\n    flag_sf = ((int32_t)var_tmp0 < 0);\n    flag_of = 0;\n    flag_zf = (var_tmp0 == 0);\n    if ((flag_zf == 1) | (flag_sf != flag_of)) {";
+        let got = fuse_hlil_flag_conditions(src);
+        let ultima = got.lines().last().unwrap();
+        assert!(!ultima.contains("flag_"), "flag residui: {ultima}");
+        assert!(ultima.contains("(int32_t)var_tmp0"), "{ultima}");
+        assert!(!ultima.contains("a <= b"), "riscrittura non esatta: {ultima}");
+    }
+
+    #[test]
+    fn je_diventa_uguaglianza() {
+        let src = "    flag_zf = (x == 0);\n    if (flag_zf == 1) {";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(!u.contains("flag_"), "{u}");
+        assert!(u.contains("x == 0"), "{u}");
+    }
+
+    #[test]
+    fn jne_diventa_negazione() {
+        let src = "    flag_zf = (x == 0);\n    if (flag_zf == 0) {";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(!u.contains("flag_"), "{u}");
+        assert!(u.contains('!'), "manca la negazione: {u}");
+    }
+
+    #[test]
+    fn senza_dominanza_non_sostituisce() {
+        let src = "    flag_zf = (x == 0);\nloc_140001040:\n    if (flag_zf == 1) {";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(u.contains("flag_zf"), "ha sostituito senza dominanza: {u}");
+    }
+
+    /// Sorveglia la resa, non solo l'assenza di `flag_`: la prima stesura
+    /// fondeva `jle` in `(((int32_t)x < 0) != (0))`, esatto ma illeggibile.
+    #[test]
+    fn jle_non_lascia_confronto_ridondante_col_letterale() {
+        let src = "    flag_of = 0;
+    flag_sf = ((int32_t)x < 0);
+    flag_zf = (x == 0);
+    if ((flag_zf == 1) | (flag_sf != flag_of)) {";
+        let u = fuse_hlil_flag_conditions(src);
+        let u = u.lines().last().unwrap();
+        assert!(!u.contains("!= (0)"), "confronto col letterale rimasto: {u}");
+        assert!(!u.contains("!= 0)"), "confronto col letterale rimasto: {u}");
+        assert!(u.contains("(int32_t)x < 0"), "{u}");
+    }
+
+    /// Il difetto che i primi cinque test NON vedevano: cercavano `flag_`
+    /// residui e la resa, mai il BILANCIAMENTO. `if (flag_zf == 0) {` usciva
+    /// come `if ((!(var_tmp0 == 0)) {` — nessun `flag_`, resa plausibile,
+    /// e gcc la rifiuta.
+    #[test]
+    fn ogni_condizione_riscritta_resta_bilanciata() {
+        let casi = [
+            "    flag_zf = (var_tmp0 == 0);\n    if (flag_zf == 0) {",
+            "    flag_zf = (x == 0);\n    if (flag_zf == 1) {",
+            "    flag_zf = (x == 0);\n    if (flag_zf != 1) {",
+            "    flag_cf = (a < b);\n    flag_zf = (x == 0);\n    if ((flag_cf == 1) | (flag_zf == 1)) {",
+            "    flag_of = 0;\n    flag_sf = ((int32_t)x < 0);\n    flag_zf = (x == 0);\n    if (!((flag_zf == 1) | (flag_sf != flag_of))) {",
+            "    flag_sf = ((int32_t)x < 0);\n    flag_of = 0;\n    while (flag_sf == flag_of) {",
+        ];
+        for c in casi {
+            let got = fuse_hlil_flag_conditions(c);
+            let u = got.lines().last().unwrap();
+            let ap = u.chars().filter(|c| *c == '(').count();
+            let ch = u.chars().filter(|c| *c == ')').count();
+            assert_eq!(ap, ch, "parentesi sbilanciate ({ap} aperte, {ch} chiuse): {u}");
+            assert!(!u.contains("flag_"), "flag residuo: {u}");
+        }
+    }
+
+    /// #8380: il fronte che la prima stesura non vedeva.
+    #[test]
+    fn ternario_cmov_viene_fuso() {
+        let src = "    flag_zf = (x == 0);\n    v6 = ((flag_zf == 1) ? v4 : v6);";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(!u.contains("flag_"), "ternario non fuso: {u}");
+        assert!(u.contains("x == 0"), "{u}");
+        assert_eq!(
+            u.chars().filter(|c| *c == '(').count(),
+            u.chars().filter(|c| *c == ')').count(),
+            "parentesi sbilanciate: {u}"
+        );
+    }
+
+    /// Una dichiarazione NON e' una lettura: sostituirvi dentro produrrebbe
+    /// `uint8_t (x == 0);`. Sono 5963 righe nel corpus.
+    #[test]
+    fn la_dichiarazione_non_viene_toccata() {
+        let src = "    flag_zf = (x == 0);\n    uint8_t flag_zf;";
+        let got = fuse_hlil_flag_conditions(src);
+        assert_eq!(got.lines().last().unwrap().trim(), "uint8_t flag_zf;");
+    }
+
+    /// La coda di un `do/while` comincia con `}` ma le definizioni del corpo
+    /// la raggiungono: il blocco si chiude DOPO la condizione.
+    #[test]
+    fn coda_di_do_while_viene_fusa() {
+        let src = "    do {
+        flag_sf = ((int32_t)x < 0);
+    } while (flag_sf == 0);";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(!u.contains("flag_"), "coda do/while non fusa: {u}");
+        assert_eq!(
+            u.chars().filter(|c| *c == '(').count(),
+            u.chars().filter(|c| *c == ')').count(),
+            "sbilanciata: {u}"
+        );
+    }
+
+    /// #8400 - la forma ESATTA che ha fatto divergere `apply` in `sample6_c`
+    /// (ref=7, emesso=12). E' il test che i primi nove non avevano.
+    #[test]
+    fn operando_riassegnato_blocca_la_sostituzione() {
+        let src = "    flag_zf = ((uint32_t)a1 == 0);\n    a1 = (uint64_t)(uint32_t)a2;\n    v1 = ((flag_zf == 0) ? a2 : v1);";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(
+            u.contains("flag_zf"),
+            "ha sostituito dopo la riassegnazione di a1: {u}"
+        );
+    }
+
+    /// Il caso ricorrente: l'istruzione ALU che imposta il flag viene emessa
+    /// DOPO il flag stesso.
+    #[test]
+    fn alu_che_riscrive_il_proprio_operando_blocca_la_sostituzione() {
+        let src = "    flag_zf = ((result | v5) == 0);\n    result = (result | v5);\n    if (flag_zf == 1) {";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(u.contains("flag_zf"), "sostituito nonostante result cambi: {u}");
+    }
+
+    /// Il prefisso non basta: `a1` non deve essere invalidato da `a12`.
+    #[test]
+    fn la_riassegnazione_di_un_altro_nome_non_invalida() {
+        let src = "    flag_zf = ((uint32_t)a1 == 0);\n    a12 = 5;\n    if (flag_zf == 1) {";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(!u.contains("flag_"), "invalidato per un prefisso: {u}");
+    }
+
+    #[test]
+    fn menziona_identificatore_non_prende_sottostringhe() {
+        assert!(menziona_identificatore("((uint32_t)a1 == 0)", "a1"));
+        assert!(!menziona_identificatore("((uint32_t)a12 == 0)", "a1"));
+        assert!(!menziona_identificatore("(var_a1 == 0)", "a1"));
+        assert!(menziona_identificatore("(a1 + a2)", "a2"));
+    }
+
+    /// Una chiamata puo' cambiare la memoria: le definizioni che
+    /// dereferenziano vanno scartate.
+    #[test]
+    fn una_chiamata_invalida_le_definizioni_che_dereferenziano() {
+        let src = "    flag_zf = (*(uint32_t *)p == 0);\n    v2 = sub_140001000(p);\n    if (flag_zf == 1) {";
+        let got = fuse_hlil_flag_conditions(src);
+        let u = got.lines().last().unwrap();
+        assert!(u.contains("flag_zf"), "sostituito dopo una chiamata: {u}");
+    }
+
+    #[test]
+    fn flag_senza_definizione_resta_intatto() {
+        let src = "    if (flag_cf == 1) {";
+        assert_eq!(fuse_hlil_flag_conditions(src), src);
+    }
+}
+
+
+/// #8390 - toglie le assegnazioni di flag che [`fuse_hlil_flag_conditions`] ha
+/// reso illeggibili... cioe' MAI LETTE.
+///
+/// Misurato dopo la fusione: **18547 su 23260 (79%)** delle righe
+/// `flag_X = ...;` non hanno piu' un lettore (contro 40 prima). Sono righe
+/// morte: un flag e' un artefatto del decompilatore, non e' osservabile dal
+/// programma, quindi toglierlo e' esattamente equivalente.
+///
+/// ATTENZIONE: Due guardie, entrambe necessarie:
+///  * il lato destro non deve contenere una CHIAMATA - `flag_zf = f(x);`
+///    ha un effetto collaterale anche se il flag non si legge;
+///  * si tocca solo una riga che INIZIA con `flag_`: `uint8_t flag_df = 0;`
+///    e' una dichiarazione con inizializzatore, non un'assegnazione, e le mie
+///    prime due sonde l'hanno confusa proprio qui.
+fn drop_dead_flag_assignments(code: &str) -> String {
+    let righe: Vec<&str> = code.split('\n').collect();
+
+    let e_dichiarazione = |t: &str| {
+        ["uint8_t ", "int ", "bool ", "char ", "unsigned ", "__int64 "]
+            .iter()
+            .any(|p| t.starts_with(p))
+    };
+
+    // Chi viene LETTO? Il lato sinistro di un'assegnazione non e' una lettura.
+    let mut letti: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for r in &righe {
+        let t = r.trim();
+        if e_dichiarazione(t) {
+            continue;
+        }
+        let resto = match nome_flag_assegnato(t) {
+            Some(n) => &t[n.len() + 3..],
+            None => t,
+        };
+        let ch: Vec<char> = resto.chars().collect();
+        let mut i = 0usize;
+        while i < ch.len() {
+            if ch[i..].starts_with(&['f', 'l', 'a', 'g', '_']) {
+                let mut j = i + 5;
+                while j < ch.len() && (ch[j].is_ascii_alphanumeric() || ch[j] == '_') {
+                    j += 1;
+                }
+                let inizio = resto.char_indices().nth(i).map(|(k, _)| k);
+                let fine = resto
+                    .char_indices()
+                    .nth(j)
+                    .map(|(k, _)| k)
+                    .unwrap_or(resto.len());
+                if let Some(s) = inizio {
+                    letti.insert(&resto[s..fine]);
+                }
+                i = j;
+                continue;
+            }
+            i += 1;
+        }
+    }
+
+    let mut out: Vec<&str> = Vec::with_capacity(righe.len());
+    for r in &righe {
+        let t = r.trim();
+        if e_dichiarazione(t) {
+            out.push(r);
+            continue;
+        }
+        if let Some(n) = nome_flag_assegnato(t)
+            && !letti.contains(n)
+            && t.ends_with(';')
+            && !contiene_chiamata(&t[n.len() + 3..])
+        {
+            continue; // riga morta
+        }
+        out.push(r);
+    }
+    out.join("\n")
+}
+
+/// Il nome della variabile che questa riga assegna, se e' un'assegnazione
+/// semplice a un identificatore. `a1 = ...` -> `a1`; `*(p) = ...` -> None
+/// (trattata a parte); `if (...) {` -> None.
+fn variabile_scritta(t: &str) -> Option<&str> {
+    let eq = t.find(" = ")?;
+    let lhs = t[..eq].trim();
+    if lhs.is_empty() || !lhs.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    // Una DICHIARAZIONE con inizializzatore (`uint8_t flag_df = 0;`) ha uno
+    // spazio nel lato sinistro e non passa il controllo sopra; ma anche il
+    // nome nudo di un tipo non deve passare per errore.
+    (!lhs.chars().next()?.is_ascii_digit()).then_some(lhs)
+}
+
+/// `nome` compare in `expr` come identificatore intero, non come sottostringa.
+/// `a1` NON deve corrispondere dentro `a12` ne' dentro `var_a1`.
+fn menziona_identificatore(expr: &str, nome: &str) -> bool {
+    let e = expr.as_bytes();
+    let n = nome.as_bytes();
+    if n.is_empty() || n.len() > e.len() {
+        return false;
+    }
+    (0..=e.len() - n.len()).any(|i| {
+        &e[i..i + n.len()] == n
+            && (i == 0 || !(e[i - 1].is_ascii_alphanumeric() || e[i - 1] == b'_'))
+            && (i + n.len() == e.len()
+                || !(e[i + n.len()].is_ascii_alphanumeric() || e[i + n.len()] == b'_'))
+    })
+}
+
+/// Il nome assegnato da una riga `flag_X = ...`, se e' proprio quella forma.
+/// Era una closure: il prestito legato all'argomento non sopravviveva alla
+/// firma dedotta, e il compilatore aveva ragione.
+fn nome_flag_assegnato(t: &str) -> Option<&str> {
+    if !t.starts_with("flag_") {
+        return None;
+    }
+    let eq = t.find(" = ")?;
+    let n = &t[..eq];
+    (!n.contains(' ')).then_some(n)
+}
+
+/// `(` preceduta da un carattere di identificatore = chiamata. `(int32_t)x`
+/// no (la parentesi segue uno spazio o l'inizio), `f(x)` si'.
+fn contiene_chiamata(s: &str) -> bool {
+    let ch: Vec<char> = s.chars().collect();
+    ch.iter().enumerate().any(|(i, c)| {
+        *c == '(' && i > 0 && (ch[i - 1].is_ascii_alphanumeric() || ch[i - 1] == '_')
+    })
+}
+
+#[cfg(test)]
+mod prove_flag_morti {
+    use super::*;
+
+    #[test]
+    fn toglie_l_assegnazione_senza_lettori() {
+        let src = "    flag_zf = (x == 0);\n    if (x == 0) {";
+        let got = drop_dead_flag_assignments(src);
+        assert!(!got.contains("flag_zf ="), "riga morta rimasta: {got}");
+        assert!(got.contains("if (x == 0)"), "{got}");
+    }
+
+    #[test]
+    fn tiene_l_assegnazione_con_un_lettore() {
+        let src = "    flag_zf = (x == 0);\n    if (flag_zf == 1) {";
+        assert_eq!(drop_dead_flag_assignments(src), src);
+    }
+
+    /// La guardia che conta: togliere la riga toglierebbe anche la chiamata.
+    #[test]
+    fn non_tocca_un_lato_destro_con_chiamata() {
+        let src = "    flag_zf = (sub_140001000(a) == 0);\n    return 0;";
+        assert_eq!(drop_dead_flag_assignments(src), src);
+    }
+
+    /// `uint8_t flag_df = 0;` e' una DICHIARAZIONE, non un'assegnazione - ed e'
+    /// esattamente il caso su cui due sonde di misura si erano gia' sbagliate.
+    #[test]
+    fn non_tocca_una_dichiarazione_con_inizializzatore() {
+        let src = "    uint8_t flag_df = 0;\n    return 0;";
+        assert_eq!(drop_dead_flag_assignments(src), src);
+    }
+
+    #[test]
+    fn un_cast_non_e_una_chiamata() {
+        assert!(!contiene_chiamata("((int32_t)var_tmp0 < 0)"));
+        assert!(contiene_chiamata("(sub_1400(a) == 0)"));
+    }
+}
+
+
+/// Il temporaneo assegnato da `var_tmpN = ...`. Funzione libera e non
+/// closure: il prestito legato all'argomento non sopravvive alla firma dedotta
+/// — stesso inciampo di `nome_flag_assegnato`, e il compilatore aveva ragione
+/// entrambe le volte.
+fn nome_temp_scritto(t: &str) -> Option<&str> {
+    let eq = t.find(" = ")?;
+    let n = &t[..eq];
+    (n.starts_with("var_tmp") && !n[7..].is_empty() && n[7..].chars().all(|c| c.is_ascii_digit()))
+        .then_some(n)
+}
+
+/// La dichiarazione `uint64_t var_tmpN;` (senza inizializzatore).
+fn dichiarazione_temp(t: &str) -> Option<&str> {
+    // ATTENZIONE: la prima stesura accettava qualunque `X var_tmpN;` - e
+    // quindi anche `return var_tmp1;`, che ha esattamente quella forma. La
+    // trattava come dichiarazione, la escludeva dal conteggio delle letture e
+    // poi la CANCELLAVA. Preso al primo giro dai test.
+    let resto = t.strip_suffix(';')?;
+    if resto.contains('=') {
+        return None;
+    }
+    let parti: Vec<&str> = resto.split_whitespace().collect();
+    if parti.len() != 2
+        || matches!(
+            parti[0],
+            "return" | "goto" | "break" | "continue" | "case" | "default"
+        )
+    {
+        return None;
+    }
+    let n = parti[1].trim_start_matches('*');
+    (n.starts_with("var_tmp") && !n[7..].is_empty() && n[7..].chars().all(|c| c.is_ascii_digit()))
+        .then_some(n)
+}
+
+/// #8420 - toglie le assegnazioni a `var_tmpN` il cui valore non e' letto da
+/// NESSUNA parte nella funzione, e la dichiarazione che resta orfana.
+///
+/// Popolazione misurata sull'albero corrente (dopo #8410): su **26014**
+/// assegnazioni, **5214 sono morte e pure** e 2962 morte ma dereferenziano.
+/// Zero contengono chiamate, assegnamenti annidati o `++`/`--`.
+///
+/// NON e' una propagazione, ed e' la differenza che conta rispetto al difetto
+/// di #8400: li' sostituivo un valore in un punto piu' avanti, e serviva
+/// l'invalidazione per scrittura. Qui cancello una scrittura che **nessuno
+/// legge, in nessun punto della funzione**: non c'e' ordine ne' dominanza in
+/// gioco, quindi quella classe di errore non puo' presentarsi.
+///
+/// Restano volutamente fuori le 2962 che dereferenziano: una lettura morta non
+/// ha effetti in C, ma toglierla sopprimerebbe un accesso che nel programma
+/// originale potrebbe **faultare**, e questo cambierebbe il comportamento
+/// osservato invece di preservarlo.
+fn drop_dead_temp_assignments(code: &str) -> String {
+    let righe: Vec<&str> = code.split('\n').collect();
+
+
+    // Quante volte ogni temporaneo e' LETTO? Il lato sinistro non e' una
+    // lettura, e la dichiarazione nemmeno.
+    let mut letture: std::collections::HashMap<&str, usize> =
+        std::collections::HashMap::new();
+    for r in &righe {
+        let t = r.trim();
+        if dichiarazione_temp(t).is_some() {
+            continue;
+        }
+        let resto = match nome_temp_scritto(t) {
+            Some(n) => &t[n.len() + 3..],
+            None => t,
+        };
+        let ch: Vec<char> = resto.chars().collect();
+        let mut i = 0usize;
+        while i < ch.len() {
+            if ch[i..].starts_with(&['v', 'a', 'r', '_', 't', 'm', 'p']) {
+                let mut j = i + 7;
+                while j < ch.len() && ch[j].is_ascii_digit() {
+                    j += 1;
+                }
+                if j > i + 7 {
+                    let ini = resto.char_indices().nth(i).map(|(k, _)| k);
+                    let fin = resto
+                        .char_indices()
+                        .nth(j)
+                        .map(|(k, _)| k)
+                        .unwrap_or(resto.len());
+                    if let Some(s) = ini {
+                        *letture.entry(&resto[s..fin]).or_default() += 1;
+                    }
+                }
+                i = j;
+                continue;
+            }
+            i += 1;
+        }
+    }
+
+    let togliere = |n: &str| letture.get(n).copied().unwrap_or(0) == 0;
+
+    let mut out: Vec<&str> = Vec::with_capacity(righe.len());
+    for r in &righe {
+        let t = r.trim();
+        // Le dichiarazioni si decidono in un SECONDO passaggio: una scrittura
+        // tenuta (chiamata, dereferenza) ha ancora bisogno della sua.
+        if dichiarazione_temp(t).is_some() {
+            out.push(r);
+            continue;
+        }
+        if let Some(n) = nome_temp_scritto(t)
+            && togliere(n)
+            && t.ends_with(';')
+        {
+            let rhs = &t[n.len() + 3..];
+            let deref = rhs.contains("*(") || rhs.contains('[');
+            if !contiene_chiamata(rhs) && !deref {
+                continue; // scrittura morta e pura
+            }
+        }
+        out.push(r);
+    }
+    // Secondo passaggio: via le dichiarazioni il cui nome non compare piu' in
+    // nessuna riga tenuta.
+    let vivi: std::collections::HashSet<String> = out
+        .iter()
+        .filter(|r| dichiarazione_temp(r.trim()).is_none())
+        .flat_map(|r| {
+            r.match_indices("var_tmp")
+                .filter_map(|(k, _)| {
+                    let resto = &r[k..];
+                    let fine = resto[7..]
+                        .find(|c: char| !c.is_ascii_digit())
+                        .map_or(resto.len(), |z| z + 7);
+                    (fine > 7).then(|| resto[..fine].to_string())
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    out.retain(|r| match dichiarazione_temp(r.trim()) {
+        Some(n) => vivi.contains(n),
+        None => true,
+    });
+
+    out.join("\n")
+}
+
+#[cfg(test)]
+mod prove_temp_morti {
+    use super::*;
+
+    #[test]
+    fn toglie_la_scrittura_morta_e_la_sua_dichiarazione() {
+        let src = "    uint64_t var_tmp0;\n    var_tmp0 = (a1 - a2);\n    return 0;";
+        let got = drop_dead_temp_assignments(src);
+        assert!(!got.contains("var_tmp0"), "residuo: {got}");
+        assert!(got.contains("return 0;"), "{got}");
+    }
+
+    #[test]
+    fn tiene_quella_che_viene_letta() {
+        let src = "    uint64_t var_tmp0;\n    var_tmp0 = (a1 - a2);\n    if (var_tmp0 == 0) {";
+        assert_eq!(drop_dead_temp_assignments(src), src);
+    }
+
+    /// Una chiamata ha effetti anche se il risultato non si legge.
+    #[test]
+    fn non_tocca_una_scrittura_morta_con_chiamata() {
+        let src = "    uint64_t var_tmp0;\n    var_tmp0 = sub_140001000(a1);\n    return 0;";
+        assert_eq!(drop_dead_temp_assignments(src), src);
+    }
+
+    /// Scelta deliberata: una lettura morta di memoria si tiene, perche'
+    /// toglierla sopprimerebbe un accesso che potrebbe faultare.
+    #[test]
+    fn non_tocca_una_scrittura_morta_che_dereferenzia() {
+        let src = "    uint64_t var_tmp0;\n    var_tmp0 = (*(uint8_t *)a1 - 1);\n    return 0;";
+        assert_eq!(drop_dead_temp_assignments(src), src);
+    }
+
+    /// La lettura di UN temporaneo non salva un ALTRO temporaneo.
+    #[test]
+    fn i_temporanei_sono_indipendenti() {
+        let src = "    var_tmp0 = (a1 - a2);\n    var_tmp1 = (a1 + a2);\n    return var_tmp1;";
+        let got = drop_dead_temp_assignments(src);
+        assert!(!got.contains("var_tmp0"), "var_tmp0 morta rimasta: {got}");
+        assert!(got.contains("var_tmp1 = "), "var_tmp1 viva rimossa: {got}");
+    }
+
+    /// `var_tmp1` non deve essere confuso con `var_tmp10`.
+    #[test]
+    fn il_prefisso_numerico_non_confonde() {
+        let src = "    var_tmp1 = (a1 - a2);\n    return var_tmp10;";
+        let got = drop_dead_temp_assignments(src);
+        assert!(!got.contains("var_tmp1 = "), "var_tmp1 salvata da var_tmp10: {got}");
+    }
 }
 
 fn cast_hlil_integer_derefs(code: &str) -> String {
@@ -26145,6 +30063,92 @@ fn rewrite_hlil_float_bitcast(code: &str) -> String {
     if floats.is_empty() {
         return code.to_string();
     }
+    // ── #7390: la META' MANCANTE ────────────────────────────────────────────
+    // La scansione a caratteri qui sotto guarda SOLO l operando che segue il
+    // cast di larghezza. Quando `(unsigned __int128)` e' seguito da un altro
+    // cast — `a1 = (unsigned __int128)(uint32_t)*(...)` — l operando e' `(`,
+    // il nome risulta vuoto e la riga esce INTATTA: un espressione INTERA
+    // finisce assegnata a una variabile `double`, cioe' una CONVERSIONE dove
+    // il programma faceva una REINTERPRETAZIONE.
+    //
+    // Misurato su `punned_bits`: `1.0` emesso come `0x43CFF80000000000` invece
+    // di `0x3FF0000000000000`, cioe' i bit di `(double)(uint64_t)atteso`.
+    //
+    // ⚠ Il tipo `double` NON si tocca: riflette l ABI (l argomento arriva in
+    // xmm0, non in rcx). Si riscrive la SCRITTURA come pun.
+    //
+    // Popolazione misurata su 79345 file: **171 righe in 102 file**, contro
+    // **5816** righe totali con quel cast ⇒ tocca il **2,9%**. Le altre 5645
+    // hanno destinazione INTERA e restano intatte per costruzione
+    // (`larghezze.get(lhs)` fallisce) — incluso il salvataggio di registro che
+    // la docstring qui sopra protegge (528 su 552).
+    let larghezze: std::collections::HashMap<String, usize> = code
+        .lines()
+        .flat_map(|l| {
+            let w = if l.contains("double") { 8usize } else { 4 };
+            hlil_float_named(l).into_iter().map(move |n| (n, w))
+        })
+        .filter(|(n, _)| floats.contains(n))
+        .collect();
+    let riscritto: String = code
+        .lines()
+        .map(|l| {
+            let t = l.trim_start();
+            let Some((lhs, rhs)) = t.split_once(" = ") else {
+                return l.to_string();
+            };
+            let Some(resto) = rhs.strip_prefix(WIDE) else {
+                return l.to_string();
+            };
+            let Some(&dest_w) = larghezze.get(lhs) else {
+                return l.to_string();
+            };
+            // ⚠ La larghezza viene dal cast INTERNO quando c e' — e' quella che
+            // la macchina ha davvero mosso (`movss` scrive 4 byte e lascia
+            // intatti i 4 alti) — ma MAI piu' larga dell oggetto dichiarato,
+            // altrimenti si scriverebbe FUORI dalla variabile.
+            //
+            // Misurato: **98 dei 171** casi hanno cast interno `(uint32_t)` con
+            // destinazione `double`. Prendere la larghezza dal tipo dichiarato
+            // leggerebbe 8 byte da una sorgente di 4; prenderla dal cast senza
+            // limite farebbe, su un futuro `float` con `(uint64_t)`, una
+            // scrittura fuori dall oggetto. Oggi il limite non scatta mai: e'
+            // una guardia, non una correzione.
+            let interno = resto.strip_prefix('(').and_then(|r| {
+                r.split_once(')')
+                    .filter(|(ty, _)| !ty.is_empty() && ty.bytes().all(is_word_char))
+            });
+            let (ty, src) = match interno {
+                Some(("uint32_t" | "int32_t", s)) if dest_w >= 4 => ("uint32_t", s),
+                Some(("uint64_t" | "int64_t" | "__int64", s)) if dest_w >= 8 => {
+                    ("uint64_t", s)
+                }
+                _ if dest_w >= 8 => ("uint64_t", resto),
+                _ => ("uint32_t", resto),
+            };
+            let indent = &l[..l.len() - t.len()];
+            // ⚠ `src` porta gia' il `;` finale della riga originale: senza
+            // toglierlo si emette `;;`. E' C valido (statement vuoto) e
+            // quindi NESSUN controllo di ricompilabilita' lo segnalerebbe:
+            // trovato guardando il testo emesso, non un conteggio.
+            format!(
+                "{indent}*({ty} *)&{lhs} = ({ty}){};",
+                src.trim_start().trim_end().trim_end_matches(';')
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    // ⚠ `lines()` + `join` normalizza i terminatori: il newline finale va
+    // ripristinato, o la riga successiva della catena si attacca a questa.
+    let riscritto = if code.ends_with('\n') {
+        format!("{riscritto}\n")
+    } else {
+        riscritto
+    };
+    if !riscritto.contains(WIDE) {
+        return riscritto;
+    }
+    let code = riscritto.as_str();
     let bytes = code.as_bytes();
     let mut out = String::with_capacity(code.len());
     let mut i = 0usize;
@@ -26601,6 +30605,8 @@ impl PipelineBuilder {
             callee_arities_shared: Arc::new(HashMap::new()),
             callsite_argc: Arc::new(HashMap::new()),
             fn_starts: Arc::new(std::collections::HashSet::new()),
+            ret_thunks: Arc::new(std::collections::HashSet::new()),
+            abi_go: false,
             callee_return_types: HashMap::new(),
         }
     }
@@ -27520,17 +31526,138 @@ fn attach_resolved_tables(
                 }
             }
         }
-        let Some(index_var) = index_var else {
-            // No reaching definition we can name ⇒ keep the honest `JUMPOUT`.
-            // A switch on the wrong variable is worse than an unresolved jump.
-            if dbg {
-                eprintln!(
-                    "[jt] {:#x}: no reaching def for index '{}' — keeping JUMPOUT",
-                    table.jump_addr, table.index
-                );
+        // #7780 - «nessuna definizione» NON e' sempre «non so cosa sia».
+        //
+        // MISURATO con `RUSTRE_DBG_JT=1`: su `sample6_c` la tabella di
+        // `classify` e' risolta e nelle mani di questa passata, che pero'
+        // rinuncia con `no reaching def for index 'rcx'`. La ragione: **`rcx`
+        // e' il parametro `a1`**, e in quella funzione non viene mai assegnato.
+        // Non e' un'incognita: e' un **live-in**.
+        //
+        // Distinzione che questa guardia introduce, e che e' tutta la
+        // correzione:
+        //   - il registro NON e' definito da nessuna parte nella funzione
+        //     ⇒ arriva da fuori ⇒ e' la versione SSA d'ingresso
+        //     (`SsaVar::initial`, che la docstring del tipo descrive gia' come
+        //     «the initial / pre-function value»);
+        //   - il registro E' definito altrove ma non si raggiunge senza
+        //     ambiguita' (piu' predecessori, cioe' una phi) ⇒ si mantiene il
+        //     `JUMPOUT` onesto, perche' sceglierne una sarebbe indovinare.
+        //
+        // Popolazione: 5 occorrenze su 5 binari (1 in `sample6_c`, 4 in
+        // `sample7_cpp`, 0 negli altri tre). Piccola — ma una delle cinque e'
+        // `classify`, cioe' **2 delle 15 righe LINK_FAIL** che separano da 60.
+        // La popolazione che conta e' quella dell'OBIETTIVO, non quella del
+        // difetto.
+        let index_var = match index_var {
+            Some(v) => v,
+            None => {
+                // #7820 - l'UNICITA' al posto della raggiungibilita'.
+                //
+                // Il ramo precedente rinunciava appena il registro risultava
+                // definito da qualche parte, perche' scegliere fra piu'
+                // definizioni sarebbe indovinare. Ma se la definizione e' **una
+                // sola in tutta la funzione**, non c'e' nulla da indovinare:
+                // qualunque percorso arrivi al salto, quella e' la definizione
+                // che lo raggiunge. E' un'analisi statica di UNICITA', che non
+                // richiede ne' SSA ne' dominanza.
+                //
+                // Perche' serve: `RUSTRE_MLIL_SSA` e' misurato NON accendibile
+                // (round 643: -1 AGREE, 4 COMPILE_FAIL dove prima erano 0),
+                // quindi la via della phi e' chiusa. E le tabelle di salto non
+                // ricostruite sono **8 delle 16 righe LINK_FAIL** — meta' del
+                // divario verso 62/62 — perche' il riferimento alla tabella
+                // resta vivo e nessuno la definisce.
+                let mut definizioni: Vec<rustre_il_mlil::SsaVar> = Vec::new();
+                for (_, _, instrs) in &layout {
+                    for (_, def) in instrs {
+                        if let Some(v) = def.as_ref()
+                            && same_register_family(&v.name, &table.index)
+                        {
+                            definizioni.push(v.clone());
+                        }
+                    }
+                }
+                if definizioni.len() == 1 {
+                    let unica = definizioni[0].clone();
+                    if dbg {
+                        eprintln!(
+                            "[jt] {:#x}: indice '{}' ha UNA sola definizione — la uso",
+                            table.jump_addr, table.index
+                        );
+                    }
+                    unica
+                } else if !definizioni.is_empty() {
+                    // Piu' definizioni e nessuna dominanza calcolabile qui:
+                    // sceglierne una sarebbe indovinare.
+                    if dbg {
+                        eprintln!(
+                            "[jt] {:#x}: {} definizioni per l'indice '{}' — mantengo JUMPOUT",
+                            table.jump_addr,
+                            definizioni.len(),
+                            table.index
+                        );
+                    }
+                    continue;
+                } else {
+                    if dbg {
+                        eprintln!(
+                            "[jt] {:#x}: indice '{}' e' LIVE-IN — uso la versione d'ingresso",
+                            table.jump_addr, table.index
+                        );
+                    }
+                    rustre_il_mlil::SsaVar::initial(table.index.clone())
+                }
             }
-            continue;
         };
+        // #7830 - il calcolo della spedizione diventa MORTO, e va tolto.
+        //
+        // Convertire il salto in `JumpTable` lascia in piedi le istruzioni che
+        // calcolavano il bersaglio:
+        //
+        //     v1 = (__int64)&off_140004000;              <- tiene VIVO il simbolo
+        //     v2 = *(uint32_t *)(v1 + (v2 * 4));
+        //     v2 = (v2 + v1);
+        //     switch (a1) { … }                          <- non le usa piu'
+        //
+        // Sono morte per costruzione — lo `switch` prende l'indice, non
+        // l'indirizzo calcolato — ma la prima **referenzia la tabella**, e
+        // nessuno la definisce: il LINK fallisce. E' il difetto che tiene
+        // aperte **8 delle 16 righe LINK_FAIL** (classify x2, total_area x3,
+        // string_map_demo x3), tutte tabelle di salto (round 642).
+        //
+        // Quali istruzioni siano non e' da indovinare: la passata le registra
+        // gia' in `table.arith_addrs`, ed e' lo stesso insieme che salta
+        // durante la ricerca dell'indice. Toglierle e' la conclusione naturale
+        // della riscrittura, non un'euristica.
+        //
+        // ⚠ Si toglie SOLO in questo blocco e solo se il salto e' stato davvero
+        // convertito: se la conversione fallisse a valle, avremmo cancellato il
+        // calcolo lasciando un salto che ne ha bisogno.
+        //
+        // ⚠ `arith_addrs` NON basta, misurato: registra l'ARITMETICA
+        // (`base + idx*4`, la somma finale) ma **non il caricamento della
+        // base** — e proprio quello e' l'unico che nomina il simbolo. Dopo la
+        // sola rimozione degli `arith_addrs`, `v1 = (__int64)&off_140004000;`
+        // restava in piedi e il LINK continuava a fallire.
+        //
+        // Si toglie quindi anche l'assegnazione la cui sorgente e' la COSTANTE
+        // dell'indirizzo di tabella: e' il caricamento della base, identificato
+        // per valore e non per posizione.
+        let base_tab = Some(table.table_base);
+        block.instrs.retain(|ai| {
+            if table.arith_addrs.contains(&ai.address.as_u64()) {
+                return false;
+            }
+            if let Some(t) = base_tab
+                && let rustre_il_mlil::MlilInstruction::Assign { src, .. } = &ai.instr
+                && let rustre_il_mlil::MlilExpr::Const { value, .. } = src
+                && *value == t
+            {
+                return false;
+            }
+            true
+        });
         let Some(last) = block.instrs.last_mut() else {
             continue;
         };
@@ -27554,6 +31681,7 @@ fn build_mlil_cfg(
     lifted: &[(u64, Vec<rustre_il_llil::LlilAnnotatedInstr>)],
     func_start: u64,
     func_end: u64,
+    oracle: Option<&binary_entry::DataOracle>,
 ) -> Vec<rustre_il_mlil::MlilBasicBlock> {
     // Block boundaries and edges are NOT computed here: `rustre-analysis-cfg`
     // owns control-flow graph construction, and this function delegates to
@@ -27635,7 +31763,7 @@ fn build_mlil_cfg(
         );
     }
     let blocks = eliminate_dead_flag_writes_cfg(blocks);
-    promote_outward_jumps_to_tail_calls(blocks, func_start, func_end)
+    promote_outward_jumps_to_tail_calls(blocks, func_start, func_end, oracle)
 }
 
 /// #1310: un `jmp` a un indirizzo FUORI dalla funzione e' una **tail call**,
@@ -27664,6 +31792,7 @@ fn promote_outward_jumps_to_tail_calls(
     mut blocks: Vec<rustre_il_mlil::MlilBasicBlock>,
     func_start: u64,
     func_end: u64,
+    oracle: Option<&binary_entry::DataOracle>,
 ) -> Vec<rustre_il_mlil::MlilBasicBlock> {
     use rustre_il_mlil::{MlilExpr, MlilInstruction};
     if matches!(
@@ -27730,6 +31859,42 @@ fn promote_outward_jumps_to_tail_calls(
         let MlilExpr::Const { value, .. } = dest else { continue };
         if (func_start..=func_end).contains(value) {
             continue; // salto INTERNO: non e' una chiamata
+        }
+        // #7640 — un salto verso un `ret` e' un RITORNO, non una chiamata.
+        //
+        // Caso che l'ha rivelato, nominato da `behavior.py` come l'UNICO
+        // simbolo che blocca il link di `classify` (c_sample6_O2):
+        //
+        // ```asm
+        // classify_cold:  mov  $0xFFFFFFFF, %eax   ; il valore di ritorno
+        //                 jmp  0x1400014C5         ; -> `ret` DENTRO classify
+        // ```
+        //
+        // `0x1400014C5` non e' una funzione: e' l'istruzione `ret` di un caso
+        // dello switch di `classify`, condivisa da piu' rami (`0x1400014f5:
+        // je 0x1400014C5`). Promuoverla a `TailCall` emetteva
+        // `return sub_1400014C5();` — un simbolo che **nessuno definisce**,
+        // quindi LINK_FAIL, e per giunta con il valore `-1` perso per strada.
+        //
+        // Trattarlo come `Ret` e' corretto per costruzione: saltare a un `ret`
+        // ESEGUE quel `ret`. Il valore resta dove l'ABI lo mette (`eax` gia'
+        // scritto dal `mov`), quindi conservare la semantica non richiede di
+        // indovinare nulla: si emette un ritorno e il resto del corpo e' gia'
+        // li'.
+        //
+        // ⚠ Il controllo e' sul BYTE, non sul disassemblato: `data_at` copre
+        // ogni sezione mappata (usa `section_at`), `.text` inclusa. `0xC3` e'
+        // `ret`, `0xC2` e' `ret imm16` — entrambi ritornano.
+        //
+        // ⚠ Senza oracolo il comportamento e' quello di prima: la passata
+        // resta conservativa e i test che la chiamano con `None` continuano a
+        // misurare la promozione, non questa eccezione.
+        let bersaglio_e_ret = oracle
+            .and_then(|o| o.data_at(*value, 1))
+            .is_some_and(|b| matches!(b[0], 0xC3 | 0xC2));
+        if bersaglio_e_ret {
+            last.instr = MlilInstruction::Ret { values: Vec::new() };
+            continue;
         }
         last.instr = MlilInstruction::TailCall {
             dest: dest.clone(),
@@ -28786,8 +32951,12 @@ impl DecompilerPass for IlAnalysisPass {
                 std::borrow::Cow::Borrowed(&lifted[..])
             };
             let _t_cfg = std::time::Instant::now();
-            mlil_func.blocks =
-                build_mlil_cfg(&lifted_for_cfg, instructions[0].address.0, expected_addr);
+            mlil_func.blocks = build_mlil_cfg(
+                &lifted_for_cfg,
+                instructions[0].address.0,
+                expected_addr,
+                ctx.data_oracle.as_deref(),
+            );
             // Call-argument reconstruction, path B (see `fill_mlil_call_args`).
             // Opt-in until the fixed-list gcc run and the control tree agree.
             if !matches!(
@@ -28893,6 +33062,154 @@ impl DecompilerPass for IlAnalysisPass {
                         .insert("mlil_ssa_reuse_hints".to_string(), hints.join(","));
                 }
             }
+
+            // #8340 SONDA, opt-in `RUSTRE_DBG_FLAGFUSE=1`: quante VERSIONI SSA
+            // di `flag_*` hanno ESATTAMENTE un lettore?
+            //
+            // E' la popolazione FONDIBILE (`flag_zf = (x == 0); if (flag_zf)`
+            // -> `if (x == 0)`), e diventa misurabile solo dopo #8330, che ha
+            // collegato la lettura alla scrittura: prima l'SSA mostrava i flag
+            // definiti e mai usati, quindi il conteggio sarebbe stato ZERO per
+            // un difetto dell'oracolo, non per assenza di bersaglio.
+            // #8350, OPT-IN `RUSTRE_FLAG_DCE=1`: cancella le SCRITTURE di flag
+            // che l'SSA prova non essere mai lette.
+            //
+            // `eliminate_dead_flag_writes` (a monte, su build_mlil_cfg) fa una
+            // cosa simile ma sul TESTO, e non distingue le VERSIONI: una
+            // scrittura seguita da una riscrittura prima di qualunque lettura e'
+            // morta, e testualmente sembra viva perche' il NOME ricompare piu'
+            // avanti. Misurato sul corpus: **17351 versioni su 82157 (21%)** mai
+            // lette dopo quella passata.
+            //
+            // Identificazione per (indirizzo, nome): l'SSA e' costruita su un
+            // CLONE, e `insert_phis` sposta gli indici, quindi la posizione non
+            // e' utilizzabile come chiave.
+            if std::env::var("RUSTRE_FLAG_DCE").is_ok_and(|v| v != "0") {
+                use std::collections::HashSet;
+                let ssa = mlil_func.clone().into_ssa().into_inner();
+                let mut lette: HashSet<String> = HashSet::new();
+                for blk in &ssa.blocks {
+                    for u in blk.used_vars() {
+                        if u.name.starts_with("flag_") {
+                            lette.insert(format!("{u}"));
+                        }
+                    }
+                }
+                // (indirizzo, nome) delle versioni MAI lette
+                let mut morte: HashSet<(u64, String)> = HashSet::new();
+                for blk in &ssa.blocks {
+                    for ai in &blk.instrs {
+                        // ⚠ I PHI vanno ESCLUSI. Misurato: in `sample6_c` TUTTE
+                        // le 64 versioni morte sono phi e ZERO sono Assign veri.
+                        // Un phi sta a `block.start`, lo stesso indirizzo di una
+                        // eventuale Assign iniziale: la chiave (indirizzo, nome)
+                        // li confondeva e la passata rimuoveva codice VIVO —
+                        // 4 rimozioni su 3 file in un bucket dove le morte vere
+                        // sono zero.
+                        if matches!(ai.instr, rustre_il_mlil::MlilInstruction::Phi { .. }) {
+                            continue;
+                        }
+                        if let Some(d) = ai.instr.defined_var() {
+                            if d.name.starts_with("flag_") && !lette.contains(&format!("{d}")) {
+                                morte.insert((ai.address.0, d.name.clone()));
+                            }
+                        }
+                    }
+                }
+                if !morte.is_empty() {
+                    let mut tolte = 0usize;
+                    for blk in &mut mlil_func.blocks {
+                        blk.instrs.retain(|ai| {
+                            let vivo = match &ai.instr {
+                                rustre_il_mlil::MlilInstruction::Assign { dest, .. } => {
+                                    !(dest.name.starts_with("flag_")
+                                        && morte.contains(&(ai.address.0, dest.name.clone())))
+                                }
+                                _ => true,
+                            };
+                            if !vivo {
+                                tolte += 1;
+                            }
+                            vivo
+                        });
+                    }
+                    if std::env::var("RUSTRE_DBG_FLAGFUSE").is_ok_and(|v| v != "0") {
+                        eprintln!("[flagdce] scritture di flag morte rimosse: {tolte}");
+                    }
+                }
+            }
+
+
+            if std::env::var("RUSTRE_DBG_FLAGFUSE").is_ok_and(|v| v != "0") {
+                use std::collections::HashMap;
+                let ssa = mlil_func.clone().into_ssa().into_inner();
+                let mut def: HashMap<String, usize> = HashMap::new();
+                let mut usi: HashMap<String, usize> = HashMap::new();
+                for blk in &ssa.blocks {
+                    for ai in &blk.instrs {
+                        if let Some(d) = ai.instr.defined_var() {
+                            if d.name.starts_with("flag_") {
+                                *def.entry(format!("{d}")).or_default() += 1;
+                            }
+                        }
+                    }
+                    for u in blk.used_vars() {
+                        if u.name.starts_with("flag_") {
+                            *usi.entry(format!("{u}")).or_default() += 1;
+                        }
+                    }
+                }
+                // #8355: quante delle versioni MORTE sono PHI e quante
+                // ASSIGN veri? Un phi non e' un'istruzione emessa, quindi
+                // cancellarlo non toglie una riga: la popolazione azionabile
+                // e' solo la seconda.
+                let mut morte_phi = 0usize;
+                let mut morte_assign = 0usize;
+                // #8365: la stessa scomposizione sui FONDIBILI (1 solo lettore).
+                // Se anche quelli fossero in prevalenza phi, la meta' "fusione"
+                // del fronte flag sarebbe vuota come la meta' "cancellazione".
+                let mut uno_phi = 0usize;
+                let mut uno_assign = 0usize;
+                for blk in &ssa.blocks {
+                    for ai in &blk.instrs {
+                        if let Some(d) = ai.instr.defined_var() {
+                            if d.name.starts_with("flag_") && !usi.contains_key(&format!("{d}")) {
+                                if matches!(ai.instr, rustre_il_mlil::MlilInstruction::Phi { .. }) {
+                                    morte_phi += 1;
+                                } else {
+                                    morte_assign += 1;
+                                }
+                            }
+                            if d.name.starts_with("flag_")
+                                && usi.get(&format!("{d}")).copied().unwrap_or(0) == 1
+                            {
+                                if matches!(ai.instr, rustre_il_mlil::MlilInstruction::Phi { .. }) {
+                                    uno_phi += 1;
+                                } else {
+                                    uno_assign += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                if !def.is_empty() {
+                    eprintln!("[flagsplit] morte_phi={morte_phi} morte_assign={morte_assign} uno_phi={uno_phi} uno_assign={uno_assign}");
+                }
+                if !def.is_empty() {
+                    let uno = def
+                        .keys()
+                        .filter(|k| usi.get(*k).copied().unwrap_or(0) == 1)
+                        .count();
+                    let zero = def.keys().filter(|k| !usi.contains_key(*k)).count();
+                    eprintln!(
+                        "[flagfuse] versioni={} uso_singolo={} mai_lette={}",
+                        def.len(),
+                        uno,
+                        zero
+                    );
+                }
+            }
+
 
             // ── Type-recovery integration ──────────────────────────────────
             // Convert the MLIL instruction stream to the abstract IlInstr
@@ -29818,7 +34135,17 @@ impl DecompilerPass for IlAnalysisPass {
                 // difference is not the data — `ctx.variables` at this point
                 // holds the same, sometimes EMPTY, set — it is that the main
                 // path re-derives the arity from the instructions later on.
-                let live_in = win64_param_regs_live_in(instructions, &HashMap::new());
+                let live_in =
+                    win64_param_regs_live_in_abi(instructions, &HashMap::new(), ctx.abi_go);
+                if std::env::var("RUSTRE_DBG_ABI").is_ok() {
+                    eprintln!(
+                        "[abi] {:#x} go={} live_in={:?} regs={:?}",
+                        ctx.address,
+                        ctx.abi_go,
+                        live_in,
+                        arg_regs_per_abi(ctx.abi_go)
+                    );
+                }
                 let mut cc_arity = 0usize;
                 for (i, live) in live_in.iter().enumerate() {
                     if *live {
@@ -29981,7 +34308,7 @@ impl DecompilerPass for IlAnalysisPass {
                         cc_arity = minimo.min(4);
                     }
                 }
-                const WIN64_ARG_REGS: [&str; 4] = ["rcx", "rdx", "r8", "r9"];
+                let arg_regs = arg_regs_per_abi(ctx.abi_go);
                 // Win64 argument POSITIONS are shared between the integer file
                 // (rcx/rdx/r8/r9) and the SSE file (xmm0..xmm3): `f(int, double)`
                 // carries the first slot in rcx and the second in xmm1. Path A
@@ -30016,7 +34343,7 @@ impl DecompilerPass for IlAnalysisPass {
                             (
                                 format!("a{}", i + 1),
                                 "__int64".to_string(),
-                                WIN64_ARG_REGS[i].to_string(),
+                                arg_regs[i].to_string(),
                             )
                         }
                     })
@@ -30400,6 +34727,61 @@ impl DecompilerPass for IlAnalysisPass {
                         eprintln!("[testo] 01a_prima_inline_temps orfani={}", orfani_testo(&hlil_pseudo_code));
                     }
                     let hlil_pseudo_code = inline_hlil_single_use_temps(&hlil_pseudo_code);
+                    // #8370/#8385: fonde le letture di flag grezzi.
+                    //
+                    // ⚠ POSIZIONE: DOPO `inline_hlil_single_use_temps`, e la
+                    // ragione e' misurata. Messa PRIMA, rompeva quella passata:
+                    // lei inlinea i temporanei con ESATTAMENTE UN uso e ne
+                    // cancella la definizione; io trasformo "1 uso" in "0 usi",
+                    // facendo cadere il flag FUORI dalla sua finestra, cosi'
+                    // l'assegnazione sopravviveva orfana. Effetto: +652
+                    // dichiarazioni e 808 file cambiati in un solo bucket,
+                    // mentre le letture calavano dell'86%.
+                    //
+                    // E' la regola gia' scritta in questo repo al contrario:
+                    // chi RICONOSCE una forma grezza va PRIMA di chi la
+                    // NORMALIZZA. Qui il riconoscitore e'
+                    // `inline_hlil_single_use_temps`, il normalizzatore sono io.
+                    // DEFAULT-ON dal 2026-08-29 (#8410). Si spegne con
+                    // `RUSTRE_FLAG_FUSE=0`.
+                    //
+                    // Il default e' stato cambiato CON I NUMERI IN MANO, e solo
+                    // dopo che una regressione era stata trovata e chiusa:
+                    //   * comportamento  47/62, **identico a gate spento**, 0 DIVERGE
+                    //   * ricompilabilita' 0 rotti su 150 campionati
+                    //   * path A          0 file differenti su tutto il corpus
+                    //   * test            15 propri + suite completa 1409
+                    //   * leggibilita'    letture di flag -80,3%, righe -1,73%
+                    //
+                    // Il numero piu' alto misurato (-89,1%) NON e' questo: era
+                    // la versione col difetto di #8400, cioe' codice sbagliato.
+                    let hlil_pseudo_code = if !matches!(
+                        std::env::var("RUSTRE_FLAG_FUSE").as_deref(),
+                        Ok("0") | Ok("false")
+                    ) {
+                        {
+                            let t = drop_dead_flag_assignments(&fuse_hlil_flag_conditions(
+                                &hlil_pseudo_code,
+                            ));
+                            // #8420, opt-in finche' non e' misurato.
+                            if std::env::var("RUSTRE_TMP_DCE").is_ok_and(|v| v != "0") {
+                                let dopo = drop_dead_temp_assignments(&t);
+                                if std::env::var("RUSTRE_DBG_TMP").is_ok() {
+                                    eprintln!(
+                                        "[tmpdce] var_tmp nel testo={} righe prima={} dopo={}",
+                                        t.matches("var_tmp").count(),
+                                        t.lines().count(),
+                                        dopo.lines().count()
+                                    );
+                                }
+                                dopo
+                            } else {
+                                t
+                            }
+                        }
+                    } else {
+                        hlil_pseudo_code
+                    };
                     // Cosmetic: collapse redundant doubled parens `((X))` ->
                     // `(X)` (precedence-neutral, see fn doc).
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 08 prima di collapse_doubled_hlil_parens: ret={}", hlil_pseudo_code.matches("return ").count()); }
@@ -30471,6 +34853,30 @@ impl DecompilerPass for IlAnalysisPass {
                     // dead placeholder declaration is gone by then.
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 14 prima di rewrite_hlil_intrinsic_calls: ret={}", hlil_pseudo_code.matches("return ").count()); }
                     let hlil_pseudo_code = rewrite_hlil_intrinsic_calls(&hlil_pseudo_code);
+                    // #7240: ripiega le costanti nei registri argomento.
+                    //
+                    // ⛔ DEFAULT OFF, e non per prudenza: MISURATO SBAGLIATO.
+                    // Su `cs_sample10_O2_lib` produceva `fn_18000e180(27, 41)`
+                    // mentre quella funzione e' definita `void fn_18000e180()`
+                    // — ZERO parametri. E' la classe OVER di
+                    // `callsite_consistency.py`: compila (dichiarazione non
+                    // prototipata) e CONTRADDICE la definizione. Path A, sugli
+                    // stessi siti, emette `sub_1800A1E57()` senza argomenti:
+                    // la sua astensione era giusta.
+                    //
+                    // La guardia mancante e' l'ARIETA' DEL CHIAMATO, che qui
+                    // non e' raggiungibile: `callee_arities` non e' in scope in
+                    // questo punto, e nel file del chiamante le forward
+                    // declaration sono a lista VUOTA, quindi non portano
+                    // l'informazione. Rendere fedele questa passata richiede di
+                    // spostarla dove l'arieta' e' nota, non di allargarla qui.
+                    let hlil_pseudo_code = fold_const_call_args(
+                        &hlil_pseudo_code,
+                        matches!(
+                            std::env::var("RUSTRE_HLIL_FOLDARGS").as_deref(),
+                            Ok("1") | Ok("true")
+                        ),
+                    );
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 15 prima di hoist_late_hlil_decls: ret={}", hlil_pseudo_code.matches("return ").count()); }
                     if std::env::var("RUSTRE_DBG_TESTO").is_ok_and(|v| v != "0") {
                         eprintln!("[testo] 01e_prima_hoist orfani={}", orfani_testo(&hlil_pseudo_code));
@@ -30614,6 +35020,51 @@ impl DecompilerPass for IlAnalysisPass {
                     // riparazione dell'intrinseco libera i nomi che referenzia.
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 26 prima di drop_dead_pure_intrinsics: ret={}", hlil_pseudo_code.matches("return ").count()); }
                     let hlil_pseudo_code = drop_dead_pure_intrinsics(&hlil_pseudo_code);
+                    // Subito dopo, e per la stessa ragione dichiarata sopra:
+                    // e' qui che si sa quali nomi il corpo cita DAVVERO. La
+                    // versione HLIL girava troppo presto (i temporanei erano
+                    // ancora letti) ed era misurabilmente inerte.
+                    // #7660 - PROMOSSO A PREDEFINITO. Il gate resta come via
+                    // di FUGA (`RUSTRE_HLIL_TMPDCE=0`), non piu' come
+                    // interruttore d'accensione.
+                    //
+                    // Il 25-08 la passata resto' opt-in con una ragione
+                    // esplicita: «manca la verifica COMPORTAMENTALE, e la
+                    // passata cancella statement». Quella ragione era valida e
+                    // oggi e' DECADUTA - i quattro controlli sono verdi:
+                    //
+                    // | controllo | esito |
+                    // |---|---|
+                    // | occorrenze `var_tmp` | **-5670** (misurato 25-08) |
+                    // | path A | **0 differenze** |
+                    // | gcc sui file modificati | **284/284** |
+                    // | **`behavior.py`** | **45/63 INVARIATO** <- mancava questo |
+                    //
+                    // La misura comportamentale e' stata fatta senza toccare i
+                    // sorgenti, esportando il gate prima di `regen_behav.sh`:
+                    // un gate d'ambiente si misura cosi', senza ciclo
+                    // build-test e senza invalidare il fingerprint.
+                    //
+                    // Popolazione chiusa: **28560 store morti su 44898
+                    // `var_tmp` (63%)**, il 100% con lato destro privo di
+                    // effetti (aritmetica su letture; i `var_tmp` sono
+                    // temporanei del lifter per i flag, mai risultati di
+                    // chiamata). Verificato che ogni rimozione tolga
+                    // dichiarazione E store insieme.
+                    //
+                    // ⚠ Perche' `inline_hlil_single_use_temps` non li toccava
+                    // ed aveva ragione: richiede `count == Some(3)`
+                    // (dichiarazione + scrittura + UNA lettura) perche' INLINA
+                    // nel singolo uso. Uno store morto ha 2 occorrenze e 0
+                    // letture: non c'e' un uso in cui inlinare. E' un'altra
+                    // trasformazione.
+                    let hlil_pseudo_code = drop_dead_var_tmp_stores(
+                        &hlil_pseudo_code,
+                        !matches!(
+                            std::env::var("RUSTRE_HLIL_TMPDCE").as_deref(),
+                            Ok("0") | Ok("false")
+                        ),
+                    );
                     // Dopo i drop, prima del drop delle dichiarazioni: qui si
                     // sa quali usi il corpo ha davvero, e la riscrittura
                     // SOSTITUISCE la dichiarazione invece di eliminarla.
@@ -30693,6 +35144,11 @@ impl DecompilerPass for IlAnalysisPass {
                     // rifiuta «static declaration follows non-static». Va per
                     // ultima, dopo OGNI produttore, o non le vede.
                     let hlil_pseudo_code = drop_extern_when_defined(&hlil_pseudo_code);
+                    // #7680 - ULTIMA: firma e dichiarazioni sono entrambe
+                    // visibili solo qui, dopo che
+                    // `apply_win64_calling_convention_with` ha promosso i
+                    // registri a parametri.
+                    let hlil_pseudo_code = drop_locals_shadowing_params(&hlil_pseudo_code);
                     if std::env::var("RUSTRE_DBG_C2").is_ok_and(|v| v != "0") { eprintln!("[c2] 99 FINE: ret={}", hlil_pseudo_code.matches("return ").count()); }
                     ctx.annotations
                         .insert("hlil_pseudo_code".to_string(), hlil_pseudo_code);
@@ -32974,6 +37430,49 @@ impl DefaultPipelineFactory {
 
 #[cfg(test)]
 mod tests {
+
+    /// #7060b — la DCE dei `var_tmp` morti: cosa toglie e, soprattutto, cosa NO.
+    ///
+    /// I tre casi corrispondono alle tre classi misurate sul corpus:
+    /// aritmetica pura (484), deref ripetuto entro 3 righe (2317) e deref NON
+    /// ripetuto (239, da lasciare perche' cancellarlo perde un accesso che il
+    /// programma esegue).
+    #[test]
+    fn tmpdce_toglie_i_morti_e_conserva_l_accesso_non_ripetuto() {
+        // (a) aritmetica pura, mai letto -> via, con la sua dichiarazione.
+        let a = "void f(void) {\n    uint64_t var_tmp0;\n    var_tmp0 = (v1 - 4096);\n    return;\n}\n";
+        let r = drop_dead_var_tmp_stores(a, true);
+        assert!(!r.contains("var_tmp0"), "aritmetica morta non rimossa: {r}");
+
+        // (b) deref RIPETUTO subito dopo -> via: l'accesso resta nel codice.
+        let b = "void f(void) {\n    uint64_t var_tmp0;\n    var_tmp0 = (*(uint32_t *)a1 - 6);\n    if (*(uint32_t *)a1 > 6) { g(); }\n}\n";
+        let r = drop_dead_var_tmp_stores(b, true);
+        assert!(!r.contains("var_tmp0"), "deref ripetuto non rimosso: {r}");
+        assert!(r.contains("*(uint32_t *)a1 > 6"), "l'accesso superstite e' sparito: {r}");
+
+        // (c) deref NON ripetuto -> si CONSERVA: e' l'unico accesso.
+        let c = "void f(void) {\n    uint64_t var_tmp0;\n    var_tmp0 = (*(uint32_t *)a1 - 6);\n    g();\n    h();\n    k();\n}\n";
+        let r = drop_dead_var_tmp_stores(c, true);
+        assert!(r.contains("var_tmp0 = (*(uint32_t *)a1 - 6)"), "accesso unico rimosso: {r}");
+
+        // (d) LETTO -> si conserva, anche se scritto una volta sola.
+        let d = "void f(void) {\n    uint64_t var_tmp0;\n    var_tmp0 = (v1 - 1);\n    return var_tmp0;\n}\n";
+        let r = drop_dead_var_tmp_stores(d, true);
+        assert!(r.contains("var_tmp0 = (v1 - 1)"), "store vivo rimosso: {r}");
+
+        // (e) gate spento -> testo identico byte per byte.
+        assert_eq!(drop_dead_var_tmp_stores(a, false), a);
+    }
+
+    /// La dichiarazione NON e' una lettura. E' il difetto che ha fatto leggere
+    /// 3040 store morti come 3038 «fusibili» (la classe opposta) e che si e'
+    /// poi ripresentato identico nella prima versione HLIL della passata.
+    #[test]
+    fn tmpdce_la_dichiarazione_non_conta_come_lettura() {
+        let s = "void f(void) {\n    uint64_t var_tmp0;\n    var_tmp0 = (v1 + 2);\n}\n";
+        assert!(!drop_dead_var_tmp_stores(s, true).contains("var_tmp0"));
+    }
+
     use super::*;
     use rustre_core::arch::InstrFlags;
 
@@ -35515,7 +40014,7 @@ mod tests {
         let lifted = rustre_arch_x86::disassemble_and_lift(&bytes, 0x1000, 64);
         let mut mlil_func =
             rustre_il_mlil::MlilFunction::new(rustre_core::address::Address::new(0x1000));
-        mlil_func.blocks = build_mlil_cfg(&lifted, 0x1000, end);
+        mlil_func.blocks = build_mlil_cfg(&lifted, 0x1000, end, None);
         let flat = rustre_il_hlil::MlilToHlilLifter::default().lift(&mlil_func);
         let flat_code = rustre_il_hlil::CCodePrinter::default().print_function(&flat);
         let flat_gotos = flat_code.matches("goto ").count();
@@ -35566,7 +40065,7 @@ mod tests {
         let lifted = rustre_arch_x86::disassemble_and_lift(&bytes, 0x1000, 64);
         let mut mlil_func =
             rustre_il_mlil::MlilFunction::new(rustre_core::address::Address::new(0x1000));
-        mlil_func.blocks = build_mlil_cfg(&lifted, 0x1000, end);
+        mlil_func.blocks = build_mlil_cfg(&lifted, 0x1000, end, None);
 
         let blocks = build_cfs_blocks_from_mlil(&mlil_func);
 
@@ -35715,6 +40214,32 @@ mod tests {
         );
     }
 
+    /// #8260 - l'ordine OPPOSTO, che path B emette ovunque.
+    ///
+    /// Nel test qui sopra la prima coppia piega (32<=32), `changed` diventa
+    /// true e il ciclo a punto fisso ottiene la seconda iterazione. Qui la
+    /// prima coppia NON piega (64>32): prima del fix si usciva subito, e
+    /// l'avanzamento aveva gia' consumato la `(` che faceva da ancora alla
+    /// coppia successiva. Due guasti che si coprivano a vicenda.
+    #[test]
+    fn stacked_casts_collapse_also_when_the_outer_pair_must_be_kept() {
+        // L'allargamento esterno NON si tocca; il duplicato interno si'.
+        assert_eq!(
+            collapse_widen_then_narrow_casts("x = (uint64_t)(uint32_t)(uint32_t)v4;"),
+            "x = (uint64_t)(uint32_t)v4;"
+        );
+        // Quattro impilati: si riduce fino in fondo, l'esterno resta.
+        assert_eq!(
+            collapse_widen_then_narrow_casts("y = (uint64_t)(uint32_t)(uint32_t)(uint32_t)c;"),
+            "y = (uint64_t)(uint32_t)c;"
+        );
+        // Due occorrenze sulla stessa riga, indipendenti.
+        assert_eq!(
+            collapse_widen_then_narrow_casts("f((uint64_t)(uint32_t)(uint32_t)a, (uint32_t)(uint32_t)b)"),
+            "f((uint64_t)(uint32_t)a, (uint32_t)b)"
+        );
+    }
+
     #[test]
     fn calls_and_grouping_parens_are_not_mistaken_for_casts() {
         // `)(` also appears in call syntax and in grouped arithmetic; neither
@@ -35763,10 +40288,106 @@ mod tests {
         // `(uint32_t)v1`. Both operands and the constant must still be there —
         // that is what "operands lost" means — but how wide the read is is the
         // register model's business, not this test's.
-        assert!(hlil.contains("v1 - 7)"), "SUB operands lost: got:\n{hlil}");
+        // #7660 - asserzione CAMBIATA, in direzione piu' forte.
+        //
+        // Prima: `assert!(hlil.contains("v1 - 7)"))` - «gli operandi della SUB
+        // non devono andare persi». Quell'invariante nasceva quando la SUB
+        // aveva ancora un consumatore.
+        //
+        // Ma il commento qui sopra lo dice: l'`if` che la consumava ha ENTRAMBI
+        // i rami vuoti e `fold_empty_if_branches` lo cancella. A quel punto
+        // `v1 - 7` non e' letto da nessuno, e `drop_dead_var_tmp_stores`
+        // (predefinita dal #7660) lo rimuove.
+        //
+        // Emettere un calcolo che nessuno legge non e' fedelta': e' rumore che
+        // il lettore deve scartare. La verifica comportamentale lo conferma:
+        // `behavior.py` **45/63 INVARIATO** con la passata accesa.
+        //
+        // ⚠ Il test NON e' indebolito. L'invariante «non perdere operandi»
+        // vale quando il consumatore SOPRAVVIVE, e quel caso resta coperto
+        // dall'asserzione `< 5` (il confronto del ciclo sopravvive e conserva
+        // entrambi gli operandi). Qui si asserisce il fatto NUOVO - che il
+        // calcolo morto sparisca - cosi' il test sorveglia la regressione
+        // OPPOSTA: se la SUB morta riapparisse, fallirebbe.
+        assert!(
+            !hlil.contains("v1 - 7"),
+            "il calcolo morto (nessun lettore dopo la cancellazione dell'if) deve sparire, got:
+{hlil}"
+        );
         assert!(
             !hlil.contains("if ("),
             "empty no-op guard must be deleted, got:\n{hlil}"
+        );
+    }
+
+    /// SONDA (29-08): quante VERSIONI SSA di `flag_*` hanno UN SOLO lettore?
+    ///
+    /// A livello di TESTO il 94% dei `flag_*` risulta scritto piu' volte, e col
+    /// criterio locale i fondibili sono ZERO. Ma in SSA ogni scrittura e' una
+    /// variabile DISTINTA (`flag_zf#1`, `flag_zf#2`, ...), quindi la domanda
+    /// giusta e': quante VERSIONI hanno esattamente un uso?
+    #[test]
+    fn sonda_versioni_flag_a_uso_singolo() {
+        let bytes: Vec<u8> = vec![
+            0x01, 0xD8,                         // add eax, ebx     -> flag_zf
+            0x74, 0x05,                         // je +5            <- legge zf
+            0xB8, 0x01, 0x00, 0x00, 0x00,       // mov eax, 1
+            0x83, 0xF8, 0x07,                   // cmp eax, 7       -> flag_zf (2a scrittura)
+            0x7C, 0x02,                         // jl +2            <- legge sf/of
+            0x31, 0xC0,                         // xor eax, eax
+            0xC3,                               // ret
+        ];
+        let lifted = rustre_arch_x86::disassemble_and_lift(&bytes, 0x1000, 64);
+        let mut f = rustre_il_mlil::MlilFunction::new(
+            rustre_core::address::Address::new(0x1000));
+        f.blocks = build_mlil_cfg(&lifted, 0x1000, 0x1000 + bytes.len() as u64, None);
+        let ssa = f.into_ssa().into_inner();
+
+        let mut def: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let mut usi: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        for b in &ssa.blocks {
+            for ai in &b.instrs {
+                if let Some(d) = ai.instr.defined_var() {
+                    if d.name.starts_with("flag_") {
+                        *def.entry(format!("{d}")).or_default() += 1;
+                    }
+                }
+            }
+            for u in b.used_vars() {
+                if u.name.starts_with("flag_") {
+                    *usi.entry(format!("{u}")).or_default() += 1;
+                }
+            }
+        }
+        let singoli = def.keys().filter(|k| usi.get(*k).copied().unwrap_or(0) == 1).count();
+        eprintln!("  versioni SSA di flag_* definite : {}", def.len());
+        eprintln!("     con ESATTAMENTE un lettore   : {singoli}");
+        eprintln!("     dettaglio def={def:?}");
+        eprintln!("     dettaglio usi={usi:?}");
+        assert!(!def.is_empty(), "l'SSA non versiona i flag: cambiato il lift?");
+
+        // #8330 - GUARDIA DEL COLLEGAMENTO flag -> SSA.
+        //
+        // PRIMA del fix questo dizionario era VUOTO: i flag erano SCRITTI come
+        // `SsaVar("flag_<n>")` ma LETTI come `MlilExpr::Flag`, che quattro punti
+        // del crate MLIL trattavano come foglia insieme alle costanti. L'SSA li
+        // mostrava definiti e mai usati, e un consumatore di fusione non avrebbe
+        // trovato nulla da fondere.
+        //
+        // Se questa asserzione torna a fallire, il collegamento si e' rotto: i
+        // quattro siti sono in `rustre-il-mlil` (lib.rs collect_used_vars_in_expr
+        // e rewrite_expr, mlil_ssa.rs collect_used_vars_expr) e in
+        // `rustre-il-hlil` (il tipo Bool per il prefisso `flag_`).
+        assert!(
+            !usi.is_empty(),
+            "le letture di flag non sono piu' usi SSA: il collegamento #8330 e' rotto"
+        );
+        assert_eq!(
+            def.len(),
+            usi.len(),
+            "ogni versione definita deve avere un lettore in questo campione"
         );
     }
 
@@ -35787,7 +40408,7 @@ mod tests {
             0xC3, // ret
         ];
         let lifted = rustre_arch_x86::disassemble_and_lift(&bytes, 0x1000, 64);
-        let blocks = build_mlil_cfg(&lifted, 0x1000, 0x1000 + bytes.len() as u64);
+        let blocks = build_mlil_cfg(&lifted, 0x1000, 0x1000 + bytes.len() as u64, None);
         let flag_assigns: Vec<&str> = blocks[0]
             .instrs
             .iter()
@@ -35819,7 +40440,7 @@ mod tests {
             0xC3, // ret                                 @ 0x100a (1 byte)
         ];
         let lifted = rustre_arch_x86::disassemble_and_lift(&bytes, 0x1000, 64);
-        let blocks = build_mlil_cfg(&lifted, 0x1000, 0x1000 + bytes.len() as u64);
+        let blocks = build_mlil_cfg(&lifted, 0x1000, 0x1000 + bytes.len() as u64, None);
 
         assert_eq!(blocks.len(), 3, "expected 3 basic blocks, got {}", blocks.len());
         // Block 0 (cmp+je) branches two ways.
@@ -35856,7 +40477,7 @@ mod tests {
         let end = 0x1000 + bytes.len() as u64;
         let mut mlil_func =
             rustre_il_mlil::MlilFunction::new(rustre_core::address::Address::new(0x1000));
-        mlil_func.blocks = build_mlil_cfg(&lifted, 0x1000, end);
+        mlil_func.blocks = build_mlil_cfg(&lifted, 0x1000, end, None);
         assert!(
             mlil_func.blocks.len() >= 2,
             "serve un CFG multi-blocco, trovati {}",
@@ -36302,7 +40923,7 @@ mod tests {
             CfsStatement::Raw("goto loc_1002;".into()), // intra → kept
             CfsStatement::Raw("goto loc_3000;".into()), // dangling → tail call
         ];
-        rewrite_tail_call(&mut stmts, &labels);
+        rewrite_tail_call(&mut stmts, &labels, &std::collections::HashSet::new());
         assert!(matches!(&stmts[0], CfsStatement::Return(Some(s)) if s == "sub_2000()"));
         assert!(matches!(&stmts[1], CfsStatement::Raw(s) if s == "goto loc_1002;"));
         assert!(matches!(&stmts[2], CfsStatement::Return(Some(s)) if s == "sub_3000()"));
@@ -36331,7 +40952,7 @@ mod tests {
             CfsStatement::Raw("JUMPOUT(*rax);".into()),  // memoria → chiamata indiretta
             CfsStatement::Raw("JUMPOUT(off_140003000);".into()), // simbolo di dato → intatto
         ];
-        rewrite_tail_call(&mut stmts, &labels);
+        rewrite_tail_call(&mut stmts, &labels, &std::collections::HashSet::new());
         assert!(matches!(&stmts[0], CfsStatement::Return(Some(s)) if s == "v1()"), "{stmts:?}");
         assert!(
             matches!(&stmts[1], CfsStatement::Return(Some(s)) if s == "(*rax)()"),
@@ -38234,7 +42855,7 @@ mod tests {
                 format!("sub_{va:X}")
             })
         };
-        let out = resolve_hlil_code_pointers(code, &starts, &name_of);
+        let out = resolve_hlil_code_pointers(code, &starts, &Default::default(), &name_of);
         // Entry points: renamed at the use site AND re-declared as functions.
         assert!(out.contains("__int64 internal_cpu_doinit();\n"), "{out}");
         assert!(out.contains("    v9 = (__int64)internal_cpu_doinit;\n"), "{out}");
@@ -38246,11 +42867,11 @@ mod tests {
         // The shape the fixed-list gcc run rejected: an arithmetic use needs the
         // cast, or it is "invalid operands to binary -" on a function designator.
         let arith = "extern __int64 off_140001DE0;\nvoid f()\n{\n    if ((v - off_140001DE0) != 0) {\n    }\n}\n";
-        let a_out = resolve_hlil_code_pointers(arith, &starts, &name_of);
+        let a_out = resolve_hlil_code_pointers(arith, &starts, &Default::default(), &name_of);
         assert!(a_out.contains("(v - (__int64)internal_cpu_doinit)"), "{a_out}");
         // After `&` the cast would be illegal C, so the bare name is used.
         let amp = "extern __int64 off_140001DE0;\nvoid f()\n{\n    v = &off_140001DE0;\n}\n";
-        let amp_out = resolve_hlil_code_pointers(amp, &starts, &name_of);
+        let amp_out = resolve_hlil_code_pointers(amp, &starts, &Default::default(), &name_of);
         assert!(amp_out.contains("v = &internal_cpu_doinit;"), "{amp_out}");
         // Self-reference: the text DEFINES the target, so re-declaring it would
         // be "conflicting types" in the same translation unit. Rename, no decl.
@@ -38259,7 +42880,7 @@ mod tests {
             "void fn_140006890(uint64_t a1)\n{\n",
             "    a1 = off_140006890;\n}\n",
         );
-        let s_out = resolve_hlil_code_pointers(selfref, &starts, &name_of);
+        let s_out = resolve_hlil_code_pointers(selfref, &starts, &Default::default(), &name_of);
         assert!(!s_out.contains("__int64 fn_140006890();"), "{s_out}");
         assert!(s_out.contains("    a1 = (__int64)fn_140006890;\n"), "{s_out}");
         assert!(!s_out.contains("off_140006890"), "{s_out}");
@@ -38290,7 +42911,7 @@ mod tests {
             "    sub_140099999();\n",
             "}\n",
         );
-        let out = rename_hlil_sub_symbols(code, &starts, &name_of);
+        let out = rename_hlil_sub_symbols(code, &starts, &Default::default(), &name_of);
         assert!(out.contains("__int64 fn_140089e10();\n"), "{out}");
         assert!(out.contains("    fn_140089e10();\n"), "{out}");
         assert!(out.contains("__int64 internal_cpu_doinit();\n"), "{out}");
@@ -38430,10 +43051,10 @@ mod tests {
             matches!(bs[0].instrs[0].instr, MlilInstruction::TailCall { .. })
         };
         // fuori dal range [0x1000, 0x1010]: e' una tail call.
-        let out = promote_outward_jumps_to_tail_calls(vec![block(0x2000)], 0x1000, 0x1010);
+        let out = promote_outward_jumps_to_tail_calls(vec![block(0x2000)], 0x1000, 0x1010, None);
         assert!(is_tail(&out), "un salto FUORI dalla funzione e' una tail call");
         // dentro il range: resta un salto.
-        let inside = promote_outward_jumps_to_tail_calls(vec![block(0x1008)], 0x1000, 0x1010);
+        let inside = promote_outward_jumps_to_tail_calls(vec![block(0x1008)], 0x1000, 0x1010, None);
         assert!(!is_tail(&inside), "un salto INTERNO non va promosso a chiamata");
 
     }
@@ -38843,7 +43464,7 @@ mod tests {
         );
         // The recursive call keeps `sub_`: renaming it would sit next to the real
         // prototype and expose the emitter's dropped arguments as invalid C.
-        let out = rename_hlil_sub_symbols(code, &starts, &|_| None);
+        let out = rename_hlil_sub_symbols(code, &starts, &Default::default(), &|_| None);
         assert_eq!(out, code, "un'auto-definizione non va toccata\n{out}");
     }
 
@@ -38851,7 +43472,7 @@ mod tests {
     fn hlil_code_pointer_leaves_unknown_addresses_alone() {
         // An empty start set is the no-oracle case: the text must be byte-identical.
         let code = "void f()\n{\n    v9 = off_140001DE0;\n}\n";
-        assert_eq!(resolve_hlil_code_pointers(code, &HashMap::new(), &|_| None), code);
+        assert_eq!(resolve_hlil_code_pointers(code, &HashMap::new(), &Default::default(), &|_| None), code);
     }
 
     #[test]
@@ -38961,7 +43582,23 @@ mod tests {
         );
         let out = rewrite_thread_context_register(guard_only);
         if thread_ctx_reg_enabled() {
-            assert!(out.contains("extern uint64_t __thread_context;"), "{out}");
+            // #7270: `RUSTRE_TLS_DEFINE` e' passato a DEFAULT-ON, quindi il
+            // ramo emette la DEFINIZIONE (blocco locale) invece della
+            // dichiarazione `extern`. Il test verifica cio' che la passata
+            // deve fare — riconoscere il registro di contesto e sostituirlo —
+            // non quale delle due forme scelga il gate.
+            assert!(
+                out.contains("__thread_context"),
+                "il registro di contesto non e' stato riconosciuto: {out}"
+            );
+            // ⚠ La guardia che conta: NON deve restare una dichiarazione
+            // `extern` per un simbolo che nessuno definisce — era il difetto
+            // (2172 `extern`, 0 definizioni).
+            assert!(
+                !out.contains("extern uint64_t __thread_context;")
+                    || out.contains("__tls_blocco"),
+                "extern senza definizione: {out}"
+            );
             assert!(!out.contains("uint64_t v1;"), "la locale deve sparire: {out}");
             assert!(out.contains("*(__int64 *)(__thread_context + 16)"), "{out}");
         }
@@ -39534,7 +44171,17 @@ mod tests {
 }
 ";
         let out = name_saved_callee_regs(code);
-        assert!(out.contains("extern uint64_t v6;"), "non nominata: {out}");
+        // #7210: la dichiarazione resta una LOCALE non inizializzata, NON
+        // `extern`. `extern` prometterebbe un simbolo definito altrove che
+        // nessuno definisce, e costerebbe il LINK dell'intero file
+        // (`main_sumVariadic` era LINK_FAIL con causa UNICA `v2: external`).
+        assert!(
+            out.contains("uint64_t v6; /* registro callee-saved"),
+            "non nominata: {out}"
+        );
+        // ⚠ La guardia che conta: NIENTE `extern`. Senza questa riga il test
+        // passerebbe anche se la passata tornasse a emetterlo.
+        assert!(!out.contains("extern"), "extern rimesso: {out}");
         // ⚠ Il salvataggio NON deve sparire: toglierlo sposterebbe gli offset.
         assert!(out.contains("*(__int64 *)var_sp = v6;"), "store perso: {out}");
         assert!(out.contains("var_sp = (var_sp - 8);"), "decremento perso: {out}");
@@ -39560,23 +44207,35 @@ mod tests {
         // (`movdqa %xmm6, 0x2D0(%rsp)`); matchare solo `var_sp` li mancava tutti.
         let sse = "void f()\n{\n    __m128i var_xmm10;\n    *(__int64 *)(sp + 784) = var_xmm10;\n}\n";
         let out = name_saved_callee_regs(sse);
-        assert!(out.contains("extern __m128i var_xmm10;"), "{out}");
+        // #7210: locale non inizializzata, NON `extern` (vedi
+        // `a_prologue_saved_callee_register_is_named_not_deleted`).
+        assert!(out.contains("__m128i var_xmm10; /* registro callee-saved"), "{out}");
+        assert!(!out.contains("extern"), "extern rimesso: {out}");
         assert!(out.contains("*(__int64 *)(sp + 784) = var_xmm10;"), "store perso: {out}");
         // La META' SSE narrowizza in uscita: il lato destro porta dei CAST.
         // Pretendere il nome NUDO mancava 30 salvataggi (misurati).
         let cast = "void f()\n{\n    __m128i var_xmm15;\n    *(__int64 *)(sp + 40) = (uint64_t)(unsigned __int128)var_xmm15;\n}\n";
         let out = name_saved_callee_regs(cast);
-        assert!(out.contains("extern __m128i var_xmm15;"), "{out}");
+        assert!(out.contains("__m128i var_xmm15; /* registro callee-saved"), "{out}");
+        assert!(!out.contains("extern"), "extern rimesso: {out}");
         assert!(out.contains("(unsigned __int128)var_xmm15;"), "store perso: {out}");
         // Un xmm ALTO letto e mai scritto porta un valore IN INGRESSO anche
         // quando l'uso NON e' un salvataggio (calcolo, store via puntatore):
         // misurati 145 casi, nessuno raggiunto dal solo test «tutti salvataggi».
         let compute = "void f()\n{\n    unsigned __int128 var_xmm6;\n    var_xmm1 = (var_xmm1 * var_xmm6);\n}\n";
         let out = name_saved_callee_regs(compute);
-        assert!(out.contains("extern unsigned __int128 var_xmm6;"), "{out}");
+        assert!(out.contains("unsigned __int128 var_xmm6; /* valore in ingresso"), "{out}");
+        // La GUARDIA che conta: per un uso in CALCOLO il commento non deve
+        // dire «salvato dal prologo», che sarebbe una supposizione (sotto SysV
+        // sarebbe pure falsa). Deve dire solo cio' che si sa: valore in
+        // ingresso, indeterminato.
         assert!(
-            out.contains("incoming register value"),
+            out.contains("letto prima di essere scritto"),
             "commento sbagliato per un uso in calcolo: {out}"
+        );
+        assert!(
+            !out.contains("callee-saved"),
+            "commento troppo forte per un uso in calcolo: {out}"
         );
         assert!(out.contains("(var_xmm1 * var_xmm6);"), "uso perso: {out}");
         // ⚠ `xmm0`-`xmm5` sono i registri dei PARAMETRI FP Win64: la cura giusta
@@ -42609,10 +47268,29 @@ mod tests {
     fn name_stack_slots_names_and_declares() {
         let code = "int f() {\n    *(rbp - 4) = a1;\n    return *(rbp - 4);\n}";
         let out = name_stack_slots(code);
-        assert!(out.contains("int var_4;"), "{out}");
+        // #8820 - il tipo viene dalla LARGHEZZA DELL'ACCESSO; quando e'
+        // ignota (qui il sorgente e' `a1`, grafia POST-rinomina che non
+        // porta piu' la larghezza) si ALLARGA.
+        //
+        // Questa riga diceva `int var_4;`: era il default FISSO che #8820
+        // rimuove. Non e' un test adattato per far passare la modifica - il
+        // vecchio valore e' MISURATO dannoso (in `c_sample6_O0` erano `int`
+        // 15 slot su 15, coi puntatori troncati a 32 bit e i CRASH che ne
+        // seguono). Allargare e' innocuo perche' questi slot sono emessi come
+        // locali C INDIPENDENTI, non come offset dentro un frame vero.
+        assert!(out.contains("__int64 var_4;"), "{out}");
         assert!(out.contains("var_4 = a1;"), "{out}");
         assert!(out.contains("return var_4;"), "{out}");
         assert!(!out.contains("rbp"), "{out}");
+
+        // E la REGOLA, non piu' una costante: con la larghezza NOTA il tipo
+        // la segue in ENTRAMBE le direzioni. Senza queste due righe il test
+        // sopra passerebbe anche se `slot_access_type` fosse ignorato e il
+        // default fisso cambiato da `int` a `__int64`.
+        let stretto = name_stack_slots("int f() {\n    *(rbp - 4) = ecx;\n}");
+        assert!(stretto.contains("int var_4;"), "{stretto}");
+        let largo = name_stack_slots("int f() {\n    *(rbp - 8) = rcx;\n}");
+        assert!(largo.contains("__int64 var_8;"), "{largo}");
     }
 
     #[test]
@@ -45812,3 +50490,436 @@ mod cfs_wiring_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod test_7710_alloc_frame {
+    use super::{max_alloc_osservato, seed_var_sp};
+
+    #[test]
+    fn allocazione_semplice() {
+        assert_eq!(max_alloc_osservato("    sp = (sp - 40);\n", "sp"), 40);
+    }
+
+    #[test]
+    fn allocazione_cumulativa_e_epilogo() {
+        // Due allocazioni sommano; l'epilogo che ripristina NON riduce il
+        // massimo gia' raggiunto.
+        let c = "    sp = (sp - 40);\n    sp = (sp - 8);\n    sp = (sp + 48);\n";
+        assert_eq!(max_alloc_osservato(c, "sp"), 48);
+    }
+
+    #[test]
+    fn nessuna_allocazione_da_zero() {
+        assert_eq!(max_alloc_osservato("    sp = (sp + 16);\n", "sp"), 0);
+        assert_eq!(max_alloc_osservato("    fp = sp;\n", "sp"), 0);
+    }
+
+    #[test]
+    fn altra_variabile_non_conta() {
+        // `var_sp` e `sp_frame` contengono `sp` ma sono altre variabili.
+        assert_eq!(max_alloc_osservato("    var_sp = (var_sp - 64);\n", "sp"), 0);
+    }
+
+    #[test]
+    fn il_disassemblato_abbassa_la_base_anche_senza_testo() {
+        // #7720 - la classe C#: il corpo NON contiene ancora `sp = (sp - N)`
+        // quando la passata gira, ma `frame_size` lo sa dal disassemblato.
+        // Senza il `.max(frame_size)` la base resterebbe allo SLACK nudo.
+        let c = "void f(void)
+{
+    uint64_t sp;
+    *(int *)(sp + 8) = 1;
+}
+";
+        let out = seed_var_sp(c, 424, true);
+        assert!(out.contains("sp_frame + 680"), "base non abbassata da frame_size: {out}");
+    }
+
+    #[test]
+    fn si_prende_il_massimo_delle_due_fonti() {
+        // Testo con allocazione 40, disassemblato che dice 424: vince 424.
+        let c = "void f(void)
+{
+    uint64_t sp;
+    sp = (sp - 40);
+    *(int *)(sp + 8) = 1;
+}
+";
+        assert!(seed_var_sp(c, 424, true).contains("sp_frame + 680"));
+        // E all'inverso: testo 40, disassemblato 0 -> vince 40.
+        assert!(seed_var_sp(c, 0, true).contains("sp_frame + 296"));
+    }
+
+    #[test]
+    fn la_base_scende_con_l_allocazione() {
+        // Il test che sorveglia l'AFFERMAZIONE, non solo l'helper: con
+        // un'allocazione di 40 la base emessa deve superare lo SLACK nudo.
+        let c = "void f(void)\n{\n    uint64_t sp;\n    sp = (sp - 40);\n    *(int *)(sp + 8) = 1;\n}\n";
+        let out = seed_var_sp(c, 0, true);
+        assert!(out.contains("sp_frame + 296"), "base non spostata: {out}");
+        assert!(!out.contains("sp_frame + 256"), "base ancora allo SLACK nudo: {out}");
+    }
+}
+
+#[cfg(test)]
+mod test_7730_ptr_params_pathb {
+    use super::{promote_pointer_params_rec, rescale_promoted_pointer_arith, rewrite_param_array_access};
+
+    #[test]
+    fn la_catena_funziona_sulla_forma_NUDA() {
+        // Tre passate, non due: `rewrite_param_array_access` trasforma
+        // `*(aN + K)` in `aN[K]`, ed e' QUELLA forma che la promozione vede
+        // (guarda solo `X->`, `X[`, `*X`).
+        let c = "uint64_t f(uint64_t a1)
+{
+    return *(a1 + 0x8);
+}
+";
+        let c = rewrite_param_array_access(&c);
+        assert!(c.contains("a1[1]"), "array-rewrite non applicata: {c}");
+        let (out, nomi) = promote_pointer_params_rec(&c);
+        assert!(out.contains("uint64_t *a1"), "non promosso: {out}");
+        assert_eq!(nomi, vec!["a1".to_string()]);
+    }
+
+    #[test]
+    fn path_a_conserva_la_propria_grafia() {
+        // REGOLA #28: le quattro grafie di path A danno esattamente cio' che
+        // davano prima, `__int64 *`, e i due vocabolari non si mescolano.
+        let c = "__int64 f(__int64 a1)
+{
+    return *(a1 + 0x8);
+}
+";
+        let c = rewrite_param_array_access(&c);
+        let (out, _) = promote_pointer_params_rec(&c);
+        assert!(out.contains("__int64 *a1"), "grafia di path A cambiata: {out}");
+        assert!(!out.contains("uint64_t"), "vocabolari mescolati: {out}");
+    }
+
+    #[test]
+    fn il_CAST_non_e_riconosciuto_ed_e_il_limite_noto() {
+        // ⚠ Questo test documenta un LIMITE MISURATO, non un desiderata.
+        //
+        // Path A scrive la forma nuda `*(aN + K)`: 1841 occorrenze su 10
+        // bucket, contro 359 col cast. Path B scrive **esclusivamente** quella
+        // col cast: **0** nude contro **6402**. Nessuna delle passate la
+        // riconosce, quindi il cablaggio su path B e' oggi INERTE - ed e' il
+        // motivo per cui il gate resta opt-in e spento.
+        //
+        // Se un giorno la catena imparera' a vedere attraverso il cast, questo
+        // test FALLIRA': e' voluto. Obbliga a rileggere questo commento e a
+        // rimisurare, invece di lasciar passare in silenzio un cambio di
+        // semantica su 6402 accessi.
+        let c = "uint64_t f(uint64_t a1)
+{
+    return *(uint64_t *)(a1 + 0x8);
+}
+";
+        let dopo = rewrite_param_array_access(&c);
+        assert_eq!(dopo, c, "l'array-rewrite ora vede il cast: rimisurare");
+        let (_, nomi) = promote_pointer_params_rec(&dopo);
+        assert!(nomi.is_empty(), "la promozione ora vede il cast: rimisurare");
+    }
+
+    #[test]
+    fn PERICOLO_promozione_senza_normalizzazione() {
+        // ⚠⚠ Questo test documenta un PERICOLO TROVATO, non un comportamento
+        // desiderato. E' il motivo per cui il gate di path B resta SPENTO.
+        //
+        // Con DUE accessi l'array-rewrite non scatta, ma la promozione scatta
+        // lo stesso: `a1` diventa `uint64_t *` mentre il corpo conserva
+        // `*(a1 + 0x8)`, che su un puntatore a 8 byte avanza di **64** byte.
+        // `rescale_promoted_pointer_arith` NON lo ripara.
+        //
+        // Cioe': la promozione puo' scattare in casi che la riscalatura non
+        // copre. Finche' questo vale, cablare la catena su path B (o fidarsi
+        // di essa altrove) puo' introdurre corruzione di memoria che COMPILA.
+        //
+        // Se un giorno la catena diventera' sicura, questo test FALLIRA': e'
+        // voluto: obbliga a rimisurare e a riabilitare il gate con la prova in
+        // mano, invece di scoprirlo per caso.
+        let c = "uint64_t f(uint64_t a1)
+{
+    return *(a1 + 0x8) + *(a1 + 0x10);
+}
+";
+        let dopo = rewrite_param_array_access(&c);
+        assert_eq!(dopo, c, "l'array-rewrite ora copre il caso multiplo: rimisurare");
+        let (promosso, nomi) = promote_pointer_params_rec(&dopo);
+        assert_eq!(nomi, vec!["a1".to_string()], "la promozione non scatta piu': rimisurare");
+        assert!(promosso.contains("uint64_t *a1"), "{promosso}");
+        let finale = rescale_promoted_pointer_arith(&promosso, &nomi);
+        assert!(
+            !finale.contains("a1["),
+            "la riscalatura ora normalizza questo caso: la catena e' diventata sicura, rimisurare e valutare il gate"
+        );
+    }
+
+    #[test]
+    fn uno_scalare_non_dereferenziato_non_si_tocca() {
+        let c = "uint64_t f(uint64_t a1)
+{
+    return a1 + 1;
+}
+";
+        let (out, nomi) = promote_pointer_params_rec(c);
+        assert!(nomi.is_empty(), "promosso a torto: {out}");
+        assert!(!out.contains('*'), "{out}");
+    }
+}
+
+
+#[cfg(test)]
+mod test_7740_offset_decimale {
+    use super::rewrite_param_array_access;
+
+    #[test]
+    fn il_decimale_multiplo_di_8_diventa_indice() {
+        // La classe misurata: 724 occorrenze di `*(aN + 8)` in path A.
+        let c = "__int64 f(__int64 a1)\n{\n    return *(a1 + 8);\n}\n";
+        assert!(rewrite_param_array_access(c).contains("a1[1]"));
+        let c = "__int64 f(__int64 a1)\n{\n    return *(a1 + 16);\n}\n";
+        assert!(rewrite_param_array_access(c).contains("a1[2]"));
+    }
+
+    #[test]
+    fn l_esadecimale_resta_identico() {
+        // Il ramo preesistente non e' toccato.
+        let c = "__int64 f(__int64 a1)
+{
+    return *(a1 + 0x8);
+}
+";
+        assert!(rewrite_param_array_access(c).contains("a1[1]"));
+    }
+
+    #[test]
+    fn due_offset_esadecimali_restano_struct_like() {
+        // Comportamento PREESISTENTE, scoperto da un test che avevo scritto
+        // sbagliato: con DUE offset distinti il parametro e' classificato
+        // struct-like (`struct_like_params`, soglia `offs.len() >= 2`) ed e'
+        // deliberatamente escluso dalla riscrittura ad array, perche' spetta
+        // al recupero delle struct.
+        //
+        // E' la spiegazione probabile dei 724: un parametro con piu' offset
+        // non viene ne' arrayizzato ne' - se il recupero struct non scatta -
+        // riscalato, ma la promozione a puntatore scatta lo stesso.
+        let c = "__int64 f(__int64 a1)
+{
+    return *(a1 + 0x8) + *(a1 + 0x10);
+}
+";
+        assert_eq!(rewrite_param_array_access(c), c);
+    }
+
+    #[test]
+    fn i_non_multipli_di_8_restano_intatti() {
+        // `off / 8` troncherebbe a 0: meglio non riscrivere affatto che
+        // riscrivere sbagliato. (Il ramo esadecimale ha il difetto opposto ed
+        // e' preesistente: qui NON lo si estende ai decimali.)
+        for c in [
+            "__int64 f(__int64 a1)\n{\n    return *(a1 + 4);\n}\n",
+            "__int64 f(__int64 a1)\n{\n    return *(a1 + 12);\n}\n",
+        ] {
+            assert_eq!(rewrite_param_array_access(c), c, "riscritto a torto: {c}");
+        }
+    }
+
+    #[test]
+    fn un_indice_gia_riscalato_non_verrebbe_toccato() {
+        // `+ 1` non e' multiplo di 8: anche se questa passata girasse per
+        // errore su testo gia' riscalato, non lo dividerebbe una seconda
+        // volta. E' la garanzia che rende sicuro il ramo decimale.
+        let c = "__int64 f(__int64 *a1)\n{\n    return *(a1 + 1);\n}\n";
+        assert_eq!(rewrite_param_array_access(c), c);
+    }
+}
+
+#[cfg(test)]
+mod test_7750_iat_thunk {
+    use super::resolve_iat_thunks_hlil;
+
+    #[test]
+    fn il_thunk_diventa_una_chiamata_diretta() {
+        let c = "__int64 f()\n{\n    return ((__int64 (*)())(*(__int64 *)__imp_NtWriteFile))();\n}\n";
+        let o = resolve_iat_thunks_hlil(c);
+        assert!(o.contains("return ((__int64 (*)())rustre_imp_NtWriteFile)();"), "{o}");
+        assert!(!o.contains("__imp_NtWriteFile))"), "thunk residuo: {o}");
+    }
+
+    #[test]
+    fn piu_thunk_nello_stesso_file() {
+        let c = "a = ((__int64 (*)())(*(__int64 *)__imp_Sleep))();\nb = ((__int64 (*)())(*(__int64 *)__imp_exit))();\n";
+        let o = resolve_iat_thunks_hlil(c);
+        assert!(o.contains("a = ((__int64 (*)())rustre_imp_Sleep)();"), "{o}");
+    }
+
+    #[test]
+    fn il_CARICAMENTO_non_si_tocca() {
+        // La seconda forma (2793 occorrenze) e' un indirizzo preso, non una
+        // chiamata: questa passata NON deve toccarla, altrimenti una misura che
+        // si muove non e' piu' attribuibile a una sola causa.
+        let c = "    v5 = *(__int64 *)(__int64)&__imp_Sleep;\n";
+        assert_eq!(resolve_iat_thunks_hlil(c), c);
+    }
+
+    #[test]
+    fn una_forma_diversa_e_lasciata_intatta() {
+        // Test del RIFIUTO: prefisso giusto, coda sbagliata (ha argomenti).
+        let c = "x = ((__int64 (*)())(*(__int64 *)__imp_Foo))(1, 2);\n";
+        assert_eq!(resolve_iat_thunks_hlil(c), c);
+    }
+
+    #[test]
+    fn senza_thunk_e_identita() {
+        let c = "__int64 f()\n{\n    return g();\n}\n";
+        assert_eq!(resolve_iat_thunks_hlil(c), c);
+    }
+}
+
+#[cfg(test)]
+mod test_7750b_due_forme {
+    use super::resolve_iat_thunks_hlil;
+
+    #[test]
+    fn la_forma_SENZA_cast() {
+        // La forma che la v1 non vedeva, ed e' la ragione per cui usciva
+        // inerte su 2548 file.
+        let c = "    return (*(__int64 *)__imp_Sleep)();\n";
+        assert_eq!(
+            resolve_iat_thunks_hlil(c),
+            "extern __int64 rustre_imp_Sleep(void) __asm__(\"Sleep\");
+    return ((__int64 (*)())rustre_imp_Sleep)();
+"
+        );
+    }
+
+    #[test]
+    fn la_forma_CON_cast() {
+        let c = "    return ((__int64 (*)())(*(__int64 *)__imp_Sleep))();\n";
+        assert_eq!(
+            resolve_iat_thunks_hlil(c),
+            "extern __int64 rustre_imp_Sleep(void) __asm__(\"Sleep\");
+    return ((__int64 (*)())rustre_imp_Sleep)();
+"
+        );
+    }
+
+    #[test]
+    fn le_due_forme_convergono() {
+        let a = resolve_iat_thunks_hlil("x = (*(__int64 *)__imp_exit)();\n");
+        let b = resolve_iat_thunks_hlil("x = ((__int64 (*)())(*(__int64 *)__imp_exit))();\n");
+        assert_eq!(a, b, "le due grafie devono dare lo stesso risultato");
+    }
+
+    #[test]
+    fn coda_da_forma_castata_senza_prefisso_non_si_tocca() {
+        let c = "x = (*(__int64 *)__imp_Foo))();\n";
+        assert_eq!(resolve_iat_thunks_hlil(c), c);
+    }
+}
+
+#[cfg(test)]
+mod test_7760_alias_asm {
+    use super::resolve_iat_thunks_hlil;
+
+    #[test]
+    fn emette_la_dichiarazione_con_alias() {
+        let c = "__int64 f()\n{\n    return ((__int64 (*)())(*(__int64 *)__imp_Sleep))();\n}\n";
+        let o = resolve_iat_thunks_hlil(c);
+        assert!(
+            o.starts_with("extern __int64 rustre_imp_Sleep(void) __asm__(\"Sleep\");\n"),
+            "dichiarazione mancante o non in testa: {o}"
+        );
+        assert!(o.contains("((__int64 (*)())rustre_imp_Sleep)()"), "{o}");
+    }
+
+    #[test]
+    fn una_sola_dichiarazione_per_nome() {
+        let c = "a = ((__int64 (*)())(*(__int64 *)__imp_Sleep))();\nb = ((__int64 (*)())(*(__int64 *)__imp_Sleep))();\n";
+        let o = resolve_iat_thunks_hlil(c);
+        assert_eq!(o.matches("extern __int64 rustre_imp_Sleep").count(), 1, "{o}");
+    }
+
+    #[test]
+    fn ordine_stabile_fra_piu_nomi() {
+        // Ordinate: due esecuzioni devono dare lo stesso testo, altrimenti un
+        // `diff -rq` fra snapshot smette di essere una prova.
+        let c = "a = ((__int64 (*)())(*(__int64 *)__imp_Zeta))();\nb = ((__int64 (*)())(*(__int64 *)__imp_Alfa))();\n";
+        let o = resolve_iat_thunks_hlil(c);
+        let ia = o.find("rustre_imp_Alfa(void)").unwrap();
+        let iz = o.find("rustre_imp_Zeta(void)").unwrap();
+        assert!(ia < iz, "ordine non stabile: {o}");
+    }
+
+    #[test]
+    fn senza_thunk_nessuna_dichiarazione() {
+        let c = "__int64 f()\n{\n    return g();\n}\n";
+        assert_eq!(resolve_iat_thunks_hlil(c), c);
+    }
+}
+
+#[cfg(test)]
+mod test_incremento_parentesizzato {
+    use super::infer_usage_name;
+
+    #[test]
+    fn riconosce_la_grafia_di_path_a() {
+        let c = "void f() {\n    v1 = v1 + 1;\n    if (v1 < 10) {}\n}";
+        assert_eq!(infer_usage_name(c, "v1"), Some("count"));
+    }
+
+    #[test]
+    fn riconosce_la_grafia_PARENTESIZZATA_di_path_b() {
+        // 1944 occorrenze in path B contro 0 in path A: senza questa forma il
+        // contatore non veniva nominato.
+        let c = "void f() {\n    v1 = (v1 + 1);\n    if ((v1 < 10)) {}\n}";
+        assert_eq!(infer_usage_name(c, "v1"), Some("count"));
+    }
+
+    #[test]
+    fn indice_di_array_resta_i_non_count() {
+        // Un contatore usato come pedice INDICIZZA, non conta: la distinzione
+        // esisteva gia' e non deve rompersi con la nuova grafia.
+        let c = "void f() {\n    v1 = (v1 + 1);\n    if ((v1 < 10)) { x = a[v1]; }\n}";
+        assert_eq!(infer_usage_name(c, "v1"), Some("i"));
+    }
+
+    #[test]
+    fn senza_confine_non_e_un_contatore() {
+        let c = "void f() {\n    v1 = (v1 + 1);\n}";
+        assert_eq!(infer_usage_name(c, "v1"), Some("i"));
+    }
+}
+
+#[cfg(test)]
+mod test_flag_non_da_deref {
+    use super::infer_usage_name;
+
+    #[test]
+    fn store_attraverso_il_puntatore_non_e_un_flag() {
+        // Il caso reale: `v8` e' un puntatore al TEB e veniva battezzato `flag`
+        // perche' `*(uint32_t *)v8 = 1;` CONTIENE `v8 = 1;`.
+        let c = "void f() {\n    *(uint32_t *)v8 = 1;\n    *(__int64 *)v8 = 0;\n}";
+        assert_ne!(
+            infer_usage_name(c, "v8"),
+            Some("flag"),
+            "uno store per dereferenziazione non rende `v8` un flag"
+        );
+    }
+
+    #[test]
+    fn assegnazione_vera_resta_un_flag() {
+        // La capacita' non deve sparire: questo e' un flag legittimo.
+        let c = "void f() {\n    v3 = 1;\n    v3 = 0;\n}";
+        assert_eq!(infer_usage_name(c, "v3"), Some("flag"));
+    }
+
+    #[test]
+    fn serve_ENTRAMBI_i_valori() {
+        let c = "void f() {\n    v3 = 1;\n}";
+        assert_ne!(infer_usage_name(c, "v3"), Some("flag"));
+    }
+}
+

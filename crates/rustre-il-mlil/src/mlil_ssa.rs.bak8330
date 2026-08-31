@@ -216,11 +216,6 @@ fn collect_used_vars_instr(instr: &MlilInstruction, out: &mut Vec<SsaVar>) {
 fn collect_used_vars_expr(expr: &MlilExpr, out: &mut Vec<SsaVar>) {
     match expr {
         MlilExpr::Var { var, .. } => out.push(var.clone()),
-        // #8330: seconda copia della raccolta usi. Qui i `Flag` cadevano nel
-        // `_ => {}` finale, con lo stesso effetto della prima: definizioni
-        // senza usi. Dopo la conversione in `rewrite_expr` questo ramo vede
-        // gia' delle `Var`, ma resta per le funzioni NON in forma SSA.
-        MlilExpr::Flag { name } => out.push(SsaVar::initial(format!("flag_{name}"))),
         MlilExpr::Load { addr, .. } => collect_used_vars_expr(addr, out),
         MlilExpr::Neg(e, _) | MlilExpr::Not(e, _) => collect_used_vars_expr(e, out),
         MlilExpr::ZeroExtend { expr: e, .. } | MlilExpr::SignExtend { expr: e, .. } => {

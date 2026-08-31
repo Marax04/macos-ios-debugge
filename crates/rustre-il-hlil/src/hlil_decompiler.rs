@@ -299,13 +299,46 @@ impl ExprPrinter {
             HlilExpr::Add(l, r, ..) => self.binop(l, "+", r),
             HlilExpr::Sub(l, r, ..) => self.binop(l, "-", r),
             HlilExpr::Mul(l, r, ..) => self.binop(l, "*", r),
-            HlilExpr::Div(l, r, ..) | HlilExpr::DivU(l, r) | HlilExpr::DivS(l, r) => self.binop(l, "/", r),
-            HlilExpr::Mod(l, r, ..) | HlilExpr::ModU(l, r) | HlilExpr::ModS(l, r) => self.binop(l, "%", r),
+            // #7150 — la divisione CON SEGNO non e una variante, e un TIPO.
+            // Il lift lo dichiara: "Signed division: carry signedness in the
+            // attached type so the distinction is not erased" (lib.rs:3159,
+            // `MlilExpr::DivS -> HlilExpr::Div(.., from_mlil_size_signed)`).
+            // Il tipo c era, nessuno lo leggeva: su operandi `uint64_t` il `/`
+            // nudo e una divisione SENZA segno.
+            HlilExpr::Div(l, r, ty) if matches!(ty, HlilType::Int { signed: true, .. }) => {
+                format!("((int64_t){} / (int64_t){})", self.print_parens(l), self.print_parens(r))
+            }
+            HlilExpr::DivS(l, r) => {
+                format!("((int64_t){} / (int64_t){})", self.print_parens(l), self.print_parens(r))
+            }
+            HlilExpr::Div(l, r, ..) | HlilExpr::DivU(l, r) => self.binop(l, "/", r),
+            // #7150 — completamento della famiglia sensibile al segno.
+            // ⚠ INERTE sul corpus attuale: i moduli emessi sono **0** (contro
+            // 6603 shift e 259 divisioni). Aggiunto per coerenza, cosi la
+            // famiglia e chiusa e nessuno deve tornarci; NON va contato fra i
+            // guadagni, come il ramo gemello di `DivS` (§151).
+            HlilExpr::Mod(l, r, ty) if matches!(ty, HlilType::Int { signed: true, .. }) => {
+                format!("((int64_t){} % (int64_t){})", self.print_parens(l), self.print_parens(r))
+            }
+            HlilExpr::ModS(l, r) => {
+                format!("((int64_t){} % (int64_t){})", self.print_parens(l), self.print_parens(r))
+            }
+            HlilExpr::Mod(l, r, ..) | HlilExpr::ModU(l, r) => self.binop(l, "%", r),
             HlilExpr::Or(l, r, ..) | HlilExpr::BitOr(l, r) => self.binop(l, "|", r),
             HlilExpr::And(l, r, ..) | HlilExpr::BitAnd(l, r) => self.binop(l, "&", r),
             HlilExpr::Xor(l, r, ..) | HlilExpr::BitXor(l, r) => self.binop(l, "^", r),
             HlilExpr::Shl(l, r, ..) => self.binop(l, "<<", r),
-            HlilExpr::Shr(l, r, ..) | HlilExpr::Sar(l, r) => self.binop(l, ">>", r),
+            // #7150 — `Sar` e lo shift ARITMETICO: conserva il bit di segno.
+            // Su un operando dichiarato `uint64_t` un `>>` nudo e uno shift
+            // LOGICO, e su un valore negativo non da un risultato "un po
+            // diverso": ne da uno enorme e positivo. E lo stesso difetto delle
+            // `CmpS*` (#7140), nella famiglia piu numerosa — misurati **6603**
+            // shift destri nel corpus contro 259 divisioni.
+            //
+            // Il cast va SOLO a sinistra: e l operando di cui conta il segno.
+            // La quantita di shift e non negativa per costruzione.
+            HlilExpr::Sar(l, r) => format!("((int64_t){} >> {})", self.print_parens(l), self.print(r)),
+            HlilExpr::Shr(l, r, ..) => self.binop(l, ">>", r),
             HlilExpr::BoolAnd(l, r) | HlilExpr::LogicalAnd(l, r) => self.binop(l, "&&", r),
             HlilExpr::BoolOr(l, r) | HlilExpr::LogicalOr(l, r) => self.binop(l, "||", r),
             HlilExpr::Not(e, ..) => format!("(~{})", self.print(e)),
@@ -313,16 +346,51 @@ impl ExprPrinter {
             HlilExpr::Neg(e, ..) => format!("(-{})", self.print(e)),
             HlilExpr::CmpEq(l, r) => self.binop(l, "==", r),
             HlilExpr::CmpNe(l, r) => self.binop(l, "!=", r),
-            HlilExpr::CmpLt(l, r) | HlilExpr::CmpSlt(l, r) | HlilExpr::CmpUlt(l, r) => self.binop(l, "<", r),
-            HlilExpr::CmpGt(l, r) | HlilExpr::CmpSgt(l, r) | HlilExpr::CmpUgt(l, r) => self.binop(l, ">", r),
-            HlilExpr::CmpLe(l, r) | HlilExpr::CmpSle(l, r) | HlilExpr::CmpUle(l, r) => self.binop(l, "<=", r),
-            HlilExpr::CmpGe(l, r) | HlilExpr::CmpSge(l, r) | HlilExpr::CmpUge(l, r) => self.binop(l, ">=", r),
+            // #7140 — le varianti CON SEGNO vanno stampate con i cast: gli
+            // operandi sono dichiarati `uint64_t`, quindi un `<` nudo e' un
+            // confronto SENZA segno e i valori negativi si comportano da grandi
+            // positivi. Le `CmpU*` e le canoniche restano come prima.
+            HlilExpr::CmpSlt(l, r) => self.binop_con_segno(l, "<", r),
+            HlilExpr::CmpLt(l, r) | HlilExpr::CmpUlt(l, r) => self.binop(l, "<", r),
+            HlilExpr::CmpSgt(l, r) => self.binop_con_segno(l, ">", r),
+            HlilExpr::CmpSle(l, r) => self.binop_con_segno(l, "<=", r),
+            HlilExpr::CmpSge(l, r) => self.binop_con_segno(l, ">=", r),
+            HlilExpr::CmpGt(l, r) | HlilExpr::CmpUgt(l, r) => self.binop(l, ">", r),
+            HlilExpr::CmpLe(l, r) | HlilExpr::CmpUle(l, r) => self.binop(l, "<=", r),
+            HlilExpr::CmpGe(l, r) | HlilExpr::CmpUge(l, r) => self.binop(l, ">=", r),
             HlilExpr::Cast { expr, to, .. } => format!("(({}){})", self.type_printer.print(to), self.print(expr)),
             HlilExpr::FieldAccess { base, field, .. } => format!("{}.{field}", self.print_parens(base)),
             HlilExpr::Index { base, idx, .. } => format!("{}[{}]", self.print(base), self.print(idx)),
             HlilExpr::Call { func, args, .. } => {
                 let args_s: Vec<String> = args.iter().map(|a| self.print(a)).collect();
-                format!("{}({})", self.print(func), args_s.join(", "))
+                // #8090 - PRECEDENZA C: il callee va parentesizzato quando non e'
+                // un nome semplice.
+                //
+                // `Call { func: Deref(X) }` nasce da `call [X]` e stampava
+                // `*sub_X(args)`, che in C si legge `*(sub_X(args))` — chiama X e
+                // dereferenzia il RISULTATO. L'AST significa `(*sub_X)(args)`:
+                // carica il puntatore da X e chiamalo.
+                //
+                // L'AST era corretto a tutti i livelli a monte, verificati uno per
+                // uno: x86 → LLIL emette `Call(Load(X))` (`read_operand` su
+                // memoria restituisce `LlilExpr::Load`), LLIL → MLIL e MLIL → HLIL
+                // traducono fedelmente. **Sbagliava solo la stampa.**
+                //
+                // Il difetto era coperto da `strip_star_before_named_call`, che
+                // toglieva l'asterisco producendo `sub_X()` — una forma che
+                // compila e sembra una chiamata normale. Misurato su `post8070`:
+                // **975 siti** chiamano cosi' un indirizzo che sta in `.data`.
+                //
+                // `print_parens` avvolge tutto tranne `Var`/`Const`, quindi le
+                // chiamate per nome restano BYTE-IDENTICHE: cambia solo il caso
+                // in cui il callee e' un'espressione.
+                //
+                // ⚠ Verificato che `strip_star_before_named_call` NON interferisce:
+                // pretende una `(` IMMEDIATAMENTE dopo l'identificatore, e nella
+                // forma corretta `(*sub_X)(…)` dopo il nome viene `)`. Avevo
+                // dichiarato che servisse un secondo intervento coordinato:
+                // controllato, non serve.
+                format!("{}({})", self.print_parens(func), args_s.join(", "))
             }
             HlilExpr::Ternary {
                 cond, then, else_, ..
@@ -356,6 +424,29 @@ impl ExprPrinter {
 
     fn binop(&self, l: &HlilExpr, op: &str, r: &HlilExpr) -> String {
         format!("({} {} {})", self.print(l), op, self.print(r))
+    }
+
+    /// Come [`Self::binop`], ma forza il confronto CON SEGNO.
+    ///
+    /// #7140 — necessario perche le variabili di path B sono dichiarate
+    /// `uint64_t`: un `<` nudo fra due di esse e un confronto SENZA segno, e un
+    /// valore negativo si comporta da grande positivo. Il cast a `int64_t` e la
+    /// sola forma che esprime in C il `cmovl`/`jl` dell originale.
+    fn binop_con_segno(&self, l: &HlilExpr, op: &str, r: &HlilExpr) -> String {
+        // ⚠ Una COSTANTE non ha bisogno del cast: `5` e gia un intero con
+        // segno, e `(int64_t)5` aggiunge solo rumore. Castare il lato
+        // variabile basta a rendere con segno l intero confronto, perche le
+        // conversioni aritmetiche usuali promuovono l altro operando.
+        // Il test `hlil_folds_flag_combo_idioms_into_comparisons` asserisce
+        // `"< 5"`, e ha fatto notare proprio questo.
+        let cast = |e: &HlilExpr| -> String {
+            if matches!(e, HlilExpr::Const { .. }) {
+                self.print(e)
+            } else {
+                format!("(int64_t){}", self.print_parens(e))
+            }
+        };
+        format!("({} {} {})", cast(l), op, cast(r))
     }
 
     /// Emit `expr`, wrapping in parentheses when needed for unary prefix ops.
@@ -1174,6 +1265,103 @@ mod tests {
     use crate::{HlilExpr, HlilFunction, HlilPrototype, HlilStatement as HlilStmt, HlilType, HlilVar, SwitchCase};
     use rustre_core::Address;
 
+    /// #7140/#7150 — le varianti CON SEGNO si stampano coi cast, quelle SENZA
+    /// segno no.
+    ///
+    /// Il difetto che questo test blocca: le famiglie erano appiattite sulla
+    /// forma canonica (`CmpLt|CmpSlt|CmpUlt => "<"`, `Shr|Sar => ">>"`), quindi
+    /// il segno lo decideva il TIPO delle variabili — che in path B e'
+    /// `uint64_t`. Su `find_max` il binario fa `cmovl` (con segno) e l'emesso
+    /// confrontava senza segno: con valori negativi il massimo non veniva mai
+    /// aggiornato. Misurati 573 shift aritmetici resi logici e ~6700 confronti
+    /// resi senza segno.
+    #[test]
+    fn confronti_e_shift_con_segno_portano_il_cast() {
+        let p = ExprPrinter::new(TypePrinter::stdint());
+        let a = var("a");
+        let b = var("b");
+        let cinque = HlilExpr::Const { value: 5, ty: HlilType::i64() };
+
+        // CON segno → cast su entrambi i lati variabili.
+        assert_eq!(
+            p.print(&HlilExpr::CmpSlt(Box::new(a.clone()), Box::new(b.clone()))),
+            "((int64_t)a < (int64_t)b)"
+        );
+        // SENZA segno → nessun cast.
+        assert_eq!(
+            p.print(&HlilExpr::CmpUlt(Box::new(a.clone()), Box::new(b.clone()))),
+            "(a < b)"
+        );
+        // Canonica → invariata, cosi' un cambio di numeri non puo' venire da qui.
+        assert_eq!(
+            p.print(&HlilExpr::CmpLt(Box::new(a.clone()), Box::new(b.clone()))),
+            "(a < b)"
+        );
+
+        // ⚠ Una COSTANTE non si casta: `(int64_t)5` sarebbe solo rumore, e le
+        // conversioni aritmetiche usuali promuovono comunque l'altro operando.
+        assert_eq!(
+            p.print(&HlilExpr::CmpSlt(Box::new(a.clone()), Box::new(cinque))),
+            "((int64_t)a < 5)"
+        );
+
+        // #7160 — la LARGHEZZA decide il cast. `(int64_t)(uint32_t)v` NON
+        // ripristina il segno: il troncamento a 32 bit e gia avvenuto e per
+        // v = -1 da 4294967295. Serve `(int32_t)`, che reinterpreta gli stessi
+        // bit con segno. La larghezza si legge dalla variante `Cast { to }`.
+        let a32 = HlilExpr::Cast {
+            expr: Box::new(a.clone()),
+            to: HlilType::Int { signed: false, bits: 32 },
+        };
+        assert_eq!(
+            format!("{}", HlilExpr::CmpSlt(Box::new(a32.clone()), Box::new(a32))),
+            "((int32_t)(uint32_t)a < (int32_t)(uint32_t)a)"
+        );
+
+        // `Sar` e' lo shift ARITMETICO: cast SOLO a sinistra, perche' la
+        // quantita' di shift e' non negativa per costruzione.
+        assert_eq!(
+            p.print(&HlilExpr::Sar(Box::new(a.clone()), Box::new(HlilExpr::Const {
+                value: 5,
+                ty: HlilType::i64()
+            }))),
+            "((int64_t)a >> 5)"
+        );
+        // `Shr` e' LOGICO e deve restare senza cast: e' la meta' del corpus.
+        assert_eq!(
+            p.print(&HlilExpr::Shr(
+                Box::new(a.clone()),
+                Box::new(HlilExpr::Const { value: 5, ty: HlilType::i64() }),
+                HlilType::i64()
+            )),
+            "(a >> 5)"
+        );
+
+        // ⚠ E il percorso `Display`, che e una SECONDA stampa.
+        //
+        // Il test copriva solo `ExprPrinter` e passava, mentre `Display`
+        // castava un lato solo: `(int64_t)v1 < a1`. In C NON basta — con
+        // l altro operando `uint64_t` le conversioni usuali riportano il
+        // confronto a senza segno. Difetto trovato leggendo l emesso di
+        // `find_max`, non dai test: e la stessa forma del difetto originale,
+        // dove il segno cadeva in DUE punti e sistemarne uno non serviva.
+        assert_eq!(
+            format!("{}", HlilExpr::CmpSlt(Box::new(a.clone()), Box::new(b.clone()))),
+            "((int64_t)a < (int64_t)b)"
+        );
+        assert_eq!(
+            format!("{}", HlilExpr::CmpUlt(Box::new(a.clone()), Box::new(b))),
+            "(a < b)"
+        );
+        assert_eq!(
+            format!("{}", HlilExpr::Sar(Box::new(a), Box::new(HlilExpr::Const {
+                value: 5,
+                ty: HlilType::i64()
+            }))),
+            "((int64_t)a >> 5)"
+        );
+    }
+
     fn var(name: &str) -> HlilExpr {
         HlilExpr::Var {
             var: HlilVar {
@@ -1929,3 +2117,50 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod test_precedenza_callee {
+    use super::ExprPrinter;
+    use crate::{HlilExpr, HlilType, HlilVar};
+
+    fn var(n: &str) -> HlilExpr {
+        HlilExpr::Var {
+            var: HlilVar {
+                name: n.to_string(),
+                ty: HlilType::Int { signed: false, bits: 64 },
+                is_param: false,
+                stack_offset: None,
+                version: 0,
+                is_ssa: false,
+            },
+        }
+    }
+
+    #[test]
+    fn chiamata_per_nome_resta_identica() {
+        // Il caso dominante non deve cambiare di un byte: `print_parens`
+        // avvolge tutto TRANNE `Var`/`Const`.
+        let e = HlilExpr::Call {
+            func: Box::new(var("sub_140001000")),
+            args: vec![],
+            ret_ty: HlilType::Void,
+        };
+        assert_eq!(ExprPrinter::default().print(&e), "sub_140001000()");
+    }
+
+    #[test]
+    fn callee_dereferenziato_viene_parentesizzato() {
+        // `call [X]`: senza parentesi `*sub_X()` si legge in C `*(sub_X())`,
+        // cioe' «chiama lo slot e dereferenzia il risultato» — l'opposto di
+        // «carica il puntatore dallo slot e chiamalo».
+        let e = HlilExpr::Call {
+            func: Box::new(HlilExpr::Deref {
+                addr: Box::new(var("sub_14002D100")),
+                ty: HlilType::Int { signed: false, bits: 64 },
+            }),
+            args: vec![],
+            ret_ty: HlilType::Void,
+        };
+        assert_eq!(ExprPrinter::default().print(&e), "(*sub_14002D100)()");
+    }
+}

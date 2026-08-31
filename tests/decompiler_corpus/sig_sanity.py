@@ -30,6 +30,21 @@ import os
 import re
 import sys
 
+# --- selettore path A / path B ---------------------------------------------
+# Con MEASURE_PATH_B non impostata il predicato e' esattamente quello di prima
+# (`.c` ma non `.hlil.c`), quindi le colonne path A restano confrontabili con
+# lo storico. Con MEASURE_PATH_B=1 si misurano le unita' di path B.
+_PATH_B = __import__("os").environ.get("MEASURE_PATH_B") == "1"
+
+
+def _seleziona_unita(nome):
+    """True se `nome` e' un'unita' del path attualmente misurato."""
+    if _PATH_B:
+        return nome.endswith(".hlil.c")
+    return nome.endswith(".c") and not nome.endswith(".hlil.c")
+
+
+
 # `name(args) {` at line start. Control-flow keywords share this shape and must
 # be excluded, a trap already documented in CLAUDE.md.
 SIG = re.compile(r'^[A-Za-z_][\w \*]*?\b([A-Za-z_]\w*)\s*\(([^)]*)\)\s*\{', re.M)
@@ -67,7 +82,7 @@ def scan(out_dir):
     dup, shadow, total = [], [], 0
     for root, _, files in os.walk(out_dir):
         for f in sorted(files):
-            if not f.endswith(".c") or f.endswith(".hlil.c"):
+            if not _seleziona_unita(f):
                 continue
             path = os.path.join(root, f)
             try:

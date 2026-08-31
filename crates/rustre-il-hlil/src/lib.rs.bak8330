@@ -2595,36 +2595,6 @@ impl MlilToHlilLifter {
         fn_end: Option<u64>,
         fn_starts: &std::collections::HashSet<u64>,
     ) -> HlilFunction {
-        // SONDA #8460 (`RUSTRE_DBG_COVER=1`, effetto ZERO altrimenti).
-        //
-        // Il round 1164 ha misurato che OGNI bersaglio `JUMPOUT` cade in un buco
-        // del CFG (17 su 17). Ma quel campione e' condizionato sull'esito:
-        // `[extent]` si stampa solo quando un bersaglio non e' stato trovato,
-        // quindi dice "ogni JUMPOUT ha un buco", NON "ogni buco da' un JUMPOUT".
-        //
-        // Questa sonda stampa una riga per OGNI funzione, a prescindere
-        // dall'esito, e permette il controllo che manca: le funzioni SANE hanno
-        // il CFG completo? Se hanno buchi anche loro, il buco e' necessario ma
-        // non sufficiente, e chiudere i buchi non chiude i LINK_FAIL.
-        if std::env::var("RUSTRE_DBG_COVER").is_ok_and(|v| v != "0") {
-            let coperti: u64 = mlil
-                .blocks
-                .iter()
-                .map(|b| b.end.as_u64().saturating_sub(b.start.as_u64()))
-                .sum();
-            let min_start = mlil.blocks.iter().map(|b| b.start.as_u64()).min().unwrap_or(0);
-            let max_end = mlil.blocks.iter().map(|b| b.end.as_u64()).max().unwrap_or(0);
-            let span = fn_end.map_or_else(
-                || max_end.saturating_sub(min_start),
-                |f| f.saturating_sub(min_start) + 1,
-            );
-            eprintln!(
-                "[cover] entry={:x} blocchi={} coperti={coperti} span={span} buchi={}",
-                mlil.entry.as_u64(),
-                mlil.blocks.len(),
-                span.saturating_sub(coperti)
-            );
-        }
         // OPT-IN (`RUSTRE_HLIL_SPLIT_TARGETS=1`), default OFF.
         //
         // Splitting at mid-block targets removes synthetic `goto` blocks and
@@ -3352,15 +3322,7 @@ impl MlilToHlilLifter {
                 // size slot is absent or generic.
                 let inferred_ty = {
                     let n = &var.name;
-                    // #8330: dopo la conversione `Flag` -> `Var` versionata
-                    // nell'SSA MLIL, un flag arriva qui come `Var` e NON piu'
-                    // come `MlilExpr::Flag`, che era tipizzato `Bool` poche
-                    // righe sotto. Senza questo ramo i flag diventerebbero
-                    // INTERI nel C emesso: e' l'unico punto in cui la
-                    // conversione sarebbe VISIBILE nell'output.
-                    if n.starts_with("flag_") {
-                        HlilType::Bool
-                    } else if n.ends_with('l') && n.starts_with("r") {
+                    if n.ends_with('l') && n.starts_with("r") {
                         HlilType::u8()
                     } else if n.ends_with('w') && n.starts_with("r") {
                         HlilType::u16()

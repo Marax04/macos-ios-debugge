@@ -213,28 +213,11 @@ fn att_reg(operand: &str) -> Option<String> {
 
 /// Map a width alias to its canonical 64-bit register name so `eax`/`ax`/`al`
 /// all compare equal to `rax`. Unknown tokens pass through lower-cased.
+/// #8730 - delega alla FONTE UNICA. La versione locale non conosceva
+/// `ah`/`bh`/`ch`/`dh`, che `register_canonical` mappa correttamente.
 fn canon_reg(tok: &str) -> String {
-    let t = tok.trim().trim_start_matches('%').to_ascii_lowercase();
-    let fam = match t.as_str() {
-        "rax" | "eax" | "ax" | "al" => "rax",
-        "rbx" | "ebx" | "bx" | "bl" => "rbx",
-        "rcx" | "ecx" | "cx" | "cl" => "rcx",
-        "rdx" | "edx" | "dx" | "dl" => "rdx",
-        "rsi" | "esi" | "si" | "sil" => "rsi",
-        "rdi" | "edi" | "di" | "dil" => "rdi",
-        "rbp" | "ebp" | "bp" | "bpl" => "rbp",
-        "rsp" | "esp" | "sp" | "spl" => "rsp",
-        "r8" | "r8d" | "r8w" | "r8b" => "r8",
-        "r9" | "r9d" | "r9w" | "r9b" => "r9",
-        "r10" | "r10d" | "r10w" | "r10b" => "r10",
-        "r11" | "r11d" | "r11w" | "r11b" => "r11",
-        "r12" | "r12d" | "r12w" | "r12b" => "r12",
-        "r13" | "r13d" | "r13w" | "r13b" => "r13",
-        "r14" | "r14d" | "r14w" | "r14b" => "r14",
-        "r15" | "r15d" | "r15w" | "r15b" => "r15",
-        other => return other.to_string(),
-    };
-    fam.to_string()
+    let t = tok.trim().trim_start_matches('%');
+    crate::x86_register_width::register_canonical(t)
 }
 
 /// Split a two-operand instruction into `(src, dst)` at the top-level comma
@@ -754,16 +737,16 @@ fn last_token(s: &str) -> &str {
         .unwrap_or("")
 }
 
+// #8730 - FONTE UNICA. Prima questo file aveva la PROPRIA lista di registri,
+// e le mancavano tutte le forme a 8 bit: un limite di switch scritto come
+// `cmp $3, %r8b` non veniva riconosciuto e la tabella restava non rilevata
+// (#8680: +21 siti distinti una volta aggiunte a mano). Il difetto non era la
+// lista sbagliata: era che ESISTESSE una seconda lista. `lib.rs::is_register`
+// delegava gia' a `x86_register_width`, che il suo commento chiama
+// «single source of truth»; qui no.
 fn is_register(tok: &str) -> bool {
-    let t = tok.trim().to_ascii_lowercase();
-    matches!(
-        t.as_str(),
-        "rax" | "rbx" | "rcx" | "rdx" | "rsi" | "rdi" | "rbp" | "rsp"
-            | "r8" | "r9" | "r10" | "r11" | "r12" | "r13" | "r14" | "r15"
-            | "eax" | "ebx" | "ecx" | "edx" | "esi" | "edi" | "ebp" | "esp"
-            | "r8d" | "r9d" | "r10d" | "r11d" | "r12d" | "r13d" | "r14d" | "r15d"
-            | "ax" | "bx" | "cx" | "dx" | "si" | "di"
-    )
+    let t = tok.trim().trim_start_matches('%');
+    crate::x86_register_width::register_width_bytes(t).is_some()
 }
 
 // ── Table-entry resolution (pure decode over raw table bytes) ────────────────
@@ -1652,5 +1635,39 @@ mod tests {
             resolve_table_targets(&resolver_info(2, 0x0040_8000, 2), &bytes, 0, |_| true),
             None
         );
+    }
+
+    /// #8680 - riproduce la sequenza REALE di `rust3_O0/sub_140002410`
+    /// (dispatch a 0x14000289a) che il rilevatore NON trova, pur avendo la
+    /// forma canonica e il limite 8 istruzioni piu indietro.
+    #[test]
+    fn dispatch_reale_di_sub_140002410() {
+        let raw: Vec<(u64, String, String)> = vec![
+            (0x14000286a, "cmp".into(), "%dl, %r8b".into()),
+            (0x14000286d, "mov".into(), "%rax, %rcx".into()),
+            (0x140002870, "mov".into(), "%rcx, %rdx".into()),
+            (0x140002873, "mov".into(), "%rdx, %rax".into()),
+            (0x140002876, "mov".into(), "%rax, %rcx".into()),
+            (0x14000287a, "cmp".into(), "$3, %r8b".into()),
+            (0x14000287e, "ja".into(), "0x140003045".into()),
+            (0x140002884, "mov".into(), "0xD0(%rbp), %rdx".into()),
+            (0x14000288b, "lea".into(), "(%rdx,%rax), %r10".into()),
+            (0x14000288f, "movzbl".into(), "%r8b, %edx".into()),
+            (0x140002893, "lea".into(), "0x999C6(%rip), %r8".into()),
+            (0x14000289a, "movslq".into(), "(%r8,%rdx,4), %rdx".into()),
+            (0x14000289e, "add".into(), "%r8, %rdx".into()),
+            (0x1400028a1, "jmp".into(), "*%rdx".into()),
+        ];
+        // bisezione: la stessa sequenza SENZA il `movzbl` che copia r8 in edx
+        let mut senza_copia = raw.clone();
+        senza_copia.retain(|(_, m, _)| m != "movzbl");
+        eprintln!("[dbg] con movzbl  = {:?}", detect_jump_table_raw(&raw).is_some());
+        eprintln!("[dbg] senza copia = {:?}", detect_jump_table_raw(&senza_copia).is_some());
+        // e con il cmp direttamente sull indice rdx
+        let mut cmp_su_idx = raw.clone();
+        for e in cmp_su_idx.iter_mut() { if e.1 == "cmp" && e.2 == "$3, %r8b" { e.2 = "$3, %edx".into(); } }
+        eprintln!("[dbg] cmp su edx  = {:?}", detect_jump_table_raw(&cmp_su_idx).is_some());
+        let got = detect_jump_table_raw(&raw);
+        assert!(got.is_some(), "forma canonica presente e limite a 8 istruzioni: deve trovarla");
     }
 }

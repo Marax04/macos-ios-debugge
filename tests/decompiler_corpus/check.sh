@@ -16,10 +16,21 @@ fail=0
 TMPC="/tmp/_check_$$.c"
 trap 'rm -f "$TMPC"' EXIT
 for f in "$DIR"/*.c; do
-  # Skip *.hlil.c — a separate experimental HLIL pseudo-code dump (not the
-  # recompilability target; e.g. contains dangling `goto ADDR;` with no
-  # label), added alongside the normal .c files by ongoing HLIL work.
-  case "$f" in *.hlil.c) continue ;; esac
+  # Quale percorso di emissione controllare.
+  #
+  # Storicamente questo harness saltava SEMPRE i `*.hlil.c`, quindi il testo di
+  # path B non e' MAI passato da qui in nessuna corsa di questo repo (conferma
+  # dal totale: 12558 file controllati su un albero che ne contiene 25116).
+  # Acceso su B per la prima volta ha trovato 16 difetti e ne ha assolti 102 che
+  # path A sbagliava: la cecita' costava in ENTRAMBE le direzioni.
+  #
+  # `MEASURE_PATH_B=1` seleziona i `.hlil.c`; senza, il comportamento e'
+  # identico a prima. Stessa convenzione degli altri quattro harness.
+  if [ "${MEASURE_PATH_B:-0}" = "1" ]; then
+    case "$f" in *.hlil.c) ;; *) continue ;; esac
+  else
+    case "$f" in *.hlil.c) continue ;; esac
+  fi
   total=$((total+1))
   # -I"$DIR": whole-project reconstruction bucket files (`RUSTRE_BUCKET_BY_SOURCE=1`)
   # carry a relative `#include "<bucket>.h"`. The prelude is concatenated into

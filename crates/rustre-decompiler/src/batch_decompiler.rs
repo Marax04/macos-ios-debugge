@@ -847,6 +847,171 @@ fn run_decompile_loop_bounded(
             }
         }
     }
+    // ── #7980: SECONDA ONDATA — definire cio' che si e' gia' chiamato ──────
+    //
+    // ⚠ `gate_acceso` e' DEFAULT-ON (`!matches!(.., Ok("0")|Ok("false"))`):
+    // questo blocco gira SEMPRE salvo `RUSTRE_SECONDA_ONDATA=0`. Scritto qui
+    // perche' la prima misura confrontava due corse entrambe con l'ondata
+    // accesa e le dava identiche — il gate sembrava inerte e non lo era.
+    //
+    // Path B recupera 6,3x i `case` di path A (7553 contro 1208 su rust3_O0) e
+    // paga il vantaggio con riferimenti irrisolti: i rami freddi di uno switch
+    // che rustc colloca DOPO un'altra funzione escono dall'estensione e sono
+    // emessi come `sub_X()` verso un simbolo che nessuno definisce.
+    //
+    // ⚠ La cura ovvia — allungare la fine della funzione — e' ESCLUSA dal
+    // codice, non per prudenza: `scan_cap` (`binary_entry.rs`) limita la
+    // finestra al PROSSIMO INIZIO di funzione proprio perche' la camminata,
+    // che prosegue oltre il primo `ret` per recuperare i corpi dei case,
+    // altrimenti assorbirebbe la funzione seguente. Alzare quel tetto farebbe
+    // inghiottire `sub_140034fc0` per intero.
+    //
+    // Qui si fa l'opposto, e non serve toccare ne' `scan_cap` ne' la
+    // camminata: se il codice emesso CHIAMA un indirizzo come funzione, quello
+    // stesso indirizzo viene DECOMPILATO come funzione. Generico per
+    // costruzione — chiude la classe switch e ogni altra che lasci un
+    // `sub_HEX` senza definizione.
+    //
+    // Limitato a poche ondate e a un tetto per ondata: una funzione nuova puo'
+    // riferirne altre, e senza freno l'insieme cresce finche' c'e' immagine.
+    if gate_acceso("RUSTRE_SECONDA_ONDATA") {
+        // MISURATO: piu' ondate NON e' meglio. 3 ondate -> 17 irrisolti,
+        // 8 ondate -> 32. Le ondate si ALIMENTANO: in una regione di dati
+        // decodificata come codice ogni funzione aggiunta ne riferisce
+        // altre a 1 byte di distanza. Il tetto e' quindi una scelta di
+        // convergenza, non un limite di risorse.
+        let max_ondate: usize = std::env::var("RUSTRE_ONDATE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            // MISURATO su rust3_O0 — la risposta NON e' monotona:
+            //   0->55  1->23  2->15  3->17  4->14  8->32
+            // Default 2: vicino al minimo, meno file aggiunti di 3 e 4, e
+            // il piu' lontano dal regime divergente. La differenza 15 vs 14
+            // e' dentro l'oscillazione, non un guadagno.
+            // Col criterio `.text` la successione CONVERGE e il ciclo esce da
+            // solo (`mancanti.is_empty()`), quindi il tetto non e' piu' una
+            // scelta di merito ma solo una rete di sicurezza. MISURATO: a 4
+            // ondate restavano 4 residui su rust8_O0 e 2 su cpp_sample7_O2,
+            // a 12 entrambi vanno a ZERO. Prima del criterio alzare il tetto
+            // PEGGIORAVA (8 ondate -> 32 residui): e' il criterio, non il
+            // tetto, ad aver cambiato il segno.
+            .unwrap_or(16);
+        const MAX_PER_ONDATA: usize = 512;
+        // CRITERIO, non piu' un tetto scelto a mano. Partizionando il residuo
+        // per regione si vede che i due bucket si comportano in modo OPPOSTO:
+        //
+        //   ondate   residuo   in `.idata`   in `.text`
+        //     1        23          15            8
+        //     2        15           9            6
+        //     3        17          13            4
+        //     4        14          10            4
+        //
+        // Il residuo VERO converge (8→6→4→4); tutta l'oscillazione che mi aveva
+        // fatto concludere «piu' ondate e' peggio» stava in una sola regione —
+        // e quella regione e' **`.idata`**, la tabella degli import
+        // (`0x1400cc000..0x1400cdbec` in rust3_O0): non e' codice, e
+        // disassemblata da' `imul $0x3D000066, 0x74(%rsi), %ebp`.
+        //
+        // Due filtri piu' ovvi FALSIFICATI dalla misura prima di arrivare qui:
+        //  - densita' degli indirizzi: min 5 B fra i legittimi contro 1 B fra
+        //    gli spuri, ma solo 2 spuri su 32 sotto i 4 B — avrebbe preso il 6%;
+        //  - forma di chiamata: **55/55 e 32/32** compaiono come `sub_X(...)`,
+        //    quindi non distingue nulla.
+        let oracle = crate::binary_entry::DataOracle::from_load(load);
+        let mut definiti: std::collections::HashSet<u64> =
+            result.functions.iter().map(|f| f.address).collect();
+        let mut totale = 0usize;
+        for _ondata in 0..max_ondate {
+            let mut mancanti: Vec<u64> = Vec::new();
+            for f in &result.functions {
+                let hlil = f.hlil_pseudo_code.as_deref().unwrap_or("");
+                for testo in [f.pseudo_code.as_str(), hlil] {
+                    let mut resto = testo;
+                    while let Some(i) = resto.find("sub_") {
+                        resto = &resto[i + 4..];
+                        let hex: String =
+                            resto.chars().take_while(char::is_ascii_hexdigit).collect();
+                        if hex.len() >= 4
+                            && let Ok(va) = u64::from_str_radix(&hex, 16)
+                            && !definiti.contains(&va)
+                            && !mancanti.contains(&va)
+                        {
+                            mancanti.push(va);
+                        }
+                    }
+                }
+            }
+            mancanti.retain(|&va| {
+                oracle.section_kind(va) == crate::binary_entry::SectionKind::Text
+            });
+            if mancanti.is_empty() {
+                break;
+            }
+            mancanti.sort_unstable();
+            mancanti.truncate(MAX_PER_ONDATA);
+            for va in &mancanti {
+                definiti.insert(*va);
+            }
+            let nuovi: Vec<(u64, u64, Result<DecompiledFunction, DecompilerError>)> =
+                mancanti.par_iter().map(decompile_one).collect();
+            let mut aggiunte = 0usize;
+            for (_addr, elapsed, res) in nuovi {
+                if let Ok(func) = res {
+                    result.stats.functions_decompiled += 1;
+                    result.stats.total_time_ms += elapsed;
+                    result.functions.push(func);
+                    aggiunte += 1;
+                }
+            }
+            totale += aggiunte;
+            if aggiunte == 0 {
+                break;
+            }
+        }
+        if std::env::var_os("RUSTRE_DBG_ONDATA").is_some() {
+            eprintln!("[ondata] funzioni aggiunte={totale}");
+        }
+    }
+    // ── #8040: la 2a ondata definisce cio' che `fn_starts` non conosce ─────
+    //
+    // #7980 emette le funzioni referenziate-ma-non-definite. Entrano pero'
+    // nell'insieme emesso DOPO che `callee_arities_for` ha calcolato
+    // `fn_starts` sullo sweep, quindi le tre passate `hlil_` di rinomina
+    // (`rename_hlil_sub_symbols` e sorelle) non le vedono: il gate
+    // `starts.contains_key(&va) || extra.contains(&va)` e' falso.
+    //
+    // Risultato misurato su `sample7_cpp` path B: la definizione e'
+    // `void fn_14001aefe()` mentre il chiamante scrive `sub_14001AEFE()`.
+    // Il linker non le unisce ⇒ LINK_FAIL.
+    //
+    // Causa provata per IDENTITA' DI INSIEME, non per cardinalita': due corse
+    // con la sola `RUSTRE_ONDATE` che cambia danno 1118 e 1138 file; i casi
+    // non spiegati dalle guardie erano 20; l'intersezione fra i due insiemi e'
+    // **20 su 20**, con zero casi fuori.
+    //
+    // Qui la mappa e' letta dalla VERITA' DEL TESTO EMESSO — come la funzione
+    // e' realmente definita — invece di ri-derivarla da `name_of`, che e' il
+    // passaggio dove le due grafie divergono.
+    //
+    // Tocca SOLO `hlil_pseudo_code`: path A non puo' cambiare per costruzione.
+    if !matches!(
+        std::env::var("RUSTRE_ONDATA_NOMI").as_deref(),
+        Ok("0") | Ok("false")
+    ) {
+        riconcilia_nomi_ondata(&mut result);
+        // #8150, PROMOSSO a default-ON: misurato con generazione appaiata sullo
+        // stesso albero. `code_as_data` di path B 157 -> 2, file con riferimenti
+        // irrisolti 3366 -> 3173, azionabili 22 invariati, simboli dato definiti
+        // 26061 invariati. 215 file cambiati, **215/215 compilano** e path A e'
+        // intatto (0 file non-hlil diversi). Spegnibile con `RUSTRE_OFF_ONDATA=0`.
+        if !matches!(
+            std::env::var("RUSTRE_OFF_ONDATA").as_deref(),
+            Ok("0") | Ok("false")
+        ) {
+            risolvi_off_ondata(&mut result);
+        }
+    }
+
     result.elapsed_ms = start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
     result
 }
@@ -877,6 +1042,110 @@ fn run_decompile_loop_bounded(
 ///
 /// Il TIPO passa da `uint8_t[64]` a `uint64_t[8]`: gli usi restano validi
 /// perche' accedono via `(__int64)&off_X + i*8`, cioe' l'indirizzo della base.
+/// #8840 - definisce le tabelle di puntatori a funzione che il testo di path A
+/// indicizza ancora ma che nessuno definisce.
+///
+/// Cerca `extern __int64 off_HEX;` il cui simbolo compaia anche in posizione
+/// di INDICE (`off_HEX[`) o con l'indirizzo preso (`&off_HEX`), legge i byte
+/// dall'immagine e li interpreta come celle da 8 byte.
+///
+/// Definisce SOLO se OGNI cella risolve a una funzione emessa. Una cella non
+/// risolta resterebbe un numero, cioe' un puntatore a memoria arbitraria: il
+/// file linkerebbe e salterebbe nel vuoto. Meglio un LINK_FAIL rumoroso di un
+/// salto silenzioso.
+///
+/// Emette anche le dichiarazioni anticipate delle funzioni puntate: non sono
+/// chiamate da questo file, quindi nessun'altra passata le ha dichiarate.
+fn definisci_tabelle_fnptr_a(
+    code: &str,
+    load: Option<&crate::RichLoadResult>,
+    names: &HashMap<u64, String>,
+) -> String {
+    let Some(load) = load else { return code.to_string() };
+    if !code.contains("extern __int64 off_") {
+        return code.to_string();
+    }
+    let mut definizioni: Vec<String> = Vec::new();
+    let mut risolti: Vec<String> = Vec::new();
+    for line in code.lines() {
+        let t = line.trim();
+        let Some(resto) = t.strip_prefix("extern __int64 off_") else { continue };
+        let Some(hex) = resto.strip_suffix(";") else { continue };
+        if hex.is_empty() || !hex.bytes().all(|c| c.is_ascii_hexdigit()) {
+            continue;
+        }
+        let nome = format!("off_{hex}");
+        // Deve essere INDICIZZATA o avere l'indirizzo preso: un semplice uso
+        // scalare non e' una tabella e non va inventato.
+        if !code.contains(&format!("{nome}[")) && !code.contains(&format!("&{nome}")) {
+            continue;
+        }
+        let Ok(va) = u64::from_str_radix(hex, 16) else { continue };
+        let Some((base, slice)) = crate::binary_entry::slice_at_va(load, va) else { continue };
+        let Some(off) = va.checked_sub(base).and_then(|d| usize::try_from(d).ok()) else {
+            continue;
+        };
+        let Some(byte) = slice.get(off..) else { continue };
+        // Celle finche' risolvono; ci si ferma alla prima che non risolve.
+        let mut celle: Vec<String> = Vec::new();
+        for chunk in byte.chunks(8) {
+            if chunk.len() < 8 {
+                break;
+            }
+            let mut v = 0u64;
+            for (i, c) in chunk.iter().enumerate() {
+                v |= u64::from(*c) << (8 * i);
+            }
+            // Un nome che inizia con `_` e' riservato all'implementazione e
+            // spesso gia' dichiarato dagli header del prelude: dichiararlo e'
+            // `conflicting types` (stessa ragione di #5990).
+            match names.get(&v).filter(|n| !n.starts_with('_')) {
+                Some(f) => celle.push(f.clone()),
+                None => break,
+            }
+        }
+        // Una cella sola non e' una tabella.
+        if celle.len() < 2 {
+            continue;
+        }
+        for f in &celle {
+            let d = format!("__int64 {f}();");
+            if !definizioni.contains(&d) && !code.contains(&d) {
+                definizioni.push(d);
+            }
+        }
+        let corpo = celle
+            .iter()
+            .map(|f| format!("(uint64_t){f}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        definizioni.push(format!("uint64_t {nome}[{}] = {{ {corpo} }};", celle.len()));
+        risolti.push(nome);
+    }
+    if definizioni.is_empty() {
+        return code.to_string();
+    }
+    // La dichiarazione `extern` va TOLTA: `extern __int64 off_X;` accanto a
+    // `uint64_t off_X[4]` e' `conflicting types`.
+    let mut out = String::with_capacity(code.len() + 256);
+    for d in &definizioni {
+        out.push_str(d);
+        out.push('\n');
+    }
+    for line in code.lines() {
+        let t = line.trim();
+        let togli = t
+            .strip_prefix("extern __int64 ")
+            .and_then(|r| r.strip_suffix(";"))
+            .is_some_and(|n| risolti.iter().any(|r| r == n));
+        if togli {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
 fn materialize_fnptr_tables(
     code: &str,
     names: &HashMap<u64, String>,
@@ -1085,6 +1354,42 @@ fn declare_renamed_imports(code: &str, enabled: bool) -> String {
             }
         }
     }
+    // #7970 — un PARAMETRO non e' un simbolo globale non dichiarato.
+    //
+    // La guardia sopra esclude i nomi gia' dichiarati, definiti o assegnati.
+    // NON esclude i **parametri**, che nella firma compaiono come
+    // `uint64_t a1)` o `uint64_t a1,` — nessuno dei pattern cercati. Esito:
+    //
+    //     extern __int64 a1;                        <- spurio
+    //     __int64 _Unwind_GetCFA(uint64_t a1) { return (*(__int64 *)a1); }
+    //
+    // Non rompe il link — il parametro fa OMBRA alla globale, quindi l'`extern`
+    // resta inusato — ma **afferma il falso**: dice che esiste una variabile
+    // globale con quel nome.
+    //
+    // MISURATO su sei bucket: **path B 125 file, path A ZERO** in ognuno.
+    //   sample7_cpp 44 | cpp_sample7_O0 41 | rust3_O0 15
+    //   go_sample9_O0 15 | sample5_cs 5 | csharp_O2 5
+    // E' un divario di parita' con path A come ORACOLO di cio' che l'uscita
+    // dovrebbe essere: non una stima, un comportamento gia' realizzato altrove.
+    //
+    // I nomi si leggono dalle righe di DEFINIZIONE (con `(`…`)` e senza `;`
+    // finale): una dichiarazione non introduce parametri nel corpo.
+    let parametri: std::collections::HashSet<String> = code
+        .lines()
+        .filter(|l| !l.trim_end().ends_with(';') && l.contains('(') && l.contains(')'))
+        .filter_map(|l| l.split_once('(').and_then(|(_, r)| r.split_once(')')).map(|(a, _)| a))
+        .flat_map(|args| {
+            args.split(',').filter_map(|a| {
+                a.trim()
+                    .rsplit(|c: char| c.is_whitespace() || c == '*')
+                    .next()
+                    .filter(|w| !w.is_empty() && w.chars().all(|c| c.is_alphanumeric() || c == '_'))
+                    .map(str::to_string)
+            })
+        })
+        .collect();
+    candidati.retain(|n| !parametri.contains(n));
     if candidati.is_empty() {
         return code.to_string();
     }
@@ -1116,8 +1421,342 @@ fn define_simd_bodies(code: &str, enabled: bool) -> String {
     }
     let mut corpi = String::new();
     // Si definisce solo cio' che il file USA e nessuno DEFINISCE.
-    let usa = |n: &str| code.contains(&format!("{n}(")) && !code.contains(&format!("static uint64_t {n}("))
-        && !code.contains(&format!("static uint32_t {n}("));
+    // ⚠ La guardia deve coprire OGNI tipo di ritorno che questa funzione emette,
+    // altrimenti un corpo gia' presente verrebbe definito una seconda volta. I
+    // corpi SIMD a 128 bit (#7200) ritornano `unsigned __int128`: senza questa
+    // riga la protezione non scattava per loro.
+    // #8670 - corrispondenza per PAROLA, non per sottostringa. Trovato dal
+    // test `un_mnemonico_ignoto_non_riceve_un_corpo`: `vpmaxsd(` CONTIENE
+    // `maxsd(`, quindi una funzione con AVX `vpmaxsd` riceveva il corpo di
+    // `maxsd`, uno scalare su double - semantica diversa e per giunta
+    // LINKABILE, cioe invisibile. Idem `mul_overflow` in `imul_overflow`.
+    let inizio_parola = |s: &str, at: usize| -> bool {
+        if at == 0 { return true; }
+        let c = s.as_bytes()[at - 1];
+        !c.is_ascii_alphanumeric() && c != b'_'
+    };
+    let usa = |n: &str| {
+        let ago = format!("{n}(");
+        code.match_indices(&ago).any(|(i, _)| inizio_parola(code, i))
+            && !code.contains(&format!("static uint64_t {n}("))
+            && !code.contains(&format!("static uint32_t {n}("))
+            && !code.contains(&format!("static unsigned __int128 {n}("))
+    };
+    // ── #7200: i dieci helper SIMD a 128 bit ───────────────────────────
+    // Semantica ISA verificata contro gli intrinseci SSE2 corrispondenti su
+    // vettori pseudo-casuali. Larghezza `unsigned __int128` e NON `uint64_t`:
+    // `packuswb` e `pshufd` con immediato 0xEE/0xF5 LEGGONO la meta' alta, che
+    // un modello a 64 bit non rappresenta.
+    // ⚠ Assunzione dichiarata: little-endian nel `memcpy` fra `__int128` e
+    // array. Vera su x86-64, ma e' un'assunzione, non un teorema.
+    // #8650: sei helper MANCANTI, semantica NON ambigua.
+    // Misurato al round 1239: 23 mnemonici erano CHIAMATI e mai DEFINITI
+    // (`external` al link, causa dei LINK_FAIL di rust3_O0). Questi sei
+    // coprono 564 occorrenze sul corpus. Stessa assunzione little-endian
+    // gia dichiarata sopra per i corpi #7200.
+    // #8655: i tre emersi DOPO #8650 (erano nascosti dietro i primi quattro).
+    // `psadbw` era gia' nella mappa intrinseci ma non fra gli helper: e' il
+    // difetto delle DUE LISTE che divergono, round 1240.
+    if usa("psadbw") {
+        corpi.push_str(
+            "static unsigned __int128 psadbw(unsigned __int128 dst, unsigned __int128 src)
+{
+    uint8_t a[16], b[16];
+    uint16_t r[8];
+    unsigned s0 = 0, s1 = 0;
+    int i;
+    memcpy(a, &dst, 16);
+    memcpy(b, &src, 16);
+    for (i = 0; i < 8; i++) s0 += (unsigned)(a[i] > b[i] ? a[i] - b[i] : b[i] - a[i]);
+    for (i = 8; i < 16; i++) s1 += (unsigned)(a[i] > b[i] ? a[i] - b[i] : b[i] - a[i]);
+    for (i = 0; i < 8; i++) r[i] = 0;
+    r[0] = (uint16_t)s0;
+    r[4] = (uint16_t)s1;
+    memcpy(&dst, r, 16);
+    return dst;
+}
+",
+        );
+    }
+    // shld/shrd: spostamento a doppia precisione a 64 bit. Un conteggio 0
+    // lascia dst INVARIATO (comportamento ISA), non produce uno shift di 64
+    // che in C sarebbe indefinito.
+    if usa("shld") {
+        corpi.push_str(
+            "static uint64_t shld(uint64_t dst, uint64_t src, int cnt)
+{
+    unsigned n = ((unsigned)cnt) & 63u;
+    if (n == 0) return dst;
+    return (uint64_t)((dst << n) | (src >> (64 - n)));
+}
+",
+        );
+    }
+    if usa("shrd") {
+        corpi.push_str(
+            "static uint64_t shrd(uint64_t dst, uint64_t src, int cnt)
+{
+    unsigned n = ((unsigned)cnt) & 63u;
+    if (n == 0) return dst;
+    return (uint64_t)((dst >> n) | (src << (64 - n)));
+}
+",
+        );
+    }
+    if usa("pminub") {
+        corpi.push_str(
+            "static unsigned __int128 pminub(unsigned __int128 dst, unsigned __int128 src)
+{
+    uint8_t a[16], b[16];
+    int i;
+    memcpy(a, &dst, 16);
+    memcpy(b, &src, 16);
+    for (i = 0; i < 16; i++) a[i] = (a[i] < b[i]) ? a[i] : b[i];
+    memcpy(&dst, a, 16);
+    return dst;
+}
+",
+        );
+    }
+    if usa("packsswb") {
+        corpi.push_str(
+            "static unsigned __int128 packsswb(unsigned __int128 dst, unsigned __int128 src)
+{
+    int16_t a[8], b[8];
+    int8_t r[16];
+    int i, v;
+    memcpy(a, &dst, 16);
+    memcpy(b, &src, 16);
+    for (i = 0; i < 8; i++) { v = a[i]; r[i] = (int8_t)(v > 127 ? 127 : (v < -128 ? -128 : v)); }
+    for (i = 0; i < 8; i++) { v = b[i]; r[i + 8] = (int8_t)(v > 127 ? 127 : (v < -128 ? -128 : v)); }
+    memcpy(&dst, r, 16);
+    return dst;
+}
+",
+        );
+    }
+    if usa("psllw") {
+        corpi.push_str(
+            "static unsigned __int128 psllw(unsigned __int128 dst, unsigned __int128 cnt)
+{
+    uint16_t a[8];
+    unsigned long long n = (unsigned long long)cnt;
+    int i;
+    memcpy(a, &dst, 16);
+    for (i = 0; i < 8; i++) a[i] = (n > 15) ? 0 : (uint16_t)(a[i] << n);
+    memcpy(&dst, a, 16);
+    return dst;
+}
+",
+        );
+    }
+    if usa("psrlw") {
+        corpi.push_str(
+            "static unsigned __int128 psrlw(unsigned __int128 dst, unsigned __int128 cnt)
+{
+    uint16_t a[8];
+    unsigned long long n = (unsigned long long)cnt;
+    int i;
+    memcpy(a, &dst, 16);
+    for (i = 0; i < 8; i++) a[i] = (n > 15) ? 0 : (uint16_t)(a[i] >> n);
+    memcpy(&dst, a, 16);
+    return dst;
+}
+",
+        );
+    }
+    if usa("psraw") {
+        corpi.push_str(
+            "static unsigned __int128 psraw(unsigned __int128 dst, unsigned __int128 cnt)
+{
+    int16_t a[8];
+    unsigned long long n = (unsigned long long)cnt;
+    int i;
+    memcpy(a, &dst, 16);
+    for (i = 0; i < 8; i++) { if (n > 15) a[i] = (int16_t)(a[i] < 0 ? -1 : 0); else a[i] = (int16_t)(a[i] >> n); }
+    memcpy(&dst, a, 16);
+    return dst;
+}
+",
+        );
+    }
+    if usa("pinsrw") {
+        corpi.push_str(
+            "static unsigned __int128 pinsrw(unsigned __int128 dst, unsigned long long val, int sel)
+{
+    uint16_t a[8];
+    memcpy(a, &dst, 16);
+    a[sel & 7] = (uint16_t)val;
+    memcpy(&dst, a, 16);
+    return dst;
+}
+",
+        );
+    }
+    if usa("pcmpeqb") {
+        corpi.push_str(
+            "static unsigned __int128 pcmpeqb(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint8_t a[16], b[16];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    for (i = 0; i < 16; i++) a[i] = (a[i] == b[i]) ? 0xFF : 0x00;\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("pcmpeqw") {
+        corpi.push_str(
+            "static unsigned __int128 pcmpeqw(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint16_t a[8], b[8];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    for (i = 0; i < 8; i++) a[i] = (a[i] == b[i]) ? 0xFFFFu : 0x0000u;\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("pcmpeqq") {
+        corpi.push_str(
+            "static unsigned __int128 pcmpeqq(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint64_t a[2], b[2];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    for (i = 0; i < 2; i++) a[i] = (a[i] == b[i]) ? ~(uint64_t)0 : (uint64_t)0;\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("pcmpgtb") {
+        corpi.push_str(
+            "static unsigned __int128 pcmpgtb(unsigned __int128 dst, unsigned __int128 src)\n{\n    int8_t a[16], b[16];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    for (i = 0; i < 16; i++) a[i] = (a[i] > b[i]) ? (int8_t)0xFF : (int8_t)0x00;\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    // #7310 — `pcmpgtw`/`pcmpgtd`: le corsie a 16 e 32 bit della famiglia che
+    // finora aveva solo quella a 8 (`pcmpgtb`, sopra).
+    //
+    // Trovati da `behavior.py`, non da un inventario: il report della misura
+    // del 2026-08-26 elenca `pcmpgtd: external` fra le cause di LINK_FAIL in
+    // `rust3_O2`. Un'intrinseca senza corpo NON e' un errore di compilazione —
+    // `-fsyntax-only` la accetta come dichiarazione implicita — quindi
+    // `check.sh` era cieco: solo il LINK la vede.
+    //
+    // Uso misurato prima di aggiungerle (mai aggiungere corpi "per simmetria"):
+    // `pcmpgtd` 74 occorrenze in `behav/out`, `pcmpgtw` 34. `pcmpgtq` ZERO ⇒
+    // NON aggiunto, resterebbe codice morto (ed e' SSE4.2, altra famiglia).
+    //
+    // ⚠ Confronto con SEGNO per corsia, come la variante a 8 bit: `int16_t` e
+    // `int32_t`, non le versioni senza segno. La maschera e' tutti-uno,
+    // scritta come `~(int)0` per corsia per non dipendere dalla larghezza del
+    // letterale.
+    if usa("pcmpgtw") {
+        corpi.push_str(
+            "static unsigned __int128 pcmpgtw(unsigned __int128 dst, unsigned __int128 src)
+{
+    int16_t a[8], b[8];
+    int i;
+    memcpy(a, &dst, 16);
+    memcpy(b, &src, 16);
+    for (i = 0; i < 8; i++) a[i] = (a[i] > b[i]) ? (int16_t)0xFFFF : (int16_t)0x0000;
+    memcpy(&dst, a, 16);
+    return dst;
+}
+",
+        );
+    }
+    if usa("pcmpgtd") {
+        corpi.push_str(
+            "static unsigned __int128 pcmpgtd(unsigned __int128 dst, unsigned __int128 src)
+{
+    int32_t a[4], b[4];
+    int i;
+    memcpy(a, &dst, 16);
+    memcpy(b, &src, 16);
+    for (i = 0; i < 4; i++) a[i] = (a[i] > b[i]) ? (int32_t)0xFFFFFFFF : (int32_t)0x00000000;
+    memcpy(&dst, a, 16);
+    return dst;
+}
+",
+        );
+    }
+    if usa("pmovmskb") {
+        corpi.push_str(
+            "static uint32_t pmovmskb(uint32_t dst, unsigned __int128 src)\n{\n    uint8_t b[16];\n    uint32_t m = 0;\n    int i;\n    memcpy(b, &src, 16);\n    for (i = 0; i < 16; i++) if (b[i] & 0x80) m |= (uint32_t)1 << i;\n    (void)dst;\n    return m;\n}\n",
+        );
+    }
+    if usa("pshufd") {
+        corpi.push_str(
+            "static unsigned __int128 pshufd(unsigned __int128 dst, unsigned __int128 src, int imm)\n{\n    uint32_t s[4], r[4];\n    unsigned __int128 out;\n    memcpy(s, &src, 16);\n    r[0] = s[imm & 3];\n    r[1] = s[(imm >> 2) & 3];\n    r[2] = s[(imm >> 4) & 3];\n    r[3] = s[(imm >> 6) & 3];\n    memcpy(&out, r, 16);\n    (void)dst;\n    return out;\n}\n",
+        );
+    }
+    if usa("pshuflw") {
+        corpi.push_str(
+            "static unsigned __int128 pshuflw(unsigned __int128 dst, unsigned __int128 src, int imm)\n{\n    uint16_t s[8], r[8];\n    unsigned __int128 out;\n    int i;\n    memcpy(s, &src, 16);\n    r[0] = s[imm & 3];\n    r[1] = s[(imm >> 2) & 3];\n    r[2] = s[(imm >> 4) & 3];\n    r[3] = s[(imm >> 6) & 3];\n    for (i = 4; i < 8; i++) r[i] = s[i];\n    memcpy(&out, r, 16);\n    (void)dst;\n    return out;\n}\n",
+        );
+    }
+    // #7840 - i tre membri MANCANTI della famiglia unpack.
+    //
+    // La serie c'era a meta': `punpcklbw` (byte) e `punpcklwd` (word) sono
+    // definiti, `punpcklqdq` (quadword) pure, ma **`punpckldq` (doubleword) no**
+    // — un buco in mezzo a una progressione regolare. E le varianti HIGH
+    // mancavano tutte.
+    //
+    // Non e' teoria: `punpckldq: external` e' un BLOCCANTE misurato di
+    // `total_area` e `string_map_demo` (6 righe LINK_FAIL). Uso nel corpus,
+    // contato prima di scrivere:
+    //
+    //     punpckldq    19 occorrenze in 19 file
+    //     punpckhbw    66 occorrenze in 52 file
+    //     punpckhqdq   32 occorrenze in  8 file
+    //     punpckhwd     0     punpckhdq   0   (non si aggiungono)
+    //
+    // Si aggiungono i tre USATI e non i due inutilizzati: definire cio' che
+    // nessuno chiama e' il difetto che #7800 ha gia' pagato con +36 compile
+    // failures.
+    if usa("punpckldq") {
+        corpi.push_str(
+            "static unsigned __int128 punpckldq(unsigned __int128 dst, unsigned __int128 src)
+{
+    uint32_t d[4], s[4], r[4];
+    unsigned __int128 out;
+    int i;
+    memcpy(d, &dst, 16);
+    memcpy(s, &src, 16);
+    for (i = 0; i < 2; i++) { r[2*i] = d[i]; r[2*i+1] = s[i]; }
+    memcpy(&out, r, 16);
+    return out;
+}
+",
+        );
+    }
+    if usa("punpckhbw") {
+        corpi.push_str(
+            "static unsigned __int128 punpckhbw(unsigned __int128 dst, unsigned __int128 src)
+{
+    uint8_t d[16], s[16], r[16];
+    unsigned __int128 out;
+    int i;
+    memcpy(d, &dst, 16);
+    memcpy(s, &src, 16);
+    for (i = 0; i < 8; i++) { r[2*i] = d[i+8]; r[2*i+1] = s[i+8]; }
+    memcpy(&out, r, 16);
+    return out;
+}
+",
+        );
+    }
+    if usa("punpckhqdq") {
+        corpi.push_str(
+            "static unsigned __int128 punpckhqdq(unsigned __int128 dst, unsigned __int128 src)
+{
+    uint64_t d[2], s[2], r[2];
+    unsigned __int128 out;
+    memcpy(d, &dst, 16);
+    memcpy(s, &src, 16);
+    r[0] = d[1];
+    r[1] = s[1];
+    memcpy(&out, r, 16);
+    return out;
+}
+",
+        );
+    }
+    if usa("punpcklbw") {
+        corpi.push_str(
+            "static unsigned __int128 punpcklbw(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint8_t d[16], s[16], r[16];\n    unsigned __int128 out;\n    int i;\n    memcpy(d, &dst, 16);\n    memcpy(s, &src, 16);\n    for (i = 0; i < 8; i++) { r[2*i] = d[i]; r[2*i+1] = s[i]; }\n    memcpy(&out, r, 16);\n    return out;\n}\n",
+        );
+    }
+    if usa("punpcklwd") {
+        corpi.push_str(
+            "static unsigned __int128 punpcklwd(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint16_t d[8], s[8], r[8];\n    unsigned __int128 out;\n    int i;\n    memcpy(d, &dst, 16);\n    memcpy(s, &src, 16);\n    for (i = 0; i < 4; i++) { r[2*i] = d[i]; r[2*i+1] = s[i]; }\n    memcpy(&out, r, 16);\n    return out;\n}\n",
+        );
+    }
+    if usa("packuswb") {
+        corpi.push_str(
+            "static unsigned __int128 packuswb(unsigned __int128 dst, unsigned __int128 src)\n{\n    int16_t d[8], s[8];\n    uint8_t r[16];\n    unsigned __int128 out;\n    int i, v;\n    memcpy(d, &dst, 16);\n    memcpy(s, &src, 16);\n    for (i = 0; i < 8; i++) { v = d[i]; r[i] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v)); }\n    for (i = 0; i < 8; i++) { v = s[i]; r[8 + i] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v)); }\n    memcpy(&out, r, 16);\n    return out;\n}\n",
+        );
+    }
     if usa("cvtsi2sd") {
         corpi.push_str(
             "static uint64_t cvtsi2sd(uint64_t dst, uint32_t src)\n{\n    double d = (double)(int)src;\n    uint64_t b;\n    memcpy(&b, &d, 8);\n    (void)dst;\n    return b;\n}\n",
@@ -1205,13 +1844,283 @@ fn define_simd_bodies(code: &str, enabled: bool) -> String {
             "static uint32_t mul_overflow(uint32_t a, uint32_t b)\n{\n    return (uint32_t)(((uint64_t)a * (uint64_t)b) >> 32) != 0;\n}\n",
         );
     }
+    // #8280: il FRATELLO CON SEGNO, emesso da lift.rs:5219 (gestore IMUL) e
+    // mai definito da nessuno. 14 occorrenze in 8 file su path B, zero su A.
+    // Non e in ida_defs.h: gcc -w lo prende per dichiarazione implicita e il
+    // file "compila", ma il LINK fallisce - la cecita di check.sh in purezza.
+    // OF per IMUL: il prodotto a doppia larghezza non entra nella larghezza
+    // singola CON SEGNO (il fratello senza segno guarda la meta alta != 0).
+    if usa("imul_overflow") {
+        corpi.push_str(
+            "static uint32_t imul_overflow(uint32_t a, uint32_t b)\n{\n    long long p = (long long)(int)a * (long long)(int)b;\n    return (uint32_t)(p != (long long)(int)p);\n}\n",
+        );
+    }
 
+    // -- #7090: le ausiliarie che BLOCCANO IL LINK ------------------------
+    //
+    // Misurato al §136: dopo aver chiuso `runtime_panicIndex`, i bucket Go e
+    // Rust continuano a fallire il link — ma per queste. Non e' piu' solo un
+    // difetto di leggibilita' come sembrava al §115: `cvtss2sd`, `aesenc` e
+    // `lfence` sono il PRIMO simbolo mancante di piu' bucket comportamentali.
+    //
+    // Si definisce, come sempre, solo cio' che il modello a 64 bit scalari
+    // rappresenta ESATTAMENTE. Le vettoriali restano fuori (vedi in fondo).
+
+    // Barriere di memoria: nessun valore, nessun effetto sul modello. Il corpo
+    // vuoto non e' un'approssimazione — e' la semantica completa per tutto cio'
+    // che questo IR rappresenta.
+    for nome in ["lfence", "sfence", "mfence"] {
+        if usa(nome) {
+            corpi.push_str(&format!(
+                "static void {nome}(void)\n{{\n    /* barriera: nessun effetto sui valori modellati */\n}}\n"
+            ));
+        }
+    }
+
+    // `tzcnt(src)`: zeri in coda. A differenza di `bsf` la ISA la DEFINISCE per
+    // operando zero — restituisce la larghezza — quindi qui non c'e' nessuna
+    // scelta arbitraria da dichiarare.
+    if usa("tzcnt") {
+        corpi.push_str(
+            "static uint32_t tzcnt(uint32_t src)\n{\n    uint32_t i;\n    if (!src) return 32; /* la ISA lo definisce: larghezza dell'operando */\n    for (i = 0; i < 32; i++) if (src & (1u << i)) return i;\n    return 32;\n}\n",
+        );
+    }
+
+    // Conversioni SCALARI fra precisioni. I `var_xmm*` sono `uint64_t` che
+    // portano i BIT del valore, come gia' assunto da `cvtsi2sd`; qui si sta
+    // dentro i 64 bit bassi, quindi la conversione e' esatta.
+    // ⚠ `cvtsi2ss`/`cvtss2sd` scrivono un `float` nei 32 bit BASSI: il resto
+    // del registro la ISA lo lascia invariato, ma il modello non lo traccia e
+    // nessuno lo legge nelle forme osservate.
+    if usa("cvtsi2ss") {
+        corpi.push_str(
+            "static uint64_t cvtsi2ss(uint64_t dst, uint32_t src)\n{\n    float f = (float)(int)src;\n    uint32_t b;\n    memcpy(&b, &f, 4);\n    (void)dst;\n    return (uint64_t)b;\n}\n",
+        );
+    }
+    if usa("cvtss2sd") {
+        corpi.push_str(
+            "static uint64_t cvtss2sd(uint64_t dst, uint64_t src)\n{\n    uint32_t b32 = (uint32_t)src;\n    float f;\n    double d;\n    uint64_t o;\n    memcpy(&f, &b32, 4);\n    d = (double)f;\n    memcpy(&o, &d, 8);\n    (void)dst;\n    return o;\n}\n",
+        );
+    }
+    if usa("cvtsd2ss") {
+        corpi.push_str(
+            "static uint64_t cvtsd2ss(uint64_t dst, uint64_t src)\n{\n    double d;\n    float f;\n    uint32_t b;\n    memcpy(&d, &src, 8);\n    f = (float)d;\n    memcpy(&b, &f, 4);\n    (void)dst;\n    return (uint64_t)b;\n}\n",
+        );
+    }
+
+    if usa("psrld") {
+        corpi.push_str(
+            "static unsigned __int128 psrld(unsigned __int128 src, uint32_t cnt)\n{\n    unsigned __int128 out = 0;\n    int i;\n    for (i = 0; i < 4; i++) {\n        uint32_t d = (uint32_t)(src >> (i * 32));\n        uint32_t r = (cnt > 31) ? 0u : (d >> cnt);\n        out |= ((unsigned __int128)r) << (i * 32);\n    }\n    return out;\n}\n",
+        );
+    }
+    if usa("pslld") {
+        corpi.push_str(
+            "static unsigned __int128 pslld(unsigned __int128 src, uint32_t cnt)\n{\n    unsigned __int128 out = 0;\n    int i;\n    for (i = 0; i < 4; i++) {\n        uint32_t d = (uint32_t)(src >> (i * 32));\n        uint32_t r = (cnt > 31) ? 0u : (d << cnt);\n        out |= ((unsigned __int128)r) << (i * 32);\n    }\n    return out;\n}\n",
+        );
+    }
+    if usa("prefetcht0") {
+        corpi.push_str(
+            "static void prefetcht0(uint64_t addr)\n{\n    (void)addr;\n}\n",
+        );
+    }
+    if usa("vpminuq") {
+        corpi.push_str(
+            "static unsigned __int128 vpminuq(unsigned __int128 dst, unsigned __int128 a, unsigned __int128 b)\n{\n    uint64_t a0 = (uint64_t)a, a1 = (uint64_t)(a >> 64);\n    uint64_t b0 = (uint64_t)b, b1 = (uint64_t)(b >> 64);\n    uint64_t r0 = (a0 < b0) ? a0 : b0;\n    uint64_t r1 = (a1 < b1) ? a1 : b1;\n    (void)dst;\n    return ((unsigned __int128)r1 << 64) | (unsigned __int128)r0;\n}\n",
+        );
+    }
+    if usa("aesenc") {
+        corpi.push_str(
+            "static uint8_t rustre_aes_sbox_[256] = {\n0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,\n0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,\n0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,\n0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,\n0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,\n0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,\n0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,\n0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,\n0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,\n0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,\n0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,\n0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,\n0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,\n0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,\n0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,\n0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16 };\n\nstatic uint8_t rustre_aes_xt_(uint8_t x)\n{\n    return (uint8_t)((x << 1) ^ ((x & 0x80) ? 0x1b : 0x00));\n}\n\nstatic unsigned __int128 aesenc(unsigned __int128 state, unsigned __int128 key)\n{\n    uint8_t a[16], b[16], o[16];\n    unsigned __int128 out = 0;\n    int i, c;\n    for (i = 0; i < 16; i++) a[i] = (uint8_t)(state >> (i * 8));\n    for (c = 0; c < 4; c++)\n        for (i = 0; i < 4; i++)\n            b[i + 4 * c] = rustre_aes_sbox_[a[i + 4 * ((c + i) & 3)]];\n    for (c = 0; c < 4; c++) {\n        uint8_t s0 = b[4*c], s1 = b[4*c+1], s2 = b[4*c+2], s3 = b[4*c+3];\n        o[4*c]   = (uint8_t)(rustre_aes_xt_(s0) ^ (rustre_aes_xt_(s1) ^ s1) ^ s2 ^ s3);\n        o[4*c+1] = (uint8_t)(s0 ^ rustre_aes_xt_(s1) ^ (rustre_aes_xt_(s2) ^ s2) ^ s3);\n        o[4*c+2] = (uint8_t)(s0 ^ s1 ^ rustre_aes_xt_(s2) ^ (rustre_aes_xt_(s3) ^ s3));\n        o[4*c+3] = (uint8_t)((rustre_aes_xt_(s0) ^ s0) ^ s1 ^ s2 ^ rustre_aes_xt_(s3));\n    }\n    for (i = 0; i < 16; i++) out |= ((unsigned __int128)o[i]) << (i * 8);\n    return out ^ key;\n}\n",
+        );
+    }
+    // ── #7220: aritmetica in virgola mobile SCALARE ────────────────────
+    // Il lift x86 mandava `divsd` su `LlilExpr::DivU` — divisione INTERA
+    // sui bit di due IEEE-754. Corretto alla radice
+    // (`rustre-arch-x86/src/lift.rs`), qui vivono i corpi che la stampa
+    // chiama. Stessa tecnica dei tre helper di conversione gia' in
+    // produzione: reinterpreta con `memcpy`, opera nel tipo giusto,
+    // reinterpreta indietro.
+    // ⚠ Solo SCALARI (SS/SD): le impacchettate (PS/PD) restano intere
+    // finche' non hanno una resa per corsia.
+    if usa("addsd") {
+        corpi.push_str(
+            "static uint64_t addsd(uint64_t a, uint64_t b)\n{\n    double x, y;\n    uint64_t r;\n    memcpy(&x, &a, 8);\n    memcpy(&y, &b, 8);\n    x = x + y;\n    memcpy(&r, &x, 8);\n    return r;\n}\n",
+        );
+    }
+    if usa("addss") {
+        corpi.push_str(
+            "static uint64_t addss(uint64_t a, uint64_t b)\n{\n    float x, y;\n    uint32_t r;\n    memcpy(&x, &a, 4);\n    memcpy(&y, &b, 4);\n    x = x + y;\n    memcpy(&r, &x, 4);\n    /* ISA: l'operazione SCALARE non tocca le corsie alte della destinazione */\n    return (a & ~(uint64_t)0xFFFFFFFF) | (uint64_t)r;\n}\n",
+        );
+    }
+    if usa("subsd") {
+        corpi.push_str(
+            "static uint64_t subsd(uint64_t a, uint64_t b)\n{\n    double x, y;\n    uint64_t r;\n    memcpy(&x, &a, 8);\n    memcpy(&y, &b, 8);\n    x = x - y;\n    memcpy(&r, &x, 8);\n    return r;\n}\n",
+        );
+    }
+    if usa("subss") {
+        corpi.push_str(
+            "static uint64_t subss(uint64_t a, uint64_t b)\n{\n    float x, y;\n    uint32_t r;\n    memcpy(&x, &a, 4);\n    memcpy(&y, &b, 4);\n    x = x - y;\n    memcpy(&r, &x, 4);\n    /* ISA: l'operazione SCALARE non tocca le corsie alte della destinazione */\n    return (a & ~(uint64_t)0xFFFFFFFF) | (uint64_t)r;\n}\n",
+        );
+    }
+    if usa("mulsd") {
+        corpi.push_str(
+            "static uint64_t mulsd(uint64_t a, uint64_t b)\n{\n    double x, y;\n    uint64_t r;\n    memcpy(&x, &a, 8);\n    memcpy(&y, &b, 8);\n    x = x * y;\n    memcpy(&r, &x, 8);\n    return r;\n}\n",
+        );
+    }
+    if usa("mulss") {
+        corpi.push_str(
+            "static uint64_t mulss(uint64_t a, uint64_t b)\n{\n    float x, y;\n    uint32_t r;\n    memcpy(&x, &a, 4);\n    memcpy(&y, &b, 4);\n    x = x * y;\n    memcpy(&r, &x, 4);\n    /* ISA: l'operazione SCALARE non tocca le corsie alte della destinazione */\n    return (a & ~(uint64_t)0xFFFFFFFF) | (uint64_t)r;\n}\n",
+        );
+    }
+    if usa("divsd") {
+        corpi.push_str(
+            "static uint64_t divsd(uint64_t a, uint64_t b)\n{\n    double x, y;\n    uint64_t r;\n    memcpy(&x, &a, 8);\n    memcpy(&y, &b, 8);\n    x = x / y;\n    memcpy(&r, &x, 8);\n    return r;\n}\n",
+        );
+    }
+    if usa("divss") {
+        corpi.push_str(
+            "static uint64_t divss(uint64_t a, uint64_t b)\n{\n    float x, y;\n    uint32_t r;\n    memcpy(&x, &a, 4);\n    memcpy(&y, &b, 4);\n    x = x / y;\n    memcpy(&r, &x, 4);\n    /* ISA: l'operazione SCALARE non tocca le corsie alte della destinazione */\n    return (a & ~(uint64_t)0xFFFFFFFF) | (uint64_t)r;\n}\n",
+        );
+    }
+    // ── #7250: aritmetica impacchettata, per CORSIA ────────────────────
+    // L'avvolgimento e' quello del tipo della corsia (`uint8_t` ecc.), che
+    // e' esattamente la semantica ISA: ogni corsia avvolge da sola e il
+    // riporto non passa alla successiva.
+    // ⚠ Little-endian assunto nel `memcpy`, come per gli altri corpi a 128 bit.
+    if usa("paddb") {
+        corpi.push_str(
+            "static unsigned __int128 paddb(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint8_t a[16], b[16];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    /* per CORSIA: il riporto NON attraversa il confine */\n    for (i = 0; i < 16; i++) a[i] = (uint8_t)(a[i] + b[i]);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("paddw") {
+        corpi.push_str(
+            "static unsigned __int128 paddw(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint16_t a[8], b[8];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    /* per CORSIA: il riporto NON attraversa il confine */\n    for (i = 0; i < 8; i++) a[i] = (uint16_t)(a[i] + b[i]);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("paddd") {
+        corpi.push_str(
+            "static unsigned __int128 paddd(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint32_t a[4], b[4];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    /* per CORSIA: il riporto NON attraversa il confine */\n    for (i = 0; i < 4; i++) a[i] = (uint32_t)(a[i] + b[i]);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("paddq") {
+        corpi.push_str(
+            "static unsigned __int128 paddq(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint64_t a[2], b[2];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    /* per CORSIA: il riporto NON attraversa il confine */\n    for (i = 0; i < 2; i++) a[i] = (uint64_t)(a[i] + b[i]);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("psubb") {
+        corpi.push_str(
+            "static unsigned __int128 psubb(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint8_t a[16], b[16];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    /* per CORSIA: il riporto NON attraversa il confine */\n    for (i = 0; i < 16; i++) a[i] = (uint8_t)(a[i] - b[i]);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("psubw") {
+        corpi.push_str(
+            "static unsigned __int128 psubw(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint16_t a[8], b[8];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    /* per CORSIA: il riporto NON attraversa il confine */\n    for (i = 0; i < 8; i++) a[i] = (uint16_t)(a[i] - b[i]);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("psubd") {
+        corpi.push_str(
+            "static unsigned __int128 psubd(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint32_t a[4], b[4];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    /* per CORSIA: il riporto NON attraversa il confine */\n    for (i = 0; i < 4; i++) a[i] = (uint32_t)(a[i] - b[i]);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("psubq") {
+        corpi.push_str(
+            "static unsigned __int128 psubq(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint64_t a[2], b[2];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    /* per CORSIA: il riporto NON attraversa il confine */\n    for (i = 0; i < 2; i++) a[i] = (uint64_t)(a[i] - b[i]);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    // ── #7260: i dieci helper che l'inventario ha fatto affiorare ──────
+    // Ognuno verificato differenzialmente contro l'intrinseca `_mm_*`
+    // corrispondente su 20000 coppie di vettori pseudo-casuali piu' i casi
+    // degeneri (operandi uguali, zeri, NaN in prima e seconda posizione,
+    // ±0, conteggi 0/4/7/63/64/99, float fuori intervallo): 0 discrepanze.
+    //
+    // ⚠ L'inventario dei simboli mancanti NON e' una lista fissa: si
+    // riforma a ogni cambio di emissione. `psrlq` era gia' un'intrinseca
+    // senza corpo (`lift.rs:1916`) ed e' emerso solo quando la classe si e'
+    // assottigliata. Va rifatto dopo ogni intervento.
+    if usa("pcmpeqd") {
+        corpi.push_str(
+            "static unsigned __int128 pcmpeqd(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint32_t a[4], b[4];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    for (i = 0; i < 4; i++) a[i] = (a[i] == b[i]) ? 0xFFFFFFFFu : 0x00000000u;\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("psrlq") {
+        corpi.push_str(
+            "static unsigned __int128 psrlq(unsigned __int128 dst, int imm)\n{\n    uint64_t a[2];\n    int i;\n    memcpy(a, &dst, 16);\n    for (i = 0; i < 2; i++) a[i] = (imm >= 64 || imm < 0) ? (uint64_t)0 : (a[i] >> imm);\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("paddusw") {
+        corpi.push_str(
+            "static unsigned __int128 paddusw(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint16_t a[8], b[8];\n    uint32_t v;\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    for (i = 0; i < 8; i++) { v = (uint32_t)a[i] + (uint32_t)b[i]; a[i] = (uint16_t)(v > 0xFFFFu ? 0xFFFFu : v); }\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("pshufb") {
+        corpi.push_str(
+            "static unsigned __int128 pshufb(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint8_t d[16], s[16], r[16];\n    int i;\n    memcpy(d, &dst, 16);\n    memcpy(s, &src, 16);\n    for (i = 0; i < 16; i++) r[i] = (s[i] & 0x80) ? 0x00 : d[s[i] & 0x0F];\n    memcpy(&dst, r, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("cvtps2pd") {
+        corpi.push_str(
+            "static unsigned __int128 cvtps2pd(unsigned __int128 dst, unsigned __int128 src)\n{\n    float f[4];\n    double d[2];\n    unsigned __int128 out;\n    memcpy(f, &src, 16);\n    d[0] = (double)f[0];\n    d[1] = (double)f[1];\n    memcpy(&out, d, 16);\n    (void)dst;\n    return out;\n}\n",
+        );
+    }
+    if usa("minsd") {
+        corpi.push_str(
+            "static unsigned __int128 minsd(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint64_t x, y;\n    double a, b;\n    x = (uint64_t)dst; y = (uint64_t)src;\n    memcpy(&a, &x, 8);\n    memcpy(&b, &y, 8);\n    x = (a < b) ? x : y;\n    return ((dst >> 64) << 64) | (unsigned __int128)x;\n}\n",
+        );
+    }
+    if usa("maxsd") {
+        corpi.push_str(
+            "static unsigned __int128 maxsd(unsigned __int128 dst, unsigned __int128 src)\n{\n    uint64_t x, y;\n    double a, b;\n    x = (uint64_t)dst; y = (uint64_t)src;\n    memcpy(&a, &x, 8);\n    memcpy(&b, &y, 8);\n    x = (a > b) ? x : y;\n    return ((dst >> 64) << 64) | (unsigned __int128)x;\n}\n",
+        );
+    }
+    if usa("pminsw") {
+        corpi.push_str(
+            "static unsigned __int128 pminsw(unsigned __int128 dst, unsigned __int128 src)\n{\n    int16_t a[8], b[8];\n    int i;\n    memcpy(a, &dst, 16);\n    memcpy(b, &src, 16);\n    for (i = 0; i < 8; i++) a[i] = (a[i] < b[i]) ? a[i] : b[i];\n    memcpy(&dst, a, 16);\n    return dst;\n}\n",
+        );
+    }
+    if usa("popcnt") {
+        corpi.push_str(
+            "static uint64_t popcnt(uint64_t src)\n{\n    uint64_t n = 0;\n    int i;\n    for (i = 0; i < 64; i++) if ((src >> i) & 1) n++;\n    return n;\n}\n",
+        );
+    }
+    if usa("cvttss2si") {
+        corpi.push_str(
+            "static uint32_t cvttss2si(uint32_t dst, unsigned __int128 src)\n{\n    float f;\n    uint32_t bits = (uint32_t)(uint64_t)src;\n    memcpy(&f, &bits, 4);\n    (void)dst;\n    if (!(f > -2147483649.0f && f < 2147483648.0f)) return 0x80000000u;\n    return (uint32_t)(int)f;\n}\n",
+        );
+    }
     // ⛔ ESCLUSI DI PROPOSITO, e non per mancanza di tempo:
-    // `cpuid_eax/ebx/ecx/edx` (204 occorrenze) — dipendono dalla CPU, nessun
-    //   corpo e' «giusto» e uno inventato sarebbe confidently wrong;
-    // `aesenc` (222), `packuswb`, `vpminuq`, `pcmpeqq` — leggono i 128 bit
-    //   PIENI, che il modello a 64 bit bassi non rappresenta: e' esattamente
-    //   la ragione per cui `punpckhqdq` e' escluso qui sopra;
+    //
+    // ⚠ AGGIORNATO (#7200): `aesenc`, `packuswb`, `vpminuq`, `pcmpeqq` erano
+    //   esclusi qui con la motivazione «leggono i 128 bit PIENI, che il modello
+    //   a 64 bit bassi non rappresenta». **Quella premessa non vale piu'**:
+    //   nell'albero emesso i `var_xmm*` sono dichiarati `unsigned __int128` e
+    //   caricati con `*(unsigned __int128 *)…`. Il modello e' a larghezza
+    //   piena, quindi i quattro sono esattamente definibili e ora lo sono.
+    //   Resta escluso `punpckhqdq`, per una ragione DIVERSA e ancora valida:
+    //   porta `dst.low = dst.high`, e sui siti dove il chiamante e' ancora
+    //   `uint64_t` quel valore non esiste.
+    //
+    // `cpuid_eax/ebx/ecx/edx` (204 occorrenze) — definibili solo con asm inline
+    //   x86 che RIESEGUE CPUID (esatto: CPUID e' una funzione pura di (EAX,ECX)
+    //   sullo stesso processore logico). Tenuti fuori PER ORA perche' le quattro
+    //   chiamate separate non sono atomiche come l'istruzione originale: sulle
+    //   foglie di topologia 0x0B/0x1F e sull'APIC ID iniziale in EBX della
+    //   foglia 1 una migrazione di thread fra le quattro darebbe una quadrupla
+    //   incoerente. Le foglie osservate nel corpus (1, 0x80000000, 0x80000001)
+    //   non hanno il problema: da riprendere con la misura in mano.
+    // `__readgsqword` (1276) — NON definibile in C portabile. Solo asm inline
+    //   x86-64 + Windows (GS = TEB). Tenuto fuori per ora perche' molti siti
+    //   passano un NON-offset (`__readgsqword(a1)`, `__readgsqword(off_…)`):
+    //   un corpo fedele li fa FAULTARE, il che e' l'esito giusto — espone un
+    //   difetto di lift a monte invece di nasconderlo — ma sposterebbe dei
+    //   LINK_FAIL su CRASH. ⛔ `return 0` NON e' l'alternativa: renderebbe ogni
+    //   `*(__int64 *)(result + 1)` a valle un deref di NULL che SEMBRA un bug
+    //   di dati. Meglio il link rotto di un numero sbagliato.
+    // `__thread_context` — stesso simbolo, grafia a operando di memoria; e' un
+    //   DATO non definito, non una funzione. Rimedio diverso.
+    //   Misurato: 2172 `extern`, ZERO definizioni, e usato solo come
+    //   `*(__int64 *)(__thread_context + 16)` (confronto col limite di stack).
+    //   ⇒ derivare `__readgsqword` da lui NON aggiusterebbe il link: sposterebbe
+    //   il fallimento su un altro simbolo indefinito, inventando anche la base.
     // `cvtsi2ss` (194) — la variante a PRECISIONE SINGOLA; il suo gemello a
     //   doppia e' definito, ma qui il valore va troncato a `float` e la forma
     //   emessa non dice se il modello lo tenga a 32 o 64 bit. Da misurare.
@@ -1431,9 +2340,38 @@ fn rename_import_slots(code: &str, imports: &HashMap<u64, String>, enabled: bool
     // dichiara lo slot IAT come FUNZIONE — ma `__imp_X` e' un DATO (il
     // puntatore), e gcc rifiuta: «redeclared as different kind of symbol».
     // La riga di dichiarazione va quindi resa nella forma DATO.
+    // ── #8020: non riscrivere IN LOCO una dichiarazione finita dentro il corpo
+    //
+    // Questa passata trasforma `… X();` in `extern __int64 __imp_X;` **sul
+    // posto**. Se la riga di partenza era gia' dentro il corpo — inserita li'
+    // da una passata precedente — la forma dato eredita la posizione
+    // sbagliata, e il risultato e' un `extern` a colonna 0 in mezzo agli
+    // statement:
+    //
+    //     v9 = (__int64)&_gnu_exception_handler;
+    //     extern __int64 __imp_SetUnhandledExceptionFilter;   <-- qui
+    //
+    // MISURATO su `runs/pathb_first`: **391 righe in 155 file**, 8 bucket;
+    // path A **zero**. `gcc -std=gnu89` le accetta come estensione, quindi non
+    // e' un fallimento di compilazione — e' codice non conforme a C89.
+    //
+    // ⚠ PRECONDIZIONE MISURATA: **391 su 391** sono DUPLICATI di una
+    // dichiarazione identica gia' presente in TESTA allo stesso file; **zero**
+    // sono uniche. Sopprimere quella interna non perde nulla.
+    //
+    // ⚠ Un primo tentativo (#8010) filtrava in `prepend_hlil_externs`: era
+    // **inerte** (391 prima, 391 dopo) perche' quella funzione gira PRIMA di
+    // questa. Ritirato — un predicato che no-oppa e' un bug.
+    let mut prof: i32 = 0;
+    let mut viste: std::collections::HashSet<String> = std::collections::HashSet::new();
     out.lines()
-        .map(|riga| {
+        .filter_map(|riga| {
             let t = riga.trim();
+            let apre = i32::try_from(riga.matches('{').count()).unwrap_or(0);
+            let chiude = i32::try_from(riga.matches('}').count()).unwrap_or(0);
+            let dentro = prof > 0;
+            prof += apre - chiude;
+            let _ = dentro;
             // ⚠⚠ MISURATO (3rust 9 -> 10): cercare `__imp_` come SOTTOSTRINGA
             // tronca i nomi che lo CONTENGONO. `panic_unwind__imp__exception_cleanup`
             // e' una funzione Rust VERA, e `rfind` la riscriveva in
@@ -1451,10 +2389,59 @@ fn rename_import_slots(code: &str, imports: &HashMap<u64, String>, enabled: bool
                     .rev()
                     .collect();
                 if ident.starts_with("__imp_") && nome.ends_with(&ident) {
-                    return format!("extern __int64 {ident};");
+                    let decl = format!("extern __int64 {ident};");
+                    // #8020: dentro il corpo e gia' dichiarata in testa ⇒ la
+                    // riga sparisce invece di essere riscritta sul posto.
+                    if dentro && viste.contains(&decl) {
+                        // #8020b: la riga va SCARTATA, non svuotata. Svuotarla
+                        // chiudeva il difetto di forma ma lasciava 391 righe
+                        // bianche (misurato: vuote 1185 -> 1410 su sample7_cpp).
+                        return None;
+                    }
+                    viste.insert(decl.clone());
+                    return Some(decl);
                 }
             }
-            riga.to_string()
+            // #7790 - la DEFINIZIONE dello slot, che questa stessa passata
+            // stava fabbricando contro il proprio docstring.
+            //
+            // Il commento sopra (riga ~1747) dice che materializzare i byte di
+            // uno slot IAT «sarebbe SBAGLIATO — il loader ci scrive dentro
+            // l'indirizzo vero a runtime, quindi i byte del file sono un
+            // segnaposto: linkerebbe e darebbe numeri sbagliati, cioe' peggio
+            // di un LINK_FAIL». Ed e' esattamente cio' che accadeva: la
+            // riscrittura del token qui sopra trasforma
+            //
+            //     static uint8_t off_140099038[64] = { … };   (da `data_symbol_definitions`)
+            // in
+            //     static uint8_t __imp_NtWriteFile[64] = { … };
+            //
+            // cioe' DEFINISCE lo slot con i byte del file. Il link riesce, e il
+            // programma legge l'RVA del nome invece dell'indirizzo della
+            // funzione: un difetto che **nessuna metrica statica puo' vedere**.
+            //
+            // MISURATO: 557 definizioni, **557 usate** (100%), ognuna con
+            // almeno una lettura `*(__int64 *)&__imp_X`. In path A: ZERO.
+            //
+            // La cura sta QUI e non altrove per una ragione d'ordine: la
+            // definizione diventa dichiarazione nella STESSA riscrittura che
+            // l'ha creata, quindi non esiste un istante in cui una lettura
+            // resti senza simbolo. Toglierla prima, altrove, trasformerebbe un
+            // difetto silenzioso in un LINK_FAIL nuovo.
+            //
+            // Le letture non si toccano: con `extern __int64 __imp_X;` la
+            // forma `*(__int64 *)(__int64)&__imp_X` legge il valore che il
+            // loader scrive, che e' il comportamento corretto.
+            if let Some(resto) = t.strip_prefix("static uint8_t __imp_") {
+                let ident: String = resto
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                if !ident.is_empty() && resto[ident.len()..].starts_with('[') {
+                    return Some(format!("extern __int64 __imp_{ident};"));
+                }
+            }
+            Some(riga.to_string())
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -1566,6 +2553,32 @@ fn emit_batch_outputs(
     let ret_void = gate_acceso("RUSTRE_RETURN_VOID_CALL");
     let trap_body = gate_acceso("RUSTRE_TRAP_BODY");
     let imp_slot = gate_acceso("RUSTRE_IMP_SLOT");
+    // #8840 - definisce su PATH A le tabelle di puntatori a funzione che il
+    // testo indicizza ancora.
+    //
+    // I tre `dispatch` LINK_FAIL della misura 1300 sono bloccati da UN solo
+    // simbolo: `off_140004000`, una tabella di puntatori letta come `v3[a1]` e
+    // chiamata. `data_symbol_definitions` la esclude per la guardia #5700, che
+    // rifiuta di definire le BASI DI TABELLA risolte - regola SOLIDA per le
+    // tabelle di SALTO (voci rel32 relative alla base originale: in un array
+    // locale puntano altrove) ma la cui premessa implicita e' che, risolto lo
+    // switch, la base sia morta. Per una tabella di CHIAMATE la premessa non
+    // vale: l'indicizzazione resta e il simbolo resta irrisolto.
+    //
+    // CONDIZIONE STRETTA, e non e' prudenza generica: definire una base
+    // referenziata "e vediamo" trasformerebbe alcuni LINK_FAIL in codice che
+    // LINKA e salta in memoria arbitraria - un difetto silenzioso al posto di
+    // uno rumoroso. Si definisce SOLO se OGNI cella da 8 byte risolve a una
+    // funzione emessa: allora la tabella e' corretta per costruzione.
+    //
+    // Stessa disciplina di #7800b (gli alias ICF): si emette solo per i
+    // simboli che qualcuno usa davvero, non "tutti quelli che si possono".
+    let fnptr_a = gate_acceso("RUSTRE_FNPTR_TABLE_A");
+    let immagine_a = if fnptr_a {
+        crate::binary_entry::load_binary(binary_path).ok()
+    } else {
+        None
+    };
     // Il binario si rilegge SOLO col gate acceso: a gate spento il costo e'
     // esattamente zero, cosi' il braccio di controllo resta quello di prima.
     let imports: HashMap<u64, String> = if imp_slot {
@@ -1582,16 +2595,74 @@ fn emit_batch_outputs(
     } else {
         HashMap::new()
     };
+    // #7800 - gli alias ICF. Stessa disciplina degli import: il binario si
+    // rilegge SOLO col gate acceso, cosi' a gate spento il costo e' zero e il
+    // braccio di controllo resta byte-identico.
+    let icf = gate_acceso("RUSTRE_ICF_ALIAS");
+    // #7800b - l'alias si emette SOLO se qualcuno chiama quel nome.
+    //
+    // La v1 li emetteva tutti: 145 su `rust3_O0`, ma **solo 17 referenziati**.
+    // I 128 inutili non erano innocui — misurato: compile failures 45 -> 81.
+    // Due modi di rompere, entrambi provati con gcc:
+    //
+    //   `conflicting types for '_get_invalid_parameter_handler'`
+    //        il nome e' gia' DICHIARATO dalle intestazioni (via <stdlib.h>,
+    //        che <emmintrin.h> tira dentro);
+    //   `multiple definition of '_get_invalid_parameter_handler'`
+    //        il nome e' gia' DEFINITO dalla CRT — e allora il riferimento si
+    //        risolveva gia' da solo, l'alias era puro danno.
+    //
+    // L'etichetta asm risolve il primo (compila) ma NON il secondo: definire un
+    // simbolo che la libreria fornisce e' sbagliato comunque.
+    //
+    // ⇒ Il criterio giusto non e' «esiste un alias» ma «qualcuno lo chiama e
+    // nessuno lo definisce». Se il nome e' referenziato e irrisolto, allora la
+    // libreria NON lo fornisce (altrimenti il link passerebbe gia'), e l'alias
+    // e' l'unica cosa che puo' chiuderlo. Precisione e sicurezza coincidono.
+    let chiamati: std::collections::HashSet<String> = if icf {
+        let mut s = std::collections::HashSet::new();
+        for f in &result.functions {
+            for testo in [
+                f.pseudo_code.as_str(),
+                f.hlil_pseudo_code.as_deref().unwrap_or(""),
+            ] {
+                for riga in testo.lines() {
+                    let t = riga.trim_start();
+                    // Una DICHIARAZIONE `__int64 nome();` e' proprio il segno
+                    // che il nome serve e non e' definito qui.
+                    if let Some(resto) = t.strip_suffix("();")
+                        && let Some(nome) = resto.rsplit(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).next()
+                        && !nome.is_empty()
+                    {
+                        s.insert(nome.to_string());
+                    }
+                }
+            }
+        }
+        s
+    } else {
+        std::collections::HashSet::new()
+    };
+    let alias_per_va: HashMap<u64, Vec<String>> = if icf {
+        crate::binary_entry::load_binary(binary_path)
+            .map_or_else(|_| HashMap::new(), |load| {
+                crate::binary_entry::alias_names_by_addr(&load)
+            })
+    } else {
+        HashMap::new()
+    };
+    let path_b_unico = std::env::var("RUSTRE_PATH_B_UNICO").as_deref() == Ok("1");
     for func in &result.functions {
         let path = out_dir.join(format!("{:#x}.c", func.address).replace("0x", "sub_"));
-        if let Err(e) = fs::write(&path, &func.pseudo_code) {
-            result.diagnostics.push(DecompilerDiagnostic {
-                severity: DiagnosticSeverity::Warning,
-                address: Some(func.address),
-                message: format!("write {}: {e}", path.display()),
-                pass: None,
-            });
-        }
+        // #8160 - la scrittura del DELIVERABLE e' spostata DOPO il blocco path B,
+        // perche' il testo di B esiste solo alla fine di quella catena. Con il gate
+        // spento cio' che finisce in `sub_HEX.c` resta `func.pseudo_code`, byte per
+        // byte come prima: lo spostamento da solo non cambia nulla.
+        //
+        // Gli ingressi della catena B sono definiti a 2262-2350, cioe' PRIMA di
+        // questo ciclo: sono invarianti di ciclo, quindi spostare la catena non
+        // cambia cio' che legge. Verificato riga per riga, non a campione.
+        let mut testo_b: Option<String> = None;
         // Experimental LLIL->MLIL->HLIL output (only present when
         // `DecompOptions.passes.hlil_experimental` was enabled) — written
         // as a sibling `.hlil.c` file, never overwriting the real
@@ -1616,6 +2687,182 @@ fn emit_batch_outputs(
             // proprio righe `extern __int64 off_X;`), e non ne introduce di
             // nuovi da rinominare.
             let hlil = rename_import_slots(&hlil, &imports, imp_slot);
+            // #7800 - alias per i nomi che l'ICF ha fuso su questo indirizzo.
+            //
+            // Il linker fonde funzioni identiche: allo stesso indirizzo restano
+            // piu' simboli COFF, la definizione viene emessa sotto UNO dei nomi
+            // e i call site che usano l'ALTRO restano senza definizione ⇒
+            // LINK_FAIL. `load.symbols` li conserva tutti; a perderli e'
+            // `name_of`, che fa `.find(|s| s.addr == va)` e tiene il primo.
+            //
+            // La forma e' verificata con gcc PRIMA di scriverla:
+            //     __int64 nome_alias(void) __attribute__((alias("nome_reale")));
+            // compila, linka, ed esegue la funzione giusta su mingw.
+            //
+            // ⚠ Solo se il nome emesso e' fra quelli noti a quell'indirizzo:
+            // altrimenti l'alias punterebbe a un simbolo che questo file non
+            // definisce, trasformando un LINK_FAIL in un errore di
+            // compilazione — peggio, non meglio.
+            // #7890 - la RICORSIONE col nome grezzo: alias invece di rename.
+            //
+            // Caso misurato (`sample7_cpp/sub_140002950.hlil.c`): il file
+            //   DEFINISCE   `void d_count_templates_scopes(uint64_t, uint64_t)`
+            //   DICHIARA    `__int64 sub_140002950();`
+            //   CHIAMA      `v2 = sub_140002950(a1, a2);`
+            // cioe' chiama SE STESSO col nome grezzo ⇒ simbolo indefinito.
+            //
+            // La catena era CIRCOLARE: `rename_hlil_sub_symbols` non rinomina
+            // perche' il bersaglio e' `void` e il sito ASSEGNA (rinominare
+            // darebbe «void value not ignored»); `repair_return_void_call` non
+            // ripara perche' il nome non e' ancora legato alla definizione.
+            // Ognuna aspetta l'altra.
+            //
+            // L'alias rompe il circolo **senza toccare il sito di chiamata**,
+            // che e' il punto: l'assegnazione non e' inventata — l'emittitore
+            // la deriva dal codice macchina, che legge davvero `rax` dopo la
+            // `call`. Cambiarla richiederebbe di sapere cosa contiene, cioe' un
+            // dato che lo statico non ha.
+            //
+            // Forma verificata con gcc PRIMA di scriverla, nel caso REALE (con
+            // la dichiarazione gia' presente nel testo e il bersaglio `void`):
+            //     __int64 sub_140002950() __attribute__((alias("d_count_…")));
+            // compila, assembla e linka; e le parentesi VUOTE sono necessarie —
+            // un prototipo `(void)` rifiuterebbe la chiamata a due argomenti.
+            let hlil = if icf
+                && let Some(e) = nome_definizione(&hlil)
+                && !e.starts_with("sub_")
+            {
+                let mut testa = String::new();
+                // ⚠ Le due grafie COINCIDONO quando l'esadecimale non ha
+                // lettere (`sub_140002950`), e senza dedup l'alias uscirebbe
+                // DUE volte — una ridefinizione, cioe' un errore di
+                // compilazione al posto di un LINK_FAIL. Trovato alla prima
+                // corsa, non ragionandoci.
+                let mut grafie = vec![
+                    format!("sub_{:X}", func.address),
+                    format!("sub_{:x}", func.address),
+                ];
+                grafie.dedup();
+                for grafia in grafie {
+                    if hlil.contains(&format!("__int64 {grafia}();"))
+                        && !hlil.contains(&format!("{grafia}() __attribute__"))
+                    {
+                        testa.push_str(&format!(
+                            "__int64 {grafia}() __attribute__((alias(\"{e}\")));
+"
+                        ));
+                    }
+                }
+                if testa.is_empty() {
+                    hlil
+                } else {
+                    testa.push_str(&hlil);
+                    testa
+                }
+            } else {
+                hlil
+            };
+            let hlil = match alias_per_va.get(&func.address) {
+                Some(nomi) => {
+                    let emesso = nome_definizione(&hlil);
+                    match emesso {
+                        Some(e) if nomi.iter().any(|n| n.as_str() == e.as_str()) => {
+                            let mut testa = String::new();
+                            for n in nomi
+                                .iter()
+                                .filter(|n| n.as_str() != e.as_str() && chiamati.contains(n.as_str()))
+                            {
+                                testa.push_str(&format!(
+                                    "__int64 {n}(void) __attribute__((alias(\"{e}\")));
+"
+                                ));
+                            }
+                            testa.push_str(&hlil);
+                            testa
+                        }
+                        _ => hlil,
+                    }
+                }
+                None => hlil,
+            };
+            // #7750d - il thunk IAT risolto come lo risolve path A.
+            //
+            // ⚠ La POSIZIONE e' il fix, non la logica. Tre cablaggi in
+            // `lib.rs` sono usciti INERTI (2548 -> 2548, misurato due volte) e
+            // la sonda `RUSTRE_DBG_IAT` ha chiuso la questione in una corsa:
+            // al punto della prima fase la passata vedeva 203 `__imp_` su
+            // `rust3_O0` e ne trasformava **0**, perche' erano tutte
+            // sottostringhe di nomi Rust (`core__num__imp__bignum__…`). Gli
+            // slot IAT veri non esistevano ancora: li produce
+            // `rename_import_slots`, QUI, in fase di scrittura.
+            //
+            // Regola: una passata che consuma una grafia va DOPO il suo
+            // produttore, e il produttore si trova misurando, non leggendo.
+            //
+            // Trasformazione (oracolo: path A emette gia' `NtWriteFile();` per
+            // lo stesso indirizzo e LINKA):
+            //     ((__int64 (*)())(*(__int64 *)__imp_N))()  ->  N()
+            // ⛔ #7750 REVOCATO — misurato DANNOSO, gate ora opt-in e SPENTO.
+            //
+            // La trasformazione funziona (2548 thunk -> 0, verificato) ma il
+            // suo effetto complessivo e' NEGATIVO:
+            //
+            // | | prima | dopo |
+            // |---|---|---|
+            // | compile failures | 45 | **283** (+238) |
+            // | objects linked | 22844 | 22606 (-238) |
+            // | AGREE | 45/63 | **45/63** |
+            //
+            // Peggiorati **20 bucket su 20**. Causa: le CRT che ritornano
+            // `void` - `return exit();` e simili non compilano.
+            //
+            // ⚠ Ma il difetto di METODO viene prima: la premessa era che il
+            // nome nudo LINKI, dedotta dal fatto che path A emette
+            // `NtWriteFile();`. **Mai verificata** — `behavior.py` misura path
+            // B, quindi non avevo alcuna prova che quella forma linki. E
+            // infatti no: dopo il fix i bloccanti passano da `__imp_NtWriteFile`
+            // a `NtWriteFile`, cioe' cambiano NOME e restano.
+            //
+            // Un «oracolo» che non e' stato misurato non e' un oracolo.
+            //
+            // Il codice e i test restano: la trasformazione e' corretta in se'
+            // e servira' quando ci sara' una vera risoluzione degli import
+            // (dichiarazioni + libreria), non prima.
+            // ⛔ #7750 SPENTO — due forme provate, **entrambe** dannose, e il
+            // motivo e' lo stesso: manca la DICHIARAZIONE del nome.
+            //
+            // | forma | nome NON dichiarato | nome dichiarato (CRT) |
+            // |---|---|---|
+            // | `NAME()` | compila (dichiarazione implicita) | `too few arguments` |
+            // | `((T(*)())NAME)()` | **`undeclared`** | compila |
+            //
+            // Misurato sul corpus, compile failures partendo da **45**:
+            // la prima forma **283**, la seconda **957**. Provato con gcc, non
+            // dedotto: un nome nudo usato come VALORE (e non come chiamata) non
+            // gode della dichiarazione implicita di gnu89.
+            //
+            // ⚠ Ma la trasformazione FUNZIONA: dopo di essa i bloccanti
+            // `__imp_NtWriteFile` &c. **spariscono** dall'elenco di
+            // `accumulate`, e sotto emerge lo strato successivo (simboli Rust
+            // non emessi). Il fronte non e' chiuso, e' **sbucciato**.
+            //
+            // Prerequisito mancante, ora esplicito: emettere una
+            // DICHIARAZIONE per ogni import risolto. Finche' non c'e',
+            // riscrivere la forma sposta il difetto invece di toglierlo.
+            // #7760 - riacceso con l'ALIAS ASM, che toglie il prerequisito
+            // invece di aggirarlo: la dichiarazione usa un nome NOSTRO
+            // (`rustre_imp_X`) con `__asm__("X")`, quindi non puo' confliggere
+            // con nessuna intestazione e il linker risolve `X` come sempre.
+            // Verificato con gcc su CRT gia' dichiarata, WinAPI e NT: compila
+            // E linka.
+            let hlil = if matches!(
+                std::env::var("RUSTRE_HLIL_IAT").as_deref(),
+                Ok("0") | Ok("false")
+            ) {
+                hlil
+            } else {
+                crate::resolve_iat_thunks_hlil(&hlil)
+            };
             // ⛔ REVOCATO — `RUSTRE_DROP_PROTO_DECLS`, effetto misurato ZERO.
             //
             // Avevo diagnosticato che `drop_conflicting_crt_forward_decls` non
@@ -1632,6 +2879,69 @@ fn emit_batch_outputs(
             // `"wcsnlen"` a `lib.rs:7425` e dedotto la funzione che la
             // conteneva — che e' `clamp_known_api_call_arity`, NON
             // `has_published_prototype`.
+            // #8180, OPT-IN `RUSTRE_DECL_CONCORDA=1`: rete di riparazione, e sta
+            // QUI perche' deve girare dopo OGNI produttore di dichiarazioni.
+            let hlil = if std::env::var("RUSTRE_DECL_CONCORDA").as_deref() == Ok("1") {
+                concorda_dichiarazioni(&hlil)
+            } else {
+                hlil
+            };
+            // #8250, OPT-IN `RUSTRE_HLIL_RETURN_FIX=1`: gli 823 `return;`
+            // nudi in funzioni non-void. path A ne ha ZERO perche'
+            // `text_pass!` scrive sempre `pseudo_code`; path B non vede
+            // mai queste passate. Sta QUI, ultimo, per la stessa ragione
+            // di #8180: una riparazione sintattica fuori posto no-oppa.
+            //
+            // Solo `fix_return_statement_consistency`, NON
+            // `rewrite_bare_return_with_value`: quella cerca `rax`/`eax`
+            // GREZZI e gira prima delle rinomine, qui sarebbe inerte.
+            let hlil = if std::env::var("RUSTRE_HLIL_RETURN_FIX").as_deref() == Ok("1") {
+                crate::fix_return_statement_consistency(&hlil)
+            } else {
+                hlil
+            };
+            // #8300: il terminatore di riga finale.
+            //
+            // MISURATO 29-08: path A emette 12558 file su 12558 SENZA newline
+            // finale, path B 12558 su 12558 CON. In C89 - lo standard che
+            // check.sh usa (-std=gnu89) - un sorgente che non termina con
+            // newline e' comportamento indefinito.
+            //
+            // La causa non e' una passata: `lib.rs` ha 142 occorrenze di
+            // `.join("\n")`, e `code.lines()` scarta il terminatore.
+            // Correggerne una non basta: si normalizza QUI, all'unico punto
+            // da cui il testo esce.
+            // #8590: una funzione DEFINITA qui non va anche dichiarata.
+            // Stesso punto e stessa ragione di #8500e: e' l'unico posto dove il
+            // testo e' completo, e la dichiarazione da togliere e' emessa da una
+            // passata diversa da quella che scrive la definizione.
+            // #8920 - INCIDENTE 2026-08-31: `lib.rs` azzerato da un errore di
+            // scrittura (Python tronca il file PRIMA di valutare l'argomento di
+            // `write`; l'eccezione e' arrivata dopo). Backup piu' recente: 29-08,
+            // e git non ha nulla di piu' fresco. Le tre funzioni
+            // `drop_decl_when_defined`, `drop_dead_data_ptr_stores` e
+            // `ripara_chiamate_a_dati` erano state aggiunte DOPO il 29-08 e non
+            // sono recuperabili da nessuna fonte.
+            //
+            // Le chiamate sono SCABLATE. Costo sul comportamento predefinito:
+            // ZERO - tutti e tre i gate erano opt-in (assente = spento), quindi il
+            // ramo attivo era gia' l'`else`. Vanno riscritte; i commenti che ne
+            // descrivono lo scopo sono rimasti apposta qui sotto.
+            // #8500e - la riparazione dei riferimenti a dati va QUI, non in
+            // `lib.rs`. La catena di path B ha DUE tratti: quello di `lib.rs`
+            // finisce con l'annotazione `hlil_pseudo_code`, e da li' riparte
+            // qui con `materialize_fnptr_tables` (che EMETTE la definizione
+            // `static void *off_X[N]`), `declare_renamed_imports` e altre.
+            // Cablata alla fine del primo tratto veniva scavalcata da tutte
+            // queste - misurato: effetto ZERO.
+            //
+            // Questo e' l'unico punto da cui il testo esce, come dice il
+            // commento qui sotto per la newline finale.
+            // #8640 -- via i `V = (__int64)&off_X;` morti che restano dopo la
+            // riscrittura dello switch: non fanno nulla e rendono il file non
+            // linkabile. DOPO le passate che li rendono morti, mai prima.
+            // #8920 - vedi sopra: scablate, gate opt-in, costo zero.
+            let hlil = if hlil.ends_with('\n') { hlil } else { hlil + "\n" };
             if let Err(e) = fs::write(&hlil_path, &hlil) {
                 result.diagnostics.push(DecompilerDiagnostic {
                     severity: DiagnosticSeverity::Warning,
@@ -1640,6 +2950,93 @@ fn emit_batch_outputs(
                     pass: None,
                 });
             }
+            // Il gemello `.hlil.c` continua a essere scritto ANCHE quando B e' il
+            // deliverable: senza, il protocollo non potrebbe piu' misurare una
+            // regressione della commutazione stessa.
+            testo_b = Some(hlil);
+        }
+        // #8160 - scelta del deliverable.
+        //
+        // Misurato (`runs/ab_0828`, stesso albero, letture appaiate):
+        //   comportamento   A 15/62 (24,2%)   B 47/62 (75,8%)   3,13x
+        //   arita           A 120/135         B 124/135  (over 6 -> 2)
+        //   firme duplicate A 4               B 0
+        //   irrisolti az.   A 3476            B 22       (158x)
+        //   simboli dato    A 8145            B 26061    (3,2x)
+        //   cross-build     A 4/1688 (0,24%)  B 4/2083 (0,19%)
+        //   code_as_data    A 0               B 2        <- l'unica a favore di A
+        //
+        // OPT-IN `RUSTRE_PATH_B_UNICO=1`, default OFF: cambia il DELIVERABLE, che e'
+        // la decisione piu' invasiva possibile in questo crate.
+        // #8840 - vedi il commento al gate: si definiscono le tabelle di
+        // puntatori a funzione che il testo di A indicizza ancora.
+        let testo_a = definisci_tabelle_fnptr_a(
+            &func.pseudo_code,
+            immagine_a.as_ref(),
+            &nomi_per_va,
+        );
+        // #8900 - gli ALIAS ICF anche su path A.
+        //
+        // Il blocco che li emette esisteva ed era applicato SOLO a `hlil`:
+        // occorrenze di `__attribute__((alias` su `pseudo_code` = ZERO.
+        // Misurato su `cpp_sample7_O0` (path A): **0 alias emessi** e 36
+        // riferimenti irrisolti dalle sole `operator new`/`operator delete`.
+        //
+        // La doppia grafia e' VOLUTA (#7880): la DEFINIZIONE porta la forma
+        // tagliata alla `(` (un nome con `(args)` romperebbe i parser di
+        // firma), i RIFERIMENTI quella completa coi tipi. L'alias asm e' il
+        // ponte, e a path A mancava.
+        //
+        // La guardia di #7800b vale identica qui, e per fortuna: `chiamati`
+        // e' costruito da ENTRAMBI i testi (`pseudo_code` E
+        // `hlil_pseudo_code`), quindi copre gia' i nomi che path A chiama.
+        // Emettere un alias per un nome NON chiamato non e' innocuo: la v1 di
+        // #7800 lo fece e i compile failures passarono da 45 a 81.
+        let testo_a = match (icf, alias_per_va.get(&func.address)) {
+            (true, Some(nomi)) => match nome_definizione(&testo_a) {
+                Some(e) if nomi.iter().any(|n| n.as_str() == e.as_str()) => {
+                    let mut testa = String::new();
+                    for n in nomi
+                        .iter()
+                        .filter(|n| n.as_str() != e.as_str() && chiamati.contains(n.as_str()))
+                    {
+                        testa.push_str(&format!(
+                            "__int64 {n}(void) __attribute__((alias(\"{e}\")));
+"
+                        ));
+                    }
+                    if testa.is_empty() {
+                        testo_a
+                    } else {
+                        testa.push_str(&testo_a);
+                        testa
+                    }
+                }
+                _ => testo_a,
+            },
+            _ => testo_a,
+        };
+        let deliverable: &str = match (&testo_b, path_b_unico) {
+            (Some(t), true) => t.as_str(),
+            _ => testo_a.as_str(),
+        };
+        // #8300: stesso terminatore per path A. Deroga CONSAPEVOLE a REGOLA
+        // #28 (path A byte-identico): il cambiamento e' DELIBERATAMENTE
+        // CONDIVISO e chiude un difetto che riguarda il 100% dei file di A.
+        let deliverable_nl;
+        let deliverable: &str = if deliverable.ends_with('\n') {
+            deliverable
+        } else {
+            deliverable_nl = format!("{deliverable}\n");
+            &deliverable_nl
+        };
+        if let Err(e) = fs::write(&path, deliverable) {
+            result.diagnostics.push(DecompilerDiagnostic {
+                severity: DiagnosticSeverity::Warning,
+                address: Some(func.address),
+                message: format!("write {}: {e}", path.display()),
+                pass: None,
+            });
         }
     }
     // Reconstruction layer: what this binary is made of. Read from the image
@@ -1805,6 +3202,17 @@ impl BatchDecompiler {
         let load = load;
         let perf_det = crate::perf::scope(crate::perf::Stage::DetectFunctions);
     let boundaries = detect_functions_in_load(&load);
+    // #8700 - sonda a effetto ZERO (`RUSTRE_DBG_SRC`): quale SORGENTE ha
+    // promosso ogni indirizzo a funzione. Serve a trovare chi crea i 115
+    // ingressi CONTENUTI dentro altre funzioni (round 1265-1267): non hanno
+    // prologo, non sono bersaglio di call, non stanno nei simboli ne in
+    // .pdata. Cercare la riga nel sorgente e costato tre giri a vuoto; la
+    // sonda chiede direttamente al rilevatore.
+    if std::env::var("RUSTRE_DBG_SRC").is_ok_and(|v| v != "0") {
+        for b in &boundaries {
+            eprintln!("[src] {:#x} {:?} {:?}", b.start.0, b.source, b.confidence);
+        }
+    }
     drop(perf_det);
         if boundaries.is_empty() {
             return Err(DecompilerError::Other(format!(
@@ -1821,6 +3229,40 @@ impl BatchDecompiler {
             load.exports.iter().map(|e| e.addr).collect();
 
         let mut filtered: Vec<u64> = Vec::with_capacity(boundaries.len());
+        // #7400 - scarta gli inizi di funzione CONTRADDETTI da `.pdata`.
+        //
+        // Un indirizzo strettamente dentro `(begin, end)` di una
+        // `RUNTIME_FUNCTION`, senza esserne il `begin`, e' un blocco interno.
+        // Registrarlo come inizio accorcia `scan_cap` dell ospite (che e' la
+        // distanza dal prossimo inizio) e la **tronca**: misurato, una funzione
+        // Go di ~300 istruzioni emessa in **5 righe**, col corpo vero finito in
+        // un file a parte di 405 righe.
+        //
+        // Il filtro va QUI e non piu' a valle: sia `filtered` (quali funzioni
+        // si emettono) sia `all_starts_sorted` (che produce `next_fn_start` e
+        // quindi `scan_cap`) derivano da `boundaries` in questo stesso blocco.
+        // Filtrando una volta si evita anche di lasciare lo spurio emesso con
+        // dentro il corpo dell ospite, cioe' lo STESSO codice in due file.
+        //
+        // ⚠ Il `begin` non si scarta MAI: e' una funzione dichiarata dal
+        // compilatore. E gli indirizzi FUORI da ogni range `.pdata` restano
+        // intatti — la' il criterio e' muto (319/467/103 nei tre bucket
+        // misurati), e le foglie senza unwind info stanno proprio li'.
+        //
+        // Taglia misurata: **762/55/18** inizi spuri ⇒ **753/38/17** funzioni
+        // de-troncate (in Go il **53,6%** di quelle dichiarate in `.pdata`).
+        let scarta_interni = !matches!(
+            std::env::var("RUSTRE_PDATA_FILTER_STARTS").as_deref(),
+            Ok("0") | Ok("false")
+        );
+        let boundaries: Vec<_> = if scarta_interni {
+            boundaries
+                .into_iter()
+                .filter(|fb| !crate::binary_entry::pdata_is_interior(&load, fb.start.as_u64()))
+                .collect()
+        } else {
+            boundaries
+        };
         for fb in &boundaries {
             let addr = fb.start.as_u64();
             // Score against config.min_priority using the same rules as
@@ -2116,6 +3558,39 @@ mod tests {
         assert!(!out.contains("sub_14003B3E0"), "{out}");
     }
 
+    /// #8020b: una dichiarazione DUPLICATA che cade DENTRO il corpo non viene
+    /// riscritta sul posto — sparisce.
+    ///
+    /// MISURATO su `runs/pathb_first`: **391 righe in 155 file** di path B
+    /// avevano un `extern __int64 __imp_X;` a colonna 0 in mezzo agli
+    /// statement (path A: zero). `gcc -std=gnu89` le accetta come estensione,
+    /// quindi nessuna metrica di ricompilabilita' le vedeva.
+    ///
+    /// **391 su 391 erano duplicati** di una dichiarazione gia' in testa: la
+    /// soppressione non perde nulla. Questo test fissa entrambe le meta' —
+    /// quella in testa RESTA, quella nel corpo SPARISCE.
+    #[test]
+    fn imp_slot_duplicato_dentro_il_corpo_sparisce() {
+        let code = "__int64 sub_14003B3E0();
+void f()
+{
+    v = 1;
+__int64 sub_14003B3E0();
+    v = sub_14003B3E0;
+}
+";
+        let out = rename_import_slots(code, &mappa_imp(), true);
+        assert_eq!(
+            out.matches("extern __int64 __imp_CreateSemaphoreA;").count(),
+            1,
+            "la copia in testa resta, quella nel corpo sparisce: {out}"
+        );
+        // e non lascia una riga bianca al suo posto
+        assert!(!out.contains("
+
+    v = sub"), "riga vuota residua: {out}");
+    }
+
     #[test]
     fn imp_slot_dichiarazione_diventa_dato_non_funzione() {
         // MISURATO (gcc 3 -> 7): `__int64 __imp_Sleep();` dichiara lo slot come
@@ -2326,5 +3801,545 @@ void X()
 }
 ";
         assert_eq!(declare_renamed_imports(code, false), code);
+    }
+}
+
+#[cfg(test)]
+mod test_7790_slot_iat_non_definito {
+    use super::rename_import_slots;
+    use std::collections::HashMap;
+
+    fn mappa() -> HashMap<u64, String> {
+        let mut m = HashMap::new();
+        m.insert(0x140099038u64, "NtWriteFile".to_string());
+        m
+    }
+
+    #[test]
+    fn la_definizione_diventa_dichiarazione() {
+        // Il difetto: la riscrittura del token trasformava la definizione dati
+        // in una DEFINIZIONE dello slot IAT, che linka e da' il valore
+        // sbagliato — contro il docstring della passata stessa.
+        let c = "static uint8_t off_140099038[64] = { 0x01, 0x02 };\n";
+        let o = rename_import_slots(c, &mappa(), true);
+        assert_eq!(o.trim(), "extern __int64 __imp_NtWriteFile;", "{o}");
+        assert!(!o.contains("static uint8_t"), "definizione sopravvissuta: {o}");
+    }
+
+    #[test]
+    fn la_lettura_resta_intatta() {
+        // Le letture non vanno toccate: con la dichiarazione, la forma legge
+        // il valore che il loader scrive.
+        let c = "    v5 = *(__int64 *)(__int64)&off_140099038;\n";
+        let o = rename_import_slots(c, &mappa(), true);
+        assert!(o.contains("&__imp_NtWriteFile"), "{o}");
+    }
+
+    #[test]
+    fn un_array_che_NON_e_uno_slot_non_si_tocca() {
+        // Un dato vero, non presente nella mappa degli import, resta definito:
+        // toglierne la definizione lo trasformerebbe in un LINK_FAIL nuovo.
+        let c = "static uint8_t off_140004000[64] = { 0x20 };\n";
+        let o = rename_import_slots(c, &mappa(), true);
+        assert_eq!(o, c, "un dato non-import e' stato toccato: {o}");
+    }
+
+    #[test]
+    fn gate_spento_e_identita() {
+        let c = "static uint8_t off_140099038[64] = { 0x01 };\n";
+        assert_eq!(rename_import_slots(c, &mappa(), false), c);
+    }
+}
+
+#[cfg(test)]
+mod test_7840_unpack_mancanti {
+    use super::define_simd_bodies;
+
+    #[test]
+    fn i_tre_usati_vengono_definiti() {
+        for n in ["punpckldq", "punpckhbw", "punpckhqdq"] {
+            let c = format!("__int64 f(void)\n{{\n    v = {n}(a, b);\n}}\n");
+            let o = define_simd_bodies(&c, true);
+            assert!(
+                o.contains(&format!("static unsigned __int128 {n}(")),
+                "{n} non definita: {o}"
+            );
+        }
+    }
+
+    #[test]
+    fn cio_che_nessuno_usa_non_si_definisce() {
+        // La regola pagata da #7800 (+36 compile failures per 128 definizioni
+        // inutili): si definisce solo cio' che il file USA.
+        let c = "__int64 f(void)\n{\n    v = punpckldq(a, b);\n}\n";
+        let o = define_simd_bodies(c, true);
+        assert!(!o.contains("punpckhbw("), "definita una helper non usata: {o}");
+        assert!(!o.contains("punpckhqdq("), "{o}");
+    }
+
+    #[test]
+    fn la_semantica_e_LOW_contro_HIGH() {
+        // `punpckldq` prende le corsie BASSE, `punpckhqdq` le ALTE: se le due
+        // fossero copiate l'una dall'altra il test lo vedrebbe.
+        let c = "v = punpckldq(a, b); w = punpckhqdq(a, b);";
+        let o = define_simd_bodies(c, true);
+        assert!(o.contains("r[2*i] = d[i]; r[2*i+1] = s[i];"), "low sbagliata: {o}");
+        assert!(o.contains("r[0] = d[1];"), "high sbagliata: {o}");
+    }
+
+    #[test]
+    fn gate_spento_e_identita() {
+        let c = "v = punpckldq(a, b);";
+        assert_eq!(define_simd_bodies(c, false), c);
+    }
+}
+
+/// Il tipo di ritorno e il nome sotto cui `testo` DEFINISCE la sua funzione,
+/// letti dal testo emesso invece che ricostruiti.
+///
+/// Solo la grafia sintetica `fn_<hex>`: un nome reale non ha il difetto, e
+/// restringere qui evita di toccare prototipi veri.
+fn definizione_emessa(testo: &str) -> Option<(String, String)> {
+    for l in testo.lines() {
+        let t = l.trim_end();
+        // Una DEFINIZIONE sta in colonna 0 e non termina con `;`.
+        // Il filtro su `fn_` esclude da solo `if (...)`/`while (...)`, che
+        // sono comunque indentati.
+        if t.is_empty() || t.starts_with(char::is_whitespace) || !t.ends_with(')') {
+            continue;
+        }
+        let Some(p) = t.find('(') else { continue };
+        let testa = t[..p].trim();
+        let Some(sp) = testa.rfind(char::is_whitespace) else { continue };
+        let nome = testa[sp + 1..].trim_start_matches('*');
+        let ret = testa[..sp].trim();
+        if nome.starts_with("fn_")
+            && nome.len() > 3
+            && nome[3..].bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Some((ret.to_string(), nome.to_string()));
+        }
+    }
+    None
+}
+
+/// #8180: fa concordare le dichiarazioni anticipate con la definizione.
+///
+/// Rete di riparazione SINTATTICA, e sta qui perche' deve girare **dopo ogni
+/// produttore** (CLAUDE.md: una passata di riparazione che non gira per ultima
+/// si annulla in silenzio).
+///
+/// Il difetto: piu' emettitori scrivono `__int64 NOME();` senza guardare cosa
+/// c'e' gia' nello stesso file. `lib.rs:11661` documenta la stessa forma:
+/// -- la stessa regola, di nuovo applicata da uno solo dei punti che ne hanno
+/// bisogno. Inseguirli uno per uno ha gia' fallito una volta (#8170, inerte).
+///
+/// Misurato su `runs/pathb_unico` (prima volta che il testo di path B passa da
+/// `check.sh`, che ha SEMPRE saltato i `.hlil.c`): 16 file su 12558 non
+/// compilano, 10 con `conflicting types`:
+///
+///   riga  84:  void runtime_runFinalizers()        <- definizione
+///   riga 539:  __int64 runtime_runFinalizers();    <- dichiarazione
+///   riga  36:  int fn_14005a920();                 <- e due dichiarazioni
+///   riga  39:  __int64 fn_14005a920();                che si contraddicono
+///
+/// La cura NON e' togliere la dichiarazione (servirebbe comunque se la
+/// definizione viene dopo l'uso): e' farle dire il tipo GIUSTO, quello con cui
+/// il file definisce -- o, se non c'e' definizione, quello della prima
+/// dichiarazione. Stessa cura di #8150, dove avevo scritto `__int64` a caso e
+/// rotto 22 file su 215.
+fn concorda_dichiarazioni(testo: &str) -> String {
+    if !testo.contains("();") {
+        return testo.to_string();
+    }
+    let mut definito: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut primo_decl: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scomponi = |t: &str| -> Option<(String, String)> {
+        let p = t.find('(')?;
+        let testa = t[..p].trim();
+        let sp = testa.rfind(char::is_whitespace)?;
+        let nome = testa[sp + 1..].trim_start_matches('*').trim();
+        let ret = testa[..sp].trim();
+        if nome.is_empty() || ret.is_empty() { return None; }
+        if !nome.chars().all(|c| c.is_alphanumeric() || c == '_') { return None; }
+        Some((nome.to_string(), ret.to_string()))
+    };
+    for l in testo.lines() {
+        let t = l.trim();
+        if l.starts_with(char::is_whitespace) { continue; }
+        if t.ends_with("();") {
+            if let Some((n, r)) = scomponi(t) {
+                primo_decl.entry(n).or_insert(r);
+            }
+        } else {
+            let s = t.trim_end_matches('{').trim();
+            if s.ends_with(')') && let Some((n, r)) = scomponi(s) {
+                definito.insert(n, r);
+            }
+        }
+    }
+    if definito.is_empty() && primo_decl.is_empty() {
+        return testo.to_string();
+    }
+    let mut visti: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out = String::with_capacity(testo.len());
+    for l in testo.lines() {
+        let t = l.trim();
+        let mut riga = l.to_string();
+        if !l.starts_with(char::is_whitespace) && t.ends_with("();") {
+            if let Some((n, r)) = scomponi(t) {
+                if !visti.insert(n.clone()) {
+                    continue;
+                }
+                let giusto = definito.get(&n).or_else(|| primo_decl.get(&n));
+                if let Some(g) = giusto && *g != r {
+                    riga = format!("{g} {n}();");
+                }
+            }
+        }
+        out.push_str(&riga);
+        out.push('\n');
+    }
+    out
+}
+
+#[cfg(test)]
+mod test_concorda_dichiarazioni {
+    use super::concorda_dichiarazioni;
+
+    #[test]
+    fn allinea_al_tipo_della_definizione() {
+        let c = "__int64 f();\nvoid f()\n{\n    return;\n}\n";
+        let o = concorda_dichiarazioni(c);
+        assert!(o.contains("void f();"), "{o}");
+        assert!(!o.contains("__int64 f();"), "{o}");
+    }
+
+    #[test]
+    fn toglie_la_dichiarazione_duplicata() {
+        let c = "int g();\n__int64 g();\nvoid h()\n{\n}\n";
+        let o = concorda_dichiarazioni(c);
+        assert_eq!(o.matches("g();").count(), 1, "{o}");
+        assert!(o.contains("int g();"), "{o}");
+    }
+
+    #[test]
+    fn non_tocca_un_file_gia_coerente() {
+        let c = "__int64 k();\nvoid m()\n{\n    k();\n}\n";
+        assert_eq!(concorda_dichiarazioni(c), c);
+    }
+}
+
+/// #8150: risolve i riferimenti `off_<HEX>` che puntano a funzioni EMESSE.
+///
+/// Sorella di `riconcilia_nomi_ondata`, e per la stessa ragione sta QUI e non
+/// nella pipeline per-funzione: l'insieme dei confini che la pipeline riceve e'
+/// STALE. Misurato su sample5_cs: `callee_arities` 3006, `fn_starts` 3146,
+/// definizioni davvero emesse **3300** -- 154 funzioni sono emesse dopo che
+/// entrambi gli insiemi sono stati calcolati (la seconda ondata di
+/// `run_decompile_loop_bounded`). Per questo #8140, che allargava i confini a
+/// `fn_starts` dentro la passata, e' risultato INERTE: nemmeno `fn_starts` le
+/// contiene. A livello batch l'insieme si legge dal TESTO EMESSO, che e'
+/// l'unica fonte che non puo' essere in ritardo.
+///
+/// Misurato: 155 dei 157 `code_as_data` di path B sono `extern __int64
+/// off_HEX;` il cui indirizzo e' definito come funzione nello stesso bucket
+/// (75+74 nei due bucket C#, 3+3 nei due Rust, zero altrove).
+///
+/// La dichiarazione NON viene rimossa ma RISCRITTA come dichiarazione di
+/// funzione: toglierla e basta lascerebbe un identificatore non dichiarato,
+/// che e' un difetto diverso e non migliore.
+fn risolvi_off_ondata(result: &mut BatchResult) {
+    let def: std::collections::HashMap<u64, (String, String)> = result
+        .functions
+        .iter()
+        .filter_map(|f| {
+            let (ret, nome) = definizione_emessa(f.hlil_pseudo_code.as_deref()?)?;
+            Some((f.address, (ret, nome)))
+        })
+        .collect();
+    if def.is_empty() {
+        return;
+    }
+    let parola = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    for f in &mut result.functions {
+        let Some(testo) = f.hlil_pseudo_code.as_deref() else {
+            continue;
+        };
+        if !testo.contains("off_") {
+            continue;
+        }
+        let bytes = testo.as_bytes();
+        let mut sost: Vec<(String, String, String)> = Vec::new();
+        let mut i = 0usize;
+        while let Some(rel) = testo[i..].find("off_") {
+            let at = i + rel;
+            let mut e = at + 4;
+            while e < bytes.len() && bytes[e].is_ascii_hexdigit() {
+                e += 1;
+            }
+            i = e;
+            if e == at + 4
+                || (at > 0 && parola(bytes[at - 1]))
+                || (e < bytes.len() && parola(bytes[e]))
+            {
+                continue;
+            }
+            let tok = &testo[at..e];
+            if sost.iter().any(|(t, _, _)| t == tok) {
+                continue;
+            }
+            let Ok(va) = u64::from_str_radix(&testo[at + 4..e], 16) else {
+                continue;
+            };
+            if let Some((ret, nome)) = def.get(&va) {
+                sost.push((tok.to_string(), ret.clone(), nome.clone()));
+            }
+        }
+        if sost.is_empty() {
+            continue;
+        }
+        let mut nuovo = String::with_capacity(testo.len());
+        for riga in testo.lines() {
+            let t = riga.trim();
+            let mut riga_out = riga.to_string();
+            let mut era_dichiarazione = false;
+            for (tok, ret, nome) in &sost {
+                // La dichiarazione dato diventa dichiarazione di FUNZIONE, col
+                // tipo di ritorno con cui la funzione e' DAVVERO definita. Averlo
+                // scritto `__int64` a caso ha rotto 22 file su 215 con
+                // `conflicting types`: la definizione nella stessa unita' di
+                // traduzione dichiarava `void`.
+                if t == format!("extern __int64 {tok};") {
+                    riga_out = format!("{ret} {nome}();");
+                    era_dichiarazione = true;
+                    break;
+                }
+            }
+            if !era_dichiarazione {
+                for (tok, _ret, nome) in &sost {
+                    riga_out = sostituisci_token(&riga_out, tok, nome, parola);
+                }
+            }
+            nuovo.push_str(&riga_out);
+            nuovo.push('\n');
+        }
+        f.hlil_pseudo_code = Some(nuovo);
+    }
+}
+
+/// Sostituisce ogni occorrenza di `tok` come TOKEN INTERO in `riga`.
+fn sostituisci_token(
+    riga: &str,
+    tok: &str,
+    nuovo: &str,
+    parola: impl Fn(u8) -> bool,
+) -> String {
+    if !riga.contains(tok) {
+        return riga.to_string();
+    }
+    let b = riga.as_bytes();
+    let mut out = String::with_capacity(riga.len());
+    let mut i = 0usize;
+    while let Some(rel) = riga[i..].find(tok) {
+        let at = i + rel;
+        let fine = at + tok.len();
+        let bordo = (at == 0 || !parola(b[at - 1])) && (fine >= b.len() || !parola(b[fine]));
+        out.push_str(&riga[i..at]);
+        out.push_str(if bordo { nuovo } else { tok });
+        i = fine;
+    }
+    out.push_str(&riga[i..]);
+    out
+}
+
+/// Riconcilia la grafia `sub_<HEX>` dei riferimenti con quella `fn_<hex>`
+/// sotto cui la funzione e' davvero definita.
+///
+/// Conservativa per costruzione — rinuncia quando rinominare potrebbe
+/// trasformare un file che COMPILA e non linka in un file che non compila:
+///  - chiamata ricorsiva esclusa (guardia #7620, gia' motivata a monte).
+///
+/// ⚠ Due guardie che avevo messo sono state RIMOSSE perche' la loro premessa
+/// era falsa, e a smascherarla e' stato path A:
+///
+/// ```text
+/// path A  sub_14001aefe.c   : void __fastcall sub_14001AEFE() { ... }
+/// path A  sub_14001ae10.c   : __int64 sub_14001AEFE();
+///                             if ((result != 0)) return sub_14001AEFE();
+/// ```
+///
+/// Path A fa ESATTAMENTE la stessa cosa — dichiarazione `__int64`, definizione
+/// `void`, valore usato — e **linka**, perche' le due stanno in unita' di
+/// traduzione diverse e il linker C non confronta i tipi. Il caso `void` non e'
+/// pericoloso: era la mia riscrittura del tipo di ritorno a PORTARE la
+/// dichiarazione accanto alla definizione e a fabbricare il
+/// "void value not ignored" che poi escludevo.
+///
+/// Rinominare e basta replica il comportamento di path A, che e' misurato
+/// funzionante. L'unico caso in cui dichiarazione e definizione condividono
+/// l'unita' di traduzione e' la chiamata ricorsiva, gia' esclusa sopra.
+fn riconcilia_nomi_ondata(result: &mut BatchResult) {
+    let def: std::collections::HashMap<u64, (String, String)> = result
+        .functions
+        .iter()
+        .filter_map(|f| {
+            let (ret, nome) = definizione_emessa(f.hlil_pseudo_code.as_deref()?)?;
+            Some((f.address, (ret, nome)))
+        })
+        .collect();
+    if def.is_empty() {
+        return;
+    }
+    let parola = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    for f in &mut result.functions {
+        let Some(testo) = f.hlil_pseudo_code.as_deref() else {
+            continue;
+        };
+        if !testo.contains("sub_") {
+            continue;
+        }
+        let mio = f.address;
+        let bytes = testo.as_bytes();
+        let mut sost: Vec<(String, String, String)> = Vec::new();
+        let mut i = 0usize;
+        while let Some(rel) = testo[i..].find("sub_") {
+            let at = i + rel;
+            let mut e = at + 4;
+            while e < bytes.len() && bytes[e].is_ascii_hexdigit() {
+                e += 1;
+            }
+            i = e;
+            if e == at + 4
+                || (at > 0 && parola(bytes[at - 1]))
+                || (e < bytes.len() && parola(bytes[e]))
+            {
+                continue;
+            }
+            let token = &testo[at..e];
+            if sost.iter().any(|(t, _, _)| t == token) {
+                continue;
+            }
+            let Ok(va) = u64::from_str_radix(&testo[at + 4..e], 16) else {
+                continue;
+            };
+            // Una chiamata RICORSIVA resta com'e': il bersaglio e' definito in
+            // questo stesso testo e la firma non e' garantita combaciare.
+            if va == mio {
+                continue;
+            }
+            if let Some((ret, nome)) = def.get(&va) {
+                sost.push((token.to_string(), nome.clone(), ret.clone()));
+            }
+        }
+        if sost.is_empty() {
+            continue;
+        }
+        let mut out = String::with_capacity(testo.len());
+        for l in testo.lines() {
+            let mut riga = l.to_string();
+            for (tok, nome, _) in &sost {
+                // #8200 - sostituzione per TOKEN INTERO, non per sottostringa.
+                //
+                // Qui c'era `riga.replace(tok, nome)` e, sopra, un `let t =
+                // l.trim();` **mai usato**: il residuo di un controllo di confine
+                // che avevo previsto e non avevo scritto. Il compilatore lo
+                // segnalava come variabile inutilizzata, e il warning era il
+                // marcatore del difetto, non un dettaglio di stile.
+                //
+                // Il difetto: `sub_14000100` e' un PREFISSO di `sub_140001000`.
+                // Sostituendo il piu' corto per primo si corrompe il piu' lungo,
+                // e il risultato compila -- e' la classe silenziosa.
+                //
+                // `sostituisci_token` esisteva gia' (la scrissi per #8150 poche
+                // ore dopo, con i confini giusti): qui la si riusa invece di
+                // riscrivere la stessa regola una seconda volta.
+                riga = sostituisci_token(&riga, tok, nome, parola);
+            }
+            out.push_str(&riga);
+            out.push('\n');
+        }
+        f.hlil_pseudo_code = Some(out);
+    }
+}
+
+
+#[cfg(test)]
+mod test_riconcilia_nomi_ondata {
+    use super::{definizione_emessa, define_simd_bodies};
+
+    #[test]
+    fn legge_la_definizione_sintetica_e_il_suo_tipo() {
+        // La DICHIARAZIONE in cima finisce con `;` e non deve vincere sulla
+        // definizione: e' esattamente la forma dei file emessi da path B.
+        let t = "__int64 __stack_chk_fail();\nvoid fn_14001aefe()\n{\n}\n";
+        assert_eq!(
+            definizione_emessa(t),
+            Some(("void".to_string(), "fn_14001aefe".to_string()))
+        );
+    }
+
+    #[test]
+    fn un_nome_reale_non_e_un_bersaglio() {
+        // Restringere a `fn_<hex>` e' cio' che impedisce di toccare prototipi
+        // veri: qui non c'e' divergenza di grafia da riconciliare.
+        let t = "uint64_t _pthread_wait(uint64_t a1)\n{\n}\n";
+        assert_eq!(definizione_emessa(t), None);
+    }
+
+    #[test]
+    fn le_intestazioni_di_controllo_non_sono_definizioni() {
+        // `if (...)` termina con `)` come una definizione: se passasse, il
+        // "nome" estratto sarebbe un pezzo della condizione.
+        let t = "    if (fn_1234())\n    while (x)\n";
+        assert_eq!(definizione_emessa(t), None);
+    }
+
+    #[test]
+    fn il_tipo_e_quello_della_definizione_non_della_dichiarazione() {
+        // Il caso che, sbagliato, sostituisce LINK_FAIL con "conflicting
+        // types": il chiamante dichiarava `__int64`, la definizione dice
+        // `uint64_t`. La dichiarazione va riscritta col tipo della DEFINIZIONE.
+        let t = "uint64_t fn_140001000(uint64_t a1)\n{\n    return a1;\n}\n";
+        let (ret, nome) = definizione_emessa(t).expect("definizione trovata");
+        assert_eq!(nome, "fn_140001000");
+        assert_eq!(ret, "uint64_t");
+    }
+
+    /// #8670 - INVARIANTE: ogni mnemonico che path B puo emettere come
+    /// CHIAMATA deve avere un corpo, altrimenti resta `external` al link.
+    ///
+    /// Nasce dal round 1239: 23 mnemonici erano chiamati e mai definiti, e il
+    /// difetto era invisibile a cinque metriche su sei. Il round 1244 ne ha
+    /// poi trovati 137 con 222 967 occorrenze: la lista scritta a mano DIVERGE
+    /// in silenzio dal produttore, e nulla se ne accorgeva.
+    #[test]
+    fn ogni_mnemonico_usato_ha_un_corpo() {
+        const MISURATI: &[&str] = &[
+            "pcmpeqb", "pcmpeqw", "pcmpeqd", "pcmpgtb", "pmovmskb", "pshufd",
+            "pshuflw", "punpcklbw", "punpcklwd", "punpckldq", "punpcklqdq",
+            "packuswb", "cvtsi2sd", "cvttsd2si", "paddb", "paddd", "paddq",
+            "psrld", "pslld", "psrlq", "popcnt",
+            "pminub", "packsswb", "psllw", "psrlw", "psraw", "pinsrw",
+            "psadbw", "shld", "shrd",
+        ];
+        for m in MISURATI {
+            let codice = format!("void f(void) {{ x = {m}(a, b); }}");
+            let out = define_simd_bodies(&codice, true);
+            let definito = out.contains(&format!("static")) 
+                && out.matches(&format!("{m}(")).count() >= 2;
+            assert!(definito, "il mnemonico {m} e CHIAMATO ma non riceve un corpo: al link resta external");
+        }
+    }
+
+    /// Complemento: un nome NON previsto non deve ricevere un corpo. Senza
+    /// questo, il test sopra passerebbe anche con una passata che definisce
+    /// qualunque cosa - e definire un corpo che non si conosce e il difetto
+    /// `confidently wrong` che il round 1245 ha evitato (vpmaxsd e AVX a 256
+    /// bit: modellarlo a 128 renderebbe LINKABILE un calcolo sbagliato).
+    #[test]
+    fn un_mnemonico_ignoto_non_riceve_un_corpo() {
+        let out = define_simd_bodies("void f(void) { x = vpmaxsd(a, b, c); }", true);
+        assert!(!out.contains("static"), "vpmaxsd non deve ricevere un corpo");
     }
 }

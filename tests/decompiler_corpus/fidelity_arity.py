@@ -25,6 +25,21 @@ import os
 import re
 import sys
 
+# --- selettore path A / path B ---------------------------------------------
+# Con MEASURE_PATH_B non impostata il predicato e' esattamente quello di prima
+# (`.c` ma non `.hlil.c`), quindi le colonne path A restano confrontabili con
+# lo storico. Con MEASURE_PATH_B=1 si misurano le unita' di path B.
+_PATH_B = __import__("os").environ.get("MEASURE_PATH_B") == "1"
+
+
+def _seleziona_unita(nome):
+    """True se `nome` e' un'unita' del path attualmente misurato."""
+    if _PATH_B:
+        return nome.endswith(".hlil.c")
+    return nome.endswith(".c") and not nome.endswith(".hlil.c")
+
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # `name(args) {` at the start of a line — a definition, not a call. Control-flow
@@ -70,7 +85,7 @@ def scan(out_dir, wanted):
     seen = {}
     for root, _, files in os.walk(out_dir):
         for f in files:
-            if not f.endswith(".c") or f.endswith(".hlil.c"):
+            if not _seleziona_unita(f):
                 continue
             try:
                 text = open(os.path.join(root, f), encoding="utf-8", errors="ignore").read()

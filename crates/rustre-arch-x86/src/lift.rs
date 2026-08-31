@@ -1770,16 +1770,28 @@ impl X86Lifter {
             //    (SS/SD) and packed (PS/PD) forms share semantics here; exact
             //    "preserve upper lanes on scalar ops" behavior is the same
             //    simplification already applied to the AVX arms above. ──────
-            M::Addps | M::Addpd | M::Addss | M::Addsd => {
+            M::Addss | M::Addsd => {
+                self.lift_vex_binop(iced, ctx, VexBinOp::FAdd);
+            }
+            M::Addps | M::Addpd => {
                 self.lift_vex_binop(iced, ctx, VexBinOp::Add);
             }
-            M::Subps | M::Subpd | M::Subss | M::Subsd => {
+            M::Subss | M::Subsd => {
+                self.lift_vex_binop(iced, ctx, VexBinOp::FSub);
+            }
+            M::Subps | M::Subpd => {
                 self.lift_vex_binop(iced, ctx, VexBinOp::Sub);
             }
-            M::Mulps | M::Mulpd | M::Mulss | M::Mulsd => {
+            M::Mulss | M::Mulsd => {
+                self.lift_vex_binop(iced, ctx, VexBinOp::FMul);
+            }
+            M::Mulps | M::Mulpd => {
                 self.lift_vex_binop(iced, ctx, VexBinOp::Mul);
             }
-            M::Divps | M::Divpd | M::Divss | M::Divsd => {
+            M::Divss | M::Divsd => {
+                self.lift_vex_binop(iced, ctx, VexBinOp::FDiv);
+            }
+            M::Divps | M::Divpd => {
                 self.lift_vex_binop(iced, ctx, VexBinOp::Div);
             }
             M::Andps | M::Andpd => self.lift_vex_binop(iced, ctx, VexBinOp::And),
@@ -1790,11 +1802,29 @@ impl X86Lifter {
             M::Por => self.lift_vex_binop(iced, ctx, VexBinOp::Or),
             M::Pxor => self.lift_vex_binop(iced, ctx, VexBinOp::Xor),
             M::Pandn => self.lift_vex_binop(iced, ctx, VexBinOp::Andn),
+            // #7250 — aritmetica IMPACCHETTATA: intrinseca, non `+`.
+            //
+            // Prima le QUATTRO larghezze finivano tutte su `VexBinOp::Add`,
+            // cioe' una sola addizione a 128 bit. Due difetti in uno:
+            //   * il RIPORTO attraversa i confini fra corsie (in `paddb` sono
+            //     15 confini, in `paddq` uno solo, ma basta uno per sbagliare);
+            //   * si perde QUALE fosse la larghezza: `paddb` e `paddq`
+            //     diventavano lo stesso `+`, quindi nemmeno a valle si poteva
+            //     recuperare.
+            //
+            // `lift_simd_write` emette un `LlilExpr::Intrinsic` col MNEMONICO
+            // REALE (`paddq`, `paddb`, …), che conserva la larghezza nel nome —
+            // la stessa strada gia' usata per `sqrt`/`min`/`max`/`comi`, con la
+            // stessa motivazione: non esiste una grammatica LLIL per queste.
+            //
+            // ⚠ NON toccare `Pand`/`Por`/`Pxor`/`Pandn`: le operazioni bit a
+            // bit sono INDIPENDENTI dalla corsia, quindi la resa intera e' gia'
+            // corretta. La distinzione e' fra ARITMETICHE e LOGICHE.
             M::Paddb | M::Paddw | M::Paddd | M::Paddq => {
-                self.lift_vex_binop(iced, ctx, VexBinOp::Add);
+                self.lift_simd_write(iced, ctx, "padd");
             }
             M::Psubb | M::Psubw | M::Psubd | M::Psubq => {
-                self.lift_vex_binop(iced, ctx, VexBinOp::Sub);
+                self.lift_simd_write(iced, ctx, "psub");
             }
             M::Pshufb => self.lift_vex_pshufb(iced, ctx),
 
@@ -2647,7 +2677,29 @@ impl X86Lifter {
             // VZEROUPPER around calls in essentially every AVX-using binary, so
             // an unmodelled clobber here is not an exotic corner: a decompiler
             // believed all sixteen registers survived it.
-            M::Vzeroupper | M::Vzeroall => self.lift_intrinsic_writing_reported_regs(iced, ctx, "vzero"),
+            // #7510 - `VZEROUPPER` e `VZEROALL` NON sono la stessa istruzione, e
+            // trattarle insieme (com'era) cancella una scrittura vera.
+            //
+            // `vzeroupper` azzera i bit **128..511** dei registri vettoriali e
+            // LASCIA INTATTI i 128 bassi, cioe' gli `xmm`. Questo IL e' scalare e
+            // i bit alti non li rappresenta: l'istruzione non ha quindi alcun
+            // effetto osservabile, e modellarla come intrinseca produceva
+            // `var_zmmN = vzero_zmmN(var_xmm0, …, var_xmm15)` — una chiamata a un
+            // simbolo che nessuno definisce, per una semantica che non c'e'.
+            // Misurate **11208 occorrenze** nel corpus, tutte solo su path B
+            // (path A ne emette zero).
+            //
+            // `vzeroall` invece azzera **anche** i 128 bassi: `xmm0..xmm15`
+            // diventano zero. E' un effetto REALE e resta modellato.
+            // #8470: `Nop`, non il vuoto. La semantica resta quella di #7510
+            // (nessun effetto osservabile in un IL scalare, nessuna intrinseca
+            // `vzero_zmmN` da definire), ma un blocco la cui PRIMA istruzione
+            // non emette nulla comincia, per chi delimita i blocchi, all'istr.
+            // SUCCESSIVA: `block_at(0x14000260c)` fallisce mentre il blocco
+            // vive a 0x14000260f, e path B emette `loc_X: JUMPOUT(X)`.
+            // Stesso trattamento gia' dato a `Endbr32/Endbr64`, vuote uguali.
+            M::Vzeroupper => ctx.emit(LlilInstruction::Nop),
+            M::Vzeroall => self.lift_intrinsic_writing_reported_regs(iced, ctx, "vzeroall"),
             M::Vpalignr => self.lift_simd_write(iced, ctx, "vpalignr"),
             M::Vpshufd => self.lift_simd_write(iced, ctx, "vpshufd"),
             M::Vpcmpeqb | M::Vpcmpeqw | M::Vpcmpeqd | M::Vpcmpeqq => {
@@ -7780,6 +7832,20 @@ enum VexBinOp {
     Sub,
     Mul,
     Div,
+    // #7220 — varianti in VIRGOLA MOBILE, distinte dalle intere.
+    //
+    // Prima `divsd` (divisione double SCALARE) finiva su `VexBinOp::Div` e
+    // quindi su `LlilExpr::DivU`: una divisione INTERA SENZA SEGNO applicata ai
+    // bit di due IEEE-754. Il risultato non e' approssimato, e' privo di senso.
+    // Misurate 436 operazioni cosi' in 50 file di un solo bucket.
+    //
+    // ⚠ SOLO le forme SCALARI (SS/SD). Le impacchettate (PS/PD) restano sulle
+    // varianti intere finche' non hanno una resa per CORSIA: mandarle qui
+    // calcolerebbe una corsia su quattro, sbagliato e in silenzio.
+    FAdd,
+    FSub,
+    FMul,
+    FDiv,
     And,
     Or,
     Xor,
@@ -7862,6 +7928,10 @@ impl X86Lifter {
             VexBinOp::Sub => LlilExpr::SubT(Box::new(a), Box::new(b), size),
             VexBinOp::Mul => LlilExpr::MulT(Box::new(a), Box::new(b), size),
             VexBinOp::Div => LlilExpr::DivU(Box::new(a), Box::new(b), size),
+            VexBinOp::FAdd => LlilExpr::FAdd(Box::new(a), Box::new(b), size),
+            VexBinOp::FSub => LlilExpr::FSub(Box::new(a), Box::new(b), size),
+            VexBinOp::FMul => LlilExpr::FMul(Box::new(a), Box::new(b), size),
+            VexBinOp::FDiv => LlilExpr::FDiv(Box::new(a), Box::new(b), size),
             VexBinOp::And => LlilExpr::And(Box::new(a), Box::new(b), size),
             VexBinOp::Or => LlilExpr::Or(Box::new(a), Box::new(b), size),
             VexBinOp::Xor => LlilExpr::Xor(Box::new(a), Box::new(b), size),
@@ -10597,6 +10667,40 @@ mod tests {
         let s = format!("{val:?}");
         assert!(!s.contains("Intrinsic"), "bswap must be concrete");
         assert!(s.matches("ShlT").count() >= 8, "one placed byte per lane");
+    }
+
+    /// #7250 — l'aritmetica IMPACCHETTATA non deve diventare un `+` a 128 bit.
+    ///
+    /// Il difetto che questo test blocca: `Paddb|Paddw|Paddd|Paddq` finivano
+    /// tutte su `VexBinOp::Add`, cioe' UNA addizione a 128 bit. Due errori in
+    /// uno — il RIPORTO attraversava i confini fra corsie, e si perdeva QUALE
+    /// fosse la larghezza (`paddb` e `paddq` diventavano lo stesso nodo), quindi
+    /// a valle non era piu' recuperabile. Misurate 90 occorrenze in un solo
+    /// bucket.
+    #[test]
+    fn packed_arithmetic_keeps_its_lane_width() {
+        // 66 0f d4 c1 — paddq %xmm1, %xmm0
+        let ops = lift64(&[0x66, 0x0f, 0xd4, 0xc1]);
+        let s = format!("{ops:?}");
+        assert!(s.contains("Intrinsic"), "paddq deve restare un'intrinseca: {s}");
+        assert!(s.contains("paddq"), "il MNEMONICO porta la larghezza: {s}");
+        // ⚠ La guardia che conta: nessuna addizione intera a 128 bit.
+        assert!(!s.contains("AddT"), "paddq non deve diventare un `+`: {s}");
+
+        // 66 0f fc c1 — paddb: stessa famiglia, larghezza DIVERSA. Se le due
+        // collassassero di nuovo, questo confronto lo rivelerebbe.
+        let b = format!("{:?}", lift64(&[0x66, 0x0f, 0xfc, 0xc1]));
+        assert!(b.contains("paddb"), "paddb deve conservare la sua larghezza: {b}");
+        assert_ne!(
+            s.contains("paddq"),
+            b.contains("paddq"),
+            "paddb e paddq non devono produrre lo stesso nome"
+        );
+
+        // Le operazioni LOGICHE restano intere: sono indipendenti dalla corsia
+        // e la loro resa era gia' corretta. 66 0f db c1 — pand %xmm1, %xmm0
+        let p = format!("{:?}", lift64(&[0x66, 0x0f, 0xdb, 0xc1]));
+        assert!(!p.contains("Intrinsic"), "pand deve restare concreto: {p}");
     }
 
     #[test]

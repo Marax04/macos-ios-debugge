@@ -911,16 +911,10 @@ fn collect_used_vars_in_instr(instr: &MlilInstruction, out: &mut Vec<SsaVar>) {
 fn collect_used_vars_in_expr(expr: &MlilExpr, out: &mut Vec<SsaVar>) {
     match expr {
         MlilExpr::Var { var, .. } => out.push(var.clone()),
-        // #8330: un flag e' SCRITTO come `SsaVar("flag_<n>")` (vedi il ramo
-        // `SetFlag` del lift) ma era LETTO come `MlilExpr::Flag`, che stava
-        // qui insieme alle COSTANTI. Risultato: l'SSA mostrava i flag
-        // definiti e MAI usati, e un consumatore che cercasse una versione a
-        // uso singolo non trovava nulla. Misurato 29-08: 7197 scritture,
-        // 5350 letture, e `used_vars()` ne riportava ZERO.
-        MlilExpr::Flag { name } => out.push(SsaVar::initial(format!("flag_{name}"))),
         MlilExpr::Const { .. }
         | MlilExpr::Undefined(_)
-        | MlilExpr::StackPointer(_) => {}
+        | MlilExpr::StackPointer(_)
+        | MlilExpr::Flag { .. } => {}
         MlilExpr::Load { addr, .. } => collect_used_vars_in_expr(addr, out),
         MlilExpr::Neg(e, _) | MlilExpr::Not(e, _) | MlilExpr::FNeg(e, _) => collect_used_vars_in_expr(e, out),
         MlilExpr::ZeroExtend { expr, .. }
@@ -7033,22 +7027,6 @@ pub mod ssa {
         }
 
         fn rewrite_expr(expr: &mut MlilExpr, b: &Self) {
-            // #8330: un flag LETTO diventa una `Var` VERSIONATA, cosi' l'SSA
-            // lega la lettura alla scrittura che la raggiunge. Senza, i flag
-            // restavano foglie e l'SSA li mostrava definiti e mai usati.
-            //
-            // ⚠ `MlilExpr::Flag` non ha campo versione: la conversione e' il
-            // solo modo di portarla. Il tipo `Bool` che HLIL dava ai `Flag` va
-            // preservato dall'inferenza sul prefisso `flag_` (vedi il ramo
-            // `MlilExpr::Var` di `rustre-il-hlil`), altrimenti i flag
-            // diventano interi nel C emesso.
-            if let MlilExpr::Flag { name } = expr {
-                let nome = format!("flag_{name}");
-                let mut sv = SsaVar::initial(nome.clone());
-                sv.version = b.top(&nome);
-                *expr = MlilExpr::Var { var: sv, size: super::Size::Byte };
-                return;
-            }
             match expr {
                 MlilExpr::Var { var, .. } => {
                     var.version = b.top(&var.name);
@@ -7056,8 +7034,6 @@ pub mod ssa {
                 MlilExpr::Const { .. }
                 | MlilExpr::Undefined(_)
                 | MlilExpr::StackPointer(_)
-                // Irraggiungibile: l'`if let` sopra converte e ritorna. Il ramo
-                // resta perche' il compilatore non lo puo' dedurre.
                 | MlilExpr::Flag { .. } => {}
                 MlilExpr::Load { addr, .. } => Self::rewrite_expr(addr, b),
                 MlilExpr::Neg(e, _) | MlilExpr::Not(e, _) => Self::rewrite_expr(e, b),

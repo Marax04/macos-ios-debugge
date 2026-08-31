@@ -581,6 +581,28 @@ pub mod cpp {
                 sc.add_code_range(*va, va.saturating_add(*vsize));
             }
         }
+        // #8720 - sonda a effetto ZERO (`RUSTRE_DBG_VT`): quanti intervalli di
+        // CODICE sono stati aggiunti e quanti candidati escono PRIMA del filtro
+        // `slots>=3 && conf>=0.80`. Serve perche `RUSTRE_VTABLE_LABELS` e inerte
+        // anche su `cpp_sample7_O0`, che ha 90 vtable `_ZTV` ben formate (nove
+        // puntatori consecutivi a .text). Lo strumento MCP non puo rispondere:
+        // non ha API per gli intervalli di codice, quindi il suo zero non prova
+        // nulla.
+        let dbg_vt = std::env::var("RUSTRE_DBG_VT").is_ok_and(|v| v != "0");
+        if dbg_vt {
+            let n_code = sections
+                .iter()
+                .filter(|(n, _, vs, _, _, f)| is_exec(n, *f) && *vs > 0)
+                .count();
+            let n_dati = sections
+                .iter()
+                .filter(|(n, _, _, _, rs, f)| !is_exec(n, *f) && *rs > 0)
+                .count();
+            eprintln!("[vt] sezioni={} codice={} dati={}", sections.len(), n_code, n_dati);
+            for (n, va, vs, ro, rs, f) in sections {
+                eprintln!("[vt]   {n:10} va={va:#x} vsize={vs} raw={ro} rawsize={rs} flags={f:#x} exec={}", is_exec(n, *f));
+            }
+        }
         let mut out = Vec::new();
         for (name, va, _vsize, raw_offset, raw_size, flags) in sections {
             if is_exec(name, *flags) || *raw_size == 0 {
@@ -591,6 +613,9 @@ pub mod cpp {
             let Some(hi) = lo.checked_add(len) else { continue };
             let Some(slice) = image.get(lo..hi) else { continue };
             for c in sc.scan(slice, *va) {
+                if dbg_vt {
+                    eprintln!("[vt]   candidato {:#x} slot={} conf={:.2}", c.address, c.slot_count, c.confidence);
+                }
                 out.push((c.address, c.slot_count, c.confidence));
             }
         }
@@ -728,6 +753,116 @@ fn mlil_instr_reads(instr: &rustre_il_mlil::MlilInstruction, out: &mut Vec<Strin
     }
 }
 
+/// #8030 — adattatore MLIL → `def_use_analysis::Program`, la forma **per
+/// istruzione**.
+///
+/// ## Perche' serve, misurato
+///
+/// Il rilevatore di jump table trova il sito (`jmp *%rcx`) ma cerca la base
+/// guardando ALL'INDIETRO nel flusso di istruzioni. Su `sub_14004e560`
+/// (`rust3_O0`) incontra **4 definizioni di `%r13`** e rinuncia:
+/// `[jt] no table_addr`. Sono **28 siti** su quel binario, piu' **5** che
+/// rinunciano sull'INDICE — e i **12 simboli `DATA_NOT_EMITTED`** che bloccano
+/// `behavior.py --path-b` (47/62) ne sono un sottoinsieme.
+///
+/// ## Perche' rinunciare e' sbagliato — VERIFICATO sul CFG
+///
+/// ```text
+/// 0x14004e5c1  jbe  0x14004E5D8        ; ramo alternativo
+/// 0x14004e5cc  lea  0x50059(%rip), %r13   ; ← BASE, indirizzo costante
+/// 0x14004e5d6  jmp  0x14004E652           ; salta OLTRE l'add, al dispatch
+/// 0x14004e5f1  add  %r14, %r13            ; ← solo sul ramo alternativo
+/// ```
+///
+/// Il blocco del dispatch (`0x14004E652`) ha **due soli predecessori** in tutta
+/// la funzione: il `jmp` dal ramo della `lea` e l'arco all'indietro del ciclo,
+/// che **non ridefinisce `%r13`**. Il ramo dell'`add` **non arriva**.
+///
+/// ⇒ Al sito, `%r13` ha **UNA sola definizione raggiungente**. La risposta
+/// esiste; manca solo chi la calcoli.
+///
+/// ## Perche' `compute_reaching_defs` NON basta
+///
+/// La sua unita' e' `LivenessCfgNode = (u32, Vec<u32>, Vec<u32>, Vec<u32>)`,
+/// cioe' **per BLOCCO**. Un risultato per blocco non distingue la `lea`
+/// dall'`add` quando cadono nello stesso blocco, e qui servono le catene
+/// def-use **per istruzione** (`ProgramPoint`, `VersionedVar`, φ).
+///
+/// ## Che cosa fa questa funzione, e che cosa NON fa
+///
+/// Non inventa l'analisi: `build_liveness_cfg_from_mlil` (sotto) calcola gia'
+/// letture e scritture **per istruzione**, e poi le **aggrega** per blocco
+/// perche' `LivenessCfgNode` non sa rappresentare altro. Qui si usa la stessa
+/// estrazione e si **smette di aggregare**.
+///
+/// ⚠ Nessun consumatore, per ora: e' l'adattatore, non il cablaggio. Il passo
+/// successivo — dare le catene al rilevatore di jump table — va misurato con
+/// `behavior.py --path-b`, che deve **salire da 47/62**. Il conteggio delle
+/// tabelle risolte non basta: uno `switch` fabbricato e' peggio di un
+/// `JUMPOUT` onesto, e il crate lo documenta con una misura.
+#[must_use]
+pub fn build_defuse_program_from_mlil(
+    blocks: &[MlilBasicBlock],
+) -> adf::def_use_analysis::Program {
+    use adf::def_use_analysis as du;
+    use rustre_il_mlil::MlilInstruction;
+
+    let mut prog = du::Program::new(0);
+    if blocks.is_empty() {
+        return prog;
+    }
+    // `MlilBasicBlock.id` e' un `u32` arbitrario; `du::Block.id` e' l'indice
+    // usato anche dagli archi. Si mappa sull'INDICE, non sull'id, cosi'
+    // `successors`/`predecessors` restano coerenti senza tabelle di traduzione.
+    let idx_of: std::collections::HashMap<u32, usize> = blocks
+        .iter()
+        .enumerate()
+        .map(|(i, b)| (b.id, i))
+        .collect();
+
+    for (i, block) in blocks.iter().enumerate() {
+        let mut instrs: Vec<du::Instruction> = Vec::with_capacity(block.instrs.len());
+        for ann in &block.instrs {
+            let mut reads: Vec<String> = Vec::new();
+            mlil_instr_reads(&ann.instr, &mut reads);
+            let def = match &ann.instr {
+                MlilInstruction::Assign { dest, .. } | MlilInstruction::Phi { dest, .. } => {
+                    Some(format!("{}#{}", dest.name, dest.version))
+                }
+                _ => None,
+            };
+            instrs.push(du::Instruction {
+                def,
+                uses: reads,
+            });
+        }
+        let succ: Vec<usize> = block
+            .successors
+            .iter()
+            .filter_map(|s| idx_of.get(s).copied())
+            .collect();
+        let pred: Vec<usize> = block
+            .predecessors
+            .iter()
+            .filter_map(|p| idx_of.get(p).copied())
+            .collect();
+        prog.add_block(du::Block {
+            id: i,
+            instrs,
+            successors: succ,
+            predecessors: pred,
+        });
+    }
+    prog
+}
+
+// #8210 - questo blocco e la sua `#[must_use]` erano rimasti sopra
+// `build_defuse_program_from_mlil`: qualcuno ha inserito quella funzione
+// FRA la documentazione e la funzione che descriveva. Effetto: l'adattatore
+// MLIL->Program portava la descrizione di un costruttore di CFG di liveness,
+// e questa funzione non aveva documentazione ne' attributo. Il compilatore
+// lo segnalava come `unused attribute` (duplicato) -- il warning era il
+// marcatore di una documentazione attaccata all'oggetto sbagliato.
 /// Build a MULTI-BLOCK `LivenessCfgNode` list from the MLIL basic blocks,
 /// together with the `id → name` map needed to read the result back.
 ///
@@ -888,6 +1023,63 @@ pub fn dead_vars_from_mlil(blocks: &[MlilBasicBlock]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+
+    /// #8030 — l'adattatore conserva la struttura PER ISTRUZIONE, che e' cio'
+    /// che `compute_reaching_defs` (per blocco) non puo' dare.
+    ///
+    /// Riproduce la forma misurata su `sub_14004e560` (`rust3_O0`):
+    ///   blocco 0: confronto, si dirama
+    ///   blocco 1: `base = COST` (la `lea`), poi salta al dispatch
+    ///   blocco 2: `base = base + x` (l'`add`), NON raggiunge il dispatch
+    ///   blocco 3: usa `base` — una sola definizione raggiungente
+    #[test]
+    fn defuse_program_conserva_le_istruzioni_e_gli_archi() {
+        use rustre_core::address::Address;
+        use rustre_il_mlil::{
+            MlilAnnotatedInstr, MlilBasicBlock, MlilExpr, MlilInstruction, Size, SsaVar,
+        };
+        let ann = |instr: MlilInstruction| MlilAnnotatedInstr {
+            address: Address::new(0),
+            instr,
+        };
+        let assign = |name: &str, src: MlilExpr| {
+            ann(MlilInstruction::Assign {
+                dest: SsaVar::new(name, 1),
+                src,
+                size: Size::QWord,
+            })
+        };
+        let blk = |id: u32, preds: Vec<u32>, succs: Vec<u32>, instrs: Vec<MlilAnnotatedInstr>| {
+            MlilBasicBlock {
+                id,
+                start: Address::new(0),
+                end: Address::new(0),
+                instrs,
+                predecessors: preds,
+                successors: succs,
+            }
+        };
+        let cost = MlilExpr::Const { value: 0x1400b1d10, size: Size::QWord };
+        let blocks = vec![
+            blk(10, vec![], vec![11, 12], vec![]),
+            blk(11, vec![10], vec![13], vec![assign("base", cost.clone())]),
+            blk(12, vec![10], vec![], vec![assign("base", cost.clone())]),
+            blk(13, vec![11], vec![], vec![assign("t", MlilExpr::Var { var: SsaVar::new("base", 1), size: Size::QWord })]),
+        ];
+        let prog = build_defuse_program_from_mlil(&blocks);
+
+        assert_eq!(prog.blocks.len(), 4, "un blocco per MlilBasicBlock");
+        // Gli id sono INDICI, non gli id MLIL (10..13): gli archi devono
+        // essere tradotti, altrimenti puntano nel vuoto.
+        assert_eq!(prog.blocks[0].successors, vec![1, 2], "archi tradotti su indice");
+        assert_eq!(prog.blocks[3].predecessors, vec![1], "il ramo `add` NON e' predecessore");
+        // La struttura e' per ISTRUZIONE: def e uses non sono aggregati.
+        assert_eq!(prog.blocks[1].instrs.len(), 1);
+        assert_eq!(prog.blocks[1].instrs[0].def.as_deref(), Some("base#1"));
+        assert!(prog.blocks[1].instrs[0].uses.is_empty(), "una costante non legge nulla");
+        assert_eq!(prog.blocks[3].instrs[0].def.as_deref(), Some("t#1"));
+        assert_eq!(prog.blocks[3].instrs[0].uses, vec!["base#1".to_string()]);
+    }
     use super::*;
 
     fn lines(src: &[&str]) -> Vec<String> {

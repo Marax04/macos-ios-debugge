@@ -7033,22 +7033,6 @@ pub mod ssa {
         }
 
         fn rewrite_expr(expr: &mut MlilExpr, b: &Self) {
-            // #8330: un flag LETTO diventa una `Var` VERSIONATA, cosi' l'SSA
-            // lega la lettura alla scrittura che la raggiunge. Senza, i flag
-            // restavano foglie e l'SSA li mostrava definiti e mai usati.
-            //
-            // ⚠ `MlilExpr::Flag` non ha campo versione: la conversione e' il
-            // solo modo di portarla. Il tipo `Bool` che HLIL dava ai `Flag` va
-            // preservato dall'inferenza sul prefisso `flag_` (vedi il ramo
-            // `MlilExpr::Var` di `rustre-il-hlil`), altrimenti i flag
-            // diventano interi nel C emesso.
-            if let MlilExpr::Flag { name } = expr {
-                let nome = format!("flag_{name}");
-                let mut sv = SsaVar::initial(nome.clone());
-                sv.version = b.top(&nome);
-                *expr = MlilExpr::Var { var: sv, size: super::Size::Byte };
-                return;
-            }
             match expr {
                 MlilExpr::Var { var, .. } => {
                     var.version = b.top(&var.name);
@@ -7056,8 +7040,6 @@ pub mod ssa {
                 MlilExpr::Const { .. }
                 | MlilExpr::Undefined(_)
                 | MlilExpr::StackPointer(_)
-                // Irraggiungibile: l'`if let` sopra converte e ritorna. Il ramo
-                // resta perche' il compilatore non lo puo' dedurre.
                 | MlilExpr::Flag { .. } => {}
                 MlilExpr::Load { addr, .. } => Self::rewrite_expr(addr, b),
                 MlilExpr::Neg(e, _) | MlilExpr::Not(e, _) => Self::rewrite_expr(e, b),

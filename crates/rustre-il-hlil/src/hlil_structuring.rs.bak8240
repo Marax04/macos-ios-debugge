@@ -4175,11 +4175,6 @@ fn structure_loops_from_cfg_con(
         // statement contenitore, altrimenti il `while` lo taglia fuori.
         let ultima_pos = pos_of[&ultima];
         if ultima_pos < hdr_pos {
-            // #8240: ottavo abbandono del candidato, e l'unico che taceva.
-            // Senza questa riga la diagnosi lo conta come "non pervenuto"
-            // e la distribuzione dei rifiuti mente. Gli altri sette
-            // stampano gia'.
-            if dbg { eprintln!("[cfgloop] RIFIUTO regione_prima_dell_header"); }
             continue;
         }
         let estranea = pos_of

@@ -44,10 +44,12 @@ RUNS="$CORPUS/runs"
 LABEL=""
 COMPARE=""
 FULL=0
+PATH_B=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --label)   LABEL="${2:-}"; shift 2 ;;
     --compare) COMPARE="${2:-}"; shift 2 ;;
+    --path-b) PATH_B=1; shift ;;
     --full)    FULL=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -93,10 +95,22 @@ fi
 # REGRESSION at an improvement. Numbers produced by different versions of the
 # harness are not comparable, and saying so is better than flagging the wrong
 # thing — the same rule this script already applies to a moving source tree.
+# #8230 - l'elenco copriva SETTE file. `fidelity.sh` e `check.sh` erano gia'
+# in `fingerprint()` (che invalida una corsa se cambiano DURANTE) ma non qui
+# (che annota un confronto se sono cambiati FRA due corse). Sono definizioni
+# di METRICA, non solo input: il 2026-08-29 ho reso `fidelity.sh` capace di
+# vedere path B -- modifica che sposta un numero senza che il codice emesso
+# cambi, il caso esatto per cui questa annotazione esiste -- e il confronto
+# non l'ha dichiarato.
+# `readability.py` e `callsite_consistency.py` erano fuori da ENTRAMBI.
 harness_fingerprint() {
   md5sum "$CORPUS/fidelity_arity.py" "$CORPUS/behavior.py" "$CORPUS/sig_sanity.py" \
          "$CORPUS/cross_build.py" "$CORPUS/unresolved.py" "$CORPUS/prototypes.json" \
-         "$CORPUS/behavior_spec.json" 2>/dev/null | md5sum | cut -d' ' -f1
+         "$CORPUS/behavior_spec.json" \
+         "$CORPUS/fidelity.sh" "$CORPUS/check.sh" \
+         "$CORPUS/readability.py" "$CORPUS/callsite_consistency.py" \
+         "$CORPUS/callsite_truth.py" \
+         2>/dev/null | md5sum | cut -d' ' -f1
 }
 HARNESS_FP=$(harness_fingerprint)
 
@@ -110,13 +124,21 @@ mkdir -p "$DEST/out"
 gen_fail=0
 for f in "$CORPUS"/bin/*.exe; do
   n=$(basename "$f" .exe)
-  if ! "$DRIVER" "$f" "$DEST/out/$n" >/dev/null 2>&1; then
+  HL=""; [ "$PATH_B" = 1 ] && HL="--hlil-experimental"
+  if ! "$DRIVER" "$f" "$DEST/out/$n" $HL >/dev/null 2>&1; then
     echo "  GEN FAIL: $n"
     gen_fail=$((gen_fail+1))
   fi
 done
 c_count=$(find "$DEST/out" -name '*.c' ! -name '*.hlil.c' | wc -l)
 echo "  generated: $c_count .c files, $gen_fail generation failures"
+if [ "$PATH_B" = 1 ]; then
+  b_count=$(find "$DEST/out" -name '*.hlil.c' | wc -l)
+  echo "  generated (path B): $b_count .hlil.c units"
+  # Uno ZERO qui non e' "path B non ha unita'": e' il gate che non ha preso.
+  # Vedi la regola del denominatore accanto allo zero.
+  [ "$b_count" -gt 0 ] || echo "  *** ATTENZIONE: --path-b chiesto ma 0 unita' path B: flag --hlil-experimental inefficace ***"
+fi
 
 # ── 2. Brace balance — literals stripped FIRST ───────────────────────────────
 # Braces inside emitted string literals false-flag balanced files (a real
@@ -167,6 +189,33 @@ read -r beh_total beh_agree <<<"$(
     "$DEST/behavior.json" 2>/dev/null || echo "0 0"
 )"
 echo "  behaviour: $beh_agree/$beh_total agree on all inputs"
+# ⚠ NON tutti i bucket comportamentali leggono QUESTO snapshot.
+#
+# `behavior.py:609`: un bucket puo' dichiarare un `out_dir` proprio, e 17 dei 25
+# lo fanno, puntando a `behav/out` -- un albero FISSO che `measure.sh` NON
+# rigenera. Quei bucket sono quindi **immuni** a qualunque modifica del
+# decompilatore misurata da qui: una corsa `--label before/after` non puo'
+# vederne l'effetto.
+#
+# Costo reale, gia' pagato due volte: il 2026-08-20 produsse una diagnosi
+# sbagliata, e il 2026-08-29 fece leggere 23/62 dove il numero vero era 47/62
+# (una MISCELA: 8 bucket dallo snapshot + 17 da behav/out non aggiornato).
+#
+# Finche' non e' risolto, la misura lo DICHIARA invece di tacerlo.
+esterni=$(python - "$CORPUS/behavior_spec.json" <<'PYEOF'
+import json,sys
+d=json.load(open(sys.argv[1],encoding="utf-8"))
+b=d.get("buckets", d)
+tot=sum(1 for v in b.values() if isinstance(v,dict))
+ext=sum(1 for v in b.values() if isinstance(v,dict) and v.get("out_dir"))
+print(f"{ext}/{tot}")
+PYEOF
+)
+case "$esterni" in
+  0/*) ;;
+  *) echo "    ⚠ $esterni bucket leggono un albero ESTERNO allo snapshot (behav/out):"
+     echo "      immuni alle modifiche misurate qui. Vedi behavior.py:609." ;;
+esac
 
 # ── Signature sanity: defects decidable from the signature text alone.
 #    Tracked separately from recompilability so a naming regression cannot hide
@@ -205,6 +254,98 @@ read -r unres_files unres_act unres_code unres_def <<<"$(
     "$DEST/unresolved.json" 2>/dev/null || echo "0 0 0 0"
 )"
 echo "  unresolved: $unres_files files reference undefined data; actionable=$unres_act code_as_data=$unres_code defined=$unres_def"
+
+# ── Leggibilita': l'unica dimensione su cui path A batte path B ──────────────
+#
+# Nove metriche sopra misurano CORRETTEZZA. Nessuna misura quanto il testo sia
+# LEGGIBILE -- e CLAUDE.md mette «readable» PRIMA di «recompilable».
+#
+# Misurato il 2026-08-29: path A ha 0 goto, path B ne ha 11387 (in 22,8% dei
+# file, mediana 2); righe +31%, cast 2,2x, profondita' +1. Senza questa riga la
+# commutazione del deliverable su B sarebbe sembrata un miglioramento puro,
+# mentre e' uno SCAMBIO.
+#
+# Sta QUI, e non in uno script che qualcuno deve ricordarsi di lanciare, per la
+# stessa ragione per cui `QualityAnalyser` (1173 righe) non ha mai misurato
+# nulla: una capacita' che nessuno esegue non esiste.
+python "$CORPUS/readability.py" "$DEST/out" --json > "$DEST/readability.json" 2>/dev/null
+read -r rd_goto rd_righe rd_cast <<<"$(
+  python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["goto"],d["righe_per_unita"],d["cast_per_unita"])'     "$DEST/readability.json" 2>/dev/null || echo "0 0 0"
+)"
+echo "  readability: goto=$rd_goto righe/unita=$rd_righe cast/unita=$rd_cast"
+
+# callsite_consistency: arieta' con cui una funzione e' DEFINITA contro
+# quella con cui e' CHIAMATA nello stesso progetto. Nessuna verita' esterna:
+# se il codice si contraddice, un lato sbaglia. Ed e' cieca per costruzione a
+# check.sh, perche' gcc accetta f(a,b,c,d) contro `__int64 f();`.
+python "$CORPUS/callsite_consistency.py" "$DEST/out" --json > "$DEST/callsite.json" 2>/dev/null
+read -r cs_def cs_over cs_under <<<"$(
+  python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["definitions"],d["over"],d["under"])'     "$DEST/callsite.json" 2>/dev/null || echo "0 0 0"
+)"
+echo "  callsite: def=$cs_def over=$cs_over under=$cs_under"
+
+# callsite_truth: gli argomenti ai siti contro i PROTOTIPI PUBBLICATI.
+# callsite_consistency misura la coerenza INTERNA e non distingue "coerente e
+# giusto" da "coerente e sbagliato due volte": misurato 29-08, path A chiama
+# pthread_mutex_unlock (arieta' vera 1) con 2 argomenti E la definisce con 2,
+# quindi risulta coerente pur sbagliando due volte.
+python "$CORPUS/callsite_truth.py" "$DEST/out" --json > "$DEST/callsite_truth.json" 2>/dev/null
+read -r ct_sites ct_ok <<<"$(
+  python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["sites"],d["correct_pct"])'     "$DEST/callsite_truth.json" 2>/dev/null || echo "0 0"
+)"
+echo "  callsite_truth: $ct_ok% corretti su $ct_sites siti con firma nota"
+
+# ── 3b. Colonna PATH B (solo con --path-b) ──────────────────────────────────
+# ACCANTO alle colonne path A, mai al posto: due letture della stessa corsa.
+# I 4 harness senza flag proprio leggono MEASURE_PATH_B; i 2 che hanno gia'
+# --path-b usano il loro flag. Vocabolario diverso, stesso significato.
+if [ "$PATH_B" = 1 ]; then
+  echo "  ---- path B ----"
+  MEASURE_PATH_B=1 python "$CORPUS/fidelity_arity.py" "$DEST/out" --json       > "$DEST/arity_b.json" 2>/dev/null
+  read -r b_n b_ok b_over b_under b_pct <<<"$(
+    python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["checked"],d["correct"],d["over"],d["under"],d["pct"])'       "$DEST/arity_b.json" 2>/dev/null || echo "0 0 0 0 null"
+  )"
+  echo "  [B] arity fidelity (n=$b_n): $b_ok correct (${b_pct}%)  over=$b_over under=$b_under"
+
+  python "$CORPUS/behavior.py" "$DEST/out" --path-b --json-out "$DEST/behavior_b.json"       > "$DEST/behavior_b.txt" 2>&1
+  read -r bb_total bb_agree <<<"$(
+    python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["total"],d["agree"])'       "$DEST/behavior_b.json" 2>/dev/null || echo "0 0"
+  )"
+  echo "  [B] behaviour: $bb_agree/$bb_total agree on all inputs"
+
+  MEASURE_PATH_B=1 python "$CORPUS/sig_sanity.py" "$DEST/out" --json       > "$DEST/sig_sanity_b.json" 2>/dev/null
+  read -r sb_n sb_dup sb_shadow <<<"$(
+    python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["signatures"],d["duplicate_param"],d["shadows_keyword"])'       "$DEST/sig_sanity_b.json" 2>/dev/null || echo "0 0 0"
+  )"
+  echo "  [B] signatures: $sb_n scanned, duplicate_param=$sb_dup shadows_keyword=$sb_shadow"
+
+  MEASURE_PATH_B=1 python "$CORPUS/unresolved.py" "$DEST/out" --json       > "$DEST/unresolved_b.json" 2>/dev/null
+  read -r ub_files ub_act ub_code ub_def <<<"$(
+    python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["files_with_unresolved"],d["actionable"],d["code_as_data"],d["data_symbols_defined"])'       "$DEST/unresolved_b.json" 2>/dev/null || echo "0 0 0 0"
+  )"
+  echo "  [B] unresolved: $ub_files files; actionable=$ub_act code_as_data=$ub_code defined=$ub_def"
+  python "$CORPUS/readability.py" "$DEST/out" --path-b --json > "$DEST/readability_b.json" 2>/dev/null
+  read -r rb_goto rb_righe rb_cast <<<"$(
+    python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["goto"],d["righe_per_unita"],d["cast_per_unita"])'       "$DEST/readability_b.json" 2>/dev/null || echo "0 0 0"
+  )"
+  echo "  [B] readability: goto=$rb_goto righe/unita=$rb_righe cast/unita=$rb_cast"
+  python "$CORPUS/callsite_consistency.py" "$DEST/out" --path-b --json > "$DEST/callsite_b.json" 2>/dev/null
+  read -r csb_def csb_over csb_under <<<"$(
+    python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["definitions"],d["over"],d["under"])'       "$DEST/callsite_b.json" 2>/dev/null || echo "0 0 0"
+  )"
+  echo "  [B] callsite: def=$csb_def over=$csb_over under=$csb_under"
+  python "$CORPUS/callsite_truth.py" "$DEST/out" --path-b --json > "$DEST/callsite_truth_b.json" 2>/dev/null
+  read -r ctb_sites ctb_ok <<<"$(
+    python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["sites"],d["correct_pct"])'       "$DEST/callsite_truth_b.json" 2>/dev/null || echo "0 0"
+  )"
+  echo "  [B] callsite_truth: $ctb_ok% corretti su $ctb_sites siti"
+  MEASURE_PATH_B=1 python "$CORPUS/cross_build.py" "$DEST/out" --json > "$DEST/cross_build_b.json" 2>/dev/null
+  read -r xb_bn xb_bbad <<<"$(
+    python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["compared"],d["inconsistent"])'       "$DEST/cross_build_b.json" 2>/dev/null || echo "0 0"
+  )"
+  echo "  [B] cross-build: $xb_bn functions in >=2 builds, $xb_bbad inconsistent"
+  echo "  ---------------"
+fi
 
 # ── 4. Recompilability (opt-in: ~11k gcc invocations) ───────────────────────
 recompile="skipped"
@@ -259,7 +400,13 @@ for d in sorted(os.listdir(root)):
             no_expl += 1
 json.dump(funcs, open(os.path.join(dest, "confidence.json"), "w"))
 print(f"  functions: {len(funcs)}  silent_wrongness: {silent}  missing_evidence: {no_expl}")
+# 8310: i due numeri servono alla shell per metrics.json e per il confronto.
+open(os.path.join(dest, "confidence_counts.txt"), "w").write(f"{silent} {no_expl}")
 PY
+
+# 8310: rileggi i due conteggi prodotti dal blocco sopra.
+read -r sw_silent sw_noexpl < "$DEST/confidence_counts.txt" 2>/dev/null || true
+: "${sw_silent:=0}" "${sw_noexpl:=0}"
 
 # ── 6. Publish ONLY if the tree held still ──────────────────────────────────
 FP_AFTER=$(fingerprint)
@@ -299,7 +446,16 @@ cat > "$DEST/metrics.json" <<EOF
   "unresolved_actionable": $unres_act,
   "unresolved_code_as_data": $unres_code,
   "data_symbols_defined": $unres_def,
-  "recompilability": "$recompile"
+  "recompilability": "$recompile",
+  "readability_goto": ${rd_goto:-0},
+  "readability_cast_per_unit": "${rd_cast:-0}",
+  "callsite_definitions": ${cs_def:-0},
+  "callsite_over": ${cs_over:-0},
+  "callsite_under": ${cs_under:-0},
+  "silent_wrongness": ${sw_silent:-0},
+  "missing_evidence": ${sw_noexpl:-0},
+  "callsite_truth_sites": ${ct_sites:-0},
+  "callsite_truth_pct": ${ct_ok:-0}
 }
 EOF
 [ $TAINTED = 1 ] && exit 3
@@ -349,7 +505,11 @@ for k in ("c_files", "unbalanced_braces", "arity_fidelity_legacy", "arity_checke
           "crossbuild_inconsistent", "unresolved_files",
           "unresolved_actionable", "unresolved_code_as_data",
           "data_symbols_defined", "recompilability",
-          "generation_failures"):
+          "generation_failures",
+          "readability_goto", "readability_cast_per_unit",
+          "callsite_definitions", "callsite_over", "callsite_under",
+          "silent_wrongness", "missing_evidence",
+          "callsite_truth_sites", "callsite_truth_pct"):
     a, b = mb.get(k), mn.get(k)
     flag = ""
     # "skipped" is the absence of a measurement, not a different one. Flagging

@@ -1,0 +1,387 @@
+{
+ "_doc": [
+  "Ground truth for the behavioural metric: functions whose ORIGINAL source is in",
+  "src/, called with the same inputs in both the emitted and the reference build.",
+  "",
+  "Types are the SOURCE types. The emitted signature is deliberately NOT consulted:",
+  "the question this metric asks is whether the reconstruction can be called the way",
+  "the original could. A recovered `size_t` where the source says `int32_t` is a real",
+  "finding, not a detail to accommodate.",
+  "",
+  "Inputs must include the boundaries that separate a correct reconstruction from a",
+  "plausible one: the default/out-of-range switch arm, division by zero, the shift",
+  "count that x86 masks implicitly (b=33), recursion depth, negative values, and for",
+  "pointer arguments a single-element buffer (loop preconditions) as well as a long",
+  "one. A buffer argument is {\"buf\": [...], \"elem\": \"<C type>\"} and is compared",
+  "after the call too \u00e2\u20ac\u201d several of these functions write through the pointer.",
+  "",
+  "Excluded on purpose: variadic functions (sum_varargs) \u00e2\u20ac\u201d the emitted signature",
+  "cannot express `...`, so a mismatch would measure the harness, not the output.",
+  "random: {cases, ranges} adds a fixed-seed sweep on top of the curated inputs. Scalars only, and ranges are chosen to stay in the function's real domain (factorial past 20 overflows uint64 in BOTH builds, which would compare equal and prove nothing).",
+  "sample1 and sample1_c are the SAME source compiled into two different binaries; both are measured on purpose, because a function that reconstructs correctly in one build and not the other localises a compilation-dependent defect.",
+  "Cross-language on purpose: accumulate/find_max appear in C (sample1, sample1_c), C++ (sample2_cpp) and Rust (sample3_rust, sample8_rust) with identical signatures. Same algorithm, different code generators \u2014 a divergence in one and not the others localises which generated shape the decompiler cannot handle, which a single language can never show.",
+  "A bucket may set \"out_dir\" (relative to this directory, or absolute) to point at its own decompiled output instead of a subdirectory of the snapshot passed on the command line; the cross-language buckets built into behav/bin are decompiled into behav/out and use it. Absent, behaviour is unchanged. \"reference_mode\": \"staticlib\" switches the Rust reference from --emit=obj to a staticlib (needed by any source that allocates) and adds the Windows system libraries it needs. Go buckets name a prebuilt cgo c-archive with \"reference_archive\"."
+ ],
+ "buckets": {
+  "rust3_O2": {
+   "source": "sample3_struct_loop.rs",
+   "harness_prelude": "typedef struct Point { int64_t x; int64_t y; int64_t sum; } Point;",
+   "functions": {
+    "accumulate": {
+     "ret": "int64_t",
+     "args": [
+      "Point *",
+      "int"
+     ],
+     "inputs": [
+      [
+       {
+        "buf": [
+         [
+          1,
+          2,
+          0
+         ],
+         [
+          3,
+          4,
+          0
+         ],
+         [
+          5,
+          6,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       3
+      ],
+      [
+       {
+        "buf": [
+         [
+          1,
+          2,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       0
+      ],
+      [
+       {
+        "buf": [
+         [
+          7,
+          8,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       1
+      ],
+      [
+       {
+        "buf": [
+         [
+          7,
+          8,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       -1
+      ],
+      [
+       {
+        "buf": [
+         [
+          0,
+          0,
+          0
+         ],
+         [
+          0,
+          0,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       2
+      ],
+      [
+       {
+        "buf": [
+         [
+          -5,
+          5,
+          0
+         ],
+         [
+          100,
+          -1,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       2
+      ],
+      [
+       {
+        "buf": [
+         [
+          1,
+          1,
+          0
+         ],
+         [
+          2,
+          2,
+          0
+         ],
+         [
+          3,
+          3,
+          0
+         ],
+         [
+          4,
+          4,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       4
+      ],
+      [
+       {
+        "buf": [
+         [
+          1,
+          1,
+          0
+         ],
+         [
+          2,
+          2,
+          0
+         ],
+         [
+          3,
+          3,
+          0
+         ],
+         [
+          4,
+          4,
+          0
+         ],
+         [
+          5,
+          5,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       5
+      ],
+      [
+       {
+        "buf": [
+         [
+          9223372036854775807,
+          1,
+          0
+         ],
+         [
+          1,
+          1,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       2
+      ],
+      [
+       {
+        "buf": [
+         [
+          -9223372036854775807,
+          -1,
+          0
+         ],
+         [
+          -1,
+          -1,
+          0
+         ]
+        ],
+        "elem": "Point"
+       },
+       2
+      ]
+     ]
+    },
+    "find_max": {
+     "ret": "int64_t",
+     "args": [
+      "const int64_t *",
+      "size_t"
+     ],
+     "inputs": [
+      [
+       {
+        "buf": [
+         7
+        ],
+        "elem": "int64_t"
+       },
+       1
+      ],
+      [
+       {
+        "buf": [
+         10,
+         40,
+         20,
+         30
+        ],
+        "elem": "int64_t"
+       },
+       4
+      ],
+      [
+       {
+        "buf": [
+         1,
+         2,
+         3,
+         4,
+         5
+        ],
+        "elem": "int64_t"
+       },
+       5
+      ],
+      [
+       {
+        "buf": [
+         5,
+         4,
+         3,
+         2,
+         1
+        ],
+        "elem": "int64_t"
+       },
+       5
+      ],
+      [
+       {
+        "buf": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8
+        ],
+        "elem": "int64_t"
+       },
+       8
+      ],
+      [
+       {
+        "buf": [
+         5,
+         5,
+         5,
+         5
+        ],
+        "elem": "int64_t"
+       },
+       4
+      ],
+      [
+       {
+        "buf": [
+         -9,
+         -3,
+         -100
+        ],
+        "elem": "int64_t"
+       },
+       3
+      ],
+      [
+       {
+        "buf": [
+         0,
+         0,
+         0,
+         0,
+         0
+        ],
+        "elem": "int64_t"
+       },
+       5
+      ],
+      [
+       {
+        "buf": [
+         -9223372036854775807,
+         9223372036854775807,
+         0
+        ],
+        "elem": "int64_t"
+       },
+       3
+      ],
+      [
+       {
+        "buf": [
+         9223372036854775807,
+         -1,
+         -1,
+         -1,
+         -1
+        ],
+        "elem": "int64_t"
+       },
+       5
+      ],
+      [
+       {
+        "buf": [
+         -1,
+         -1,
+         -1,
+         -1,
+         9223372036854775807
+        ],
+        "elem": "int64_t"
+       },
+       5
+      ]
+     ]
+    }
+   },
+   "out_dir": "behav/out",
+   "link_libs": [
+    "-lntdll",
+    "-lsynchronization"
+   ]
+  }
+ }
+}

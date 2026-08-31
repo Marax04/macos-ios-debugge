@@ -244,8 +244,24 @@ def linker_for(source):
 # std::sys layer). They must come AFTER the objects on the link line, which is
 # where `check_one` appends them. Verified necessary for sample8_rust_features.rs
 # (Vec/Box/str::parse) and harmless for sample3.
+# `-lsynchronization` aggiunta il 2026-08-27, e la giustificazione e' MISURATA
+# sul binario, non supposta: leggendo la tabella di import di `rust3_O0.exe`
+# (DataDirectory[1] - NON [0], che e' l'export e mi ha gia' ingannato una volta)
+# i quattro simboli che bloccavano `accumulate` e `find_max` vengono da
+#
+#     NtWriteFile, RtlNtStatusToDosError  -> ntdll.dll                     (-lntdll, gia' presente)
+#     WaitOnAddress, WakeByAddressAll     -> api-ms-win-core-synch-l1-2-0  (-lsynchronization, MANCAVA)
+#
+# Verificato con un link minimo: con `-lntdll` restano irrisolti i due
+# `*ByAddress*`; aggiungendo `-lsynchronization` linkano tutti e quattro.
+#
+# Non e' un allentamento della metrica: il binario ORIGINALE importa quei
+# simboli da quella DLL, quindi fornire la libreria di import corrispondente
+# riproduce il suo ambiente. Toglierla renderebbe irraggiungibile un caso che
+# l'originale risolve senza sforzo.
 RUST_STATICLIB_LIBS = ["-lws2_32", "-lntdll", "-luserenv", "-lbcrypt",
-                       "-lole32", "-loleaut32", "-ladvapi32"]
+                       "-lole32", "-loleaut32", "-ladvapi32",
+                       "-lsynchronization"]
 
 
 def extra_link_args(bspec):
@@ -492,7 +508,26 @@ def check_one(work, bucket_dir, src_obj, name, spec_fn, prelude, bucket_objs,
         line = [h_obj, *parts, src_obj, *link_libs]
     else:
         line = [h_obj, src_obj, *parts, *link_libs]
-    r = run([(linker or CC), "-w", *line, "-o", exe])
+    # Il link passa un oggetto per ogni file emesso della chiusura transitiva.
+    # Su Windows la riga di comando ha un tetto (~32 KB) e i bucket C# ne hanno
+    # 8712: il link falliva con `WinError 206 - nome del file o estensione
+    # troppo lunga` PRIMA di produrre qualunque risultato, dopo ore di gcc.
+    #
+    # Non e una modifica alla METRICA: la metrica non cambia, cambia solo il
+    # modo di consegnare la lista al linker. `gcc` accetta un response file con
+    # `@percorso`, una riga per argomento; e la forma portabile per liste lunghe.
+    #
+    # Soglia bassa apposta: sotto i 200 oggetti la riga diretta resta, cosi il
+    # comportamento sui bucket piccoli e identico a prima e un eventuale
+    # cambiamento di numeri non puo venire da qui.
+    if len(line) > 200:
+        rsp = os.path.join(work, f"link_{name}.rsp")
+        with open(rsp, "w", encoding="utf-8") as fh:
+            for a in line:
+                fh.write(a.replace("\\", "/") + "\n")
+        r = run([(linker or CC), "-w", f"@{rsp}", "-o", exe])
+    else:
+        r = run([(linker or CC), "-w", *line, "-o", exe])
     if r.returncode != 0:
         missing = sorted(set(re.findall(r"undefined reference to `([^']+)'", r.stderr)))
         return {"status": "LINK_FAIL", "file": os.path.basename(emitted_c),

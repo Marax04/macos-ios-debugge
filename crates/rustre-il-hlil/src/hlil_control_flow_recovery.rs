@@ -712,6 +712,12 @@ pub fn cfg_from_hlil_level(body: &[crate::HlilStatement]) -> (Vec<CfgBlock>, u32
         u64::from_str_radix(t, 16).ok().or_else(|| t.parse::<u64>().ok())
     }
     /// Raccoglie i `goto` annidati, senza creare nodi per le etichette annidate.
+    ///
+    /// #8620 PROVATA E REVOCATA (round 1214): ri-ancorare `cur` all'ultima
+    /// etichetta annidata fa scattare 484092 ri-ancore e porta i retroarchi da
+    /// 5675 a 14402 (+154%), ma l'ESITO peggiora -- `while` 1107 -> 1074,
+    /// `goto` 2725 -> 2764, e 119 righe emesse in meno. Non riaprire senza
+    /// spiegare prima perche' piu' retroarchi producano MENO cicli riscritti.
     fn goto_annidati(stmts: &[HlilStatement], cur: u64, archi: &mut Vec<(u64, u64)>) {
         for s in stmts {
             if let HlilStatement::Goto(a) = s {
@@ -723,8 +729,44 @@ pub fn cfg_from_hlil_level(body: &[crate::HlilStatement]) -> (Vec<CfgBlock>, u32
         }
     }
 
+    /// #7120 — le etichette ANNIDATE, come NODI del grafo.
+    ///
+    /// MISURATO (§144): degli archi raccolti il **49%** viene scartato perche'
+    /// il bersaglio non e' un nodo — 10265 su 20580 su `sample3_rust` — e i
+    /// retroarchi superstiti sono **253** contro i 7697 che il testo emesso
+    /// mostra. `recover_loops` riceve meta' connettivita', e infatti risponde
+    /// `nessun_ciclo` nel 99,6% dei casi.
+    ///
+    /// Aggiungerle come nodi ripara il GRAFO. Non ripara da solo la
+    /// riscrittura, che si regge sulle etichette di primo livello: un ciclo il
+    /// cui header e' annidato verra' riconosciuto e poi rifiutato piu' in
+    /// basso. Ma il rifiuto e' onesto e misurabile, mentre l'arco perso non lo
+    /// era — spariva senza lasciare traccia.
+    ///
+    /// Gate `RUSTRE_HLIL_NODI_ANNIDATI`, opt-in.
+    fn etichette_annidate(stmts: &[HlilStatement], out: &mut Vec<u64>) {
+        for s in stmts {
+            for b in crate::hlil_structuring::stmt_bodies_pub(s) {
+                for x in b {
+                    if let HlilStatement::Label(l) = x
+                        && let Some(v) = val_label(l)
+                    {
+                        out.push(v);
+                    }
+                }
+                etichette_annidate(b, out);
+            }
+        }
+    }
+
     const ENTRY: u64 = 0;
     let mut nodi = vec![ENTRY];
+    if matches!(
+        std::env::var("RUSTRE_HLIL_NODI_ANNIDATI").as_deref(),
+        Ok("1") | Ok("true")
+    ) {
+        etichette_annidate(body, &mut nodi);
+    }
     let mut archi: Vec<(u64, u64)> = Vec::new();
     let mut ret: HashSet<u64> = HashSet::new();
     let mut cur = ENTRY;
@@ -745,12 +787,45 @@ pub fn cfg_from_hlil_level(body: &[crate::HlilStatement]) -> (Vec<CfgBlock>, u32
         }
         for b in crate::hlil_structuring::stmt_bodies_pub(s) {
             goto_annidati(b, cur, &mut archi);
+            // #7130 — l ARCO DI CADUTA verso le etichette annidate.
+            // Il §145 ha mostrato che aggiungere i NODI annidati non basta:
+            // senza predecessori non sono dominati dall entry, e nessun ciclo
+            // naturale si chiude su di loro. Qui si aggiunge l arco dal blocco
+            // corrente a ogni etichetta del corpo: e la caduta che il flusso
+            // esegue davvero entrando nel costrutto.
+            if matches!(
+                std::env::var("RUSTRE_HLIL_ARCHI_CADUTA").as_deref(),
+                Ok("1") | Ok("true")
+            ) {
+                // ⚠ Solo la PRIMA etichetta del corpo, non tutte le
+                // discendenti: entrando nel costrutto il flusso cade li. La
+                // prima versione ne aggiungeva una per OGNI etichetta annidata
+                // e gli archi passavano da 20580 a 154366 — un grafo cosi
+                // dorato di archi che ogni nodo raggiunge tutto, e la
+                // dominanza non discrimina piu nulla.
+                if let Some(v) = b.iter().find_map(|x| match x {
+                    HlilStatement::Label(l) => val_label(l),
+                    _ => None,
+                }) {
+                    archi.push((cur, v));
+                }
+            }
         }
     }
     nodi.sort_unstable();
     nodi.dedup();
     let idx: HashMap<u64, u32> = nodi.iter().enumerate().map(|(i, &n)| (n, i as u32)).collect();
 
+    // Sonda a effetto ZERO (`RUSTRE_DBG_ARCHI`): quanti archi vengono SCARTATI
+    // perche puntano a un nodo che non esiste in questo grafo? `nodi` contiene
+    // solo le etichette di PRIMO livello, mentre `goto_annidati` raccoglie
+    // archi da qualunque profondita: un arco verso un etichetta ANNIDATA non
+    // trova il bersaglio e sparisce senza rumore.
+    if std::env::var("RUSTRE_DBG_ARCHI").is_ok() {
+        let persi = archi.iter().filter(|(a, b)| idx.get(a).is_none() || idx.get(b).is_none()).count();
+        let indietro = archi.iter().filter(|(a, b)| b < a && idx.contains_key(a) && idx.contains_key(b)).count();
+        eprintln!("[archi] nodi={} archi={} persi={persi} retro={indietro}", nodi.len(), archi.len());
+    }
     let mut succ: HashMap<u32, Vec<u32>> = HashMap::new();
     for (a, b) in &archi {
         if let (Some(&x), Some(&y)) = (idx.get(a), idx.get(b)) {
