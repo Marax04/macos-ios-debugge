@@ -1301,6 +1301,97 @@ facendole convergere su un helper solo, non ricopiando la cura 12 volte.
 | Darwin ×2 | **0 errori** (sola compilazione) |
 | MCP | **408 / 1** — passati 407 → 408 (il test nuovo); l'1 è il cricchetto, invariato a 175 |
 
+
+---
+
+## Iterazione 644 — 2026-08-31 — copertura LIVE via workflow, e DUE errori miei corretti
+
+### ⚠ RETTIFICA di una misura che avevo pubblicato: i test live di Windows
+
+Nella panoramica data all'utente avevo scritto **«8 test live su Windows, 6 su
+Linux»**. **È FALSO.** Avevo contato le occorrenze della *stringa* `live_tests`
+nel file, non i test dentro il modulo.
+
+I numeri veri, misurati:
+
+| | Windows | Linux (prima del workflow) |
+|---|---|---|
+| Test nel modulo `live_tests` | **80** | **41** |
+| Di cui lanciano o si attaccano a un processo vero | **77** | **42** |
+
+Conseguenza: la diagnosi «il divario più grande è la copertura live» era
+**sbagliata nella forma in cui l'ho detta**. Windows era gia' il piu' coperto
+dei due. Resta vero che Linux era indietro, ed e' quello che il workflow ha
+chiuso. Famiglia: [[feedback_contraddizione_smaschera_sonda]] — un conteggio
+che non torna con l'ordine di grandezza atteso e' la sonda, non l'oggetto.
+
+### ⚠ PUNTO CIECO DEL PROTOCOLLO: `--lib` non vede i test di integrazione
+
+La direttiva dice `cargo test --release -p rustre-debug --lib` e l'ho sempre
+eseguito alla lettera. Eseguendo per la prima volta `--tests`, e' emerso che
+**`tests/apple_end_to_end.rs` fallisce 2 su 4 sotto Linux**, da PRIMA di questa
+sessione, e nessuna delle mie misure lo vedeva:
+
+- `full_debug_cycle_over_rsp` — `left: None  right: Some("caller")` (riga 218)
+- `stepping_traverses_the_call_the_same_way_a_ui_would` (riga 281)
+
+Il run si fermava li' e non arrivava nemmeno ai file live nuovi. E' esattamente
+[[feedback_verde_non_significa_verificato]]: un controllo che gira, riporta un
+esito, e non guarda l'oggetto. **Da ora la misura Linux include `--tests`.**
+(Sono test del percorso Apple/RSP: la correzione ricade sotto la sospensione
+iOS decisa dall'utente, quindi va a verbale come rosso NOTO, non chiuso.)
+
+### Workflow #1 Linux — 5 agenti su 5, zero errori, 63 test live nuovi
+
+Cinque file nuovi in `tests/`: `live_linux_breakpoints.rs` (21),
+`live_linux_watchpoints.rs` (12), `live_linux_stepping.rs` (8),
+`live_linux_regs_mem.rs` (14), `live_linux_threads_modules.rs` (9).
+
+Non sono test in memoria: compilano al volo una fixture C, risolvono i simboli
+con `nm`, lanciano sotto `ptrace`, e le asserzioni sui watchpoint leggono
+**DR0-DR7 ripresi dal tracee**, non lo stato interno del debugger.
+
+**DIFETTO 1 — `set_breakpoint_ignore_count(addr, 0)` cancella il filtro sul
+thread.** `src/linux_debugger.rs:3503-3505`: il ramo `count == 0` rimuove
+`ignore_counts` **e** `thread_filters`. «Ignora zero volte» significa «fermati a
+ogni passaggio» e non dice nulla su quale thread. Rosso: atteso
+`only_thread == Some(ThreadId(13380))`, ottenuto `None` — e `breakpoints()`
+concorda con la perdita, quindi non c'e' modo di accorgersene.
+
+**DIFETTO 2 — un watchpoint non raggiunge i thread creati DOPO l'armamento.**
+Causa misurata, non dedotta: il clone *viene* osservato (`ThreadCreate` arriva),
+ma su un tid nuovo `get_registers` risponde ESRCH perche' il backend non fa
+`PTRACE_ATTACH` sui thread nati dopo il launch. `rearm_watchpoints_on_new_threads`
+prende il ramo «registri illeggibili» — quello reso onesto al §641 — e riporta
+l'indirizzo come non armato; **ma il chiamante era gia' stato informato che
+l'indirizzo e' sorvegliato**. Miss silenzioso. Cura: `PTRACE_SEIZE` +
+`PTRACE_O_TRACECLONE`.
+
+**Un agente ha corretto SE STESSO, e va registrato**: due suoi test fallivano su
+`read_memory`; invece di dichiarare un difetto ha capito che il TEST era
+sbagliato — `read_memory` maschera di proposito i trap piantati, come gdb e
+lldb — e ha aggiunto un test che fissa quel comportamento come voluto invece di
+lasciarlo folklore.
+
+### Workflow #2 Linux e #3 Windows lanciati subito dopo
+
+Per regola dell'utente: appena un workflow chiude, si verifica e se ne rilancia
+un altro. Vedi [[feedback_workflow_a_catena]].
+- **#2 Linux** (`wu4e64nin`): ciclo di vita, segnali/ragioni di arresto, simboli
+  e righe DWARF, espressioni e condizioni, mappe e moduli con `dlopen`.
+- **#3 Windows** (`wcdru9aax`): ciclo di vita, eccezioni vere (access violation,
+  divisione per zero, stack overflow), moduli e simboli con `LoadLibrary`,
+  memoria e mappe, thread creati dopo l'attach.
+
+### Misure di questo giro
+
+| Dove | Esito |
+|---|---|
+| Windows `--lib` | **2124 / 0** |
+| Linux `--lib` | **2107 / 0** |
+| Linux `--tests` | **ROSSO NOTO**: `apple_end_to_end` 2/4 (preesistente, percorso Apple) |
+| MCP | **408 / 1** |
+
 ---
 ---
 
