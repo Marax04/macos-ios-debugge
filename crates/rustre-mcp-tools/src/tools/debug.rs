@@ -2070,13 +2070,34 @@ rustre_debug::DebugError::ProcessNotFound(_)) => {}
                 let session_id = req_str(&args, "session_id")?.to_string();
 
                 if let Some(r) = with_live(&session_id, |sess| {
-                    let tids = block_on(sess.dbg.threads()).map_err(|e| anyhow!("{e}"))?;
-                    let json_tids: Vec<Value> = tids.iter().map(|t| json!({ "tid": t.0 })).collect();
+                    // `thread_details`, not `threads`: a bare id is most of
+                    // nothing. An audit against x64dbg got nine fields per
+                    // thread there against one here — and three of four threads
+                    // sharing a `pc` is what names them as the runtime's thread
+                    // pool at a glance.
+                    //
+                    // Fields the backend cannot answer stay `null` rather than
+                    // becoming a plausible zero: a pc of 0 would read as a
+                    // thread parked at a null address.
+                    let details = block_on(sess.dbg.thread_details()).map_err(|e| anyhow!("{e}"))?;
+                    let json_tids: Vec<Value> = details
+                        .iter()
+                        .map(|t| {
+                            json!({
+                                "tid": t.id.0,
+                                "pc": t.pc,
+                                "base_priority": t.base_priority,
+                                "start_address": t.start_address,
+                                "teb": t.teb,
+                                "name": t.name
+                            })
+                        })
+                        .collect();
                     Ok(json!({
                         "session_id": session_id,
                         "threads": json_tids,
                         "live": true,
-                        "source": "rustre_debug::Debugger::threads (live OS backend)"
+                        "source": "rustre_debug::Debugger::thread_details (live OS backend)"
                     }))
                 }) {
                     return r;

@@ -1563,6 +1563,34 @@ pub enum DebugError {
 // Process / Thread identifiers
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// What a backend knows about one thread of the debugged process.
+///
+/// Fields beyond `id` are `Option` on purpose: a backend answers what it can
+/// read and says nothing about the rest, rather than filling a plausible zero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreadInfo {
+    /// The thread id — the only field every backend can always answer.
+    pub id: ThreadId,
+    /// Program counter of the stopped thread, when the process is stopped.
+    pub pc: Option<u64>,
+    /// Base priority as the OS reports it.
+    pub base_priority: Option<i32>,
+    /// Address the thread began executing at.
+    pub start_address: Option<u64>,
+    /// Thread Environment Block / thread-local base, when the OS exposes it.
+    pub teb: Option<u64>,
+    /// The name the program gave the thread, when it gave one.
+    pub name: Option<String>,
+}
+
+impl ThreadInfo {
+    /// A thread known only by its id — everything else unanswered.
+    #[must_use]
+    pub const fn from_id(id: ThreadId) -> Self {
+        Self { id, pc: None, base_priority: None, start_address: None, teb: None, name: None }
+    }
+}
+
 /// Opaque process identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct ProcessId(pub u32);
@@ -2684,6 +2712,24 @@ pub trait Debugger: Send + Sync {
     /// `ENHANCEMENT_LOG.md` iter 168), but real per-thread control of a
     /// genuinely multi-threaded Linux target is not yet implemented.
     async fn threads(&self) -> Result<Vec<ThreadId>, DebugError>;
+
+    /// Everything the backend knows about each thread, not just its id.
+    ///
+    /// [`threads`](Debugger::threads) answers `Vec<ThreadId>`, and a bare id is
+    /// most of nothing: an audit against x64dbg on the same process got NINE
+    /// fields per thread there — cip, TEB, name, start address, priority,
+    /// suspend count — against ONE here. The cost is concrete: x64dbg shows at a
+    /// glance that three of four threads sit at the same `cip` with the same
+    /// start address, which names them as ntdll's thread pool. Three bare
+    /// numbers name nothing.
+    ///
+    /// Every field is optional because backends differ in what they can answer,
+    /// and "not known" must stay distinguishable from a value. The default
+    /// implementation carries ids alone: a backend that has not been taught this
+    /// reports poverty honestly rather than inventing.
+    async fn thread_details(&self) -> Result<Vec<ThreadInfo>, DebugError> {
+        Ok(self.threads().await?.into_iter().map(ThreadInfo::from_id).collect())
+    }
     /// Return the thread that last caused a stop event.
     async fn current_thread(&self) -> Result<ThreadId, DebugError>;
 

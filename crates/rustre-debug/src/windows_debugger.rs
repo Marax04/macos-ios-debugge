@@ -52,7 +52,7 @@ use rustre_core::address::Address;
 
 use crate::{
     Breakpoint, BreakpointKind, DebugError, DebugEvent, Debugger, LaunchOptions, MemoryMap,
-    ModuleInfo, ProcessId, RegisterSet, StackFrame, StopReason, ThreadId,
+    ModuleInfo, ProcessId, RegisterSet, StackFrame, StopReason, ThreadId, ThreadInfo,
 };
 
 const DBG_CONTINUE: DWORD = 0x0001_0002;
@@ -3129,6 +3129,58 @@ impl crate::Debugger for WindowsDebugger {
         Ok(result)
     }
 
+    async fn thread_details(&self) -> Result<Vec<ThreadInfo>, DebugError> {
+        // The base priority is NOT an extra query: `threads()` above already
+        // walks `THREADENTRY32`, whose `tpBasePri` it filled and discarded.
+        // Reading it here costs one field copy.
+        let pid = self.pid.lock().ok_or(DebugError::NotAttached)?;
+        let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+        if snapshot == INVALID_HANDLE_VALUE {
+            return Err(DebugError::MemoryError(
+                0,
+                format!("CreateToolhelp32Snapshot failed: {}", unsafe { GetLastError() }),
+            ));
+        }
+        let mut out: Vec<ThreadInfo> = Vec::new();
+        let mut entry: THREADENTRY32 = unsafe { zeroed() };
+        entry.dwSize = size_of::<THREADENTRY32>() as DWORD;
+        let mut first = true;
+        loop {
+            let ok = if first {
+                first = false;
+                unsafe { Thread32First(snapshot, &raw mut entry) }
+            } else {
+                unsafe { Thread32Next(snapshot, &raw mut entry) }
+            };
+            if ok == FALSE {
+                break;
+            }
+            if entry.th32OwnerProcessID == pid.0 {
+                out.push(ThreadInfo {
+                    id: ThreadId(entry.th32ThreadID),
+                    pc: None,
+                    base_priority: Some(entry.tpBasePri),
+                    start_address: None,
+                    teb: None,
+                    name: None,
+                });
+            }
+        }
+        unsafe {
+            CloseHandle(snapshot);
+        }
+
+        // The pc is valid only because the process is STOPPED; a thread whose
+        // context cannot be read keeps `None` rather than a plausible zero,
+        // which is the same rule the register paths follow everywhere else.
+        for t in &mut out {
+            if let Ok(regs) = self.get_registers(t.id).await {
+                t.pc = Some(regs.pc);
+            }
+        }
+        Ok(out)
+    }
+
     async fn current_thread(&self) -> Result<ThreadId, DebugError> {
         self.current_tid.lock().ok_or(DebugError::NotAttached)
     }
@@ -4624,6 +4676,57 @@ mod live_tests {
             matches!(after, Err(DebugError::NotAttached)),
             "the session is over and the only honest answer is NotAttached, got: {after:?}"
         );
+    }
+
+    /// A stopped process can say more about its threads than their ids.
+    ///
+    /// An audit against x64dbg on the same target got NINE fields per thread
+    /// there against ONE here, and the cost is concrete: x64dbg shows that three
+    /// of four threads sit at the same `cip` with the same start address, which
+    /// names them as ntdll's thread pool at a glance. Four bare numbers name
+    /// nothing.
+    ///
+    /// Two of those fields cost nothing to add and are measured here:
+    /// - **base priority** is ALREADY READ. `threads()` enumerates through
+    ///   `THREADENTRY32`, whose `tpBasePri` field it fills and then discards.
+    /// - **pc** comes from `get_registers`, which this backend already
+    ///   implements and which is valid precisely because the process is stopped.
+    ///
+    /// Deliberately NOT included: the suspend count. Obtaining it requires a
+    /// suspend/resume pair, which PERTURBS THE OBSERVED PROCESS — a price a
+    /// debugger must declare, never pay silently to fill a field.
+    #[tokio::test]
+    async fn thread_details_carry_more_than_the_id() {
+        let dbg = WindowsDebugger::new();
+        dbg.launch(cmd_launch_options(&["/C", "echo hi >NUL"]))
+            .await
+            .expect("launch should succeed against a real cmd.exe");
+        dbg.continue_execution().await.expect("continue to the first stop");
+
+        let details = dbg.thread_details().await.expect("thread_details");
+        assert!(!details.is_empty(), "a live process has at least one thread");
+
+        let with_pc = details.iter().filter(|t| t.pc.is_some()).count();
+        assert!(
+            with_pc > 0,
+            "no thread reported a pc, though the process is STOPPED and              get_registers works: {details:?}"
+        );
+        let with_prio = details.iter().filter(|t| t.base_priority.is_some()).count();
+        assert!(
+            with_prio > 0,
+            "no thread reported a base priority, though `threads()` already              reads THREADENTRY32.tpBasePri and throws it away: {details:?}"
+        );
+
+        // The id must still be there, and match the plain enumeration: the new
+        // call is a superset, not a different answer.
+        let plain = dbg.threads().await.expect("threads");
+        let mut a: Vec<u32> = details.iter().map(|t| t.id.0).collect();
+        let mut b: Vec<u32> = plain.iter().map(|t| t.0).collect();
+        a.sort_unstable();
+        b.sort_unstable();
+        assert_eq!(a, b, "thread_details must describe the same threads threads() lists");
+
+        let _ = dbg.kill().await;
     }
 
     fn cmd_launch_options(args: &[&str]) -> LaunchOptions {

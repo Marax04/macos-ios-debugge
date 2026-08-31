@@ -2289,6 +2289,165 @@ compilatore li prende tutti — ma sono il prezzo prevedibile di un'estrazione.
 | Linux `--lib` | **2108 / 0** |
 | Darwin x2 | **0 errori** (sola compilazione) |
 
+
+---
+
+## Iterazione 651 — 2026-08-31 — `debug.threads`: da UN campo a sei
+
+Secondo dei sei divari dell'audit x64dbg: **nove campi per thread la', UNO qui**.
+
+Il costo e' concreto e l'audit lo mostra: x64dbg fa vedere che tre thread su
+quattro stanno allo stesso `cip` con lo stesso start address — sono il thread
+pool di ntdll, riconoscibili a colpo d'occhio. **Quattro numeri nudi non nominano
+nulla.**
+
+### La causa e' DIVERSA dai giri precedenti
+
+Negli altri casi il dato era gia' in mano e non veniva usato. Qui **non esisteva
+nel contratto**: `threads()` restituisce `Vec<ThreadId>` e basta, quindi nessun
+livello superiore poteva riportare di piu' per quanto il backend sapesse.
+
+### La forma della cura conta quanto la cura
+
+`thread_details()` aggiunto al trait con un **default che dichiara la poverta'**
+— restituisce i soli id — invece di inventare. Ogni campo di `ThreadInfo` e'
+`Option`: un backend risponde cio' che sa leggere e tace sul resto. E' la stessa
+disciplina a tre stati che oggi ha chiuso il frame pointer inventato (§638), il
+PID che diventava il sentinella di «nessun processo» (§640), il `dr7` assente
+letto come pulito (§641-642) e i tre tool che fabbricavano lo stato (§649).
+
+**Rosso misurato**, la poverta' esibita:
+`ThreadInfo { id: ThreadId(22228), pc: None, base_priority: None, start_address: None, teb: None, name: None }`
+— un id e cinque assenze, su un processo FERMO in cui `get_registers` funziona.
+
+### Su Windows, due campi che il codice AVEVA GIA'
+
+- **`base_priority` non costa una query**: `threads()` cammina gia' su
+  `THREADENTRY32`, il cui `tpBasePri` veniva riempito dal sistema e **scartato**
+  da noi. Terza volta oggi che lo schema dell'audit si ripete — il lavoro
+  difficile fatto, l'ultimo passo mancante.
+- **`pc`** da `get_registers`, valido proprio perche' il processo e' fermo. Un
+  thread il cui contesto non si legge conserva `None`, non uno zero plausibile:
+  un pc a 0 si leggerebbe come «thread fermo a un indirizzo nullo».
+
+Il test asserisce anche che `thread_details` descriva **gli stessi** thread di
+`threads()`: e' un sovrainsieme, non una seconda enumerazione che puo' divergere.
+
+### Cio' che NON ho fatto, e perche'
+
+- **Suspend count** (che x64dbg mostra): ottenerlo richiede una coppia
+  sospendi/riprendi, che **PERTURBA IL PROCESSO OSSERVATO**. In un debugger e' un
+  costo da dichiarare, mai da pagare di nascosto per riempire un campo — chi
+  legge il valore non saprebbe che ottenerlo ha cambiato lo stato esaminato.
+- **TEB, start_address, name**: richiedono `NtQueryInformationThread` e
+  `GetThreadDescription`, API nuove con la loro gestione degli errori. Meglio un
+  giro dedicato che infilarle qui e verificarle male.
+
+### MCP aggiornato al backend nuovo
+
+`debug.threads` riporta ora `tid`, `pc`, `base_priority`, `start_address`, `teb`,
+`name`. I campi non risposti restano **`null`**.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows `--lib` | **2128 / 0** |
+| Linux `--lib` | **2108 / 0** |
+| Darwin x2 | **0 errori** (sola compilazione) |
+| MCP | **409 / 1** — l'1 e' il cricchetto |
+
+### Il guard di prossimita' ha trovato un'AFFERMAZIONE FALSA, non una prosa lunga
+
+Le tre volte precedenti mi aveva segnalato commenti fuori posto. Qui ha colto un
+difetto sostanziale: la risposta dichiarava
+`source: "rustre_debug::Debugger::threads"` mentre il gestore ora chiama
+`thread_details`. **La dichiarazione era rimasta indietro rispetto al codice** —
+stessa classe delle descrizioni corrette al §649, per cui un auditor esperto
+aveva tratto una diagnosi sbagliata leggendole. Il campo `source` esiste per dire
+al chiamante da dove viene il dato: una dichiarazione stantia li' e' peggio
+dell'assenza.
+
+
+---
+
+## ⭐ WORKFLOW #6 — DE-VACUAZIONE — i test vacui ora MORDONO
+
+5 agenti su 5. Seguito diretto della campagna di falsificazione (143 vacui su
+211). I due file peggiori sono chiusi, e **entrambi gli agenti hanno trovato un
+difetto NEL PROPRIO lavoro** falsificandolo.
+
+### `live_linux_breakpoints.rs` — da 18 vacui su 20 a 20 mordenti su 21
+
+**Causa riprodotta prima di toccare nulla**, non dedotta: rieseguita la
+mutazione della campagna (ogni simbolo risolve a `main`) → **18 passed / 2
+failed**, esattamente il numero dichiarato. I 2 che gia' mordevano lo facevano
+per il **conteggio**, non per l'indirizzo.
+
+Cura: `run_until_breakpoint(dbg, addr, ..)` — che filtrava gli stop
+sull'indirizzo poi asserito — sostituito da helper che **non prendono
+l'indirizzo**. `assert_eq!(address, fx.hot)` torna a essere una misura invece di
+una tautologia. Piu' **due oracoli indipendenti** sullo stesso ELF (`nm` e
+`objdump -d --disassemble`) che devono concordare, e il confronto dei **32 byte**
+del codice vivo nel tracee col corpo disassemblato.
+
+**Quattro falsificazioni, misurate:**
+
+| mutazione | rossi |
+|---|---|
+| ogni simbolo → `main` | **21 / 21** |
+| `hot` riceve l'indirizzo di `warm`, oracoli concordi | **20 / 21** |
+| la fixture chiama `hot` 4 volte invece di 5 | 4 |
+| la fixture chiama `warm` 2 volte invece di 1 | 1 |
+
+⚠ **Difetto trovato dall'agente NEL PROPRIO lavoro**: la prima versione
+confrontava 8 byte, cioe' **il prologo che `hot`, `warm` e `cold` condividono** —
+lasciava 17 verdi su 21 sotto mutazione. Allargata la finestra a 32 byte: 20 su
+21.
+
+**L'unico sopravvissuto e' DICHIARATO invece che nascosto**:
+`a_condition_on_an_unset_address_is_refused` non dipende da quale funzione sia
+quell'indirizzo, perche' asserisce cosa accade dove NON c'e' breakpoint. Non e'
+debolezza.
+
+### `live_linux_load.rs` — da 8 vacui su 8 a 8 mordenti
+
+**Causa diversa, stessa radice**: il file non usa l'helper filtrante — nessun
+test chiedeva mai se `fx.hot` fosse davvero `hot`. Una trappola si pianta e si
+ripristina byte per byte a **qualunque** indirizzo eseguibile mappato: erano
+affermazioni su «un indirizzo eseguibile qualsiasi».
+
+Cura: contare gli attraversamenti senza filtrare, con una **matrice** letta dal
+sorgente della fixture:
+
+| modo | `hot` | `filler` |
+|---|---|---|
+| senza argomenti | 0 | 1 |
+| `loop 5` | 5 | 0 |
+
+⚠ **E anche questo guard e' andato rosso alla prima esecuzione, su se' stesso**:
+```
+[pin-falsify] loop 5: hot=5 main=1; quick: main=1
+assertion `left != right` failed: the crossing count does not separate `main` from `filler`
+  left: 1   right: 1
+```
+Una **cella sola** non separa `main` da `filler`; la **coppia** si': `main` =
+(1,1), `filler` = (1,0), `hot` = (0,5). E' la lezione «un conteggio e' lasco,
+l'insieme no» misurata una seconda volta, su un oggetto diverso.
+
+Rafforzata anche una soglia lasca preesistente: `trap_count >= n - 1` →
+`trap_count == n` (misurato **200/200**), piu' il controllo che la finestra
+pristina non sia gia' tutta `0xCC` — altrimenti «osservo trappole» non prova
+nulla.
+
+### La lezione, confermata due volte in un giro
+
+**Chi scrive un oracolo deve falsificare anche l'oracolo.** Entrambi gli agenti
+hanno prodotto una prima versione che sembrava rigorosa e non lo era: una
+guardava byte condivisi da tutte le funzioni, l'altra una cella che due simboli
+diversi riproducono. Nessuna delle due sarebbe mai stata scoperta da un run
+verde.
+
 ---
 ---
 
