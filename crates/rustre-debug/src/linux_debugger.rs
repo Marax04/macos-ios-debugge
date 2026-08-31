@@ -2013,7 +2013,13 @@ fn ensure_stopped(
     }
 }
 
-/// `waitpid(-1, __WALL)`: reap whichever thread of the tracee stops next.
+/// `waitpid(-1, __WALL)`: reap whichever child stops next, and report it only
+/// if it belongs to THIS session.
+///
+/// Not "whichever thread of the tracee", which is what this line used to say:
+/// `-1` means any child of this process, including strays left by earlier
+/// sessions in the same binary. The distinction is made below, at the exit
+/// branch, and it is a correctness one — see the note there.
 ///
 /// Both the `PTRACE_EVENT_CLONE` stop on the cloning parent and a freshly
 /// cloned thread's birth-stop are transparently RESUMED here. The kernel does
@@ -2052,8 +2058,46 @@ fn wait_for_stop_any(
         }
 
         if libc::WIFEXITED(status) || libc::WIFSIGNALED(status) {
+            // Membership is read BEFORE the removal, because the removal is
+            // what destroys the evidence.
+            //
+            // `waitpid(-1)` reaps ANY child of this process, not only a thread
+            // of the tracee — the doc comment above said "whichever thread of
+            // the tracee", which is not what `-1` means. A test binary that
+            // runs several debug sessions in turn leaves strays behind, and
+            // their deaths are reaped here and then stamped with the CURRENT
+            // session's pid:
+            //
+            //     EVENT pid=29125 tid=29115 mine=29125
+            //           reason=ThreadExit { tid: ThreadId(29115), exit_code: -9 }
+            //
+            // `29115` was a process of an earlier session, detached from and
+            // `kill -9`'d; `29125` is this session's target. Reproduced 3 times
+            // out of 3.
+            //
+            // Why that is worse than untidy: `run_until_interesting` documents
+            // a filter on the event's pid as its defence against exactly this
+            // cross-talk, and a foreign event carrying the RIGHT pid walks
+            // straight through it. The defence was defeated by the label.
+            //
+            // A tid this session never saw born is not this session's to
+            // report. It has still been REAPED, which is the part that must
+            // happen — leaving it unreaped would make it a zombie — but it is
+            // not turned into an event about a target it has nothing to do
+            // with. `known_tids` is the right question to ask because
+            // `PTRACE_O_TRACECLONE` means every thread of this tracee is seen
+            // being born, and the leader is inserted at attach.
+            let was_ours = known_tids.contains(&waited);
             known_tids.remove(&waited);
             stopped_tids.remove(&waited);
+            if !was_ours && waited != pid {
+                if trace {
+                    eprintln!(
+                        "[ptrace] tid={waited} status={status:#x} branch=foreign-reap (not this session)"
+                    );
+                }
+                continue;
+            }
             if waited != pid {
                 // A secondary thread exiting is not the process exiting — that
                 // distinction was already right, and it stays.

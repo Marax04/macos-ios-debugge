@@ -3889,3 +3889,71 @@ agente ha cancellato albero, target dir e backup. Ma «prezioso» non e' lo stes
 che «dichiarato»: la regola «committare solo i propri hunk» esiste esattamente
 per non far entrare nel proprio commit lavoro altrui senza dirlo, e qui e'
 successo.
+
+---
+
+## Giro 658 — un evento estraneo che indossava il pid giusto
+
+Il difetto D1 trovato dal workflow #9, corretto. E' il piu' insidioso della
+giornata, perche' **non produce un dato palesemente sbagliato: produce un dato
+credibile**.
+
+**Rosso riprodotto sul mio albero prima di toccare nulla:**
+
+    session 2 reported an event about session 1's process 21338:
+    ThreadExit { tid: ThreadId(21338), exit_code: -9 }
+
+**Causa.** `wait_for_stop_any` miete con `waitpid(-1, __WALL)`. Il commento
+sopra diceva «reap whichever thread of **the tracee** stops next» — ma `-1` non
+significa «del tracee», significa «di chiunque»: qualunque figlio di questo
+processo, compresi i residui lasciati da sessioni precedenti nello stesso
+binario di test. La morte del residuo veniva poi timbrata col pid della sessione
+CORRENTE, perche' l'evento si costruisce con `ProcessId(pid)` dove `pid` e'
+quello della sessione, non quello che `waitpid` ha appena restituito.
+
+**Perche' e' peggio che disordinato.** `run_until_interesting` documenta il
+filtro sul pid dell'evento come propria difesa contro esattamente questa
+interferenza. Un evento estraneo che porta il pid GIUSTO **attraversa quel
+filtro indisturbato**: la difesa e' stata sconfitta dall'etichetta, non aggirata.
+
+**Cura.** Un tid che questa sessione non ha mai visto nascere non e' suo da
+riportare. La verifica legge l'appartenenza **prima** della rimozione da
+`known_tids` — perche' e' la rimozione a distruggere la prova — e l'evento
+estraneo viene scartato invece che rietichettato.
+
+Due precisazioni che rendono la cura corretta e non solo silenziosa:
+- il processo estraneo **viene comunque mietuto**: e' la parte che deve
+  succedere, altrimenti resterebbe uno zombie. Cio' che non succede piu' e'
+  trasformarlo in un evento che parla di un bersaglio con cui non c'entra;
+- `known_tids` e' la domanda giusta perche' con `PTRACE_O_TRACECLONE` ogni
+  thread di questo tracee e' visto nascere, e il leader e' inserito all'attacco:
+  l'insieme e' completo, quindi «non conosciuto» significa davvero «non nostro»
+  e non «non ancora registrato».
+
+Corretta anche la **descrizione falsa** sopra la funzione, che e' cio' che
+rendeva il difetto invisibile a chi leggeva il codice.
+
+**Il test non e' mio**: l'ha scritto un agente del workflow #9 contro il backend
+rotto, con la tabella «atteso / ottenuto» e l'oracolo giusto — *un tracee a
+thread singolo non puo' legittimamente riportare un `ThreadExit` per un tid
+diverso dal proprio pid*. `#[ignore]` rimosso.
+
+**Verifica mirata al rischio vero.** Il pericolo della cura non e' lasciare
+passare l'evento estraneo: e' **sopprimere un'uscita legittima**. Per questo ho
+eseguito l'intero file e non il solo test: `9 passed; 0 failed`.
+
+**Suite del giro 658:** Windows `2132 passed; 0 failed` · Linux `2110 passed;
+0 failed` · file dv4 `9 passed; 0 failed` · Darwin x86_64 e aarch64 `Finished` ·
+MCP 411/1, invariata (il solito cricchetto preesistente).
+
+**Due inciampi di procedura, entrambi miei:**
+1. l'output di WSL e' tornato VUOTO tre volte pur essendo il comando terminato —
+   un intoppo del canale, non un esito. Rimedio adottato: scrivere prima su file
+   DENTRO WSL e poi leggerlo, cosi' il risultato resta recuperabile anche se il
+   canale lo perde. Ha funzionato al primo colpo.
+2. rieseguendo Linux ho lanciato una seconda `cargo` sulla STESSA
+   `CARGO_TARGET_DIR` mentre la prima era ancora viva: `Blocking waiting for
+   file lock on build directory`, ed erano finiti in esecuzione **due binari di
+   test ptrace insieme**. Che e' precisamente la condizione che genera
+   l'interferenza fra sessioni corretta in questo stesso giro. Uccisi entrambi e
+   rieseguito una volta sola.
