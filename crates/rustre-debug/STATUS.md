@@ -3665,3 +3665,81 @@ e' un indirizzo di stack. Falsificazione finale: **8 rossi su 8**.
 2. **`/tmp` e' condiviso fra agenti** e a meta' sessione e' stato azzerato
    (alberi privati, target dir e backup spariti). Il lavoro d'appoggio degli
    agenti va sotto `$HOME`, non sotto `/tmp`.
+
+---
+
+## Giro 656 — lo stack pointer non e' un rilevatore di call
+
+Il difetto isolato dal workflow #8, corretto. **Riguarda Windows E Linux**, non
+solo Linux: contati i punti prima di toccare il codice, la stessa riga stava in
+**tutti e tre** i backend — `linux_debugger.rs:3756`, `windows_debugger.rs:3066`,
+`macos_debugger.rs:3908`.
+
+**Il difetto.** `step_over` decideva se aveva incontrato una chiamata con
+
+    if after.sp >= before.sp { return Ok(event); }
+
+Su Windows il commento sopra lo diceva pure a chiare lettere: «`sp` shrinking is
+what identifies a `call`». **E' falso.** `push %rbp` abbassa `rsp` esattamente
+come una `call`, e cosi' `sub $N,%rsp`: le due istruzioni che aprono OGNI
+funzione compilata a `-O0`. Il backend credeva di essere entrato in una
+chiamata, piantava il breakpoint di ritorno a un indirizzo che il programma non
+raggiunge mai, e rilasciava il processo:
+
+    step_over over `push %rbp` at 0x401869 ran the fixture to EXIT.
+
+(misurato **senza alcuna trap piantata** — la trap non c'entrava).
+
+Nota cosa la vecchia euristica azzeccava, perche' spiega come sia sopravvissuta:
+**ogni call abbassa `sp`**. E' il *converso* a essere falso, ed e' il converso
+che il codice usava.
+
+**Cura.** Un rilevatore vero, `instr_step::instruction_is_call`, accanto a
+`step_over_return_addr` — lo stesso posto, perche' una guardia gia' esistente
+pretende che i tre backend condividano questa logica. Su x86 usa
+`rustre_arch_x86::branch::classify_branch(..).is_call()`, che era **gia' una
+dipendenza**: non ho scritto una tabella di opcode, ne ho cablata una che
+esisteva. Su `AArch64` riconosce `BL` e `BLR`, e **rifiuta deliberatamente** di
+rivendicare `BLRAA`/`BLRAB`: dichiararle senza hardware su cui provarle sarebbe
+esattamente il tipo di ipotesi che questa funzione esiste per eliminare.
+
+Le due condizioni ora sono **entrambe** richieste e non sono ridondanti:
+l'opcode decodificato dice che una chiamata e' stata TENTATA, lo stack cresciuto
+dice che e' davvero avvenuta.
+
+### Una guardia che c'era gia' mi ha colto in fallo
+
+Corretti Linux e Windows, la suite e' andata ROSSA su
+`the_logic_shared_by_the_three_backends_stays_identical`:
+
+> `step_over` differs between linux and macos. Either the fix reached one
+> backend and not the other (the recurring defect this guards), or the
+> difference is deliberate.
+
+Aveva ragione. Le alternative erano due e una sola onesta: spostare `step_over`
+in `PER_PLATFORM` avrebbe indebolito la guardia per **nascondere** la mia
+divergenza. Ho propagato la stessa correzione a `macos_debugger.rs` — e'
+manutenzione di logica condivisa, non sviluppo del debugger Apple, e lasciare li'
+lo stesso difetto sapendolo sarebbe stato peggio. E' l'unico motivo per cui quel
+file e' stato toccato.
+
+### La prova piu' forte non e' mia
+
+Il workflow #8 aveva lasciato `step_over_a_stack_decrementing_non_call_must_not_resume`
+come `#[ignore]`, scritto **contro il backend rotto, per fallire**, prima che la
+cura esistesse. Eseguito con `--ignored` contro il backend curato:
+
+    test step_over_a_stack_decrementing_non_call_must_not_resume ... ok
+
+Un oracolo che nessuno ha scritto per adattarsi al fix. L'`#[ignore]` e' stato
+RIMOSSO: un difetto chiuso deve avere un test che gira sempre, altrimenti la
+prossima regressione non trova nessuno ad accoglierla.
+
+Il mio test di unita' `the_prologue_is_not_a_call` ha una **meta' negativa**
+deliberata (`push`, `sub`, `mov`, `jmp`, `ret` NON sono call) oltre a quella
+positiva: un rilevatore che risponde sempre «si'» supererebbe la sola meta'
+positiva.
+
+**Suite:** Windows `2132 passed; 0 failed` · Linux `2110 passed; 0 failed` ·
+il test dv3 prima ignorato `1 passed` · Darwin x86_64 e aarch64 `Finished`,
+zero errori (importante stavolta: la propagazione a macOS si compila solo li').

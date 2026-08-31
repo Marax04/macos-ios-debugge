@@ -253,9 +253,96 @@ pub fn step_over_return_addr(pc: u64, bytes: &[u8]) -> Option<u64> {
     next_pc(native_arch(), pc, bytes)
 }
 
+/// Is the instruction at the start of `bytes` a CALL?
+///
+/// `step_over` needs this and had no way to ask. It decided with
+///
+///     if after.sp >= before.sp { return Ok(event); }
+///
+/// i.e. "the stack grew, so it must have been a call". **The stack pointer is
+/// not a call detector.** A `push %rbp` lowers it exactly like a `call` does,
+/// and so does `sub $N,%rsp` — the two instructions that open every function
+/// compiled at `-O0`. Stepping over either one made the backend believe it had
+/// entered a call, plant the return breakpoint at an address the program would
+/// never reach, and release the process, which then ran to exit:
+///
+///     step_over over `push %rbp` at 0x401869 ran the fixture to EXIT.
+///
+/// (measured 2026-08-31, with no breakpoint planted anywhere).
+///
+/// Note what the old heuristic got right, because it explains why it survived:
+/// every call DOES lower the stack. It is the converse that is false, and the
+/// converse is what the code relied on.
+///
+/// Arch-aware for the same reason [`step_over_return_addr`] is: an x86 opcode
+/// table applied to A64 words answers about bytes that mean something else
+/// entirely. On `AArch64` the calls are `BL` (immediate) and `BLR` (register).
+/// `BLRAA`/`BLRAB` (pointer-authenticated calls) are deliberately NOT matched
+/// here: they are a distinct encoding and claiming them without a test on
+/// hardware that emits them would be a guess, which is the failure this
+/// function exists to end.
+#[must_use]
+pub fn instruction_is_call(bytes: &[u8]) -> bool {
+    match native_arch() {
+        StepArch::X86_64 | StepArch::X86 => {
+            rustre_arch_x86::branch::classify_branch(bytes).is_call()
+        }
+        StepArch::Aarch64 => {
+            let Some(w) = bytes.get(..4) else { return false };
+            let word = u32::from_le_bytes([w[0], w[1], w[2], w[3]]);
+            // BL  imm26 : 100101xx ...
+            // BLR Rn    : 1101011000111111000000xxxxx00000
+            (word & 0xFC00_0000) == 0x9400_0000 || (word & 0xFFFF_FC1F) == 0xD63F_0000
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The instructions that open every `-O0` function must NOT be mistaken
+    /// for calls.
+    ///
+    /// This is the whole defect in one assertion. `step_over` used to decide
+    /// with `after.sp >= before.sp`, and both of these lower the stack exactly
+    /// as a `call` does, so both were treated as calls and the process was
+    /// released to run to exit.
+    ///
+    /// The negative half is the half that matters: a detector that answers
+    /// "yes" to a real call proves nothing on its own — `is_call` returning
+    /// `true` unconditionally would pass that half.
+    #[test]
+    #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+    fn the_prologue_is_not_a_call() {
+        // push %rbp
+        assert!(!instruction_is_call(&[0x55]), "`push %rbp` is not a call");
+        // sub $0x10,%rsp
+        assert!(
+            !instruction_is_call(&[0x48, 0x83, 0xEC, 0x10]),
+            "`sub $0x10,%rsp` is not a call"
+        );
+        // mov %rsp,%rbp — moves nothing onto the stack, must also be no
+        assert!(!instruction_is_call(&[0x48, 0x89, 0xE5]), "`mov %rsp,%rbp` is not a call");
+        // A jump moves `pc` without touching `sp`; the old heuristic got this
+        // one right, so it is kept as a regression witness.
+        assert!(!instruction_is_call(&[0xEB, 0x10]), "a short jump is not a call");
+        // ret
+        assert!(!instruction_is_call(&[0xC3]), "`ret` is not a call");
+
+        // And the positive half, so the detector is not simply "always no".
+        assert!(
+            instruction_is_call(&[0xE8, 0x00, 0x00, 0x00, 0x00]),
+            "`call rel32` IS a call"
+        );
+        assert!(
+            instruction_is_call(&[0xFF, 0xD0]),
+            "`call *%rax` IS a call"
+        );
+
+        // Empty input must not panic and must not claim a call.
+        assert!(!instruction_is_call(&[]), "no bytes is not a call");
+    }
 
     // ── The wiring this module used to lack ─────────────────────────────────
 

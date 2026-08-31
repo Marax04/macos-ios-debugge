@@ -3054,16 +3054,21 @@ impl crate::Debugger for WindowsDebugger {
         }
         let after = self.get_registers(tid).await?;
 
-        // `sp` shrinking is what identifies a `call`: it pushed a return
-        // address. Anything else — including a jump, which moves `pc`
-        // without touching `sp` — was fully executed by the single step.
+        // What identifies a call is the INSTRUCTION, decoded. The stack
+        // pointer is not a call detector: `push %rbp` and `sub $N,%rsp` — the
+        // two instructions that open every `-O0` function — lower it exactly
+        // like a `call` does. Believing them meant planting the return
+        // breakpoint at an address the program never reaches and then
+        // releasing the process, which ran to exit:
         //
-        // A preceding `after.sp >= before.sp && after.pc == return_addr`
-        // branch used to sit here. It was dead: every input satisfying it
-        // also satisfies the `sp` test below, so it could never change the
-        // outcome, and its comment contradicted the one it sat above by
-        // claiming a moved `pc` implies a call. Linux and macOS never had it.
-        if after.sp >= before.sp {
+        //     step_over over `push %rbp` at 0x401869 ran the fixture to EXIT.
+        //
+        // Both conditions are required, and they are not redundant. The
+        // decoded opcode says a call was ATTEMPTED; the stack having grown
+        // says it actually happened. Every call lowers `sp` — that much the
+        // old heuristic had right. It is the converse it relied on, and the
+        // converse is false.
+        if !crate::instr_step::instruction_is_call(&bytes) || after.sp >= before.sp {
             return Ok(event);
         }
 

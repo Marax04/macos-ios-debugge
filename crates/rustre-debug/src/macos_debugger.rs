@@ -3905,7 +3905,21 @@ impl crate::Debugger for MacosDebugger {
         }
         let after = self.get_registers(tid).await?;
 
-        if after.sp >= before.sp {
+        // What identifies a call is the INSTRUCTION, decoded. The stack
+        // pointer is not a call detector: `push %rbp` and `sub $N,%rsp` — the
+        // two instructions that open every `-O0` function — lower it exactly
+        // like a `call` does. Believing them meant planting the return
+        // breakpoint at an address the program never reaches and then
+        // releasing the process, which ran to exit:
+        //
+        //     step_over over `push %rbp` at 0x401869 ran the fixture to EXIT.
+        //
+        // Both conditions are required, and they are not redundant. The
+        // decoded opcode says a call was ATTEMPTED; the stack having grown
+        // says it actually happened. Every call lowers `sp` — that much the
+        // old heuristic had right. It is the converse it relied on, and the
+        // converse is false.
+        if !crate::instr_step::instruction_is_call(&bytes) || after.sp >= before.sp {
             return Ok(event);
         }
         let Some(return_addr) = return_addr else {
