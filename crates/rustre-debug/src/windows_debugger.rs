@@ -3415,6 +3415,43 @@ impl crate::Debugger for WindowsDebugger {
         unsafe {
             CloseHandle(handle);
         }
+
+        // Name the anonymous regions that carry meaning.
+        //
+        // `MemoryMap::name` is documented as "module filename, `[heap]`,
+        // `[stack]`, etc." and until now only the first of those was ever
+        // produced: every region without a backing file came back `None`, so a
+        // caller reading the map saw a hundred nameless private ranges and no
+        // way to tell a thread stack from a scratch allocation. The doc
+        // promised something the code did not do.
+        //
+        // A thread's stack is the region containing that thread's stack
+        // pointer, and both halves of that sentence are already available here
+        // — `threads()` and `get_registers` — so nothing new is queried and
+        // nothing is guessed.
+        //
+        // Deliberately conservative in three ways:
+        //  * a file-backed region is never relabelled; the module filename is
+        //    the better answer and overwriting it would lose information;
+        //  * a thread whose registers cannot be read right now (it is running,
+        //    or it died between the two calls) simply contributes no label.
+        //    An unlabelled region says "not established", which is the honest
+        //    answer and stays distinguishable from a wrong one;
+        //  * the tid goes IN the label. Two threads have two stacks, and
+        //    `[stack]` alone would say the map has one.
+        if let Ok(tids) = self.threads().await {
+            for tid in tids {
+                let Ok(regs) = self.get_registers(tid).await else { continue };
+                let Some(sp) = regs.get("rsp") else { continue };
+                if let Some(m) = maps
+                    .iter_mut()
+                    .find(|m| m.file_path.is_none() && sp >= m.base.0 && sp < m.base.0 + m.size)
+                {
+                    m.name = Some(format!("[stack:{}]", tid.0));
+                }
+            }
+        }
+
         Ok(maps)
     }
 
@@ -5447,6 +5484,95 @@ mod live_tests {
         assert!(
             containing.name.as_deref().is_some_and(|n| n.to_lowercase().contains("ntdll")),
             "expected the ntdll region's name to mention ntdll, got {:?}", containing.name
+        );
+
+        let _ = dbg.kill().await;
+    }
+
+    /// A thread stack must be NAMED in the memory map, and the name must be
+    /// right about which region it is.
+    ///
+    /// `MemoryMap::name` has always been documented as "module filename,
+    /// `[heap]`, `[stack]`, etc.", and only the first of those was ever
+    /// produced: every region without a backing file came back `None`.
+    ///
+    /// THE ORACLE IS NOT `rsp`. The labelling uses each thread'''s stack
+    /// pointer, so asserting that the labelled region contains `rsp` would be
+    /// a tautology satisfied by any region at all — the exact shape this crate
+    /// measured 143 times in its own live tests.
+    ///
+    /// The independent witness is `backtrace()`, which reaches the OUTER
+    /// frames by unwinding `.pdata`, not by reading `rsp`. Those frames''' stack
+    /// pointers are computed from unwind information and must nevertheless
+    /// land inside the very region that was named from frame zero. Two
+    /// different mechanisms agreeing about the same range is evidence; one
+    /// mechanism agreeing with itself is not.
+    #[tokio::test]
+    async fn a_thread_stack_is_named_in_the_memory_map() {
+        let dbg = WindowsDebugger::new();
+        dbg.launch(cmd_launch_options(&["/C", "exit", "0"]))
+            .await
+            .expect("cmd.exe should launch under the debugger");
+
+        let mut stopped = false;
+        for _ in 0..50 {
+            let event = dbg.continue_execution().await.expect("continue_execution should not error");
+            if matches!(event.reason, StopReason::Breakpoint { .. }) {
+                stopped = true;
+                break;
+            }
+            if event.reason.is_exit() {
+                break;
+            }
+        }
+        assert!(stopped, "expected the initial system breakpoint");
+
+        let maps = dbg.memory_maps().await.expect("memory_maps should succeed");
+        let stacks: Vec<&MemoryMap> = maps
+            .iter()
+            .filter(|m| m.name.as_deref().is_some_and(|n| n.starts_with("[stack:")))
+            .collect();
+        assert!(
+            !stacks.is_empty(),
+            "no region was named as a thread stack, so every anonymous region is still nameless"
+        );
+
+        // A stack is private memory: naming a file-backed region would mean the
+        // search matched the wrong thing.
+        for m in &stacks {
+            assert!(
+                m.file_path.is_none(),
+                "a region named {:?} must not be file-backed, got {:?}",
+                m.name, m.file_path
+            );
+            assert!(m.writable, "a thread stack must be writable, {:?} is not", m.name);
+        }
+
+        // The independent half: frames reached by unwinding must live in the
+        // region named from frame zero.
+        let tid = dbg.current_thread().await.expect("a stopped process has a current thread");
+        let frames = dbg.backtrace(tid).await.expect("backtrace should succeed at the initial stop");
+        let named = stacks
+            .iter()
+            .find(|m| m.name.as_deref() == Some(&format!("[stack:{}]", tid.0)))
+            .expect("the thread that is stopped should have its own stack named");
+
+        let mut checked = 0usize;
+        for f in frames.iter().skip(1) {
+            let sp = f.sp.as_u64();
+            if sp == 0 {
+                continue;
+            }
+            assert!(
+                sp >= named.base.as_u64() && sp < named.base.as_u64() + named.size,
+                "frame {} was unwound to sp {:#x}, outside the region named {:?} ({:#x}..{:#x})",
+                f.index, sp, named.name, named.base.as_u64(), named.base.as_u64() + named.size
+            );
+            checked += 1;
+        }
+        assert!(
+            checked > 0,
+            "no outer frame carried a stack pointer, so nothing independent of `rsp` was checked              and this test would have proved only that the labelling agrees with itself"
         );
 
         let _ = dbg.kill().await;

@@ -3535,3 +3535,133 @@ propagare.
 li' dentro**. Il mio `trace` fuori scope e' passato indenne dal verde di Windows
 ed e' stato colto solo da WSL. Un file per piattaforma e' verificato da UNA
 piattaforma sola.
+
+<!-- ULTIMO-RAPPORTO: giro 654 -->
+
+---
+
+## Giro 655 — le regioni anonime della mappa non avevano NOME (divario 5 dell'audit)
+
+**Fail-first, contato prima di toccare il codice.** `MemoryRegionInfo` ha un
+campo `label` e un costruttore `with_label`: **zero** usi in produzione, in tutti
+e tre i backend (`with_label` 0, `label: Some(` 0). Capacita' presente e spenta.
+Il tratto pero' restituisce `MemoryMap`, il cui campo `name` e' documentato come
+«module filename, `[heap]`, `[stack]`, etc.» — e su Windows era popolato SOLO per
+le regioni con un file dietro. Heap, stack, PEB, TEB: tutte `None`.
+
+**La documentazione prometteva qualcosa che il codice non faceva** — di nuovo il
+difetto che sta nella frase, non nel codice.
+
+**Cura.** Lo stack di un thread e' la regione che contiene il suo stack pointer,
+e le due meta' della frase sono gia' disponibili li' dentro (`threads()` e
+`get_registers`): nessuna nuova API, nessuna ipotesi. Conservativa in tre modi
+deliberati:
+- una regione con file dietro **non** viene mai rietichettata (il nome del modulo
+  e' la risposta migliore);
+- un thread i cui registri non sono leggibili adesso semplicemente non contribuisce
+  un'etichetta: una regione senza nome dice «non stabilito», che resta
+  distinguibile da una risposta sbagliata;
+- **il tid sta DENTRO l'etichetta** (`[stack:1234]`): due thread hanno due stack,
+  e `[stack]` da solo direbbe che la mappa ne ha uno.
+
+### L'oracolo NON e' `rsp`, ed e' il punto del giro
+
+Etichetto usando lo stack pointer, quindi verificare che la regione etichettata
+contenga `rsp` sarebbe una **tautologia** soddisfatta da qualunque regione — la
+forma esatta che questa sessione ha gia' misurato 143 volte nei test live.
+
+Il testimone indipendente e' `backtrace()`, che raggiunge i frame ESTERNI
+srotolando `.pdata`, non leggendo `rsp`. Gli sp di quei frame sono calcolati
+dalle informazioni di unwind e devono comunque cadere nella regione nominata a
+partire dal frame zero. Due meccanismi diversi che concordano sullo stesso
+intervallo sono una prova; un meccanismo che concorda con se' stesso no.
+Il test rifiuta esplicitamente di passare se nessun frame esterno ha portato uno
+stack pointer, perche' in quel caso non avrebbe controllato nulla di indipendente.
+
+**Falsificato, e morde.** Mutazione: etichettare la prima regione anonima
+scrivibile ignorando `sp`. Esito: `FAILED. 0 passed; 1 failed`. Ripristinato e
+verificato `cmp`-identico, poi di nuovo verde.
+
+**Suite:** Windows `2131 passed; 0 failed` · Linux `2109 passed; 0 failed` ·
+Darwin x86_64 e aarch64 `Finished`, zero errori.
+
+**MCP:** `debug.memory_maps` inoltra gia' il campo `name`, quindi le etichette
+nuove raggiungono l'API senza modifiche, e la descrizione del tool («Return the
+current virtual memory layout of the traced process») resta vera. Nessuna
+contraddizione fra i due strati da sanare.
+
+---
+
+## Workflow #8 (`wf_ea4995c4-23b`) — 5 agenti su 5, e un DIFETTO VERO del backend
+
+Terzo giro di de-vacuazione, coi file `live_linux_*` non ancora trattati.
+
+### Il risultato che conta: `step_over` scambia un `push` per una `call`
+
+**Rosso misurato, riprodotto senza alcuna trap piantata:**
+
+    step_over over `push %rbp` at 0x401869 ran the fixture to EXIT.
+
+Causa, letta nel codice (`src/linux_debugger.rs`, `step_over`, ~3736-3765): il
+rilevatore di call e'
+
+    if after.sp >= before.sp { return Ok(event); }
+
+**Lo stack pointer non e' un rilevatore di call.** Un `push %rbp` abbassa `rsp`
+esattamente come una `call`, quindi `step_over` lo scambia per una chiamata,
+piazza il breakpoint di ritorno nel posto sbagliato e rilascia il processo, che
+corre fino a `exit`. Colpisce il prologo di OGNI funzione compilata a `-O0`
+(`push %rbp`, `sub $N,%rsp`), quindi non e' un caso di margine.
+
+E' il bersaglio del giro 656.
+
+### I buchi negli oracoli, con i numeri
+
+**La classe (b) e' confermata ovunque: nessun oracolo fissa un INDIRIZZO.**
+- `stepping`: spostare l'ingresso di `callee` o di `main` di 8 byte su confine di
+  istruzione lascia **7 verdi su 7**. Causa: ogni indirizzo passa da `run_to(X)`,
+  che pianta un breakpoint a `X` e poi asserisce che lo stop e' a `X` — vero per
+  ogni `X` possibile.
+- `stepping-limits`: **tutti e sei** confrontano due indirizzi che `objdump`
+  consegna INSIEME, cioe' una relazione e non una posizione; uno spostamento
+  coerente di 8 byte ne lascia verdi 5 su 6.
+
+**Il piu' istruttivo:** `step_over_a_call_does_not_enter_the_callee` **non sa
+distinguere una call da un `mov`**. Spostando l'oracolo sulla coppia di
+istruzioni successiva resta verde, perche' su una non-call `step_over` degenera
+in `single_step`, che atterra ugualmente sull'istruzione dopo. Dimostra «avanza
+di una istruzione», proprieta' che `single_step` ha identica: il test non
+verifica cio' che il suo nome afferma.
+
+**Classe (a), autoesenzione:** in `stepping`, **fixture assente = 7 verdi in
+0,40 s** contro 2,33 s. Lo `[skip]` va su stdout, che libtest nasconde per un
+test che passa: il salto non e' registrato da nulla. In `stepping-limits`
+l'autoesenzione e' stata cercata e **non c'era** (convertiti tutti e cinque gli
+`[skip]` in `panic!`: 6/6 verdi), che e' una risposta altrettanto utile.
+
+**Un verde per coincidenza, non per progetto:** la mutazione `addr+1` restava
+verde solo perche' `insns[1]` e' `push %rbp`, lunga esattamente 1 byte, quindi
+`addr+1` coincideva con la verita'. La variante `+8` lo uccide.
+
+### Un agente ha trovato il difetto nel PROPRIO test e l'ha chiuso
+
+La sua prima versione copriva 6 mutazioni su 8: restavano verdi quelle che
+spostavano l'ingresso di `main`, che **non era fissato da nulla ne' nel file
+assegnato ne' nel suo**. Il quinto test e' nato da quel verde, col metodo giusto:
+*l'ingresso di una funzione si distingue dalla sua seconda istruzione solo
+grazie a qualcosa di ESTERNO alla funzione* — all'ingresso vero `[rsp]` e' un
+indirizzo di ritorno dentro `__libc_start_call_main` (un secondo simbolo,
+indipendente), mentre 8 byte dopo il prologo ha gia' fatto `push %rbp` e `[rsp]`
+e' un indirizzo di stack. Falsificazione finale: **8 rossi su 8**.
+
+### Due note d'ambiente, entrambe colpa mia o dell'infrastruttura
+
+1. **Ho lasciato l'albero condiviso non compilante** mentre gli agenti
+   partivano: `linux_debugger.rs:1529 cannot find value 'trace' in this scope` e
+   `production_sources()` fuori dal modulo — le due correzioni intermedie del
+   giro 654. Due agenti hanno perso tempo e hanno misurato su copia privata,
+   poi rimisurato sull'albero riparato ottenendo risultati identici. **Lezione:
+   non lanciare agenti su un albero mentre ci sto compilando sopra a meta'.**
+2. **`/tmp` e' condiviso fra agenti** e a meta' sessione e' stato azzerato
+   (alberi privati, target dir e backup spariti). Il lavoro d'appoggio degli
+   agenti va sotto `$HOME`, non sotto `/tmp`.
