@@ -32,6 +32,159 @@ use anyhow::{Result as AnyhowResult, anyhow};
 /// A PDB still answers far more — statics, locals, line numbers, anything not
 /// exported — so this is a fallback and not a replacement. The refusal was right
 /// that it had no symbols; it was wrong that there was nothing to say.
+/// Pick the export that a runtime address belongs to: the greatest one at or
+/// below it.
+///
+/// Separated from the I/O so it can be measured. `exports` are `(name, runtime
+/// address)` pairs already rebased into THIS process.
+///
+/// Three rules, and each one is a way to be wrong:
+/// - **at or below, never above.** Naming a frame after the export that follows
+///   it points the reader at code that has not run.
+/// - **the GREATEST such export**, not the first found: a module has hundreds,
+///   and any of them below the address would be "a" match while only the
+///   nearest is the function the address is inside.
+/// - **nothing below means `None`**, not the first export. An address before
+///   every export is not inside any of them, and a name would be invention.
+fn nearest_export_at_or_below(exports: &[(String, u64)], addr: u64) -> Option<(String, u64)> {
+    exports
+        .iter()
+        .filter(|(_, a)| *a <= addr)
+        .max_by_key(|(_, a)| *a)
+        .map(|(n, a)| (n.clone(), addr - a))
+}
+
+/// Name a runtime ADDRESS from the export tables of the loaded modules.
+///
+/// The opposite direction of [`resolve_via_module_exports`], and the one a
+/// backtrace needs. An audit against x64dbg found every frame reported with
+/// `name: null` while x64dbg answered `ntdll.LdrInitializeThunk+1DB` — yet the
+/// data was already in hand on this side: `modules()` gives base, size and path
+/// for every loaded module, and `rustre-loader-pe` parses their export
+/// directories. Only this direction had never been written.
+///
+/// Rebasing is where this goes wrong silently: an export's address in the file
+/// is relative to the image's PREFERRED base, and the module is loaded wherever
+/// the OS put it. Add the runtime base and subtract the file's own, or the
+/// number stays perfectly plausible and names the wrong function.
+///
+/// A PDB answers more — statics, locals, line numbers, anything not exported —
+/// so this is a fallback, applied only where the symbol provider said nothing.
+///
+/// The ORDER matters and is not a preference: exports name only what a module
+/// exports, so a static function would be attributed to the exported symbol
+/// before it — a plausible name for the wrong function. Running last means a
+/// PDB name always wins, and this only fills silence.
+/// Render one stack frame, filling in what the backend left empty.
+///
+/// Extracted from the `debug.backtrace` handler because that handler had grown
+/// past sixty lines between the call it makes and the `"source"` it claims, and
+/// `every_source_claim_names_a_call_this_path_really_makes` said so. The guard
+/// measures prose distance, but the signal it carries is that a handler is
+/// doing too much inline.
+///
+/// Two sources, in order of quality:
+/// 1. the session's loaded symbols (CodeView/PDB), which know statics, locals
+///    and line numbers;
+/// 2. the module export tables, which need no PDB at all — the fallback that an
+///    audit against x64dbg found missing, with every frame reported `name: null`
+///    while x64dbg answered `ntdll.LdrInitializeThunk+1DB`.
+fn enrich_frame(
+    f: &rustre_debug::StackFrame,
+    syms: Option<&rustre_debug::codeview::CodeViewProvider>,
+    guard: &LiveSession,
+) -> Value {
+    // The lookups below come from the `SymbolProvider` trait, which the handler
+    // imported locally; this function lives outside that scope.
+    use rustre_debug::codeview::SymbolProvider;
+
+                        // Enrich frames the backend couldn't name using the
+                        // session's loaded CodeView symbols: nearest symbol for
+                        // the name/offset, line table for source_file/line.
+                        let mut name = f.function_name.clone();
+                        let mut offset = f.offset;
+                        let mut source_file = f.source_file.clone();
+                        let mut source_line = f.source_line;
+                        if let Some(p) = syms {
+                            let pc = f.pc.as_u64();
+                            // Name and symbol-relative offset are two separate
+                            // facts, and the backend supplies them
+                            // independently: it can name a frame while leaving
+                            // `offset` empty. Gating the symbol lookup on
+                            // `name.is_none()` alone therefore meant a named
+                            // frame could NEVER acquire an offset — the field
+                            // was permanently null on the live path. Look up
+                            // when either is missing, and fill only what is.
+                            if (name.is_none() || offset.is_none())
+                                && let Some(s) = p.lookup_nearest(pc) {
+                                    if offset.is_none() {
+                                        offset = Some(pc.saturating_sub(s.address));
+                                    }
+                                    if name.is_none() {
+                                        name = Some(s.name);
+                                    }
+                                }
+                            if source_file.is_none()
+                                && let Some(loc) = p.source_line_for_address(pc) {
+                                    source_file = Some(loc.file);
+                                    source_line = Some(loc.line);
+                                }
+                        }
+                        // Last resort, after the symbol provider and only where
+                        // it said nothing: see `name_address_via_module_exports`.
+                        if name.is_none()
+                            && let Some((module_name, sym, off)) =
+                                name_address_via_module_exports(&guard, f.pc.as_u64())
+                        {
+                            name = Some(format!("{module_name}!{sym}"));
+                            if offset.is_none() {
+                                offset = Some(off);
+                            }
+                        }
+                        json!({
+                            "frame": f.index,
+                            "addr": f.pc.as_u64(),
+                            "sp": f.sp.as_u64(),
+                            "name": name,
+                            "module": f.module,
+                            "offset": offset,
+                            // Nullable on purpose: `None` is a real answer,
+                            // and 0 would re-collapse it (see the test).
+                            "fp": f.fp.map(|a| a.as_u64()),
+                            "source_file": source_file,
+                            "source_line": source_line
+                        })
+                    
+}
+
+fn name_address_via_module_exports(
+    sess: &LiveSession,
+    addr: u64,
+) -> Option<(String, String, u64)> {
+    let mods = block_on(sess.dbg.modules()).ok()?;
+    let m = mods.iter().find(|m| {
+        let base = m.base.as_u64();
+        addr >= base && addr < base.saturating_add(m.size)
+    })?;
+    if m.path.is_empty() {
+        return None;
+    }
+    let bytes = std::fs::read(&m.path).ok()?;
+    let pe = rustre_loader_pe::PeInfo::parse(&bytes).ok()?;
+    let base = m.base.as_u64();
+    let exports: Vec<(String, u64)> = pe
+        .exports
+        .iter()
+        .filter(|e| e.forwarder.is_none())
+        .filter_map(|e| {
+            let n = e.name.clone()?;
+            Some((n, base.saturating_add(e.address.saturating_sub(pe.image_base))))
+        })
+        .collect();
+    let (name, offset) = nearest_export_at_or_below(&exports, addr)?;
+    Some((m.name.clone(), name, offset))
+}
+
 fn resolve_via_module_exports(sess: &mut LiveSession, name: &str) -> Option<(String, u64)> {
     let mods = block_on(sess.dbg.modules()).ok()?;
     for m in &mods {
@@ -1597,53 +1750,8 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     let frames = block_on(guard.dbg.backtrace(guard.tid)).map_err(|e| anyhow!("{e}"))?;
                     let cap = guard.dbg.backtrace_frame_cap();
                     let syms = guard.symbols.as_deref();
-                    let json_frames: Vec<Value> = frames.iter().map(|f| {
-                        // Enrich frames the backend couldn't name using the
-                        // session's loaded CodeView symbols: nearest symbol for
-                        // the name/offset, line table for source_file/line.
-                        let mut name = f.function_name.clone();
-                        let mut offset = f.offset;
-                        let mut source_file = f.source_file.clone();
-                        let mut source_line = f.source_line;
-                        if let Some(p) = syms {
-                            let pc = f.pc.as_u64();
-                            // Name and symbol-relative offset are two separate
-                            // facts, and the backend supplies them
-                            // independently: it can name a frame while leaving
-                            // `offset` empty. Gating the symbol lookup on
-                            // `name.is_none()` alone therefore meant a named
-                            // frame could NEVER acquire an offset — the field
-                            // was permanently null on the live path. Look up
-                            // when either is missing, and fill only what is.
-                            if (name.is_none() || offset.is_none())
-                                && let Some(s) = p.lookup_nearest(pc) {
-                                    if offset.is_none() {
-                                        offset = Some(pc.saturating_sub(s.address));
-                                    }
-                                    if name.is_none() {
-                                        name = Some(s.name);
-                                    }
-                                }
-                            if source_file.is_none()
-                                && let Some(loc) = p.source_line_for_address(pc) {
-                                    source_file = Some(loc.file);
-                                    source_line = Some(loc.line);
-                                }
-                        }
-                        json!({
-                            "frame": f.index,
-                            "addr": f.pc.as_u64(),
-                            "sp": f.sp.as_u64(),
-                            "name": name,
-                            "module": f.module,
-                            "offset": offset,
-                            // Nullable on purpose: `None` is a real answer,
-                            // and 0 would re-collapse it (see the test).
-                            "fp": f.fp.map(|a| a.as_u64()),
-                            "source_file": source_file,
-                            "source_line": source_line
-                        })
-                    }).collect();
+                    let json_frames: Vec<Value> =
+                        frames.iter().map(|f| enrich_frame(f, syms, &guard)).collect();
                     return Ok(json!({
                         "session_id": session_id,
                         "frames": json_frames,
@@ -7756,11 +7864,15 @@ mod tests {
         // that matches itself is green for the wrong reason. That helper exists
         // precisely because this trap was hit three times before it was written
         // (iteration 634), and it has now caught its own author.
+        // Anchored on `enrich_frame`, not on the tool: the rendering moved
+        // there when the handler was split (the proximity guard flagged that it
+        // had grown too long). A guard anchored on the old site would have gone
+        // green by looking at the wrong code.
         let src = production_only(include_str!("debug.rs"));
         let i = src
-            .find("\"debug.backtrace\",")
-            .expect("the backtrace tool must exist");
-        let body = &src[i..(i + 6000).min(src.len())];
+            .find("fn enrich_frame(")
+            .expect("the frame renderer must exist");
+        let body = &src[i..(i + 4000).min(src.len())];
         assert!(
             body.contains("\"fp\": f.fp.map(|a| a.as_u64())"),
             "the live renderer must publish `fp` as a nullable field: rendering it              as 0 would re-collapse the distinction the backend keeps"
@@ -7771,6 +7883,52 @@ mod tests {
         );
     }
 
+
+    /// Naming a frame means the export it is INSIDE, not the nearest one in any
+    /// direction.
+    ///
+    /// The audit against x64dbg found every backtrace frame with `name: null`
+    /// while x64dbg answered `ntdll.LdrInitializeThunk+1DB`. The data was
+    /// already in hand — `debug.modules` reports base and path for every loaded
+    /// module, and `rustre-loader-pe` parses their export tables, which
+    /// `resolve_via_module_exports` already uses for the NAME → ADDRESS
+    /// direction. Only the opposite direction was missing.
+    ///
+    /// This pins the choice rule down, because each way of getting it wrong
+    /// produces a plausible name rather than an error.
+    #[test]
+    fn a_frame_is_named_after_the_export_it_is_inside() {
+        let exports = vec![
+            ("LdrInitializeThunk".to_string(), 0x1000_u64),
+            ("RtlUserThreadStart".to_string(), 0x2000_u64),
+            ("NtCreateFile".to_string(), 0x3000_u64),
+        ];
+
+        // Inside the second one.
+        assert_eq!(
+            nearest_export_at_or_below(&exports, 0x21DB),
+            Some(("RtlUserThreadStart".to_string(), 0x1DB)),
+            "the frame is inside RtlUserThreadStart, at +0x1DB"
+        );
+        // Exactly ON an export is offset zero, not the previous one.
+        assert_eq!(
+            nearest_export_at_or_below(&exports, 0x3000),
+            Some(("NtCreateFile".to_string(), 0))
+        );
+        // The GREATEST below, not the first that happens to be below.
+        assert_eq!(
+            nearest_export_at_or_below(&exports, 0x2FFF),
+            Some(("RtlUserThreadStart".to_string(), 0xFFF)),
+            "0x1000 is also below 0x2FFF; the nearest one is the answer"
+        );
+        // Below everything is NOT the first export: it is no answer at all.
+        assert_eq!(
+            nearest_export_at_or_below(&exports, 0x0FFF),
+            None,
+            "an address before every export is inside none of them, and a name              would be invention"
+        );
+        assert_eq!(nearest_export_at_or_below(&[], 0x1000), None);
+    }
 
     /// A tool that reports PROCESS STATE must refuse without a live session,
     /// never invent it.

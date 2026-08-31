@@ -2126,6 +2126,169 @@ dall'ordine e' una regressione in attesa**. Annotato come fronte aperto.
 | Linux `--lib` | **2108 / 0** |
 | Darwin x2 | **0 errori** (sola compilazione) |
 
+
+---
+
+## ⭐⭐ WORKFLOW LINUX #5 — LA FALSIFICAZIONE — il risultato piu' importante della sessione
+
+Un agente ha cambiato **un solo dato di verita' esterna** in ciascuno dei 20 file
+live esistenti e ha misurato quanti test cadono. Ripristino verificato: i 20 file
+sono **byte-identici** al backup (`cmp` su tutti e 20).
+
+### Il numero
+
+| | |
+|---|---|
+| test live totali | **230** |
+| attivi (non `#[ignore]`) | **211** |
+| **che MORDONO davvero** | **68** |
+| **VACUI sul dato mutato** | **143** |
+
+Avvertenza dell'agente, corretta: «vacuo» significa *non morde su QUEL dato*, non
+«inutile». `read_memory_at_an_unmapped_address_fails` non deve dipendere da un
+indirizzo di simbolo. **I casi gravi sono quelli il cui NOME afferma la
+dipendenza.**
+
+### I tre file gravi, con la causa LETTA
+
+**1. `live_linux_breakpoints.rs` — 18 vacui su 20. Il ciclo e' chiuso su se
+stesso.** `run_until_breakpoint(dbg, addr, ..)` **FILTRA** il flusso degli stop
+sull'indirizzo che il test poi asserisce: `assert_eq!(address, fx.hot)` e' una
+**tautologia**. Qualunque indirizzo mappato, eseguibile e attraversato la
+soddisfa. Forzando ogni simbolo a risolvere a `main`, 20 test su 20 restano
+verdi. Fra i vacui:
+`a_planted_breakpoint_stops_the_process_and_is_reported_as_a_breakpoint`,
+`set_breakpoint_writes_the_trap_into_the_live_text_segment`,
+`enable_breakpoint_replants_the_trap_after_a_disable`.
+
+**2. `live_linux_load.rs` — 8 su 8 vacui.** Stesso helper, stessa causa. Incluso
+`two_hundred_breakpoints_plant_and_remove_restore_the_text_byte_for_byte`.
+
+**3. `live_linux_elf_symbols.rs` — 9 su 9 vacui: L'ORACOLO E' DECORATIVO.**
+`Gap::expected` — il conteggio di `nm`, unico oracolo indipendente del file —
+compare **solo dentro argomenti di `format!`, in nessuna asserzione**. Le
+asserzioni confrontano `obtained` con `reachable`, **entrambi calcolati dagli
+stessi byte**. Forzando `nm_count` a 0, restano 9/9 verdi.
+
+### ⚠ QUESTO INDEBOLISCE IL MIO GIRO 648, e va detto
+
+Al §648 ho dichiarato `parse_elf` corretto «verificato contro `nm` su cinque
+forme di ELF». **Quei test non confrontavano con `nm`.** La capacita' e' reale —
+il guard NUOVO dell'agente, `parse_elf_resolves_every_name_nm_defines`, rende
+`nm` portante e **passa**, risolvendo tutti e 28 i nomi — ma la mia frase
+descriveva una verifica che non stava avvenendo. Ho creduto a un verde che non
+guardava l'oggetto.
+
+### La cura dell'agente: un oracolo che nessuna manomissione puo' falsificare
+
+Il perno e' **contare gli attraversamenti SENZA filtrare sull'indirizzo**: la
+fixture chiama `hot` 5 volte, `warm` 1, `cold` 0. La tripla **(5,1,0)** e'
+riprodotta da una sola assegnazione indirizzi→nomi, e nessuna manomissione della
+tabella dei simboli puo' falsificarla. Otto test-guardia, tutti falsificati a
+loro volta: 5 mutazioni, **7 su 8 mordono**.
+
+**L'ottavo e' andato rosso alla PRIMA esecuzione trovando un difetto in se
+stesso**: `pgrep -f falsif` intercettava il binario di test di cargo
+(`live_linux_falsification-<hash>`) invece della fixture. Corretto in
+`pgrep -x falsifwf5`.
+
+**E un'asserzione debole trovata cosi' e sostituita**: la prima versione di
+`parse_elf_resolves_every_name_nm_defines` confrontava CONTEGGI
+(`obtained >= nm_count`), e forzare l'oracolo da 28 a 31 la lasciava verde
+perche' `parse_elf` ne restituisce comodamente di piu'. **Un conteggio e' lasco,
+l'insieme dei NOMI no.**
+
+### Stato finale delle 21 suite: 21 su 21 verdi, 0 rossi, 0 orfani
+
+### Lezione, da applicare sempre
+
+Un test che costruisce l'aspettativa **dallo stesso dato che verifica** non
+verifica: e' un'identita' scritta in due righe. La falsificazione — cambiare un
+dato e pretendere il rosso — e' l'unico modo per distinguerla da una misura.
+Vedi [[feedback_verde_non_significa_verificato]] e
+[[feedback_guardie_che_si_rompono_da_sole]].
+
+
+---
+
+## Iterazione 650 — 2026-08-31 — il backtrace ora NOMINA i frame
+
+Primo dei sei divari dell'audit x64dbg: ogni frame riportato con `name: null`
+mentre x64dbg rispondeva `ntdll.LdrInitializeThunk+1DB`.
+
+### Lo schema dell'audit, confermato ancora una volta
+
+**Il pezzo difficile c'era gia'.** `resolve_via_module_exports` legge le export
+table dei moduli caricati e le riallinea alla base di runtime — che e' la parte
+dove si sbaglia, perche' un RVA sommato alla base sbagliata da' un numero
+plausibile che non punta a niente. Ma serviva solo per **nome → indirizzo**. Il
+verso che il backtrace richiede, **indirizzo → nome**, non era mai stato scritto.
+
+Esisteva perfino un test, `resolve_symbol_falls_back_to_the_exports_already_mapped`,
+che elencava «quattro pezzi presenti e non uniti».
+
+### La regola di scelta, e le tre forme di errore che fissa
+
+`nearest_export_at_or_below` non e' banale, e ogni modo di sbagliarla produce un
+NOME PLAUSIBILE invece di un errore:
+- **al di sotto o uguale, mai al di sopra**: nominare un frame con l'export che
+  lo SEGUE indica codice che non e' stato eseguito;
+- **il PIU' GRANDE fra quelli sotto**, non il primo trovato: un modulo ne ha
+  centinaia, e tutti quelli sotto sono «un» match mentre solo il piu' vicino e'
+  la funzione in cui l'indirizzo si trova;
+- **niente sotto ⇒ `None`**, non il primo export: un indirizzo che precede ogni
+  export non e' dentro nessuno di essi, e un nome sarebbe invenzione.
+
+Filtrati anche i **forwarder**: il loro indirizzo non e' codice di questo modulo
+e userebbe l'ancora sbagliata per i frame vicini.
+
+### L'ORDINE non e' una preferenza
+
+Il ripiego gira **dopo** il fornitore di simboli e solo dove quello ha taciuto.
+Le export nominano solo cio' che un modulo esporta, quindi una funzione statica
+verrebbe attribuita all'export che la precede — nome plausibile, funzione
+sbagliata. Per ultimo significa che un nome da PDB vince sempre.
+
+### ⭐ Il guard di prossimita' mi ha fermato per la TERZA volta, e la terza ho capito
+
+Le prime due volte ho spostato prosa. La terza ho letto il messaggio:
+`line 1736: the reply claims Debugger::backtrace but nothing in the preceding 60
+lines calls it`. La chiamata era a 1668, la dichiarazione a 1736: **68 righe**.
+
+Il guard misura la prosa ma **segnalava altro**: il gestore era cresciuto troppo
+perche' ci stavo infilando tutta la logica di arricchimento. Cura giusta:
+estrarre **`enrich_frame`** in una funzione con nome e doc. Ora il gestore fa tre
+righe e la gerarchia delle fonti ha una sede unica.
+
+Le prime due volte ho curato il sintomo.
+
+### ⭐ E il MIO guard e' andato rosso PER IL MOTIVO GIUSTO
+
+Il controllo sui sorgenti del `fp` cercava entro 6000 caratteri dal tool
+`debug.backtrace`; spostato il rendering, non guardava piu' l'oggetto.
+
+**Ma l'esito interessante e' il contrario**: con una finestra piu' larga sarebbe
+rimasto **VERDE continuando a guardare codice sbagliato**. La differenza fra
+«mi avverte» e «mi mente» dipendeva solo da quanti caratteri avevo scelto.
+Riancorato a `fn enrich_frame(` — al NOME della cosa sorvegliata, non alla sua
+posizione.
+
+### Tre correzioni di tipo, tutte figlie dell'estrazione
+
+Riferimento condiviso invece di esclusivo (la funzione legge soltanto), tipo
+concreto `CodeViewProvider` invece di oggetto-trait, e `use SymbolProvider` reso
+esplicito perche' il gestore lo importava localmente. Errori a rischio nullo — il
+compilatore li prende tutti — ma sono il prezzo prevedibile di un'estrazione.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| MCP | **410 / 1** — passati 409 → 410, l'1 e' il cricchetto |
+| Windows `--lib` | **2127 / 0** |
+| Linux `--lib` | **2108 / 0** |
+| Darwin x2 | **0 errori** (sola compilazione) |
+
 ---
 ---
 
