@@ -15207,6 +15207,79 @@ fn ";
         }
     }
 
+    /// Every `#[cfg(feature = "...")]` must name a feature this crate DECLARES.
+    ///
+    /// A gate on a feature that does not exist can never be true, so the code
+    /// behind it is unreachable forever — and nothing says so at the call site.
+    /// Worse, the crate documentation ADVERTISES it: the module doc on
+    /// `nl_query` tells the reader that "feature `nl-query-llm` routes unmatched
+    /// questions to the Anthropic API", a capability that could not be switched
+    /// on by any means.
+    ///
+    /// `cargo` does warn (`unexpected cfg condition value`), but a warning in a
+    /// build that emits seventy of them is not a signal anyone reads. A test is.
+    ///
+    /// This is the "absence disguised as an answer" family in its manifest
+    /// form: the manifest answers "no such feature" while the docs answer "yes,
+    /// there is one", and the compiler picks the first.
+    #[test]
+    fn every_feature_gate_names_a_feature_the_manifest_declares() {
+        const MANIFEST: &str = include_str!("../Cargo.toml");
+
+        // The `[features]` table, if any: names are the keys before `=`.
+        let declared: Vec<String> = MANIFEST
+            .lines()
+            .skip_while(|l| l.trim() != "[features]")
+            .skip(1)
+            .take_while(|l| !l.trim_start().starts_with('['))
+            .filter_map(|l| l.split('=').next())
+            .map(|k| k.trim().to_string())
+            .filter(|k| !k.is_empty() && !k.starts_with('#'))
+            .collect();
+
+        let mut missing: Vec<String> = Vec::new();
+        let mut inspected = 0usize;
+        for (name, src) in super::tests_expanded::production_sources() {
+            for line in src.lines() {
+                // Only real attributes. The first version of this guard matched
+                // any `feature = "` in any text and reported two false
+                // positives: `target_feature = "avx2"` — a TARGET feature, which
+                // has nothing to do with the manifest — and a fragment of prose
+                // in a doc comment. The first defect a new measurement finds is
+                // usually in the measurement.
+                let t = line.trim_start();
+                if !t.starts_with("#[cfg(") && !t.starts_with("#[cfg_attr(") {
+                    continue;
+                }
+                let mut rest = line;
+                while let Some((before, after)) = rest.split_once("feature = \"") {
+                    rest = after;
+                    // `target_feature` is not a Cargo feature.
+                    if before.ends_with("target_") {
+                        continue;
+                    }
+                    let Some((feat, _)) = after.split_once('"') else { continue };
+                    inspected += 1;
+                    if !declared.iter().any(|d| d == feat) {
+                        missing.push(format!("{name}: gate on undeclared feature `{feat}`"));
+                    }
+                }
+            }
+        }
+        assert!(
+            inspected > 0,
+            "the guard inspected no feature gate at all — it is green for the              wrong reason"
+        );
+        missing.sort();
+        missing.dedup();
+        assert!(
+            missing.is_empty(),
+            "code gated on features the manifest does not declare is unreachable              forever:
+{missing:#?}
+declared: {declared:?}"
+        );
+    }
+
     /// The DISARM path must not read an absent `dr7` as "nothing was armed".
     ///
     /// Twin of the re-arm defect closed in iteration 641, in the same three

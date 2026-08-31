@@ -38,6 +38,7 @@ thiserror = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+reqwest = { workspace = true, optional = true, features = ["blocking"] }
 tracing = { workspace = true }
 rayon = { workspace = true }
 # opt-2: SIMD-accelerated byte search via memchr (AVX2/SSE4.2/NEON at runtime)
@@ -52,6 +53,19 @@ roaring = "0.10"
 lru = "0.12"
 # safety: zeroize register snapshots to prevent sensitive data leaks
 zeroize = { workspace = true }
+
+[features]
+# Routes questions `nl_query` cannot match to the Anthropic API.
+#
+# The gate existed in `nl_query.rs` and the module documentation advertised it,
+# but the manifest declared no feature at all: `#[cfg(feature = "nl-query-llm")]`
+# could never be true, so that code was unreachable by any means while the docs
+# promised it worked. Declaring it here is what makes the promise keepable.
+#
+# `reqwest` is pulled with `blocking` because `llm_translate` is synchronous on
+# purpose (it must be callable from non-async contexts); the workspace
+# dependency does not carry that feature.
+nl-query-llm = ["dep:reqwest"]
 
 [dev-dependencies]
 tempfile = { workspace = true }

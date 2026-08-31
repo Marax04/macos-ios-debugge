@@ -1474,6 +1474,143 @@ che scatta sul punto sbagliato non prova nulla: cfr.
 2. `apple_end_to_end` 2/4 rosso sotto Linux — percorso Apple, sotto sospensione
    iOS, registrato come rosso NOTO.
 
+
+---
+
+## Iterazione 646 — 2026-08-31
+
+### Difetto: una feature DOCUMENTATA che non poteva essere accesa in alcun modo
+
+`nl_query.rs` gatava tre blocchi su `#[cfg(feature = "nl-query-llm")]`, e la doc
+del modulo (`lib.rs:275`) diceva al lettore che quella feature «routes unmatched
+questions to the Anthropic API».
+
+Ma `crates/rustre-debug/Cargo.toml` **non aveva alcuna sezione `[features]`**.
+Il gate non poteva essere vero per nessuna via: quel codice era **irraggiungibile
+per sempre** mentre i documenti lo davano per disponibile. E non sarebbe nemmeno
+compilato se qualcuno ci avesse provato, perche' usa `reqwest::blocking` e la
+dipendenza del workspace non porta quella feature.
+
+E' la famiglia «assenza spacciata per risposta» nella sua forma di manifest: il
+manifest risponde «non esiste», la doc risponde «esiste», e il compilatore da'
+retta al primo.
+
+### Cablato, non zittito (regola dell'utente sui warning)
+
+`[features] nl-query-llm = ["dep:reqwest"]` piu' `reqwest` opzionale con
+`features = ["blocking"]`. **E verificato che ora si ACCENDA davvero**:
+`cargo check --release -p rustre-debug --features nl-query-llm` → `Finished`,
+zero errori. Dichiarare una feature che non compila sarebbe stato solo spostare
+la bugia.
+
+### La guardia e' generale, e mi ha corretto subito
+
+`every_feature_gate_names_a_feature_the_manifest_declares` legge `Cargo.toml` con
+`include_str!` e controlla ogni gate delle sorgenti di produzione.
+
+**Prima versione: 3 bersagli, di cui 2 FALSI POSITIVI MIEI.**
+- `watchpoint_engine.rs: avx2` — e' `target_feature`, una feature del PROCESSORE,
+  che col manifest non c'entra nulla.
+- `lib.rs: '...'` — un frammento di prosa dentro un commento.
+
+Corretta: solo righe che iniziano con `#[cfg(`/`#[cfg_attr(`, ed esclusione
+esplicita di `target_feature`. Aggiunta l'asserzione `inspected > 0`, cosi' la
+guardia non puo' diventare verde perche' non guarda niente — cfr.
+[[feedback_guardie_che_si_rompono_da_sole]].
+
+Dopo la correzione resta **un solo bersaglio vero**, ed e' quello chiuso.
+
+### I 73 warning, classificati
+
+| classe | quanti |
+|---|---|
+| `usage of an unsafe block` (manca il commento SAFETY) | **69** |
+| `unexpected cfg condition value: nl-query-llm` | **3** ← chiusa qui |
+| `unused import: Seek` (`windbg_ttd_backend.rs:38`) | 1 |
+
+I 69 non sono rumore: in un debugger che chiama Win32 e ptrace grezzi, ogni
+blocco `unsafe` senza una motivazione scritta e' una promessa non verificata.
+Fronte aperto.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows `--lib` | **2126 / 0** |
+| Linux `--lib` | **2108 / 0** |
+| Darwin x2 | **0 errori** (sola compilazione) |
+| `--features nl-query-llm` | **compila** |
+
+
+---
+
+## WORKFLOW LINUX #2 — 2026-08-31 — 5 agenti su 5, zero errori, 46 test live
+
+Aree: ciclo di vita, segnali/ragioni di arresto, simboli, espressioni, mappe e
+moduli. Cinque file nuovi in `crates/rustre-debug/tests/`.
+
+### ⚠ TRE STUB nei provider di simboli — capacita' DICHIARATE e ASSENTI
+
+Non sono difetti di comportamento: sono funzioni che esistono, sono chiamabili,
+e non fanno nulla. E' la classe piu' grave trovata finora.
+
+1. **`ElfSymbolProvider::parse_elf` e' uno STUB che scarta OGNI simbolo.**
+   Test `parse_elf_should_load_the_symbols_a_real_elf_contains`, `#[ignore]`.
+2. **`DwarfSymbolProvider::load` e' uno STUB che restituisce un provider vuoto.**
+   Test `dwarf_provider_load_should_read_debug_info_from_the_binary`, `#[ignore]`.
+3. **Il parser del programma di riga RIFIUTA DWARF 5** — che e' il default dei
+   compilatori attuali. Test `dwarf5_line_program_should_not_parse_to_zero_rows`,
+   `#[ignore]`.
+
+Il terzo workflow (`w12efkit6`) ha due agenti dedicati a misurare il divario
+ESATTO: quanti simboli dovrebbero uscire da ogni forma di ELF (PIE, no-PIE,
+strippato, con e senza `-g`) confrontando con `nm`, e quante righe escono da
+`-gdwarf-4` contro `-gdwarf-5`.
+
+### DIFETTO — `current_thread()` sopravvive alla fine della sessione
+
+`kill()` e `detach()` azzerano pid, cmd_tx, breakpoints, hit_counts, disabled,
+conditions, pending, ignore_counts, thread_filters, hw_watchpoints — ma **non
+`current_tid`**. L'unico percorso che lo pulisce e' `retire_session_after_exit()`,
+cioe' la sola uscita naturale del tracee.
+
+Risultato: l'istanza si CONTRADDICE. `is_attached()` risponde gia' `false` mentre
+`current_thread()` restituisce il tid del processo morto — e quel tid e' il
+default su cui poggiano le chiamate di registri e stepping.
+
+Rosso misurato: `current_thread answered ThreadId(15126) for a process killed
+moments ago; the session is over and the only honest answer is NotAttached`.
+
+**Misurato da me: il difetto e' nei TRE backend** (linux/windows/macos), in
+nessuno dei quali `kill`/`detach` tocca `current_tid`. Tre punti.
+
+### Un agente ha chiuso con ZERO difetti del backend, ed e' un buon segno
+
+L'agente sui segnali: 8 test verdi, nessun difetto. I suoi 5 rossi iniziali erano
+errori del TEST, non del codice, e li ha lasciati scritti nei doc comment perche'
+sono trappole vere:
+- un tracee appena lanciato e' fermo al trap di `exec` e non ha ancora eseguito
+  nulla di `main`: un segnale inviato subito arriva PRIMA che il programma
+  installi il gestore, e uccide per azione predefinita;
+- il backend fa `waitpid(-1)`, quindi in un binario di test unico il figlio
+  lasciato da un test precedente viene consegnato al debugger del test
+  successivo — i test ora filtrano su `ev.pid`.
+
+### Esiti dichiarati dagli agenti (da verificare dal coordinatore)
+
+| file | esito |
+|---|---|
+| `live_linux_lifecycle.rs` | 13 ok, 1 ignore |
+| `live_linux_signals.rs` | 8 ok |
+| `live_linux_symbols.rs` | 6 ok, 3 ignore (i tre stub) |
+| `live_linux_expressions.rs` | 9 test |
+| `live_linux_maps_modules.rs` | 6 test |
+
+### WORKFLOW LINUX #3 lanciato subito dopo (`w12efkit6`)
+
+Aree: divario esatto di `parse_elf`, divario DWARF 4 contro DWARF 5, heap,
+casi limite di lettura/scrittura memoria, casi limite dello stepping.
+
 ---
 ---
 
