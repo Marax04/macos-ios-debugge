@@ -2448,6 +2448,84 @@ guardava byte condivisi da tutte le funzioni, l'altra una cella che due simboli
 diversi riproducono. Nessuna delle due sarebbe mai stata scoperta da un run
 verde.
 
+
+---
+
+## Iterazione 652 — 2026-08-31 — `LibraryLoad` dice finalmente QUALE libreria
+
+Terzo dei sei divari dell'audit. **Rosso misurato: `left: 0, right: 7`** — sette
+librerie caricate, zero nominate.
+
+### Perche' era sopravvissuto a piu' tentativi di cura
+
+Non era «un campo aggiunto e dimenticato», come sembrava da fuori:
+`resolve_library_path` **esiste ed e' collegata in CINQUE punti** dell'MCP. E il
+backend riempie gia' il nome sul lato asincrono in `arm_pending_breakpoints`, con
+tanto di guardia che lo pretende.
+
+**La ricerca era corretta, la FONTE sbagliata.** Entrambe cercano il modulo per
+base in `modules()`, ma a `LOAD_DLL_DEBUG_EVENT` il loader **non ha ancora
+registrato l'immagine**, quindi toolhelp non la elenca. Nessuna delle due poteva
+funzionare, e nessuna delle due era scritta male.
+
+### Il dato era in mano, e veniva buttato via
+
+Windows consegna `hFile` **insieme all'evento**, proprio perche' in quell'istante
+e' l'unica cosa che nomina l'immagine. Questo backend quell'handle lo prendeva
+gia' — `event_file_handle` — **solo per chiuderlo**, in una correzione precedente
+che tappava una perdita di handle. Lo schema dell'audit nella sua forma piu'
+pura: il datum preso in mano e non interrogato.
+
+Cura: `GetFinalPathNameByHandleW` sull'handle, **fuori** da `classify_event`,
+nel ciclo di debug dove l'handle e' gia' posseduto. Prefisso `\?\` rimosso: e'
+una fuga per la lunghezza del path, non parte del nome.
+
+### ⚠ Il rischio dichiarato PRIMA, e la misura che lo chiude
+
+La guardia `classify_event_does_not_query_the_traced_process` fu stabilita **per
+bisezione** all'iterazione 504: una query psapi in quella finestra ruppe il
+rilevamento dei watchpoint hardware, e ogni hit tornava come single step perche'
+`DR6` non risultava piu' impostato.
+
+Il mio argomento — un handle di FILE non e' il processo tracciato: niente handle
+di processo, niente psapi, niente toolhelp — e' **un argomento, non una prova**.
+Ho scritto nel commento che il controllo che conta sono i test sui watchpoint, e
+li ho eseguiti in modo esplicito:
+
+```
+a_debug_register_hit_is_reported_as_a_breakpoint_not_a_single_step ... ok
+hardware_debug_registers_round_trip ... ok
+every_backend_programs_the_debug_registers_for_watchpoints ... ok
+a_disarm_that_cannot_clear_the_debug_registers_does_not_report_success ... ok
+```
+
+**Otto controlli sui registri di debug, tutti verdi.** La distinzione ora e'
+misurata sul test che la puo' falsificare, non solo ragionata.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| Windows `--lib` | **2129 / 0** |
+| Linux `--lib` | **2108 / 0** |
+| Darwin x2 | **0 errori** (sola compilazione) |
+| MCP | **410 / 1** — l'1 e' il cricchetto |
+
+### Stato dei sei divari dell'audit x64dbg
+
+| # | divario | stato |
+|---|---|---|
+| 1 | backtrace non simbolizzato | **CHIUSO** §650 |
+| 2 | `debug.threads` 1 campo contro 9 | **CHIUSO** §651 (6 campi) |
+| 3 | `LibraryLoad` con path vuoto | **CHIUSO** §652 |
+| 4 | `breakpoint_id: null` per i watchpoint | aperto |
+| 5 | mappa di memoria senza semantica | aperto |
+| 6 | disassemblatore live assente | aperto |
+
+Piu' l'avvertimento sui ~30 tool mai provati dal vivo: **superato** dal workflow
+#4, che ha misurato la famiglia TTD su processo vero (20 capacita' reali, 3
+difetti con nome e rosso).
+
 ---
 ---
 

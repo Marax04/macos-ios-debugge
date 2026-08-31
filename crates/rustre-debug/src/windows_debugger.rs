@@ -40,6 +40,7 @@ use winapi::um::tlhelp32::{
     CreateToolhelp32Snapshot, MODULEENTRY32W, Module32FirstW, Module32NextW, TH32CS_SNAPMODULE,
     TH32CS_SNAPMODULE32, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
 };
+use winapi::um::fileapi::GetFinalPathNameByHandleW;
 use winapi::um::winbase::{DEBUG_PROCESS, DebugBreakProcess};
 use winapi::um::winnt::{
     CONTEXT, CONTEXT_DEBUG_REGISTERS, CONTEXT_FULL, HANDLE, MEMORY_BASIC_INFORMATION, MEM_FREE, PAGE_EXECUTE,
@@ -1563,7 +1564,16 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 }
                 last_tid = ev.dwThreadId;
                 owed_handle = event_file_handle(&ev);
-                let reason = classify_event(&ev);
+                let mut reason = classify_event(&ev);
+                // Name the image from the handle, which is the only thing that
+                // knows it at this instant.
+                if let StopReason::LibraryLoad { path, .. } = &mut reason
+                    && path.is_empty()
+                    && let Some(h) = owed_handle
+                    && let Some(p) = image_path_from_handle(h)
+                {
+                    *path = p;
+                }
                 // Ours to swallow, or the application's to handle? Decided here,
                 // where the exception code is still in hand, and applied by the
                 // NEXT `ContinueDebugEvent`.
@@ -1622,7 +1632,16 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 }
                 last_tid = ev.dwThreadId;
                 owed_handle = event_file_handle(&ev);
-                let reason = classify_event(&ev);
+                let mut reason = classify_event(&ev);
+                // Name the image from the handle, which is the only thing that
+                // knows it at this instant.
+                if let StopReason::LibraryLoad { path, .. } = &mut reason
+                    && path.is_empty()
+                    && let Some(h) = owed_handle
+                    && let Some(p) = image_path_from_handle(h)
+                {
+                    *path = p;
+                }
                 // Ours to swallow, or the application's to handle? Decided here,
                 // where the exception code is still in hand, and applied by the
                 // NEXT `ContinueDebugEvent`.
@@ -1917,6 +1936,35 @@ fn continue_status_for(ev: &DEBUG_EVENT) -> DWORD {
 ///
 /// Returns `None` for a null or `INVALID_HANDLE_VALUE` handle: Windows is
 /// entitled to hand over neither, and closing those is an error, not a tidy-up.
+/// Ask the file handle Windows handed us WHICH image just loaded.
+///
+/// At `LOAD_DLL_DEBUG_EVENT` the loader has not registered the image yet, so
+/// `modules()` cannot see it — which is precisely why Windows passes `hFile`
+/// with the event. This backend already took that handle (to close it, fixing a
+/// leak) and never asked it for the path it names: the datum was in hand and
+/// thrown away, and every load arrived as `LibraryLoad { path: "" }`.
+///
+/// NOT called from `classify_event`. That function must not call back into the
+/// OS about the traced process — a rule established BY BISECTION in iteration
+/// 504, after a psapi query in that window broke hardware watchpoint hits. This
+/// runs beside it, on a FILE handle, which is a different object: no process
+/// handle, no psapi, no toolhelp. That distinction is an argument, not a proof,
+/// so the watchpoint-hit tests are the check that matters here.
+///
+/// The `\?\` prefix `GetFinalPathNameByHandleW` returns is stripped: it is a
+/// path-length escape, not part of the name a caller expects to see.
+fn image_path_from_handle(h: HANDLE) -> Option<String> {
+    let mut buf = vec![0u16; 32768];
+    let n = unsafe {
+        GetFinalPathNameByHandleW(h, buf.as_mut_ptr(), buf.len() as DWORD, 0)
+    };
+    if n == 0 || n as usize >= buf.len() {
+        return None;
+    }
+    let path = String::from_utf16_lossy(&buf[..n as usize]);
+    Some(path.strip_prefix(r"\?\").map_or(path.clone(), ToString::to_string))
+}
+
 fn event_file_handle(ev: &DEBUG_EVENT) -> Option<HANDLE> {
     let h = match ev.dwDebugEventCode {
         LOAD_DLL_DEBUG_EVENT => unsafe { ev.u.LoadDll() }.hFile,
@@ -4727,6 +4775,53 @@ mod live_tests {
         assert_eq!(a, b, "thread_details must describe the same threads threads() lists");
 
         let _ = dbg.kill().await;
+    }
+
+    /// A library load must say WHICH library.
+    ///
+    /// A live audit against `notepad.exe` got back
+    /// `LibraryLoad { path: "", base: ... }` — a user told a library appeared
+    /// and never which one — and the MCP's `library_path`, a field added for
+    /// exactly this, came back `null` beside it.
+    ///
+    /// The naming is done on the async side via `modules()`, which is the right
+    /// place; the trouble is that at `LOAD_DLL_DEBUG_EVENT` the loader has NOT
+    /// yet registered the image, so toolhelp does not list it. That is not a bug
+    /// in the lookup: it is why Windows hands the debugger `hFile` with the
+    /// event in the first place.
+    ///
+    /// And that handle is already in this file — `event_file_handle` takes it
+    /// and CLOSES it, to fix a handle leak, without ever asking it for the path
+    /// it names. The raw datum is in hand and thrown away.
+    #[tokio::test]
+    async fn a_library_load_says_which_library() {
+        let dbg = WindowsDebugger::new();
+        dbg.launch(cmd_launch_options(&["/C", "echo hi >NUL"]))
+            .await
+            .expect("launch should succeed against a real cmd.exe");
+
+        let mut seen = 0usize;
+        let mut named = 0usize;
+        for _ in 0..400 {
+            let Ok(event) = dbg.continue_execution().await else { break };
+            if let StopReason::LibraryLoad { path, .. } = &event.reason {
+                seen += 1;
+                if !path.is_empty() {
+                    named += 1;
+                }
+            }
+            if matches!(event.reason, StopReason::ProcessExit { .. }) {
+                break;
+            }
+        }
+        let _ = dbg.kill().await;
+
+        assert!(seen > 0, "cmd.exe loads libraries; none was reported");
+        assert_eq!(
+            named, seen,
+            "{} of {seen} library loads arrived with an EMPTY path: the event              carries a file handle that names the image, and this backend takes              that handle only to close it",
+            seen - named
+        );
     }
 
     fn cmd_launch_options(args: &[&str]) -> LaunchOptions {
