@@ -173,7 +173,11 @@ struct CrashState {
     signum: i32,
     fault_addr: Option<u64>,
     regs: Vec<(&'static str, u64)>,
-    resolved: usize,
+    /// The slots `get_register` REFUSED, by name. Kept apart from the slots
+    /// that merely hold zero: a register that is genuinely 0 at the fault and a
+    /// register the backend cannot produce look identical in the value, and
+    /// only the second one is a gap in the core-writing path.
+    unavailable: Vec<&'static str>,
     frames: Vec<StackFrame>,
     stack_base: u64,
     stack_bytes: Vec<u8>,
@@ -202,14 +206,14 @@ async fn crash_and_capture(fx: &Fixture) -> (LinuxDebugger, CrashState) {
     let tid = ev.tid;
 
     let mut regs = Vec::new();
-    let mut resolved = 0usize;
+    let mut unavailable = Vec::new();
     for name in PRSTATUS_GREGS {
         match dbg.get_register(tid, name).await {
-            Ok(v) => {
-                resolved += 1;
-                regs.push((name, v));
+            Ok(v) => regs.push((name, v)),
+            Err(_) => {
+                unavailable.push(name);
+                regs.push((name, 0));
             }
-            Err(_) => regs.push((name, 0)),
         }
     }
     let frames = dbg.backtrace(tid).await.expect("backtrace at the fault");
@@ -239,7 +243,7 @@ async fn crash_and_capture(fx: &Fixture) -> (LinuxDebugger, CrashState) {
             signum,
             fault_addr,
             regs,
-            resolved,
+            unavailable,
             frames,
             stack_base: lo,
             stack_bytes,
@@ -517,6 +521,29 @@ async fn the_crashed_stack_bytes_contain_the_string_the_fixture_planted() {
 /// produces a core a consumer reads as a crash with a null `fs_base` — wrong,
 /// not merely incomplete. So the roster is printed and the slots a backtrace
 /// depends on are asserted present.
+///
+/// **MEASURED DEFECT (partial) — 9 of the 27 slots are REFUSED.** Measured
+/// output: `NT_PRSTATUS slots the backend answered: 18/27; REFUSED:
+/// ["orig_rax", "cs", "ss", "fs_base", "gs_base", "ds", "es", "fs", "gs"]`.
+/// The test is green because 18 is enough for the rows below that matter most,
+/// and the assertion is pinned at `<= 9` so a regression is caught; the gap is
+/// recorded here rather than hidden behind the green.
+///
+/// | slot group | expected (external truth) | reachable with what the crate already has | obtained today |
+/// |---|---|---|---|
+/// | `rip`/`rsp`/`rbp`/GPRs (18) | the kernel's `user_regs_struct` has all 27 fields | yes — `read_regs` (`linux_debugger.rs:2480`) already returns the WHOLE struct | 18/27 answered |
+/// | `fs_base`/`gs_base` | same single `user_regs_struct`, offsets 21-22 | yes — the bytes are ALREADY in the buffer the backend read | `get_register` returns an error |
+/// | `cs`/`ss`/`ds`/`es`/`fs`/`gs`, `orig_rax` | same buffer, offsets 15, 17, 20, 23-26 | yes — same buffer | `get_register` returns an error |
+///
+/// Command that produces the external truth: `readelf -n <core>` shows the
+/// 336-byte `NT_PRSTATUS` descriptor, whose 27 `elf_gregset_t` slots start at
+/// descriptor offset 112. The cure is not a new ptrace call: the backend
+/// already reads the whole `user_regs_struct` (`PTRACE_GETREGS` on x86-64, which
+/// fills the very structure `NT_PRSTATUS` carries), and `to_register_set`
+/// (`linux_debugger.rs:2560`) names exactly 18 of its fields and stops. The nine
+/// missing slots are a naming table that stops short, not data the crate lacks. Without them a
+/// core written from this state reports `fs_base = 0`, which a consumer reads
+/// as a valid TLS base of zero — wrong, not absent.
 #[tokio::test]
 async fn the_prstatus_register_roster_is_measured_slot_by_slot() {
     let fx = build_fixture();
@@ -525,8 +552,9 @@ async fn the_prstatus_register_roster_is_measured_slot_by_slot() {
 
     let zeroed: Vec<&str> = st.regs.iter().filter(|(_, v)| *v == 0).map(|(n, _)| *n).collect();
     println!(
-        "NT_PRSTATUS slots the backend answered: {}/27; zero-valued (unavailable OR genuinely zero): {zeroed:?}",
-        st.resolved
+        "NT_PRSTATUS slots the backend answered: {}/27; REFUSED: {:?}; zero-valued (refused OR genuinely zero): {zeroed:?}",
+        27 - st.unavailable.len(),
+        st.unavailable
     );
     for must in ["rip", "rsp", "rbp", "rax", "rbx", "rdi", "rsi", "eflags"] {
         assert!(
@@ -535,10 +563,10 @@ async fn the_prstatus_register_roster_is_measured_slot_by_slot() {
         );
     }
     assert!(
-        st.resolved >= 17,
-        "the backend answered only {}/27 NT_PRSTATUS slots — a core written from this \
-         state would be missing register CONTENT, not merely precision",
-        st.resolved
+        st.unavailable.len() <= 9,
+        "the backend REFUSED {} of the 27 NT_PRSTATUS slots ({:?}) - a core written from          this state would be missing register CONTENT, not merely precision",
+        st.unavailable.len(),
+        st.unavailable
     );
 }
 
@@ -587,6 +615,13 @@ async fn after_the_crash_kills_the_tracee_every_reader_says_gone_not_stale() {
     let maps = dbg.memory_maps().await;
     let mem = dbg.read_memory(Address::new(st.stack_base), 16).await;
     cleanup(&dbg).await;
+    println!(
+        "after the tracee died: get_registers={:?}, backtrace={:?}, read_memory={:?}, memory_maps={:?}",
+        regs.as_ref().err(),
+        bt.as_ref().map(Vec::len),
+        mem.as_ref().err(),
+        maps.as_ref().map(Vec::len)
+    );
 
     assert!(regs.is_err(), "get_registers on a dead tracee must fail, got {regs:?}");
     assert!(bt.is_err(), "backtrace on a dead tracee must fail, got {:?}", bt.map(|f| f.len()));
@@ -812,7 +847,12 @@ fn zz_no_orphan_fixture_processes_survive() {
         .output()
         .expect("pgrep");
     let listing = String::from_utf8_lossy(&out.stdout);
-    let mine: Vec<&str> =
-        listing.lines().filter(|l| l.contains("/fixture") && !l.contains("live_linux")).collect();
+    // Match only THIS file's fixture: other agents run concurrently in the same
+    // tree with names like `load_fixture`, and a substring match on "/fixture"
+    // would fail this test on somebody else's live process.
+    let mine: Vec<&str> = listing
+        .lines()
+        .filter(|l| l.split_whitespace().any(|w| w.ends_with("/fixture")))
+        .collect();
     assert!(mine.is_empty(), "orphaned fixture processes survived: {mine:?}");
 }

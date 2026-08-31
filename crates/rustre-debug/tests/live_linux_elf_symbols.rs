@@ -401,7 +401,6 @@ async fn a_stripped_build_keeps_only_its_dynamic_symbols() {
 /// Failure text: "no-pie -g: parse_elf obtained 0 of 29 symbols (35 reachable
 /// through the crate's own parse_symtab)", left: 0, right: 35.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "backend defect: parse_elf is a stub — 0 of 35 symbols on an ET_EXEC -g build"]
 async fn parse_elf_should_load_the_symtab_of_a_no_pie_binary() {
     let fx = build(&["-no-pie", "-g"]);
     let g = measure(&fx, &[], ".symtab", ".strtab").await;
@@ -424,7 +423,6 @@ async fn parse_elf_should_load_the_symtab_of_a_no_pie_binary() {
 /// Failure text: "pie -g: parse_elf obtained 0 of 31 symbols (37 reachable)",
 /// left: 0, right: 37.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "backend defect: parse_elf is a stub — 0 of 37 symbols on a PIE -g build"]
 async fn parse_elf_should_load_the_symtab_of_a_pie_binary() {
     let fx = build(&["-fPIE", "-pie", "-g"]);
     let g = measure(&fx, &[], ".symtab", ".strtab").await;
@@ -447,7 +445,6 @@ async fn parse_elf_should_load_the_symtab_of_a_pie_binary() {
 /// Failure text: "no -g: parse_elf obtained 0 of 29 symbols (35 reachable)",
 /// left: 0, right: 35.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "backend defect: parse_elf is a stub — 0 of 35 symbols with no debug info"]
 async fn parse_elf_should_load_the_symtab_of_a_binary_built_without_g() {
     let fx = build(&["-no-pie"]);
     let g = measure(&fx, &[], ".symtab", ".strtab").await;
@@ -471,7 +468,6 @@ async fn parse_elf_should_load_the_symtab_of_a_binary_built_without_g() {
 /// Failure text: "stripped: parse_elf obtained 0 of 2 dynamic symbols (3
 /// reachable through .dynsym)", left: 0, right: 3.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "backend defect: parse_elf is a stub — 0 dynamic symbols on a stripped build"]
 async fn parse_elf_should_load_the_dynsym_of_a_stripped_binary() {
     let fx = build(&["-no-pie", "-g", "-s"]);
     let g = measure(&fx, &["-D"], ".dynsym", ".dynstr").await;
@@ -493,16 +489,27 @@ async fn parse_elf_should_load_the_dynsym_of_a_stripped_binary() {
 /// Failure text: "shared object: parse_elf obtained 0 of 5 dynamic symbols (6
 /// reachable), and lost the exported shared_marker: true".
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "backend defect: parse_elf is a stub — 0 dynamic symbols on a shared object"]
 async fn parse_elf_should_load_the_dynsym_of_a_shared_object() {
     let fx = build_shared();
     let g = measure(&fx, &["-D"], ".dynsym", ".dynstr").await;
     assert!(g.reachable > 0, "guard: the .so must export something");
     let prov = ElfSymbolProvider::parse_elf("so", &fx.bytes).expect("valid ELF");
     let lost = prov.lookup_name("shared_marker").is_none();
+    // SUPERSET, not equality — corrected after the cure, with the reason.
+    //
+    // This `.so` is built WITHOUT `-s`, so it carries a `.symtab` as well, and
+    // `parse_elf` prefers the full table when one is present, exactly as gdb
+    // and lldb do: `.symtab` is a superset that also names the local symbols.
+    // Measured after the fix: 25 obtained against 6 reachable through
+    // `.dynsym` alone — more, not fewer, and `shared_marker` among them.
+    //
+    // The equality this used to assert was the right shape while `parse_elf`
+    // returned nothing, and became the wrong shape once it returned the better
+    // answer. The stripped-binary test above still pins the `.dynsym` fallback
+    // down, so nothing is left unguarded by this relaxation.
     assert!(
-        g.obtained == g.reachable && !lost,
-        "shared object: parse_elf obtained {} of {} dynamic symbols ({} reachable), and lost the exported shared_marker: {lost}",
-        g.obtained, g.expected, g.reachable
+        g.obtained >= g.reachable && !lost,
+        "shared object: parse_elf obtained {} symbols, fewer than the {} reachable through .dynsym alone, or lost the exported shared_marker: {lost}",
+        g.obtained, g.reachable
     );
 }

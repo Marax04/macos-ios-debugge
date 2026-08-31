@@ -33,6 +33,11 @@ use rustre_symbols::SymbolProvider;
 use rustre_symbols::elf_provider::ElfSymbolProvider;
 use std::time::Duration;
 
+/// `SIGCHLD` on Linux/x86-64. Spelled out rather than pulled from `libc`
+/// because `libc` is a normal, not a dev, dependency of this crate and an
+/// integration test cannot see it. Ground truth: `kill -l 17` prints `CHLD`.
+const SIGCHLD: i32 = 17;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixtures
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +87,23 @@ int main(int argc, char **argv) {
 }
 "#;
 
+/// A fork whose child dies at once, so the parent is guaranteed a real
+/// `SIGCHLD` while it is stopped under the debugger. `FORKER_C`'s child
+/// `execve`s and then spins, which makes its `SIGCHLD` a race; this one does
+/// not.
+const REAPER_C: &str = r#"
+#include <signal.h>
+#include <unistd.h>
+#include <stdlib.h>
+int main(void) {
+    pid_t p = fork();
+    if (p == 0) { _exit(7); }
+    raise(SIGTRAP);                 /* stop A */
+    for (;;) { }
+    return 0;
+}
+"#;
+
 /// The replacement image. `rustre_marker_new` exists ONLY here, so finding it
 /// proves the view followed the exec and did not merely fail to notice it.
 const NEWPROG_C: &str = r#"
@@ -101,6 +123,7 @@ struct Fixtures {
     forker: String,
     execer: String,
     newprog: String,
+    reaper: String,
 }
 
 /// Compile all three fixtures. `None` when this machine has no working `cc` —
@@ -115,6 +138,7 @@ fn build() -> Option<Fixtures> {
         ("forker", FORKER_C),
         ("execer", EXECER_C),
         ("newprog", NEWPROG_C),
+        ("reaper", REAPER_C),
     ] {
         let c = dir.path().join(format!("{name}.c"));
         let bin = dir.path().join(name);
@@ -133,6 +157,7 @@ fn build() -> Option<Fixtures> {
         forker: out[0].clone(),
         execer: out[1].clone(),
         newprog: out[2].clone(),
+        reaper: out[3].clone(),
     })
 }
 
@@ -183,6 +208,34 @@ async fn resume_past_noise(dbg: &LinuxDebugger) -> rustre_debug::DebugEvent {
         }
     }
     ev
+}
+
+/// Like [`resume_past_noise`] but NEVER panics: a timeout or an error comes
+/// back as `None`.
+///
+/// Needed because a panic inside a test that still holds a live tracee does not
+/// end the run — the backend's ptrace thread stays blocked in `waitpid` and the
+/// harness hangs forever. Measured: the first draft of the `#[ignore]`d test
+/// below panicked on a 30 s timeout and left `forker` spinning at 101% CPU with
+/// the test binary never exiting. A test that cannot fail cleanly cannot report
+/// anything, so the ignored test resumes through THIS and asserts only after it
+/// has torn the process down.
+async fn try_resume(dbg: &LinuxDebugger) -> Option<rustre_debug::DebugEvent> {
+    let mut ev = tokio::time::timeout(Duration::from_secs(10), dbg.continue_execution())
+        .await
+        .ok()?
+        .ok()?;
+    for _ in 0..64 {
+        if matches!(ev.reason, StopReason::ThreadCreate { .. }) {
+            ev = tokio::time::timeout(Duration::from_secs(10), dbg.continue_execution())
+                .await
+                .ok()?
+                .ok()?;
+        } else {
+            break;
+        }
+    }
+    Some(ev)
 }
 
 /// The pids whose `/proc/<pid>/status` names `parent` as their `PPid`.
@@ -448,25 +501,34 @@ async fn follow_forks_should_deliver_a_process_create_event() {
         .launch(opts(&fx.forker, &fx.newprog, true))
         .await
         .expect("launch");
-    let mut saw = None;
-    for _ in 0..8 {
-        let ev = resume_past_noise(&dbg).await;
+    let mut seen = Vec::new();
+    let mut created = None;
+    // Two bounded resumes: the fork happens before the parent's first
+    // raise(SIGTRAP), so a ProcessCreate would arrive at or before it. The
+    // second resume exists only to prove nothing arrives later; it is expected
+    // to time out on the fixture's `for(;;)`, which `try_resume` reports as
+    // `None` instead of panicking with the tracee still alive.
+    for _ in 0..2 {
+        let Some(ev) = try_resume(&dbg).await else { break };
         if ev.pid.0 != pid.0 {
             continue;
         }
+        seen.push(format!("{:?}", ev.reason));
         if let StopReason::ProcessCreate { pid: child } = ev.reason {
-            saw = Some(child);
-            break;
-        }
-        if matches!(ev.reason, StopReason::ProcessExit { .. }) {
+            created = Some(child.0);
             break;
         }
     }
     let kids = children_of(pid.0);
     shutdown(dbg, pid.0).await;
     kill_all(&kids);
-    let child = saw.expect("follow_forks: true must deliver StopReason::ProcessCreate for the fork");
-    assert_ne!(child.0, pid.0, "the created process must not be the parent");
+
+    let child = created.unwrap_or_else(|| {
+        panic!(
+            "follow_forks: true must deliver StopReason::ProcessCreate for the fork;              the kernel showed children {kids:?} but the debugger only reported {seen:?}"
+        )
+    });
+    assert_ne!(child, pid.0, "the created process must not be the parent");
 }
 
 /// Proves: the parent's `memory_maps()` never contains the image the CHILD
@@ -748,6 +810,94 @@ async fn after_execve_the_cpu_and_the_view_agree_on_the_new_image() {
     );
 }
 
+/// Proves: when the tracee's forked child dies, the `SIGCHLD` the kernel
+/// sends the parent reaches the debugger's caller as a `Signal` stop carrying
+/// signal 17, attributed to the parent.
+///
+/// Why it matters: `SIGCHLD` is the ONLY notification a debugger of the parent
+/// gets about a child it is not following. Swallowing it, or attributing it to
+/// the untraced child, would leave the caller with no way to know the fork
+/// finished — and the backend's `waitpid(-1, __WALL)` makes the second mistake
+/// easy to make.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_parent_is_told_about_its_dead_child_through_sigchld() {
+    let fx = fixtures!();
+    let dbg = LinuxDebugger::new();
+    let pid = dbg
+        .launch(opts(&fx.reaper, &fx.reaper, false))
+        .await
+        .expect("the reaper fixture must launch under ptrace");
+
+    // The SIGCHLD and the fixture's own raise(SIGTRAP) race, so collect a few
+    // bounded stops rather than assuming an order.
+    let mut signals: Vec<(u32, i32, String)> = Vec::new();
+    for _ in 0..4 {
+        let Some(ev) = try_resume(&dbg).await else { break };
+        if let StopReason::Signal { signum, signame, .. } = &ev.reason {
+            signals.push((ev.pid.0, *signum, signame.clone()));
+        }
+    }
+    shutdown(dbg, pid.0).await;
+
+    let chld: Vec<&(u32, i32, String)> = signals.iter().filter(|s| s.1 == SIGCHLD).collect();
+    assert!(
+        !chld.is_empty(),
+        "the parent must be told its child died; stops seen: {signals:?}"
+    );
+    for s in chld {
+        assert_eq!(
+            s.0, pid.0,
+            "SIGCHLD must be attributed to the PARENT, not to the child that raised it"
+        );
+    }
+}
+
+/// The RED for signal NAMING. `StopReason::Signal` carries a `signame`
+/// alongside the number, and for `SIGCHLD` — the one signal a fork is
+/// guaranteed to produce — it reads `"SIG17"`.
+///
+/// Measured, from the `#[ignore]`d `follow_forks` run in this file:
+/// `Signal { signum: 17, signame: "SIG17", address: None }`.
+///
+/// | row | expected (external truth) | reachable with what the crate already has | obtained today |
+/// |---|---|---|---|
+/// | `signame` for 17 | `SIGCHLD` (`kill -l 17`) | yes — one arm in `signal_name` at `linux_debugger.rs:2220`, which already names 8 signals | `SIG17` |
+/// | signals named at all | 31 standard signals | yes — same `match`; `libc` exports every `SIG*` constant used | 8 (`SIGTRAP`, `SIGSEGV`, `SIGILL`, `SIGABRT`, `SIGBUS`, `SIGFPE`, `SIGCONT`, `SIGSTOP`) |
+/// | the number itself | 17 | already correct | 17 — so this is a naming gap, NOT a wrong reading |
+///
+/// Command producing the external truth: `kill -l 17` prints `CHLD`; the full
+/// list is `kill -l`.
+///
+/// Not a cosmetic complaint: `SIGCHLD`, `SIGCHLD`-vs-`SIGSTOP` and the
+/// realtime signals are exactly what a fork/exec session is full of, and
+/// `"SIG17"` forces every caller to re-implement the table the crate already
+/// half-owns. The fix is additive and cannot change any number.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "signal_name() on Linux names only 8 signals; SIGCHLD comes back as SIG17"]
+async fn a_signal_stop_should_name_sigchld_not_sig17() {
+    let fx = fixtures!();
+    let dbg = LinuxDebugger::new();
+    let pid = dbg
+        .launch(opts(&fx.reaper, &fx.reaper, false))
+        .await
+        .expect("launch");
+    let mut names = Vec::new();
+    for _ in 0..4 {
+        let Some(ev) = try_resume(&dbg).await else { break };
+        if let StopReason::Signal { signum, signame, .. } = &ev.reason {
+            if *signum == SIGCHLD {
+                names.push(signame.clone());
+            }
+        }
+    }
+    shutdown(dbg, pid.0).await;
+
+    assert!(!names.is_empty(), "no SIGCHLD stop was observed at all");
+    for n in names {
+        assert_eq!(n, "SIGCHLD", "signal 17 must be named, not numbered");
+    }
+}
+
 /// Housekeeping with teeth: no fixture process may outlive this file's tests.
 ///
 /// The fixtures spin in `for(;;)`, and the fork tests create a process the
@@ -758,7 +908,7 @@ async fn after_execve_the_cpu_and_the_view_agree_on_the_new_image() {
 async fn zz_no_fixture_process_is_left_behind() {
     // Runs last by name under `--test-threads=1`, which orders tests
     // alphabetically.
-    for name in ["forker", "execer", "newprog"] {
+    for name in ["forker", "execer", "newprog", "reaper"] {
         let alive = std::process::Command::new("pgrep")
             .args(["-x", name])
             .output()

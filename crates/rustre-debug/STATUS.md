@@ -1756,6 +1756,197 @@ resta comunque errore, ed e' quello che viene sorvegliato.
 | `live_linux_memory_limits.rs` | in verifica |
 | `live_linux_stepping_limits.rs` | in verifica |
 
+
+---
+
+## Iterazione 648 — 2026-08-31 — `parse_elf` NON E' PIU' UNO STUB
+
+Primo giro che **aggiunge una capacita' assente** invece di correggere un
+comportamento.
+
+### Il difetto
+
+`ElfSymbolProvider::parse_elf` (`crates/rustre-symbols/src/elf_provider.rs:704`)
+validava l'header e poi restituiva `Self::new(name)` — un provider VUOTO — col
+commento che lo ammetteva: «This stub returns an empty provider to avoid a full
+ELF parser dep.»
+
+Il modo di fallire era il piu' insidioso: **non falliva**. RIUSCIVA e non
+restituiva nulla, indistinguibile per il chiamante da un file davvero privo di
+simboli.
+
+### La cura, guidata dalla misura del workflow #3
+
+Nessun parser nuovo: cammino delle section header
+(`e_shoff/e_shentsize/e_shnum/e_shstrndx`), ricerca delle tabelle, e delega a
+`SymtabParser` che gia' leggeva correttamente sia ET_EXEC sia ET_DYN.
+
+**Rosso misurato** (ELF64 sintetico ma vero, costruito nel test, quindi gira
+anche su Windows): `parse_elf returned 0 symbols []` per un file che contiene
+`main` e `helper`.
+
+### ⚠ La mia PRIMA implementazione funzionava, ed era SBAGLIATA
+
+Da 0 simboli a 38, 43, 31. Sembrava un trionfo. I test degli agenti, che
+confrontano con `nm`, hanno mostrato che ne restituivo **troppi**:
+
+- 38 dove ne esistono 35
+- 43 dove ne esistono 37
+
+Causa: concatenavo `.symtab` e `.dynsym`. In un binario NON strippato il secondo
+e' un **sottoinsieme** del primo, quindi ogni simbolo esportato finiva in lista
+due volte. Il mio fixture aveva una sola tabella e non poteva coglierlo.
+
+E' [[feedback_numero_che_sale_non_e_verifica]] applicata alla lettera: da 0 a 38
+sembra un successo e nascondeva un difetto nuovo.
+
+**Regola corretta**: `.symtab` VINCE quando c'e', `.dynsym` e' la riserva che
+copre binari strippati e `.so`.
+
+### Un test corretto, con la prova che sbagliava LUI
+
+`parse_elf_should_load_the_dynsym_of_a_shared_object` asseriva
+`obtained == reachable(.dynsym)` = 6, e otteneva 25. **Sbagliava il test**, e le
+prove sono tre: quel `.so` e' compilato senza `-s` e quindi ha un `.symtab` di 25
+voci; preferire la tabella completa e' cio' che fanno gdb e lldb; e il messaggio
+del test stesso diceva `lost: false`, cioe' il simbolo esportato c'ERA.
+
+Riscritta come **sovrainsieme** — la stessa nota di metodo che l'agente DWARF
+aveva gia' applicato al confronto con `readelf`. Il test sul binario strippato
+resta intatto e continua a inchiodare la riserva `.dynsym`: nessuna copertura
+persa.
+
+### Cinque `#[ignore]` RIMOSSI
+
+I test che documentavano lo stub ora sorvegliano la capacita'. Un difetto chiuso
+il cui test resta ignorato non sorveglia piu' nulla: e' una regressione
+silenziosa in attesa.
+
+### Misure
+
+| Dove | Esito |
+|---|---|
+| `rustre-symbols --lib` | **654 / 0** |
+| Windows `--lib` | **2127 / 0** |
+| `live_linux_elf_symbols` (verita' esterna `nm`) | **9 / 0, zero ignorati** (era 4 ok + 5 ignore) |
+
+### Restano aperti
+
+- Parser righe DWARF: v5 da' 0 righe su 24, ed e' il default del compilatore.
+- Watchpoint che non raggiunge i thread nati dopo l'armamento (`PTRACE_SEIZE`).
+- 69 blocchi `unsafe` senza commento SAFETY.
+- `apple_end_to_end` 2/4 rosso (percorso Apple, sotto sospensione iOS).
+
+
+---
+
+## ⭐ AUDIT COMPARATIVO x64dbg — 2026-08-31 — il documento piu' utile finora
+
+Fornito dall'utente. Entrambi i debugger pilotati via i rispettivi MCP sullo
+STESSO eseguibile (`notepad.exe`), due processi indipendenti.
+
+**La proprieta' che lo rende decisivo: non serve una verita' esterna.** Due
+debugger che guardano lo stesso stato del sistema operativo DEVONO produrre gli
+stessi numeri. Dove concordano, entrambi sono giusti; dove divergono, almeno uno
+sbaglia e si vede quale.
+
+### PARTE I — Il motore e' CORRETTO. Zero discrepanze su 8 assi.
+
+| asse | accordo |
+|---|---|
+| registri invarianti ASLR | **8/8 identici** (`rip` 0x7FFD701A0861 su entrambi) |
+| moduli: basi | **15/15 identiche** |
+| moduli: dimensioni | **15/15 identiche** |
+| frame di stack | **5/5 identici** |
+| byte di memoria | **32/32 identici** |
+| indirizzo del breakpoint | identico |
+| destinazione dello step | identica (4 byte, `sub rsp,0x28`) |
+| codifica DR7 | **0x90001 bit per bit** |
+
+I 4 registri che differiscono (rsp, rdi, r15, r8) sono stack/PEB/heap
+per-processo, e `r8` mantiene lo STESSO delta da `rsp` (-8) su entrambi.
+
+Le parti difficili sono giuste: **l'unwind `.pdata` senza frame pointer**
+(`rbp = 0`, uno scanner ingenuo non ci arriverebbe), il **rewind di RIP dopo
+l'int3**, la **codifica dei registri di debug**. E `original_byte: Some(72)` =
+0x48, il prefisso REX.W corretto.
+
+### PARTE II — I divari, tutti SOPRA il motore
+
+Lo schema, e vale la pena nominarlo: **RustRE ha il dato grezzo e non fa
+l'ultimo passo.**
+
+1. 🔴 **Backtrace non simbolizzato** — `name: null` su tutti e 5 i frame, mentre
+   x64dbg risolve `ntdll.LdrInitializeThunk+1DB`. Eppure `debug.modules` da'
+   base e path per 15 moduli su 15: la export table basterebbe, senza PDB.
+   `resolve_symbol` risponde «no symbols loaded» anche con la EAT di ntdll
+   mappata e leggibile.
+2. 🔴 **`debug.threads` da' UN campo (tid) contro NOVE** — x64dbg: cip, TEB,
+   nome, handle, start_address, priority, suspend_count, last_error, number.
+   Costo concreto: x64dbg mostra che i 3 thread non-main sono tutti a
+   `cip 0x7FFD70171034` — il thread pool di ntdll, riconoscibile a colpo
+   d'occhio. Con RustRE sono tre numeri. `GetThreadContext` e' gia' chiamato 38
+   volte nello stesso file.
+3. 🔴 **`LibraryLoad` con `path: ""` e `library_path: null`** — il campo e'
+   stato AGGIUNTO e lasciato non popolato. Da risolvere con
+   `GetFinalPathNameByHandle` sull'`hFile` di `LOAD_DLL_DEBUG_EVENT`.
+4. 🔴 **`breakpoint_id: null`** per i watchpoint nella lista unificata
+   `debug.breakpoints`, mentre `debug.watchpoints` assegna correttamente `wp_1`:
+   il watchpoint non e' indirizzabile da li'.
+5. 🔴 **Mappa di memoria senza semantica** — 156 regioni con tre booleani contro
+   181 annotate con PEB, TEB per TID, Stack per TID, Heap per ID, sezioni PE
+   (`.text`, `.rdata`, `.pdata`…), `state`/`type`/`protect` come stringhe.
+   RustRE comprime `MEM_RESERVE` in `readable: false`, perdendo la distinzione
+   fra «riservato non committato» e «committato ma PAGE_NOACCESS».
+6. 🔴 **Nessun disassemblatore live** nella famiglia `debug.*`. Per disassemblare
+   cio' che si sta debuggando bisogna uscire dal debugger.
+
+### PARTE III — Dove RustRE vince
+
+- **Autodiagnostica**: `debug.self_test` (7 sottosistemi) e `debug.health` che
+  dichiara le capacita' **con la motivazione**, incluso cio' che NON sa fare.
+  x64dbg non ha nulla di equivalente. Il **circuit breaker sul PDB** (apre dopo
+  3 fallimenti per 60 s) e' ingegneria difensiva che x64dbg non espone.
+- **Valutatore di espressioni tipato** via MCP: `*(u32*)($rsp + 8) + $rax` con
+  cast di larghezza, e risposta in tre forme piu' `is_address`.
+- **Path completi dei moduli** (WinSxS integrale), che x64dbg non da'.
+- `ignore_count` e `only_thread`, che x64dbg non elenca.
+- **95 tool `debug.*`** contro 24 dispatcher, con famiglie intere assenti in
+  x64dbg: TTD, esecuzione inversa, analisi causale, retroattivo, NL, invarianti
+  live, diff semantico fra run, multi-target.
+
+### ⚠ L'AVVERTIMENTO DI METODO, da prendere sul serio
+
+**Le famiglie TTD, causale e NL — ~30 tool su 95, un terzo della superficie —
+NON sono state verificate dall'audit.** E due tool toccati (`heap_chunks`,
+`set_watchpoint`) dichiarano di avere un **percorso non-live che restituisce
+dati sintetici** quando manca la sessione. Onestamente documentato, ma:
+
+> una risposta plausibile da quei tool non prova che il percorso live esista.
+
+Sono **capacita' dichiarata, non misurata** — e in questo repo la distinzione fra
+le due e' gia' costata piu' di una sessione. Il criterio per TTD, equivalente al
+confronto con x64dbg: registrare una run, riprodurla, e verificare che il valore
+letto al tick N coincida con quello che il processo aveva DAVVERO a quel punto.
+
+### Nota: l'incoerenza dei parametri e' pari fra i due
+
+L'auditor ha sbagliato 5 chiamate su 12 al primo tentativo anche su x64dbg
+(`size` stringa ma `count` stringa, `"w"` invece di `"write"`). RustRE ha lo
+stesso difetto (`set_watchpoint` vuole `size`, `read_memory` vuole `len`).
+**Su questo asse sono pari, entrambi male.**
+
+### Piano di lavoro che ne discende, in ordine di valore/costo
+
+1. Simbolizzare il backtrace (EAT, senza PDB — il dato e' gia' in mano).
+2. Popolare `debug.threads` da 1 a 5-6 campi.
+3. `LibraryLoad`: risolvere il path.
+4. `breakpoint_id` per i watchpoint nella lista unificata.
+5. Etichette semantiche nella mappa di memoria.
+6. Disassemblatore live.
+7. **Verificare TTD/causale/NL sul percorso LIVE**, non solo che i tool
+   rispondano.
+
 ---
 ---
 

@@ -695,6 +695,33 @@ impl ElfSymbolProvider {
         Ok(Self::from_elf_syms(name, syms))
     }
 
+    /// Read `e_shoff`, `e_shentsize`, `e_shnum` and `e_shstrndx` from an ELF header.
+///
+/// Returns `None` when the header is truncated or the table is empty, so a
+/// malformed file yields no symbols rather than garbage ones.
+    fn elf_section_header_location(data: &[u8], is_64: bool, le: bool) -> Option<(u64, u16, u16, u16)> {
+    let (o_shoff, o_shentsize, o_shnum, o_shstrndx) =
+        if is_64 { (0x28, 0x3A, 0x3C, 0x3E) } else { (0x20, 0x2E, 0x30, 0x32) };
+    let u16_at = |o: usize| -> Option<u16> {
+        let b: [u8; 2] = data.get(o..o + 2)?.try_into().ok()?;
+        Some(if le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+    };
+    let shoff = if is_64 {
+        let b: [u8; 8] = data.get(o_shoff..o_shoff + 8)?.try_into().ok()?;
+        if le { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) }
+    } else {
+        let b: [u8; 4] = data.get(o_shoff..o_shoff + 4)?.try_into().ok()?;
+        u64::from(if le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+    };
+    let shentsize = u16_at(o_shentsize)?;
+    let shnum = u16_at(o_shnum)?;
+    let shstrndx = u16_at(o_shstrndx)?;
+    if shoff == 0 || shentsize == 0 || shnum == 0 {
+        return None;
+    }
+    Some((shoff, shentsize, shnum, shstrndx))
+}
+
     /// Parse from a complete ELF file bytes (stub: detects header, finds sections).
     ///
     /// # Errors
@@ -712,9 +739,107 @@ impl ElfSymbolProvider {
         if ident.data != ELFDATA2LSB && ident.data != ELFDATA2MSB {
             return Err(ElfError::UnsupportedEncoding(ident.data));
         }
-        // Real parsing would extract section headers and find .symtab/.dynsym.
-        // This stub returns an empty provider to avoid a full ELF parser dep.
-        Ok(Self::new(name))
+        let is_64 = ident.class == ELFCLASS64;
+        let le = ident.data == ELFDATA2LSB;
+
+        // Walk the section headers and hand the tables to `parse_symtab`,
+        // which already reads them correctly.
+        //
+        // This used to return `Self::new(name)` — an EMPTY provider — with a
+        // comment saying so. The failure mode is what made it dangerous: it did
+        // not fail, it SUCCEEDED and returned nothing, which a caller cannot
+        // tell apart from a file that genuinely carries no symbols. Measured
+        // against real binaries the loss was total and unconditional: 0 of 35
+        // symbols for a non-PIE build, 0 of 37 for a PIE one (the default on
+        // every modern distribution), 0 of 3 stripped, 0 of 6 for a shared
+        // object.
+        //
+        // BOTH tables are looked up, not one: `.symtab`/`.strtab` carry the
+        // full set, but a stripped binary and a `.so` only have
+        // `.dynsym`/`.dynstr`, and that is where an exported symbol a running
+        // process actually calls lives.
+        let Some((shoff, shentsize, shnum, shstrndx)) = Self::elf_section_header_location(data, is_64, le)
+        else {
+            return Ok(Self::new(name));
+        };
+
+        let section = |i: u16| -> Option<(u32, u32, usize, usize, u32)> {
+            let off = usize::try_from(shoff).ok()? + usize::from(i) * usize::from(shentsize);
+            let h = data.get(off..off.checked_add(usize::from(shentsize))?)?;
+            let u32_at = |o: usize| -> Option<u32> {
+                let b: [u8; 4] = h.get(o..o + 4)?.try_into().ok()?;
+                Some(if le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+            };
+            let usize_at = |o: usize| -> Option<usize> {
+                if is_64 {
+                    let b: [u8; 8] = h.get(o..o + 8)?.try_into().ok()?;
+                    usize::try_from(if le { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) })
+                        .ok()
+                } else {
+                    let b: [u8; 4] = h.get(o..o + 4)?.try_into().ok()?;
+                    Some((if le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) }) as usize)
+                }
+            };
+            // sh_name, sh_type, sh_offset, sh_size, sh_link
+            let (o_off, o_size, o_link) = if is_64 { (24, 32, 40) } else { (16, 20, 24) };
+            Some((u32_at(0)?, u32_at(4)?, usize_at(o_off)?, usize_at(o_size)?, u32_at(o_link)?))
+        };
+
+        // Section names come from the section-header string table.
+        let shstr = section(shstrndx).and_then(|(_, _, off, size, _)| data.get(off..off + size));
+        let name_of = |sh_name: u32| -> &str {
+            let Some(tab) = shstr else { return "" };
+            let start = sh_name as usize;
+            let Some(rest) = tab.get(start..) else { return "" };
+            let end = rest.iter().position(|b| *b == 0).unwrap_or(rest.len());
+            std::str::from_utf8(&rest[..end]).unwrap_or("")
+        };
+
+        // `.symtab` and `.dynsym` are NOT two disjoint halves: in a binary that
+        // has not been stripped, every dynamic symbol also appears in the full
+        // table. Concatenating both therefore lists the exported symbols TWICE
+        // — measured against real binaries: 38 returned where 35 exist, 43
+        // where 37 exist. So the full table WINS when present, and the dynamic
+        // one is the fallback that carries a stripped binary or a `.so`.
+        let mut symtab_syms = Vec::new();
+        let mut dynsym_syms = Vec::new();
+        let mut sections = Vec::new();
+        for i in 0..shnum {
+            let Some((sh_name, sh_type, off, size, link)) = section(i) else { continue };
+            let nm = name_of(sh_name);
+            sections.push(ElfSectionInfo {
+                index: i,
+                name: nm.to_string(),
+                addr: 0,
+                offset: off as u64,
+                size: size as u64,
+                flags: 0,
+            });
+            // SHT_SYMTAB = 2, SHT_DYNSYM = 11.
+            if sh_type != 2 && sh_type != 11 {
+                continue;
+            }
+            let Some(tab) = data.get(off..off.saturating_add(size)) else { continue };
+            let Some((_, _, str_off, str_size, _)) = section(u16::try_from(link).unwrap_or(0))
+            else {
+                continue;
+            };
+            let Some(strtab) = data.get(str_off..str_off.saturating_add(str_size)) else {
+                continue;
+            };
+            if let Ok(mut parsed) = SymtabParser::new(tab, strtab, is_64, le).parse() {
+                if sh_type == 2 {
+                    symtab_syms.append(&mut parsed);
+                } else {
+                    dynsym_syms.append(&mut parsed);
+                }
+            }
+        }
+
+        let syms = if symtab_syms.is_empty() { dynsym_syms } else { symtab_syms };
+        let mut out = Self::from_elf_syms(name, syms);
+        out.sections = sections;
+        Ok(out)
     }
 
     /// Apply relocations: for each `JUMP_SLOT` / `GLOB_DAT` relocation, try to
@@ -1027,6 +1152,101 @@ mod tests {
         b.extend_from_slice(&value.to_le_bytes());
         b.extend_from_slice(&size.to_le_bytes());
         b
+    }
+
+    /// Build a real ELF64 file around a `.symtab`, so `parse_elf` can be
+    /// measured against something that is genuinely an ELF.
+    ///
+    /// Sections: [0] null, [1] `.symtab`, [2] `.strtab`, [3] `.shstrtab`.
+    fn make_elf64_with_symtab(symtab: &[u8], strtab: &[u8]) -> Vec<u8> {
+        const EHSIZE: usize = 64;
+        const SHENTSIZE: usize = 64;
+        let shstrtab = b" .symtab .strtab .shstrtab ";
+        let (off_symtab, off_strtab, off_shstr) = (
+            EHSIZE,
+            EHSIZE + symtab.len(),
+            EHSIZE + symtab.len() + strtab.len(),
+        );
+        let shoff = off_shstr + shstrtab.len();
+
+        let mut f = Vec::new();
+        // -- ELF header ---------------------------------------------------
+        f.extend_from_slice(&[0x7f, b'E', b'L', b'F', 2, 1, 1, 0]); // 64-bit, LSB
+        f.extend_from_slice(&[0u8; 8]); // padding
+        f.extend_from_slice(&2u16.to_le_bytes()); // e_type = ET_EXEC
+        f.extend_from_slice(&0x3eu16.to_le_bytes()); // e_machine = x86-64
+        f.extend_from_slice(&1u32.to_le_bytes()); // e_version
+        f.extend_from_slice(&0x40_1000u64.to_le_bytes()); // e_entry
+        f.extend_from_slice(&0u64.to_le_bytes()); // e_phoff
+        f.extend_from_slice(&(shoff as u64).to_le_bytes()); // e_shoff
+        f.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        f.extend_from_slice(&(EHSIZE as u16).to_le_bytes()); // e_ehsize
+        f.extend_from_slice(&0u16.to_le_bytes()); // e_phentsize
+        f.extend_from_slice(&0u16.to_le_bytes()); // e_phnum
+        f.extend_from_slice(&(SHENTSIZE as u16).to_le_bytes()); // e_shentsize
+        f.extend_from_slice(&4u16.to_le_bytes()); // e_shnum
+        f.extend_from_slice(&3u16.to_le_bytes()); // e_shstrndx
+        assert_eq!(f.len(), EHSIZE);
+
+        f.extend_from_slice(symtab);
+        f.extend_from_slice(strtab);
+        f.extend_from_slice(shstrtab);
+
+        let mut sh = |name: u32, ty: u32, off: usize, size: usize, link: u32, entsize: u64| {
+            f.extend_from_slice(&name.to_le_bytes());
+            f.extend_from_slice(&ty.to_le_bytes());
+            f.extend_from_slice(&0u64.to_le_bytes()); // sh_flags
+            f.extend_from_slice(&0u64.to_le_bytes()); // sh_addr
+            f.extend_from_slice(&(off as u64).to_le_bytes());
+            f.extend_from_slice(&(size as u64).to_le_bytes());
+            f.extend_from_slice(&link.to_le_bytes());
+            f.extend_from_slice(&0u32.to_le_bytes()); // sh_info
+            f.extend_from_slice(&1u64.to_le_bytes()); // sh_addralign
+            f.extend_from_slice(&entsize.to_le_bytes());
+        };
+        sh(0, 0, 0, 0, 0, 0); // [0] null
+        sh(1, 2, off_symtab, symtab.len(), 2, 24); // [1] .symtab -> link .strtab
+        sh(9, 3, off_strtab, strtab.len(), 0, 0); // [2] .strtab
+        sh(17, 3, off_shstr, shstrtab.len(), 0, 0); // [3] .shstrtab
+        f
+    }
+
+    /// `parse_elf` must return the symbols the ELF actually contains.
+    ///
+    /// It used to validate the identification bytes and then answer
+    /// `Self::new(name)` — an EMPTY provider — with the source saying so:
+    /// "This stub returns an empty provider to avoid a full ELF parser dep."
+    ///
+    /// The failure mode is what makes it dangerous: it does not fail. It
+    /// SUCCEEDS and returns nothing, which for a caller is indistinguishable
+    /// from a file that genuinely carries no symbols. Measured live against
+    /// real binaries, the loss is total and unconditional — 0 symbols out of 35
+    /// reachable for a non-PIE build, 0 of 37 for a PIE one (the default on
+    /// every modern distribution), 0 of 3 for a stripped binary and 0 of 6 for
+    /// a shared object.
+    ///
+    /// No new parser is needed: `parse_symtab`, right above, already reads
+    /// these entries correctly. What was missing is the walk over the section
+    /// headers to find the tables and hand them over.
+    #[test]
+    fn parse_elf_returns_the_symbols_the_file_contains() {
+        let strtab = b" main helper ";
+        let mut symtab = make_elf64_sym_bytes(0, STT_NOTYPE, 0, SHN_UNDEF, 0, 0);
+        symtab.extend(make_elf64_sym_bytes(1, (STB_GLOBAL << 4) | STT_FUNC, 0, 1, 0x40_1000, 0x20));
+        symtab.extend(make_elf64_sym_bytes(6, (STB_GLOBAL << 4) | STT_FUNC, 0, 1, 0x40_1030, 0x10));
+
+        let elf = make_elf64_with_symtab(&symtab, strtab);
+        let p = ElfSymbolProvider::parse_elf("fixture", &elf).expect("a valid ELF must parse");
+
+        let idx = p.name_index();
+        assert!(
+            idx.contains_key("main") && idx.contains_key("helper"),
+            "parse_elf returned {} symbols {:?} for a file that carries `main` and              `helper`: succeeding with nothing is indistinguishable from a file with no              symbols",
+            idx.len(),
+            idx.keys().collect::<Vec<_>>()
+        );
+        assert_eq!(idx.get("main"), Some(&0x40_1000), "and at the address the file states");
+        assert_eq!(idx.get("helper"), Some(&0x40_1030));
     }
 
     #[test]
