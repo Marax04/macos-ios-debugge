@@ -3394,3 +3394,144 @@ per cui e' sopravvissuto a piu' giri verdi.
 2. la difensiva: dare un timeout a questo test, perche' un blocco diventi un
    ROSSO con diagnosi invece di fermare l'intera suite per sempre — che e' la
    regola che il file stesso enuncia e che questo test viola.
+
+---
+
+## Workflow #7 (`wf_70b2361c-8eb`) — 5 agenti su 5, e una SMENTITA
+
+Secondo giro di de-vacuazione + **verifica indipendente** dei due file gia'
+corretti. La verifica e' la parte che conta, perche' ha demolito una
+dichiarazione precedente.
+
+### La smentita, e perche' e' istruttiva
+
+Il giro precedente aveva dichiarato `live_linux_breakpoints.rs` mordente
+**20/21**. Misurato di nuovo con una mutazione COERENTE (a `hot` si da'
+l'indirizzo di `warm` **e** la finestra objdump di `warm`): morde **6/21** —
+`15 passed; 6 failed`.
+
+Il 20/21 era riproducibile solo lasciando i due oracoli **discordi**: in quel
+caso `assert_address_is_hot` falliva perche' `nm` non concordava con `objdump`,
+non perche' l'indirizzo fosse sbagliato. **La finestra di 32 byte coglieva il
+disaccordo fra oracoli, non la funzione sbagliata.** La capacita' era reale, la
+frase piu' forte della misura — la stessa classe di errore che ho gia' commesso
+io al giro 648 su `parse_elf`.
+
+I 6 che mordono davvero sono tutti sui **conteggi di attraversamento**, nessuno
+sulla finestra di byte: conferma diretta della regola «un conteggio e' lasco, una
+TRIPLA no» — qui (5,1,0) per (hot, warm, cold).
+
+### Difetti nuovi, ciascuno col rosso misurato
+
+1. **Nessun oracolo fissa l'ENTRY.** `hot + 8` e' dentro `hot`, su confine
+   d'istruzione, attraversato le stesse 5 volte: con la finestra traslata la
+   suite resta **21 passed / 0 failed**. Chiuso da un guard nuovo che confronta
+   con l'entry pubblicata E aggiunge la meta' negativa (i byte a `hot+8` NON
+   devono coincidere con quelli dell'entry).
+2. **`pin_addresses` fissa una FUNZIONE, non un indirizzo**: con `filler+128`
+   stampa `measured` identico ad `expected` e passa. Morso reale **0/9**.
+3. **`a_thread_storm_does_not_disarm_the_planted_breakpoints` puo' passare senza
+   controllare nulla**: le sue due asserzioni vere stanno dentro `if alive`.
+   Stessa mutazione, due corse diverse: `8 passed; 1 failed` poi `7 passed; 2
+   failed`; isolato fallisce sempre. **Il salto non era registrato da nulla** —
+   un test che si autoesenta in silenzio.
+4. Soglia lasca residua nello stesso test: `traps >= addrs.len() - 1` mentre
+   l'altro storm e' stato irrigidito a `== n`.
+
+### Vacuita' dichiarate LEGITTIME (non tutto cio' che non morde e' un difetto)
+
+`0xCC->0xCD` morde 4/21 e 2/9, ed e' corretto: solo quei test affermano qualcosa
+sul valore del byte. `hot+8` per i test di piantatura/ripristino resta legittimo:
+l'affermazione «una trappola si pianta e si ripristina dentro `hot`» e' vera; e'
+la DOC a promettere l'entry, per questo il guard e' un'aggiunta e non una
+correzione.
+
+### L'agente ha falsificato il PROPRIO oracolo, ed e' andato rosso
+
+Primo tentativo: aveva scambiato i **corpi** oltre ai nomi, e i due programmi
+stampavano entrambi `7` — `left "7" right "11"`. L'oracolo non separava nulla.
+Corretto scambiando i **siti di chiamata** e lasciando i corpi: `fixture=7
+swapped=11`. **Lo stdout del programma e' l'unico oracolo del crate che
+sopravvive a una mutazione del PROGRAMMA**, e nessuno dei due file de-vacuati lo
+usava.
+
+### Il ramo fork/segnali
+
+`OutputRedirect::stdout` e' documentato come non implementato da nessun backend,
+quindi lo stdout del tracee non e' leggibile ATTRAVERSO la crate. L'agente ha
+aggirato l'ostacolo senza fingere: le fixture scrivono con `open`/`write` (non
+`stdio`, perche' uno degli scrittori e' un handler di segnale) su un log il cui
+path arriva da `argv`. 7 test su 8 mordono; l'ottavo e' vacuo e **dichiarato
+tale**: asserisce solo che nessun processo fixture sopravvive.
+
+### File prodotti (nessun file di produzione toccato, per regola)
+
+`tests/live_linux_devac_audit.rs` (4 attivi + 1 `#[ignore]` che asserisce un
+difetto misurato), `tests/live_linux_devac_fork_signals.rs` (8 test).
+I file altrui sono stati ripristinati e verificati `cmp`-identici; suite finali
+21/0 e 9/0; `pgrep -x` su tutti gli stem: zero orfani.
+
+### Giro 654 — la cura
+
+**Fail-first misurato PRIMA di toccare il codice**, contando i punti invece di
+fidarmi dell'impressione: dei **3 `PTRACE_CONT` in produzione, 2 buttavano via
+l'esito** — righe 2077 (il genitore dopo l'evento di clone) e 2089 (il nuovo nato
+al suo birth-stop). L'unico controllato era quello del Continue. Sono
+esattamente i due che RIPRENDONO un thread: se falliscono, quel thread resta in
+ptrace-stop per sempre e nessuno lo viene a sapere.
+
+**Tre modifiche, in `src/linux_debugger.rs`:**
+1. i due esiti ora sono controllati; se la ripresa fallisce il tid **resta** in
+   `stopped_tids` invece di essere perso;
+2. `stopped_tids` diventa coerente: il ramo del clone lo aggiornava, quello
+   della nascita no — due meta' dello stesso fatto che si contraddicevano;
+3. **lo sweep**: «continue» significa continuare il PROCESSO, quindi il Continue
+   riprende ogni thread ancora fermo, non solo l'ultimo che ha riportato lo
+   stop. `stopped_tids` era mantenuto da sempre e **mai consultato li'**:
+   capacita' presente e spenta, non assente.
+
+**Guard nuovo** `no_ptrace_cont_discards_its_result` in `lib.rs`. E' un guard sul
+SORGENTE per una ragione precisa: riprodurre il deadlock significa scrivere un
+test che SI BLOCCA quando il codice e' sbagliato, e questo crate ha gia' imparato
+(giro 526) che un test che si blocca non prova nulla e avvelena le corse
+successive.
+
+**Il guard ha sbagliato due volte prima di funzionare, e le due volte contano:**
+- prima versione: accusava ogni riga che inizia con `libc::ptrace(` — cioe'
+  TUTTE, curate o no, perche' la chiamata sta su riga propria dentro
+  `let ok = unsafe { .. }`. Sarebbero stati **falsi positivi al 100%**, contro il
+  codice che risolve il difetto;
+- seconda versione: guardava se le righe sopra legano il risultato, ma la riga
+  di traccia soprastante e' `eprintln!("... status={status:#x} ...")` e quell'`=`
+  dentro la stringa le faceva **mancare del tutto** il sito 2077.
+- terza: toglie i letterali prima di guardare. **Falsificato in entrambe le
+  direzioni contro il sorgente pre-cura preso da git: 2 accusati prima
+  (2077, 2089 — gli stessi due contati a mano), 0 dopo.**
+
+**Suite del giro 654:**
+- **Linux**: `2109 passed; 0 failed`, e soprattutto
+  `a_threads_birth_and_death_both_reach_the_caller ... ok` — il test che era in
+  deadlock — con la suite chiusa in 3,19 s invece che bloccata.
+- **Windows**: `2130 passed; 0 failed` (2129 + il guard nuovo).
+- **MCP**: 411 passati, 1 fallito: identico a prima, il solito cricchetto
+  FABRICATOR preesistente. Nessuna regressione.
+- **Darwin** x86_64 e aarch64: entrambi `Finished`, zero errori.
+
+**Onesta' sulla forza della prova.** Il verde di Linux NON dimostra da solo che
+il deadlock sia chiuso: quella suite era verde anche prima, perche' il difetto
+dipende dall'ordine degli eventi. Cio' che regge sono due cose diverse: la causa
+letta dal kernel (tre stati incompatibili fra loro) e il guard sulla FORMA del
+codice, che non dipende dall'ordine di esecuzione. Il test verde e' il terzo
+indizio, non il primo.
+
+**`rustre-mcp-tools/tools/debug.rs` NON e' stato toccato**, e la regola non e'
+stata dimenticata: questa modifica cambia la semantica interna della ripresa, non
+la superficie dell'API — nessun tool cambia forma, tipo o risposta. Due volte in
+due giri ho lasciato che i due strati si contraddicessero; qui non c'e' nulla da
+propagare.
+
+**Nota di metodo, gia' costata una compilazione:** `linux_debugger.rs` e'
+`cfg(target_os = "linux")`, quindi **la suite Windows non puo' vedere un errore
+li' dentro**. Il mio `trace` fuori scope e' passato indenne dal verde di Windows
+ed e' stato colto solo da WSL. Un file per piattaforma e' verificato da UNA
+piattaforma sola.

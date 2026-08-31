@@ -15268,6 +15268,77 @@ fn ";
     /// This is the "absence disguised as an answer" family in its manifest
     /// form: the manifest answers "no such feature" while the docs answer "yes,
     /// there is one", and the compiler picks the first.
+    /// Every `PTRACE_CONT` must have its result LOOKED AT.
+    ///
+    /// Measured on 2026-08-31: of the three in `linux_debugger.rs`, TWO
+    /// discarded it — and they were precisely the two that resume a thread
+    /// (the parent after a clone event, and a newly born thread at its
+    /// birth-stop). A resume that silently fails leaves that thread in
+    /// `ptrace_stop` forever, and the whole process stops making progress:
+    ///
+    ///     tid 7678  state t  ptrace_stop     <- never resumed
+    ///     tid 7677  state S  futex_do_wait   <- pthread_join waiting on it
+    ///     tid 7676  state S  do_wait         <- waitpid, forever
+    ///
+    /// read live from /proc while the suite hung. The suite had been green for
+    /// several rounds before that: the failure depends on event ordering, so a
+    /// green run is not evidence and only a guard on the SHAPE of the code
+    /// keeps it closed.
+    ///
+    /// Why a source guard and not a behavioural test: reproducing the deadlock
+    /// means writing a test that HANGS when the code is wrong, and this crate
+    /// already learned (iteration 526) that a test which hangs proves nothing
+    /// and poisons every run after it.
+    #[test]
+    fn no_ptrace_cont_discards_its_result() {
+        // How "discarded" is decided, and why not more simply. The first
+        // version of this guard flagged any line STARTING with
+        // `libc::ptrace(` — which is every one of them, cured or not, because
+        // the call sits on its own line inside `let ok = unsafe { .. }`. It
+        // would have been false positives at a rate of 100%, accusing the very
+        // code that fixes the defect.
+        //
+        // So the result is bound if the few lines ABOVE bind it, and string
+        // literals are removed first: the trace line right above one call site
+        // is `eprintln!("... status={status:#x} ...")`, whose `=` inside the
+        // format string made the second version miss that site entirely.
+        //
+        // Falsified in both directions against the pre-cure source:
+        // 2 offenders before, 0 after.
+        fn without_string_literals(s: &str) -> String {
+            s.split('"').step_by(2).collect::<Vec<_>>().join(" ")
+        }
+        let mut offenders: Vec<String> = Vec::new();
+        // `production_sources` is `pub(super)` in the sibling `tests_expanded`
+        // module, so it is reached through the crate root, not by bare name.
+        for (name, src) in super::tests_expanded::production_sources() {
+            let lines: Vec<&str> = src.lines().collect();
+            for (i, line) in lines.iter().enumerate() {
+                let t = line.trim_start();
+                if !(t.starts_with("libc::ptrace(") && t.contains("PTRACE_CONT")) {
+                    continue;
+                }
+                let mut ctx: Vec<&str> = Vec::new();
+                let mut j = i;
+                while j > 0 && ctx.len() < 3 {
+                    j -= 1;
+                    let p = lines[j].trim();
+                    if !p.is_empty() && !p.starts_with("//") {
+                        ctx.push(p);
+                    }
+                }
+                let joined = without_string_literals(&ctx.join(" "));
+                if !joined.contains('=') && !joined.trim_start().starts_with("if ") {
+                    offenders.push(format!("{name}:{}", i + 1));
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "a PTRACE_CONT whose result is thrown away can leave a thread              stopped forever and nobody knows: {offenders:?}"
+        );
+    }
+
     #[test]
     fn every_feature_gate_names_a_feature_the_manifest_declares() {
         const MANIFEST: &str = include_str!("../Cargo.toml");

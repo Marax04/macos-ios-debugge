@@ -1500,6 +1500,37 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                     }
                     stopped_tids.remove(&resume);
                 }
+                // "Continue" means continue the PROCESS, so every thread that
+                // is still stopped must run again — not just the one that
+                // reported the last event.
+                //
+                // `stopped_tids` was maintained all along and never consulted
+                // here: the capability was present and switched off. What that
+                // cost was measured on 2026-08-31, live, from /proc:
+                //
+                //     tid 7678  state t  ptrace_stop      <- never resumed
+                //     tid 7677  state S  futex_do_wait    <- pthread_join on it
+                //     tid 7676  state S  do_wait          <- waitpid, forever
+                //
+                // Three parties, each waiting on one of the other two. One
+                // stranded thread is enough, because a tracee that joins it
+                // never reaches its next stop and the debugger never gets
+                // another event to hand back.
+                //
+                // A tid that has died in the meantime answers ESRCH; that is
+                // not an error to report, it just stops being our business, so
+                // it is dropped from the set either way.
+                let leftovers: Vec<libc::pid_t> =
+                    stopped_tids.iter().copied().filter(|t| *t != resume).collect();
+                for tid in leftovers {
+                    let ok = unsafe {
+                        libc::ptrace(libc::PTRACE_CONT, tid, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>())
+                    };
+                    if ok < 0 && ptrace_trace_enabled() {
+                        eprintln!("[ptrace] tid={tid} branch=resume-sweep PTRACE_CONT failed: {}", std::io::Error::last_os_error());
+                    }
+                    stopped_tids.remove(&tid);
+                }
                 let (event, is_exit) = wait_for_stop_any(pid, &mut known_tids, &mut stopped_tids, &mut last_tid);
                 // Remember what it stopped by, so the next resume can hand it
                 // over. Any other stop clears it: a signal must be delivered
@@ -2073,10 +2104,27 @@ fn wait_for_stop_any(
                 if trace {
                     eprintln!("[ptrace] tid={waited} status={status:#x} branch=clone-event(parent-resumed)");
                 }
-                unsafe {
-                    libc::ptrace(libc::PTRACE_CONT, waited, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>());
+                // The result is CHECKED. It used to be discarded, and that is
+                // how a thread could be left in ptrace-stop forever with
+                // nobody aware of it: measured on 2026-08-31, tid 7678 sat in
+                // `ptrace_stop` while the tracee's main thread blocked in
+                // `pthread_join` waiting for it and the debugger blocked in
+                // `waitpid` waiting for an event that could no longer come —
+                // a three-way deadlock read straight out of /proc.
+                //
+                // On failure the tid STAYS in `stopped_tids`, which is what
+                // lets the next resume sweep pick it up instead of losing it.
+                let ok = unsafe {
+                    libc::ptrace(libc::PTRACE_CONT, waited, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>())
+                };
+                if ok < 0 {
+                    if trace {
+                        eprintln!("[ptrace] tid={waited} branch=clone-event PTRACE_CONT failed: {}", std::io::Error::last_os_error());
+                    }
+                    stopped_tids.insert(waited);
+                } else {
+                    stopped_tids.remove(&waited);
                 }
-                stopped_tids.remove(&waited);
                 continue;
             }
             if !known_tids.contains(&waited) {
@@ -2085,8 +2133,24 @@ fn wait_for_stop_any(
                     eprintln!("[ptrace] tid={waited} status={status:#x} branch=thread-birth(resumed)");
                 }
                 known_tids.insert(waited);
-                unsafe {
-                    libc::ptrace(libc::PTRACE_CONT, waited, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>());
+                // Same check, same reason as the clone branch above. This is
+                // the site that matters most: a birth-stop that is not
+                // actually resumed strands a thread the tracee is about to
+                // join on, so the whole process stops making progress.
+                //
+                // It also now keeps `stopped_tids` HONEST either way. The
+                // clone branch removed the tid and this one never did, so the
+                // two halves of the same fact disagreed.
+                let ok = unsafe {
+                    libc::ptrace(libc::PTRACE_CONT, waited, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>())
+                };
+                if ok < 0 {
+                    if trace {
+                        eprintln!("[ptrace] tid={waited} branch=thread-birth PTRACE_CONT failed: {}", std::io::Error::last_os_error());
+                    }
+                    stopped_tids.insert(waited);
+                } else {
+                    stopped_tids.remove(&waited);
                 }
                 // The new thread is RESUMED (above) and the caller is TOLD.
                 //
